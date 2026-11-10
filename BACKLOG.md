@@ -119,9 +119,33 @@
 
 ---
 
-## Sprint 5: Production Exporter & Release (Milestone v0.2.0)
+## Sprint 5: Speculative Decoding & Draft Synthesizer (Milestone v0.1.6) [COMPLETED]
 
-### [THME-501] Quantization Model Exporter (GGUF / SafeTensors)
+### [THME-501] Draft Model Manifold Synthesizer (Done)
+- **Component**: `thme::speculative::synthesizer`
+- **Problem**: Generating tokens with multi-billion parameter models autoregressively is bottlenecked by memory bandwidth; smaller draft models are needed to propose candidate tokens.
+- **Acceptance Criteria**:
+  - Extract lightweight prefix draft sub-manifolds (e.g. 2 to 4 layers) from parent target models.
+  - Support dimension downscaling and BitNet b1.58 ternary discretization for low-latency CPU/edge execution.
+  - Calculate empirical parameter reductions, memory savings, and latency cost ratios $r = \frac{T_{\text{draft}}}{T_{\text{target}}}$.
+- **Done Means**: `DraftSynthesizer::extract_draft_model` generates valid `ModelIR` sub-networks with matching vocabularies and heads.
+
+### [THME-502] Multi-Token Tree Speculation Engine (Done)
+- **Component**: `thme::speculative::engine`, `thme::speculative::tree`
+- **Problem**: Validating speculative candidate sequences requires mathematically sound rejection sampling and multi-branch tree attention.
+- **Acceptance Criteria**:
+  - Implement speculative rejection sampling with temperature scaling.
+  - Compute acceptance rate $\alpha_{\text{spec}}$, emitted tokens per step $\mathbb{E}[k] + 1$, and Leviathan effective wall-clock speedup $S = \frac{\mathbb{E}[k]+1}{1 + \gamma \cdot r}$.
+  - Multi-candidate tree topology synthesis with causal 2D tree attention mask generation.
+  - CLI `thme speculate` command and MCP tool `thme_simulate_speculative_decoding`.
+  - Desktop Studio GUI Tab 4 Speculative Deck with live stat gauges and simulation runner.
+- **Done Means**: `cargo test --test test_speculative_decoding` passes 5/5 tests and verifies effective speedups $> 1.5\times$.
+
+---
+
+## Sprint 6: Production Exporter & Release (Milestone v0.2.0)
+
+### [THME-601] Quantization Model Exporter (GGUF / SafeTensors)
 - **Component**: `thme::exporter`
 - **Problem**: Modifying layer precisions and weights currently operates in-memory; users need to export the optimized model to disk.
 - **Acceptance Criteria**:

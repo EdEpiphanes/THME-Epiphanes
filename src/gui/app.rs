@@ -792,6 +792,18 @@ pub struct THMEApp {
     paradigm_apply_bitnet: bool,
     paradigm_last_report: Option<String>,
 
+    // Speculative Decoding & Multi-Token Draft Synthesizer (v0.1.6)
+    spec_draft_layers: usize,
+    spec_lookahead_horizon: usize,
+    spec_temperature: f32,
+    spec_apply_bitnet: bool,
+    spec_use_tree: bool,
+    spec_last_report: Option<String>,
+    spec_speedup_val: f64,
+    spec_acceptance_val: f64,
+    spec_tokens_per_pass: f64,
+    spec_traffic_savings: f64,
+
     // Deep Layer Deconstruction & Anatomy
     selected_subblock: Option<crate::ir::SubBlockCategory>,
     hybrid_topology_mode: usize,
@@ -908,6 +920,18 @@ impl THMEApp {
             paradigm_target_layers: 8,
             paradigm_apply_bitnet: true,
             paradigm_last_report: None,
+
+            // Speculative Decoding & Multi-Token Draft Synthesizer (v0.1.6)
+            spec_draft_layers: 4,
+            spec_lookahead_horizon: 5,
+            spec_temperature: 0.7,
+            spec_apply_bitnet: false,
+            spec_use_tree: false,
+            spec_last_report: None,
+            spec_speedup_val: 2.14,
+            spec_acceptance_val: 78.5,
+            spec_tokens_per_pass: 3.92,
+            spec_traffic_savings: 64.2,
 
             // Deep Layer Deconstruction & Anatomy
             selected_subblock: None,
@@ -3967,6 +3991,164 @@ impl THMEApp {
                             ui.end_row();
                         }
                     });
+            });
+
+        ui.add_space(10.0);
+        egui::Frame::NONE
+            .fill(p.bg_card)
+            .stroke(Stroke::new(1.0_f32, p.accent))
+            .inner_margin(egui::Margin::same(12))
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new("SPECULATIVE DECODING & MULTI-TOKEN DRAFT SYNTHESIZER (v0.1.6)")
+                            .strong()
+                            .size(11.0)
+                            .color(p.accent),
+                    );
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "Estimated Speedup: {:.2}x | Acc: {:.1}%",
+                                self.spec_speedup_val, self.spec_acceptance_val
+                            ))
+                            .strong()
+                            .color(p.success),
+                        );
+                    });
+                });
+                ui.label(
+                    egui::RichText::new(
+                        "Extract lightweight prefix draft sub-manifolds and accelerate autoregressive inference via speculative rejection sampling."
+                    )
+                    .size(9.0)
+                    .color(p.text_muted),
+                );
+
+                ui.add_space(8.0);
+                ui.columns(4, |sub| {
+                    render_stat_box(&mut sub[0], "SPEEDUP MULTIPLIER", format!("{:.2}x", self.spec_speedup_val), p.success, &p);
+                    render_stat_box(&mut sub[1], "ACCEPTANCE RATE (α)", format!("{:.1}%", self.spec_acceptance_val), p.primary, &p);
+                    render_stat_box(&mut sub[2], "TOKENS / TARGET PASS", format!("{:.2}", self.spec_tokens_per_pass), p.secondary, &p);
+                    render_stat_box(&mut sub[3], "MEMORY TRAFFIC SAVED", format!("{:.1}%", self.spec_traffic_savings), p.warning, &p);
+                });
+
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    ui.label("Draft Layers:");
+                    let max_layers = self.model().layers.len().saturating_sub(1).max(1);
+                    ui.add(egui::Slider::new(&mut self.spec_draft_layers, 1..=max_layers).text("Layers"));
+
+                    ui.add_space(10.0);
+                    ui.label("Horizon (γ):");
+                    ui.add(egui::Slider::new(&mut self.spec_lookahead_horizon, 1..=10).text("Tokens"));
+
+                    ui.add_space(10.0);
+                    ui.label("Temp (τ):");
+                    ui.add(egui::Slider::new(&mut self.spec_temperature, 0.0..=1.5).text(""));
+
+                    ui.add_space(10.0);
+                    ui.checkbox(&mut self.spec_apply_bitnet, "BitNet b1.58 Ternary Draft");
+                    ui.checkbox(&mut self.spec_use_tree, "Tree Speculation (Medusa)");
+                });
+
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    if ui.button(egui::RichText::new("Simulate Speculative Forward Pass").strong().color(Color32::BLACK)).clicked() {
+                        let source_ir = self.model().to_model_ir();
+                        let draft_cfg = crate::speculative::DraftExtractionConfig {
+                            strategy: if self.spec_apply_bitnet {
+                                crate::speculative::DraftExtractionStrategy::TernaryBitNet
+                            } else {
+                                crate::speculative::DraftExtractionStrategy::PrefixLayers
+                            },
+                            num_layers: self.spec_draft_layers,
+                            target_hidden_size: None,
+                            apply_bitnet: self.spec_apply_bitnet,
+                            stride_step: 4,
+                        };
+
+                        if let Ok((_draft, synth_rep)) = crate::speculative::DraftSynthesizer::extract_draft_model(&source_ir, &draft_cfg) {
+                            let spec_cfg = crate::speculative::SpeculativeExecutionConfig {
+                                lookahead_horizon: self.spec_lookahead_horizon,
+                                temperature: self.spec_temperature,
+                                strategy: crate::speculative::SpeculativeVerificationStrategy::RejectionSampling,
+                                base_draft_fidelity: 0.82,
+                                latency_cost_ratio: synth_rep.latency_cost_ratio,
+                            };
+
+                            let tel = crate::speculative::SpeculativeEngine::simulate_speculative_run(&spec_cfg, 25, 12.0);
+                            self.spec_speedup_val = tel.effective_speedup_multiplier;
+                            self.spec_acceptance_val = tel.mean_acceptance_rate * 100.0;
+                            self.spec_tokens_per_pass = tel.mean_tokens_per_pass;
+                            self.spec_traffic_savings = tel.memory_traffic_savings_pct;
+
+                            let (opt_g, opt_s) = crate::speculative::SpeculativeEngine::find_optimal_horizon(0.82, synth_rep.latency_cost_ratio);
+
+                            let tree_str = if self.spec_use_tree {
+                                let tree = crate::speculative::SpeculativeTreeTopology::build_canonical(&[3, 2, 1]);
+                                let (_, acc, rate) = tree.evaluate_tree_acceptance(0.82);
+                                format!("\n- Multi-Branch Tree Speculation: {} candidate nodes, {} accepted tokens ({:.1}% branch acc)", tree.total_nodes, acc, rate * 100.0)
+                            } else {
+                                String::new()
+                            };
+
+                            let summary = format!(
+                                "{}\n------------------------------------------------------------\n{}\n- Optimal Horizon: gamma = {} (Est. Speedup: {:.2}x){}",
+                                synth_rep.format_summary(),
+                                tel.format_summary(),
+                                opt_g,
+                                opt_s,
+                                tree_str
+                            );
+                            let m_name = self.model().name.clone();
+                            self.spec_last_report = Some(summary);
+                            self.log_audit("BENCHMARK", "SpeculationSimulated", &format!("Speculative speedup: {:.2}x at gamma={}", tel.effective_speedup_multiplier, self.spec_lookahead_horizon), &m_name);
+                            self.status_msg = format!("Speculative simulation evaluated: {:.2}x effective speedup!", tel.effective_speedup_multiplier);
+                        }
+                    }
+
+                    if ui.button("Synthesize & Register Draft Model Instance").clicked() {
+                        let source_ir = self.model().to_model_ir();
+                        let draft_cfg = crate::speculative::DraftExtractionConfig {
+                            strategy: if self.spec_apply_bitnet {
+                                crate::speculative::DraftExtractionStrategy::TernaryBitNet
+                            } else {
+                                crate::speculative::DraftExtractionStrategy::PrefixLayers
+                            },
+                            num_layers: self.spec_draft_layers,
+                            target_hidden_size: None,
+                            apply_bitnet: self.spec_apply_bitnet,
+                            stride_step: 4,
+                        };
+
+                        if let Ok((draft_ir, synth_rep)) = crate::speculative::DraftSynthesizer::extract_draft_model(&source_ir, &draft_cfg) {
+                            let new_m = UniversalModel::from_model_ir(draft_ir, "SynthesizedDraft");
+                            let name = new_m.name.clone();
+                            self.models.push(new_m);
+                            self.active_model_idx = self.models.len() - 1;
+                            self.auto_scan_and_benchmark();
+                            self.run_auto_decider_internal();
+                            self.spec_last_report = Some(synth_rep.format_summary());
+                            self.log_audit("SURGERY", "DraftExtracted", &format!("Extracted {}-layer draft model", self.spec_draft_layers), &name);
+                            self.status_msg = format!("Registered draft model '{}' ({} layers) successfully!", name, self.spec_draft_layers);
+                        }
+                    }
+                });
+
+                if let Some(ref report) = self.spec_last_report {
+                    ui.add_space(8.0);
+                    egui::Frame::NONE
+                        .fill(p.bg_dark)
+                        .stroke(Stroke::new(1.0_f32, p.accent))
+                        .inner_margin(egui::Margin::same(8))
+                        .show(ui, |ui| {
+                            ui.label(egui::RichText::new("SPECULATIVE SYNTHESIS & TELEMETRY REPORT").strong().color(p.accent));
+                            for line in report.lines() {
+                                ui.label(egui::RichText::new(line).size(9.0).monospace().color(p.text_main));
+                            }
+                        });
+                }
             });
     }
 

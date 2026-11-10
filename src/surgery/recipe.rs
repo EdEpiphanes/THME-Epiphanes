@@ -51,6 +51,13 @@ pub enum TweakOperation {
         #[serde(default)]
         apply_bitnet: Option<bool>,
     },
+    ExtractDraftModel {
+        num_layers: usize,
+        #[serde(default)]
+        target_hidden_size: Option<usize>,
+        #[serde(default)]
+        apply_bitnet: Option<bool>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -244,6 +251,37 @@ impl SurgeryEngine {
                         audit_log.push(format!(
                             "Failed to convert paradigm to {:?}",
                             target_paradigm
+                        ));
+                    }
+                }
+                TweakOperation::ExtractDraftModel {
+                    num_layers,
+                    target_hidden_size,
+                    apply_bitnet,
+                } => {
+                    let cfg = crate::speculative::DraftExtractionConfig {
+                        strategy: if apply_bitnet.unwrap_or(false) {
+                            crate::speculative::DraftExtractionStrategy::TernaryBitNet
+                        } else if target_hidden_size.is_some() {
+                            crate::speculative::DraftExtractionStrategy::ProjectedManifold
+                        } else {
+                            crate::speculative::DraftExtractionStrategy::PrefixLayers
+                        },
+                        num_layers: *num_layers,
+                        target_hidden_size: *target_hidden_size,
+                        apply_bitnet: apply_bitnet.unwrap_or(false),
+                        ..Default::default()
+                    };
+                    if let Ok((draft, report)) =
+                        crate::speculative::DraftSynthesizer::extract_draft_model(model, &cfg)
+                    {
+                        modified_count += draft.tensors.len();
+                        audit_log.push(report.description);
+                        *model = draft;
+                    } else {
+                        audit_log.push(format!(
+                            "Failed to extract {}-layer draft model",
+                            num_layers
                         ));
                     }
                 }

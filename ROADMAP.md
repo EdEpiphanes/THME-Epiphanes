@@ -62,7 +62,7 @@ The path from v0.1.0 to v0.2.0 focuses strictly on **correctness, honesty, repro
   - Automated rollback trigger: if degradation exceeds tolerance, rollback to last baseline checkpoint immediately and emit structured audit diagnostics.
   - `thme validate` CLI command with `--corpus`, `--max-ppl-delta`, and JSON output flags.
 
-- [x] **v0.1.5 — Surgery Daemon, IDE Extensions & PyTorch/CUDA Interop Bridge**
+- [x] **v0.1.5 — Surgery Daemon, IDE Extensions, PyTorch/CUDA Bridge & 8 AI Models Matrix**
   - Universal 8 Specialized AI Model Paradigm Converter (`src/ir/paradigm.rs`):
     - Full detection, ingestion, and cross-conversion matrix across 8 model paradigms: LLM, LCM, LAM, MoE, VLM, SLM, MLM, SAM.
     - Sparse upcycling engine partitioning dense MLPs into parallel expert matrices and synthesized router gating tensors.
@@ -78,10 +78,13 @@ The path from v0.1.0 to v0.2.0 focuses strictly on **correctness, honesty, repro
     - Pure Rust PEFT LoRA adapter checkpoint parser and zero-copy weight merger ($W = W_0 + \frac{\alpha}{r} B \times A$).
     - `thme export` / `thme interop` CLI command for instant pipeline transitions.
 
-- [ ] **v0.1.6 — Speculative Decoding & Draft Model Synthesizer**
-  - Draft model manifold synthesizer extracting lightweight sub-models from early-exit checkpoints (e.g., first 4 layers of 16-layer model).
-  - Multi-token tree speculation verification engine calculating acceptance rate $\alpha_{\text{spec}}$ and effective latency speedup.
-  - Verification telemetry integrated into Studio GUI Benchmarks tab.
+- [/] **v0.1.6 — Speculative Decoding & Draft Model Synthesizer** [IN PROGRESS]
+  - Draft model manifold synthesizer extracting lightweight sub-models from target model early-exit checkpoints or prefix layers ($0..K$).
+  - Multi-token tree speculation verification engine calculating speculative acceptance rate $\alpha_{\text{spec}}$, expected accepted tokens $\mathbb{E}[k]$, and effective latency speedup $S = \frac{\mathbb{E}[k] + 1}{1 + \gamma \frac{T_{\text{draft}}}{T_{\text{target}}}}$.
+  - Tree-based speculative attention mask synthesis supporting multi-candidate branching (Medusa/Eagle style speculative trees).
+  - CLI `thme speculate` subcommand with full telemetry output and draft model export.
+  - IDE & Agent MCP tool `thme_simulate_speculative_decoding` for automated agent profiling.
+  - Studio GUI Benchmarks (Tab 4) live speculative simulation deck with acceptance curve and speedup multiplier gauges.
 
 ---
 
@@ -146,5 +149,5 @@ The path from v0.1.0 to v0.2.0 focuses strictly on **correctness, honesty, repro
 ## Long-Term Backlog (Deferred to v0.3.0+)
 
 These advanced algorithmic initiatives are documented in the backlog and intentionally deferred to subsequent major milestones:
-- **Mixture-of-Experts (MoE) Dynamic Specialist Routing**: Dynamic expert sensitivity profiling and routing topology restructuring for models like Mixtral and DeepSeek-V2/V3.
 - **Continuous Online RL Adaptation**: Real-time layer manifold adjustment guided by continuous reinforcement learning feedback loops.
+- **Topological Hyper-Graph Neural Architecture Search**: Automated micro-circuit rewiring using topological data analysis (TDA) persistent homology.

@@ -16,7 +16,7 @@
   <img src="https://img.shields.io/badge/Memory-Zero--Copy%20MMap-f59e0b?style=flat-square" alt="Zero-Copy" />
   <a href="https://github.com/EdEpiphanes/THME-Epiphanes/actions/workflows/ci.yml"><img src="https://github.com/EdEpiphanes/THME-Epiphanes/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <img src="https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square" alt="License" />
-  <img src="https://img.shields.io/badge/Tests-76%20Passed-success?style=flat-square" alt="Tests" />
+  <img src="https://img.shields.io/badge/Tests-81%20Passed-success?style=flat-square" alt="Tests" />
   <img src="https://img.shields.io/badge/PyTorch%20%2B%20CUDA-Compatible-ee4c2c?style=flat-square&logo=pytorch" alt="PyTorch CUDA" />
   <img src="https://img.shields.io/badge/IDE-VS%20Code%20%2B%20Copilot-blueviolet?style=flat-square" alt="VS Code Extension" />
 </p>
@@ -25,6 +25,7 @@
   <a href="#overview">Overview</a> •
   <a href="#desktop-studio-showcase">Desktop Studio</a> •
   <a href="#universal-8-specialized-ai-model-paradigm-converter">8 AI Models Matrix</a> •
+  <a href="#speculative-decoding--multi-token-draft-synthesizer">Speculative Decoding</a> •
   <a href="#scientific-math--algorithmic-optimization">Science & Math Engine</a> •
   <a href="#layer-anatomy-deconstruction--surgery">Layer Surgery</a> •
   <a href="#pytorch-cuda--fine-tuning-tools-interoperability">PyTorch & CUDA Bridge</a> •
@@ -194,6 +195,62 @@ In **Tab 1: Models Manager**, click **"Universal Paradigm Converter (8 AI Models
 - Dynamic parameter tuning controls for experts, Top-$K$, target hidden size, target layers, and BitNet b1.58 ternary discretization.
 - One-click execution button creating an immediately benchmarkable and profileable model instance in the studio workspace.
 - Renders detailed conversion diagnostic reports (parameter count delta, footprint savings, tensors restructured).
+
+---
+
+## Speculative Decoding & Multi-Token Draft Synthesizer
+
+THME provides automated draft model extraction and multi-token speculative decoding verification. Rather than running slow sequential autoregression ($N$ target forward steps for $N$ tokens), a lightweight synthesized draft model generates $\gamma$ speculative tokens that are verified simultaneously in a single parallel target forward pass.
+
+```text
+Draft Model (Prefix K-Layers / BitNet Ternary)
+  │
+  ├─ Token 1 ──► Token 2 ──► Token 3 ──► Token 4 ──► Token 5  [γ = 5 Speculative Tokens]
+  │
+Target Verification Pass (1 Parallel Forward Step)
+  │
+  ▼
+[ p(x₁) ]      [ p(x₂) ]      [ p(x₃) ]      [ p(x₄) ]      [ p(x₅) ]
+   ▲              ▲              ▲              ▲              ▲
+   │              │              │              │              │
+[ q(x₁) ]      [ q(x₂) ]      [ q(x₃) ]      [ q(x₄) ]      [ q(x₅) ]
+   │              │              │              │              │
+ Accept         Accept         Accept         Reject         (Halt)
+  (k=1)          (k=2)          (k=3)       Resample x₄'
+                                                 │
+                                                 ▼
+Emitted Sequence: [x₁, x₂, x₃, x₄'] (4 Tokens in 1 Target Step -> 1.85x - 2.5x Speedup)
+```
+
+### Speculative Rejection Sampling & Speedup Multiplier
+
+1. **Acceptance Condition**:
+   For each speculative candidate token $x_i$ ($i \in \{1 \dots \gamma\}$):
+   $$u \le \min\left(1, \frac{p(x_i)}{q(x_i)}\right), \quad u \sim \mathcal{U}(0, 1)$$
+   If rejected, the target model samples from $(p(x_i) - q(x_i))^+$ and halts speculative generation for that pass.
+2. **Leviathan Effective Speedup Multiplier**:
+   $$S = \frac{\mathbb{E}[k] + 1}{1 + \gamma \cdot r}$$
+   Where $\mathbb{E}[k]$ is the expected number of accepted tokens, and $r = \frac{T_{\text{draft}}}{T_{\text{target}}}$ is the relative latency cost ratio.
+3. **Multi-Branch Tree Speculation**:
+   Generates a candidate branching tree (Medusa / Eagle style) validated using a causal tree attention mask $\mathbf{M}_{\text{tree}}$, accepting the longest valid path.
+
+### CLI Usage
+
+```bash
+# Evaluate speculative decoding with a 2-layer BitNet ternary draft and horizon gamma=4
+thme speculate --model path/to/model.safetensors --draft-layers 2 --bitnet --horizon 4
+
+# Evaluate multi-branch tree speculative decoding and export the synthesized draft model
+thme speculate --draft-layers 4 --horizon 5 --tree --export-draft models/draft_model.json
+```
+
+### Desktop Studio GUI Integration (Tab 4: Benchmarks)
+
+In **Tab 4: Full Benchmarks**, the **Speculative Decoding & Draft Synthesizer Deck** provides:
+- Live sliders for Draft Layers ($1 \dots K$), Lookahead Horizon ($\gamma = 1 \dots 10$), and Temperature ($\tau$).
+- Checkbox toggles for BitNet b1.58 Ternary Draft format and Multi-Branch Tree Speculation.
+- Interactive telemetry stat boxes: Speedup Multiplier ($S$), Mean Acceptance Rate ($\alpha$), Tokens Generated per Target Pass, and Memory Traffic Saved.
+- One-click **"Synthesize & Register Draft Model Instance"** adding the extracted draft model into the studio active models list.
 
 ---
 

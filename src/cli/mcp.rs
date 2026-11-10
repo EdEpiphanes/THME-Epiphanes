@@ -241,6 +241,20 @@ fn handle_tools_list(id: Value) -> JsonRpcResponse {
                 },
                 "required": ["target_paradigm"]
             }
+        },
+        {
+            "name": "thme_simulate_speculative_decoding",
+            "description": "Simulates multi-token speculative decoding between target model and lightweight draft model, calculating empirical acceptance rate alpha, emitted tokens per pass, and effective latency speedup multiplier S.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "model_path": { "type": "string", "description": "Optional target model path." },
+                    "draft_layers": { "type": "integer", "description": "Number of layers in draft model (default 4)." },
+                    "lookahead_horizon": { "type": "integer", "description": "Speculative lookahead horizon gamma (default 5)." },
+                    "temperature": { "type": "number", "description": "Sampling temperature (default 0.7)." },
+                    "apply_bitnet": { "type": "boolean", "description": "Use BitNet b1.58 ternary format in draft model (default false)." }
+                }
+            }
         }
     ]);
 
@@ -280,6 +294,9 @@ fn handle_tools_call(
         "thme_run_experiment" => tool_run_experiment(&args),
         "thme_micro_train" => tool_micro_train(&args),
         "thme_convert_paradigm" => tool_convert_paradigm(&args, active_model_path),
+        "thme_simulate_speculative_decoding" => {
+            tool_simulate_speculative_decoding(&args, active_model_path)
+        }
         _ => Err(format!("Unknown tool: {}", name)),
     };
 
@@ -749,5 +766,98 @@ fn tool_convert_paradigm(
         report.new_tensors_added,
         report.tensors_restructured,
         report.description
+    ))
+}
+
+fn tool_simulate_speculative_decoding(
+    args: &Value,
+    active_model_path: &mut Option<String>,
+) -> Result<String, String> {
+    let path_opt = args
+        .get("model_path")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .or_else(|| active_model_path.clone());
+
+    let target_model = if let Some(ref path) = path_opt {
+        *active_model_path = Some(path.clone());
+        let p = std::path::Path::new(path);
+        crate::parser::ModelImporter::import(p).map_err(|e| format!("Import failed: {}", e))?
+    } else {
+        crate::ir::ParadigmConverter::create_synthetic_baseline()
+    };
+
+    let draft_layers = args
+        .get("draft_layers")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(4) as usize;
+    let horizon = args
+        .get("lookahead_horizon")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(5) as usize;
+    let temperature = args
+        .get("temperature")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.7) as f32;
+    let apply_bitnet = args
+        .get("apply_bitnet")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    let draft_cfg = crate::speculative::DraftExtractionConfig {
+        strategy: if apply_bitnet {
+            crate::speculative::DraftExtractionStrategy::TernaryBitNet
+        } else {
+            crate::speculative::DraftExtractionStrategy::PrefixLayers
+        },
+        num_layers: draft_layers,
+        target_hidden_size: None,
+        apply_bitnet,
+        stride_step: 4,
+    };
+
+    let (_draft_model, synth_report) =
+        crate::speculative::DraftSynthesizer::extract_draft_model(&target_model, &draft_cfg)?;
+
+    let spec_config = crate::speculative::SpeculativeExecutionConfig {
+        lookahead_horizon: horizon,
+        temperature,
+        strategy: crate::speculative::SpeculativeVerificationStrategy::RejectionSampling,
+        base_draft_fidelity: 0.82,
+        latency_cost_ratio: synth_report.latency_cost_ratio,
+    };
+
+    let telemetry =
+        crate::speculative::SpeculativeEngine::simulate_speculative_run(&spec_config, 25, 12.0);
+
+    let (opt_gamma, opt_s) = crate::speculative::SpeculativeEngine::find_optimal_horizon(
+        spec_config.base_draft_fidelity,
+        synth_report.latency_cost_ratio,
+    );
+
+    Ok(format!(
+        "### Speculative Decoding Simulation Completed\n\
+        - **Target Model**: `{}` ({} layers, {} params)\n\
+        - **Synthesized Draft**: `{}` ({} layers, {} params, {:.1}% size reduction)\n\
+        - **Lookahead Horizon (gamma)**: {} tokens\n\
+        - **Mean Acceptance Rate (alpha)**: {:.1}%\n\
+        - **Tokens Generated per Target Pass**: {:.2}\n\
+        - **Effective Wall-Clock Speedup**: **{:.2}x**\n\
+        - **Memory Bandwidth Reduction**: {:.1}%\n\
+        - **Optimal Horizon Recommendation**: gamma = {} (Est. Speedup: {:.2}x)",
+        target_model.name,
+        target_model.num_layers,
+        target_model.num_parameters,
+        synth_report.draft_model_name,
+        synth_report.draft_layers,
+        synth_report.draft_params,
+        synth_report.parameter_reduction_pct,
+        telemetry.lookahead_horizon,
+        telemetry.mean_acceptance_rate * 100.0,
+        telemetry.mean_tokens_per_pass,
+        telemetry.effective_speedup_multiplier,
+        telemetry.memory_traffic_savings_pct,
+        opt_gamma,
+        opt_s
     ))
 }

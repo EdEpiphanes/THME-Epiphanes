@@ -5,6 +5,7 @@ pub mod mcp;
 pub mod plan;
 pub mod profile;
 pub mod report;
+pub mod speculate;
 pub mod tweak;
 pub mod validate;
 
@@ -53,6 +54,9 @@ pub enum Commands {
     /// Cross-convert model topology across 8 specialized AI paradigms (LLM, LCM, LAM, MoE, VLM, SLM, MLM, SAM)
     Convert(convert::ConvertArgs),
 
+    /// Synthesize draft models and evaluate multi-token speculative decoding speedups
+    Speculate(speculate::SpeculateArgs),
+
     /// Export PyTorch / CUDA fine-tuning script or Hugging Face configurations
     #[command(alias = "interop")]
     Export(interop::InteropArgs),
@@ -73,6 +77,7 @@ pub fn run() -> Result<()> {
         Commands::Tweak(args) => tweak::execute(args),
         Commands::Report(args) => report::execute(args),
         Commands::Convert(args) => convert::execute(args),
+        Commands::Speculate(args) => speculate::execute(args),
         Commands::Export(args) => interop::execute(args),
         Commands::Mcp(args) => mcp::execute(args),
     }

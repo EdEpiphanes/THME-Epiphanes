@@ -9,6 +9,7 @@ pub mod parser;
 pub mod profiling;
 pub mod quality;
 pub mod report;
+pub mod speculative;
 pub mod surgery;
 pub mod trainer;
 pub mod transform;
@@ -30,6 +31,12 @@ pub use profiling::{KvCacheEstimator, SensitivityProfiler};
 pub use quality::{
     BenchmarkScore, EvaluationCorpus, EvaluatorConfig, GateDecision, GateResult, ModelEvaluator,
     PerplexityGateDecision, PerplexityGateResult, PerplexityMetrics, QualityGate,
+};
+pub use speculative::{
+    DraftExtractionConfig, DraftExtractionStrategy, DraftSynthesisReport, DraftSynthesizer,
+    SpeculativeEngine, SpeculativeExecutionConfig, SpeculativeStepTelemetry,
+    SpeculativeTelemetryReport, SpeculativeTreeNode, SpeculativeTreeTopology,
+    SpeculativeVerificationStrategy,
 };
 pub use surgery::{SurgeryDiff, SurgeryEngine, TweakOperation, TweakRecipe};
 pub use trainer::{

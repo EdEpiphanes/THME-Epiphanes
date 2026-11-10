@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.6] - 2026-11-10
+
+### Added
+- **Speculative Decoding & Draft Model Synthesizer Engine (`src/speculative/`)**:
+  - `DraftSynthesizer` (`src/speculative/synthesizer.rs`): Automated draft model extraction supporting Prefix Layers, Strided Subsampling, Low-Rank Projection, and BitNet b1.58 Ternary Discretization.
+  - `SpeculativeEngine` (`src/speculative/engine.rs`): Multi-token speculative decoding execution and verification engine modeling rejection sampling, token acceptance probability ($\alpha_{\text{spec}}$), tokens emitted per pass ($\mathbb{E}[k] + 1$), latency cost ratio ($r = \frac{T_{\text{draft}}}{T_{\text{target}}}$), and effective wall-clock latency speedup ($S$).
+  - `SpeculativeTreeTopology` (`src/speculative/tree.rs`): Multi-branch tree speculation topology with 2D causal tree attention mask synthesis (Medusa / Eagle style) and longest accepted path selection.
+- **CLI `thme speculate` (`src/cli/speculate.rs`, `src/cli/mod.rs`)**:
+  - Command-line tool for speculative decoding evaluation with lookahead horizon ($\gamma$), temperature, BitNet draft toggle, tree decoding, JSON reporting, and draft model export.
+- **Model Context Protocol (MCP) Tool `thme_simulate_speculative_decoding` (`src/cli/mcp.rs`)**:
+  - Exposes programmatic speculative decoding simulation to AI coding agents in VS Code and GitHub Copilot.
+- **Desktop Studio GUI Speculative Cockpit (`src/gui/app.rs`)**:
+  - Added interactive Speculative Decoding & Multi-Token Draft Synthesizer Deck in Tab 4 (Full Benchmarks) with live sliders, telemetry stat cards, simulation runner, and one-click draft model registration.
+- **Declarative Surgery Recipe Support (`src/surgery/recipe.rs`)**:
+  - Added `TweakOperation::ExtractDraftModel` to execute draft model extraction within Teacher LLM recipes.
+- **Speculative Decoding Test Suite (`tests/test_speculative_decoding.rs`)**:
+  - 5 comprehensive tests for prefix extraction, ternary BitNet draft models, speculative speedup simulation, tree topology attention masks, and recipe surgery. Total test count expanded to 81 passing tests.
+
+---
+
 ## [0.1.5] - 2026-11-10
 
 ### Added
