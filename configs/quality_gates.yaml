@@ -1,0 +1,12 @@
+# THME Quality Gate Tolerances
+quality_gates:
+  primary:
+    metric: "mmlu_accuracy"
+    allowed_degradation_pts: 1.0
+  secondary:
+    - metric: "gsm8k_accuracy"
+      allowed_degradation_pts: 1.5
+    - metric: "perplexity_wikitext2"
+      allowed_degradation_pts: 0.25 # maximum allowed ppl increase
+confidence_interval: 0.95
+auto_rollback: true

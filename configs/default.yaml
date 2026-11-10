@@ -1,0 +1,23 @@
+# THME / LLM-Tweaker Default Configuration
+version: "0.1.0"
+
+optimization:
+  target_vram_gb: null
+  max_degradation_pct: 2.0
+  pareto_mode: "balanced" # aggressive, balanced, conservative
+
+profiling:
+  batch_size: 1
+  context_lengths:
+    - 2048
+    - 4096
+    - 8192
+    - 16384
+    - 32768
+    - 65536
+    - 131072
+
+safeguards:
+  keep_norms_high_precision: true
+  min_embedding_bits: 8.0
+  min_head_bits: 8.0

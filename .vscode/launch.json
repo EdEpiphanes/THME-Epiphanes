@@ -1,0 +1,96 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug THME Desktop Studio (GUI)",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=thme-gui",
+                    "--package=llm-tweaker"
+                ],
+                "filter": {
+                    "name": "thme-gui",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug THME CLI (inspect mock_llama)",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=thme",
+                    "--package=llm-tweaker"
+                ],
+                "filter": {
+                    "name": "thme",
+                    "kind": "bin"
+                }
+            },
+            "args": ["inspect", "examples/mock_llama"],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug THME CLI (profile mock_llama)",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=thme",
+                    "--package=llm-tweaker"
+                ],
+                "filter": {
+                    "name": "thme",
+                    "kind": "bin"
+                }
+            },
+            "args": ["profile", "examples/mock_llama"],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug THME CLI (plan Pareto allocation)",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=thme",
+                    "--package=llm-tweaker"
+                ],
+                "filter": {
+                    "name": "thme",
+                    "kind": "bin"
+                }
+            },
+            "args": ["plan", "examples/mock_llama", "--budget-gb", "0.05"],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug Integration Tests (test_ir)",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=test_ir",
+                    "--package=llm-tweaker"
+                ],
+                "filter": {
+                    "name": "test_ir",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

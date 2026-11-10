@@ -1,0 +1,7 @@
+/target
+optimization_plan.json
+examples/mock_llama/
+examples/report.md
+LLM-Tweaker-Studio.exe
+*.exe
+**/*.rs.bk

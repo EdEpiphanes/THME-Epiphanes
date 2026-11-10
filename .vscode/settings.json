@@ -1,0 +1,36 @@
+{
+    "antigravity.enableInlineDiff": false,
+
+    // Rust Analyzer integration
+    "rust-analyzer.check.command": "clippy",
+    "rust-analyzer.cargo.allTargets": true,
+    "rust-analyzer.cargo.buildScripts.enable": true,
+    "rust-analyzer.procMacro.enable": true,
+    "rust-analyzer.inlayHints.lifetimeElisionHints.enable": "skip_trivial",
+    "rust-analyzer.inlayHints.typeHints.enable": true,
+    "rust-analyzer.inlayHints.parameterHints.enable": true,
+
+    // Formatting & editor settings
+    "editor.formatOnSave": true,
+    "[rust]": {
+        "editor.defaultFormatter": "rust-lang.rust-analyzer"
+    },
+    "[toml]": {
+        "editor.defaultFormatter": "tamasfe.even-better-toml"
+    },
+    "files.trimTrailingWhitespace": true,
+    "files.insertFinalNewline": true,
+
+    // CodeLLDB debugger settings
+    "lldb.suppressUpdateNotifications": true,
+
+    // Even Better Toml / Dependi
+    "evenBetterToml.formatter.alignEntries": true,
+
+    // Test Explorer & Rust Test Adapter
+    "testExplorer.useNativeTesting": true,
+    "rustTestAdapter.testBinary": "${workspaceFolder}/target/debug/llm_tweaker.exe",
+
+    // Ponytail Copilot Sync
+    "ponytail.mode": "full"
+}

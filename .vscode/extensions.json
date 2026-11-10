@@ -1,0 +1,14 @@
+{
+    "recommendations": [
+        "rust-lang.rust-analyzer",
+        "vadimcn.vscode-lldb",
+        "fill-labs.dependi",
+        "tamasfe.even-better-toml",
+        "swellaby.vscode-rust-test-adapter",
+        "hbenl.vscode-test-explorer",
+        "dustypomerleau.rust-syntax",
+        "jscearcy.rust-doc-viewer",
+        "eamodio.gitlens",
+        "Finch13.ponytail-dietrichgebert-sync"
+    ]
+}
