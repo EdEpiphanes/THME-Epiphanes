@@ -106,6 +106,17 @@
   - PEFT LoRA adapter zero-copy weight merger ($W = W_0 + \frac{\alpha}{r} B \times A$).
 - **Done Means**: `cargo test --test test_interop` passes for script generation, configs, and LoRA math.
 
+### [THME-404] Universal 8 Specialized AI Model Paradigm Converter (Done)
+- **Component**: `thme::ir::paradigm`, `thme::cli::convert`
+- **Problem**: Ingesting and cross-converting diverse model architectures (LLM, LCM, LAM, MoE, VLM, SLM, MLM, SAM) requires universal tensor manifold transformations.
+- **Acceptance Criteria**:
+  - Implement heuristic and structural detection across all 8 specialized AI paradigms.
+  - Universal cross-conversion matrix with sparse upcycling (MoE), BitNet b1.58 ternary discretization (SLM), vision tower augmentation (VLM/SAM), neuro-symbolic intent routing (LAM), latent concept space projection (LCM), bidirectional masking (MLM), and dense consolidation (LLM).
+  - CLI `thme convert` command with full parameter customization.
+  - Desktop Studio GUI converter integrated in Tab 1 (Models Manager).
+  - Declarative surgery recipe support (`TweakOperation::ConvertParadigm`) and MCP tool `thme_convert_paradigm`.
+- **Done Means**: `cargo test --test test_model_paradigm_conversion` passes for detection, recipe surgery, and all 8 model round-trip conversions.
+
 ---
 
 ## Sprint 5: Production Exporter & Release (Milestone v0.2.0)

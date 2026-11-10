@@ -224,6 +224,23 @@ fn handle_tools_list(id: Value) -> JsonRpcResponse {
                     "steps": { "type": "integer", "description": "Number of steps (default 5)." }
                 }
             }
+        },
+        {
+            "name": "thme_convert_paradigm",
+            "description": "Cross-converts model topology across 8 specialized AI paradigms (LLM, LCM, LAM, MoE, VLM, SLM, MLM, SAM) with mathematical manifold restructuring.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "model_path": { "type": "string", "description": "Optional model path. Omit to use synthetic baseline." },
+                    "target_paradigm": { "type": "string", "enum": ["llm", "lcm", "lam", "moe", "vlm", "slm", "mlm", "sam"], "description": "Target paradigm code." },
+                    "num_experts": { "type": "integer", "description": "Number of experts when target is MoE (default 4)." },
+                    "top_k": { "type": "integer", "description": "Top-K routing when target is MoE (default 2)." },
+                    "target_hidden_size": { "type": "integer", "description": "Target hidden dimension when target is SLM (default 1024)." },
+                    "target_layers": { "type": "integer", "description": "Target layer count when target is SLM (default 8)." },
+                    "apply_bitnet": { "type": "boolean", "description": "Apply BitNet b1.58 ternary discretization (default false)." }
+                },
+                "required": ["target_paradigm"]
+            }
         }
     ]);
 
@@ -262,6 +279,7 @@ fn handle_tools_call(
         "thme_simulate_token_flow" => tool_simulate_token_flow(&args),
         "thme_run_experiment" => tool_run_experiment(&args),
         "thme_micro_train" => tool_micro_train(&args),
+        "thme_convert_paradigm" => tool_convert_paradigm(&args, active_model_path),
         _ => Err(format!("Unknown tool: {}", name)),
     };
 
@@ -645,4 +663,91 @@ fn tool_micro_train(args: &Value) -> Result<String, String> {
     } else {
         Err("No training steps recorded".to_string())
     }
+}
+
+fn tool_convert_paradigm(
+    args: &Value,
+    active_model_path: &mut Option<String>,
+) -> Result<String, String> {
+    let target_str = args
+        .get("target_paradigm")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "Missing required parameter 'target_paradigm'".to_string())?;
+
+    let target = match target_str.to_lowercase().as_str() {
+        "llm" => crate::ir::SpecializedModelParadigm::LLM,
+        "lcm" => crate::ir::SpecializedModelParadigm::LCM,
+        "lam" => crate::ir::SpecializedModelParadigm::LAM,
+        "moe" => crate::ir::SpecializedModelParadigm::MoE,
+        "vlm" => crate::ir::SpecializedModelParadigm::VLM,
+        "slm" => crate::ir::SpecializedModelParadigm::SLM,
+        "mlm" => crate::ir::SpecializedModelParadigm::MLM,
+        "sam" => crate::ir::SpecializedModelParadigm::SAM,
+        other => {
+            return Err(format!(
+            "Unknown target paradigm '{}'. Valid options: llm, lcm, lam, moe, vlm, slm, mlm, sam",
+            other
+        ))
+        }
+    };
+
+    let path_opt = args
+        .get("model_path")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .or_else(|| active_model_path.clone());
+
+    let model_ir = if let Some(ref path) = path_opt {
+        *active_model_path = Some(path.clone());
+        let p = std::path::Path::new(path);
+        crate::parser::ModelImporter::import(p).map_err(|e| format!("Import failed: {}", e))?
+    } else {
+        crate::ir::ParadigmConverter::create_synthetic_baseline()
+    };
+
+    let source = crate::ir::ParadigmConverter::detect_paradigm(&model_ir);
+
+    let mut config = crate::ir::ParadigmConversionConfig::new(target);
+    if let Some(experts) = args.get("num_experts").and_then(|v| v.as_u64()) {
+        config.num_experts = experts as usize;
+    }
+    if let Some(top_k) = args.get("top_k").and_then(|v| v.as_u64()) {
+        config.top_k = top_k as usize;
+    }
+    if let Some(hidden) = args.get("target_hidden_size").and_then(|v| v.as_u64()) {
+        config.target_hidden_size = Some(hidden as usize);
+    }
+    if let Some(layers) = args.get("target_layers").and_then(|v| v.as_u64()) {
+        config.target_layers = Some(layers as usize);
+    }
+    if let Some(bitnet) = args.get("apply_bitnet").and_then(|v| v.as_bool()) {
+        config.apply_bitnet = bitnet;
+    }
+
+    let (_converted_ir, report) = crate::ir::ParadigmConverter::convert(&model_ir, &config)?;
+
+    Ok(format!(
+        "### Universal AI Model Paradigm Conversion Completed\n\
+        - **Source**: {} ({})\n\
+        - **Target**: {} ({})\n\
+        - **Pipeline Components**: {}\n\
+        - **Parameters**: {} -> {} ({:+.1}%)\n\
+        - **Storage Size**: {:.2} MB -> {:.2} MB ({:+.1}% savings)\n\
+        - **Tensors Added**: {} | **Restructured**: {}\n\
+        - **Details**: {}",
+        source.display_name(),
+        source.code(),
+        target.display_name(),
+        target.code(),
+        target.primary_components().join(" -> "),
+        report.original_parameters,
+        report.new_parameters,
+        report.parameter_delta_pct,
+        report.original_byte_size as f64 / (1024.0 * 1024.0),
+        report.new_byte_size as f64 / (1024.0 * 1024.0),
+        report.storage_savings_pct,
+        report.new_tensors_added,
+        report.tensors_restructured,
+        report.description
+    ))
 }

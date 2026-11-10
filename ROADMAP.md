@@ -63,7 +63,13 @@ The path from v0.1.0 to v0.2.0 focuses strictly on **correctness, honesty, repro
   - `thme validate` CLI command with `--corpus`, `--max-ppl-delta`, and JSON output flags.
 
 - [x] **v0.1.5 — Surgery Daemon, IDE Extensions & PyTorch/CUDA Interop Bridge**
-  - Headless Model Context Protocol (MCP) server (`thme mcp`) exposing 7 specialized LLM surgical tools.
+  - Universal 8 Specialized AI Model Paradigm Converter (`src/ir/paradigm.rs`):
+    - Full detection, ingestion, and cross-conversion matrix across 8 model paradigms: LLM, LCM, LAM, MoE, VLM, SLM, MLM, SAM.
+    - Sparse upcycling engine partitioning dense MLPs into parallel expert matrices and synthesized router gating tensors.
+    - BitNet b1.58 ternary discretization delivering up to 85.3% footprint reduction for mobile and edge deployments.
+    - CLI `thme convert` command with full customization flags (`--experts`, `--top-k`, `--hidden`, `--layers`, `--bitnet`, `--save-recipe`).
+    - Declarative surgery recipe support (`TweakOperation::ConvertParadigm`) and Desktop Studio GUI converter in Tab 1.
+  - Headless Model Context Protocol (MCP) server (`thme mcp`) exposing 8 specialized LLM surgical tools including `thme_convert_paradigm`.
   - Packaged Visual Studio Code extension (`editors/vscode/thme-vscode-0.1.5.vsix`) with 4 Explorer sidebar panels.
   - GitHub Copilot Language Model Tools integration (`thme_copilot_inspect`, `thme_copilot_surgery`, `thme_copilot_validate`).
   - PyTorch & CUDA fine-tuning interoperability bridge (`src/interop/`):

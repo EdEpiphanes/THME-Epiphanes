@@ -21,7 +21,10 @@ pub use interop::{
     HuggingFaceConfigGenerator, PeftLoraAdapter, PyTorchCUDATrainingStrategy, PyTorchInteropConfig,
     PyTorchScriptGenerator,
 };
-pub use ir::{ModelArchitecture, ModelIR, TensorFormat, TensorIR, TensorRole};
+pub use ir::{
+    ModelArchitecture, ModelIR, ParadigmConversionConfig, ParadigmConversionReport,
+    ParadigmConverter, SpecializedModelParadigm, TensorFormat, TensorIR, TensorRole,
+};
 pub use parser::ModelImporter;
 pub use profiling::{KvCacheEstimator, SensitivityProfiler};
 pub use quality::{

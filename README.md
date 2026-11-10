@@ -16,7 +16,7 @@
   <img src="https://img.shields.io/badge/Memory-Zero--Copy%20MMap-f59e0b?style=flat-square" alt="Zero-Copy" />
   <a href="https://github.com/EdEpiphanes/THME-Epiphanes/actions/workflows/ci.yml"><img src="https://github.com/EdEpiphanes/THME-Epiphanes/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <img src="https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square" alt="License" />
-  <img src="https://img.shields.io/badge/Tests-71%20Passed-success?style=flat-square" alt="Tests" />
+  <img src="https://img.shields.io/badge/Tests-76%20Passed-success?style=flat-square" alt="Tests" />
   <img src="https://img.shields.io/badge/PyTorch%20%2B%20CUDA-Compatible-ee4c2c?style=flat-square&logo=pytorch" alt="PyTorch CUDA" />
   <img src="https://img.shields.io/badge/IDE-VS%20Code%20%2B%20Copilot-blueviolet?style=flat-square" alt="VS Code Extension" />
 </p>
@@ -24,6 +24,7 @@
 <p align="center">
   <a href="#overview">Overview</a> •
   <a href="#desktop-studio-showcase">Desktop Studio</a> •
+  <a href="#universal-8-specialized-ai-model-paradigm-converter">8 AI Models Matrix</a> •
   <a href="#scientific-math--algorithmic-optimization">Science & Math Engine</a> •
   <a href="#layer-anatomy-deconstruction--surgery">Layer Surgery</a> •
   <a href="#pytorch-cuda--fine-tuning-tools-interoperability">PyTorch & CUDA Bridge</a> •
@@ -89,6 +90,110 @@ thme-gui
 | **6. Audit Log** | Structured event stream | Filterable chronological event log with severity classification (`OPTIMIZE`, `DISTILL`, `SURGERY`, `BENCHMARK`, `INFO`, `WARN`), query search, and CSV export. |
 | **7. Export & Surgery** | Model artifacts & JSON recipes | Exports tuned models to SafeTensors, GGUF, or THME bundles. Includes a multiline JSON specification editor and executor for Teacher LLM restructuring recipes. |
 | **8. Dev Lab & Training Studio** | Non-conventional math & micro-training | Ingests arbitrary datasets (raw text, JSONL, Alpaca, ShareGPT, CSV); applies experimental weight warps (stochastic noise, complex phase modulation, spectral reshaping, continuous activation warping, stochastic DropBlock); on-device parameter micro-trainer with AdamW, SignSGD, and EWHA energy-regularized loss. |
+
+---
+
+## Universal 8 Specialized AI Model Paradigm Converter
+
+THME features a universal cross-paradigm architectural conversion engine. Any loaded model topology can be mathematically detected, deconstructed, and restructured into any of **8 specialized model paradigms**:
+
+```text
+       ┌───────────┐       ┌───────────┐       ┌───────────┐       ┌───────────┐
+       │    LLM    │       │    LCM    │       │    LAM    │       │    MoE    │
+       │Autoregres.│       │  Concept  │       │  Action   │       │Mixture of │
+       │Causal LM  │       │ Diffusion │       │ Trajectory│       │  Experts  │
+       └─────┬─────┘       └─────┬─────┘       └─────┬─────┘       └─────┬─────┘
+             │                   │                   │                   │
+             └───────────────────┼───────────────────┼───────────────────┘
+                                 │
+                     [THME MANIFOLD ENGINE]
+                     Universal Cross-Converter
+                                 │
+             ┌───────────────────┼───────────────────┼───────────────────┐
+             │                   │                   │                   │
+       ┌─────┴─────┐       ┌─────┴─────┐       ┌─────┴─────┐       ┌─────┴─────┐
+       │    VLM    │       │    SLM    │       │    MLM    │       │    SAM    │
+       │  Vision-  │       │   Small   │       │  Masked   │       │  Segment  │
+       │ Language  │       │  BitNet   │       │ Bidirect. │       │ Anything  │
+       └───────────┘       └───────────┘       └───────────┘       └───────────┘
+```
+
+### The 8 Specialized AI Model Paradigms
+
+1. **LLM (Large Language Model)**:
+   - *Architecture*: Autoregressive Causal Transformer ($W_q, W_k, W_v, W_o$, SwiGLU MLP).
+   - *Execution Pipeline*: Input $\to$ Tokenization $\to$ Embedding $\to$ Transformer Backbone $\to$ Causal Output Generation.
+2. **LCM (Large Concept Model)**:
+   - *Architecture*: Sentence segmentation, SONAR high-dimensional latent space projection, and latent concept diffusion backbone.
+   - *Execution Pipeline*: Input $\to$ Sentence Segmentation $\to$ SONAR Embedding $\to$ Diffusion Latent Process $\to$ Advanced Patterning $\to$ Quantization $\to$ Output.
+3. **LAM (Large Action Model)**:
+   - *Architecture*: Multimodal perception subsystem, intent recognition, neuro-symbolic associative memory, and action trajectory planners.
+   - *Execution Pipeline*: Input Processing $\to$ Perception System $\to$ Intent Recognition $\to$ Task Breakdown $\leftrightarrow$ Neuro-Symbolic Memory $\to$ Action Planning $\to$ Quantization $\to$ Feedback Integration.
+4. **MoE (Mixture of Experts)**:
+   - *Architecture*: Dynamic router gating mechanisms ($W_{\text{router}} \in \mathbb{R}^{N \times D}$), sparse parallel MLP expert banks, and Top-$K$ dispatchers.
+   - *Execution Pipeline*: Input $\to$ Router Mechanism $\to$ Top-$K$ Selection across $N$ Experts $\to$ Weighted Combination $\to$ Output.
+5. **VLM (Vision-Language Model)**:
+   - *Architecture*: Deep Vision Transformer (ViT) tower, cross-modal linear projection interface, and multimodal attention processor.
+   - *Execution Pipeline*: Image Input + Text Input $\to$ Vision Encoder + Text Encoder $\to$ Projection Interface $\to$ Multimodal Processor $\to$ Language Model $\to$ Output Generation.
+6. **SLM (Small Language Model)**:
+   - *Architecture*: Compact tokenization, Grouped-Query Attention (GQA), layer pruning, dimension reduction, and BitNet b1.58 ternary discretization ($\{-1, 0, +1\}$).
+   - *Execution Pipeline*: Input Processing $\to$ Compact Tokenization $\to$ Efficient Transformer $\to$ Model Quantization $\leftrightarrow$ Memory Optimization $\to$ Edge Deployment $\to$ Output Generation.
+7. **MLM (Masked Language Model)**:
+   - *Architecture*: Token masking, relaxed bidirectional dual-context attention highways, and masked token prediction heads.
+   - *Execution Pipeline*: Text Input $\to$ Token Masking $\to$ Embedding Layer $\to$ Left Context $\leftrightarrow$ Right Context $\to$ Bidirectional Attention $\to$ Masked Token Prediction $\to$ Feature Representation.
+8. **SAM (Segment Anything Model)**:
+   - *Architecture*: Point/box prompt encoder, image encoder, dense cross-modal feature correlation, and promptable mask decoder.
+   - *Execution Pipeline*: Prompt Input + Image Input $\to$ Prompt Encoder + Image Encoder $\to$ Image Embedding $\to$ Feature Correlation $\leftrightarrow$ Mask Decoder $\to$ Segmentation Output.
+
+### Universal Cross-Conversion via CLI
+
+```bash
+# Cross-convert model to Mixture of Experts (MoE) with 8 experts and Top-2 routing
+thme convert --model path/to/model.safetensors --to moe --experts 8 --top-k 2
+
+# Cross-convert model to BitNet b1.58 Ternary SLM for mobile/edge deployment
+thme convert --model path/to/model.safetensors --to slm --hidden 1024 --layers 8 --bitnet
+
+# Cross-convert model to Vision-Language Model (VLM)
+thme convert --model path/to/model.safetensors --to vlm
+
+# Cross-convert model to Large Action Model (LAM) and export declarative recipe JSON
+thme convert --model path/to/model.safetensors --to lam --save-recipe recipes/convert_to_lam.json
+```
+
+### Declarative Surgery Recipe Support
+
+Paradigm transformations can be specified declaratively in Teacher LLM surgery JSON recipes:
+
+```json
+{
+  "name": "edge-bitnet-slm-downscaling",
+  "author": "Epiphanes AutoTuner",
+  "target_model": "Llama-3-8B",
+  "version": "1.0",
+  "description": "Downscale dense LLaMA-8B into an ultra-compact 8-layer BitNet b1.58 SLM for edge devices",
+  "operations": [
+    {
+      "type": "ConvertParadigm",
+      "params": {
+        "target_paradigm": "SLM",
+        "target_hidden_size": 1024,
+        "target_layers": 8,
+        "apply_bitnet": true
+      }
+    }
+  ]
+}
+```
+
+### Desktop Studio GUI Integration
+
+In **Tab 1: Models Manager**, click **"Universal Paradigm Converter (8 AI Models)"** to reveal the interactive converter panel:
+- Inspects and displays the detected active paradigm of the currently loaded model.
+- Provides a selectable 8-paradigm pill grid with descriptions and execution pipelines.
+- Dynamic parameter tuning controls for experts, Top-$K$, target hidden size, target layers, and BitNet b1.58 ternary discretization.
+- One-click execution button creating an immediately benchmarkable and profileable model instance in the studio workspace.
+- Renders detailed conversion diagnostic reports (parameter count delta, footprint savings, tensors restructured).
 
 ---
 

@@ -38,6 +38,19 @@ pub enum TweakOperation {
         hidden_size: usize,
         default_mixer: String,
     },
+    ConvertParadigm {
+        target_paradigm: crate::ir::SpecializedModelParadigm,
+        #[serde(default)]
+        num_experts: Option<usize>,
+        #[serde(default)]
+        top_k: Option<usize>,
+        #[serde(default)]
+        target_hidden_size: Option<usize>,
+        #[serde(default)]
+        target_layers: Option<usize>,
+        #[serde(default)]
+        apply_bitnet: Option<bool>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -203,6 +216,36 @@ impl SurgeryEngine {
                         "Rebuilt model topology: {} layers, hidden dimension {}, sequence mixer '{}'",
                         num_layers, hidden_size, default_mixer
                     ));
+                }
+                TweakOperation::ConvertParadigm {
+                    target_paradigm,
+                    num_experts,
+                    top_k,
+                    target_hidden_size,
+                    target_layers,
+                    apply_bitnet,
+                } => {
+                    let cfg = crate::ir::ParadigmConversionConfig {
+                        target_paradigm: *target_paradigm,
+                        num_experts: num_experts.unwrap_or(4),
+                        top_k: top_k.unwrap_or(2),
+                        target_hidden_size: *target_hidden_size,
+                        target_layers: *target_layers,
+                        apply_bitnet: apply_bitnet.unwrap_or(false),
+                        ..Default::default()
+                    };
+                    if let Ok((converted, report)) =
+                        crate::ir::ParadigmConverter::convert(model, &cfg)
+                    {
+                        *model = converted;
+                        modified_count += report.tensors_restructured + report.new_tensors_added;
+                        audit_log.push(report.description);
+                    } else {
+                        audit_log.push(format!(
+                            "Failed to convert paradigm to {:?}",
+                            target_paradigm
+                        ));
+                    }
                 }
             }
         }

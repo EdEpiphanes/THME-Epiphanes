@@ -1,3 +1,4 @@
+pub mod convert;
 pub mod inspect;
 pub mod interop;
 pub mod mcp;
@@ -49,6 +50,9 @@ pub enum Commands {
     /// View or export optimization plan reports
     Report(report::ReportArgs),
 
+    /// Cross-convert model topology across 8 specialized AI paradigms (LLM, LCM, LAM, MoE, VLM, SLM, MLM, SAM)
+    Convert(convert::ConvertArgs),
+
     /// Export PyTorch / CUDA fine-tuning script or Hugging Face configurations
     #[command(alias = "interop")]
     Export(interop::InteropArgs),
@@ -68,6 +72,7 @@ pub fn run() -> Result<()> {
         Commands::Validate(args) => validate::execute(args),
         Commands::Tweak(args) => tweak::execute(args),
         Commands::Report(args) => report::execute(args),
+        Commands::Convert(args) => convert::execute(args),
         Commands::Export(args) => interop::execute(args),
         Commands::Mcp(args) => mcp::execute(args),
     }

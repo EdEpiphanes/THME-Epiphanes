@@ -782,6 +782,16 @@ pub struct THMEApp {
     rebuild_checkpoint_layer: usize,
     rebuild_remap_open_weights: bool,
 
+    // Universal 8 Specialized AI Models Paradigm Converter
+    paradigm_converter_open: bool,
+    selected_target_paradigm_idx: usize,
+    paradigm_num_experts: usize,
+    paradigm_top_k: usize,
+    paradigm_target_hidden: usize,
+    paradigm_target_layers: usize,
+    paradigm_apply_bitnet: bool,
+    paradigm_last_report: Option<String>,
+
     // Deep Layer Deconstruction & Anatomy
     selected_subblock: Option<crate::ir::SubBlockCategory>,
     hybrid_topology_mode: usize,
@@ -888,6 +898,16 @@ impl THMEApp {
             rebuild_hidden_dim: 2048,
             rebuild_checkpoint_layer: 4,
             rebuild_remap_open_weights: true,
+
+            // Universal 8 Specialized AI Models Paradigm Converter
+            paradigm_converter_open: false,
+            selected_target_paradigm_idx: 3, // MoE
+            paradigm_num_experts: 4,
+            paradigm_top_k: 2,
+            paradigm_target_hidden: 1024,
+            paradigm_target_layers: 8,
+            paradigm_apply_bitnet: true,
+            paradigm_last_report: None,
 
             // Deep Layer Deconstruction & Anatomy
             selected_subblock: None,
@@ -2033,6 +2053,10 @@ impl THMEApp {
                     if ui.button("Rebuild Architecture From Scratch").clicked() {
                         self.rebuilder_open = !self.rebuilder_open;
                     }
+
+                    if ui.button("Universal Paradigm Converter (8 AI Models)").clicked() {
+                        self.paradigm_converter_open = !self.paradigm_converter_open;
+                    }
                 });
 
                 if self.rebuilder_open {
@@ -2105,6 +2129,169 @@ impl THMEApp {
                                     self.rebuilder_open = false;
                                 }
                             });
+                        });
+                }
+
+                if self.paradigm_converter_open {
+                    ui.add_space(6.0);
+                    egui::Frame::NONE
+                        .fill(p.bg_card)
+                        .stroke(Stroke::new(1.0_f32, p.secondary))
+                        .inner_margin(egui::Margin::same(10))
+                        .show(ui, |ui| {
+                            ui.label(
+                                egui::RichText::new("UNIVERSAL AI MODEL PARADIGM CONVERTER (8 SPECIALIZED MODELS)")
+                                    .strong()
+                                    .color(p.secondary),
+                            );
+                            ui.label(
+                                egui::RichText::new(
+                                    "Cross-convert any loaded model topology into LLM, LCM, LAM, MoE, VLM, SLM, MLM, or SAM with mathematical manifold restructuring."
+                                )
+                                .size(9.0)
+                                .color(p.text_muted),
+                            );
+                            ui.add_space(6.0);
+
+                            let source_ir = self.model().to_model_ir();
+                            let detected_source = crate::ir::ParadigmConverter::detect_paradigm(&source_ir);
+
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("Source Paradigm (Detected):").strong().color(p.text_main));
+                                ui.label(
+                                    egui::RichText::new(format!("{} ({})", detected_source.display_name(), detected_source.code()))
+                                        .strong()
+                                        .color(p.primary),
+                                );
+                            });
+
+                            ui.add_space(6.0);
+                            ui.label(egui::RichText::new("Select Target Paradigm:").strong().color(p.text_main));
+
+                            let paradigms = crate::ir::SpecializedModelParadigm::all();
+                            ui.horizontal_wrapped(|ui| {
+                                for (idx, paradigm) in paradigms.iter().enumerate() {
+                                    let is_selected = self.selected_target_paradigm_idx == idx;
+                                    let btn_text = format!("{} ({})", paradigm.display_name(), paradigm.code());
+                                    if ui.selectable_label(is_selected, btn_text).clicked() {
+                                        self.selected_target_paradigm_idx = idx;
+                                    }
+                                }
+                            });
+
+                            let target_paradigm = paradigms[self.selected_target_paradigm_idx.min(paradigms.len() - 1)];
+
+                            ui.add_space(6.0);
+                            egui::Frame::NONE
+                                .fill(p.bg_input)
+                                .stroke(Stroke::new(1.0_f32, p.border))
+                                .inner_margin(egui::Margin::same(8))
+                                .show(ui, |ui| {
+                                    ui.label(
+                                        egui::RichText::new(format!("Target Specs: {}", target_paradigm.description()))
+                                            .size(10.0)
+                                            .color(p.text_main),
+                                    );
+                                    let comps = target_paradigm.primary_components().join(" -> ");
+                                    ui.label(egui::RichText::new(format!("Pipeline: {}", comps)).size(9.0).color(p.text_muted));
+                                });
+
+                            ui.add_space(6.0);
+                            ui.label(egui::RichText::new("Paradigm Configuration Parameters:").strong().color(p.text_main));
+
+                            match target_paradigm {
+                                crate::ir::SpecializedModelParadigm::MoE => {
+                                    ui.horizontal(|ui| {
+                                        ui.label("Number of Experts:");
+                                        ui.selectable_value(&mut self.paradigm_num_experts, 2, "2 Experts");
+                                        ui.selectable_value(&mut self.paradigm_num_experts, 4, "4 Experts");
+                                        ui.selectable_value(&mut self.paradigm_num_experts, 8, "8 Experts");
+                                        ui.selectable_value(&mut self.paradigm_num_experts, 16, "16 Experts");
+                                    });
+                                    ui.horizontal(|ui| {
+                                        ui.label("Top-K Routing:");
+                                        ui.selectable_value(&mut self.paradigm_top_k, 1, "Top-1");
+                                        ui.selectable_value(&mut self.paradigm_top_k, 2, "Top-2");
+                                        ui.selectable_value(&mut self.paradigm_top_k, 4, "Top-4");
+                                    });
+                                }
+                                crate::ir::SpecializedModelParadigm::SLM => {
+                                    ui.horizontal(|ui| {
+                                        ui.label("Target Hidden Dimension:");
+                                        ui.selectable_value(&mut self.paradigm_target_hidden, 512, "512");
+                                        ui.selectable_value(&mut self.paradigm_target_hidden, 1024, "1024");
+                                        ui.selectable_value(&mut self.paradigm_target_hidden, 2048, "2048");
+                                    });
+                                    ui.horizontal(|ui| {
+                                        ui.label("Target Pruned Layers:");
+                                        ui.selectable_value(&mut self.paradigm_target_layers, 4, "4 Layers");
+                                        ui.selectable_value(&mut self.paradigm_target_layers, 8, "8 Layers");
+                                        ui.selectable_value(&mut self.paradigm_target_layers, 12, "12 Layers");
+                                    });
+                                    ui.checkbox(&mut self.paradigm_apply_bitnet, "Apply BitNet b1.58 Ternary Discretization ({-1, 0, +1})");
+                                }
+                                _ => {
+                                    ui.label(
+                                        egui::RichText::new("Standard auto-scaling manifold adapters will be synthesized.")
+                                            .size(9.5)
+                                            .color(p.text_muted),
+                                    );
+                                }
+                            }
+
+                            ui.add_space(8.0);
+                            ui.horizontal(|ui| {
+                                if ui
+                                    .button(
+                                        egui::RichText::new(format!("Execute Conversion to {}", target_paradigm.code()))
+                                            .strong()
+                                            .color(Color32::BLACK),
+                                    )
+                                    .clicked()
+                                {
+                                    let mut config = crate::ir::ParadigmConversionConfig::new(target_paradigm);
+                                    config.num_experts = self.paradigm_num_experts;
+                                    config.top_k = self.paradigm_top_k;
+                                    config.target_hidden_size = Some(self.paradigm_target_hidden);
+                                    config.target_layers = Some(self.paradigm_target_layers);
+                                    config.apply_bitnet = self.paradigm_apply_bitnet;
+
+                                    match crate::ir::ParadigmConverter::convert(&source_ir, &config) {
+                                        Ok((converted_ir, report)) => {
+                                            let new_m = UniversalModel::from_model_ir(converted_ir, &format!("{}-Converted", target_paradigm.code()));
+                                            let name = new_m.name.clone();
+                                            self.models.push(new_m);
+                                            self.active_model_idx = self.models.len() - 1;
+                                            self.paradigm_last_report = Some(report.format_summary());
+                                            self.auto_scan_and_benchmark();
+                                            self.run_auto_decider_internal();
+                                            self.log_audit("INFO", "ParadigmConverted", &format!("Converted model topology to {}", target_paradigm.code()), &name);
+                                            self.status_msg = format!("Successfully converted model to {} paradigm!", target_paradigm.code());
+                                        }
+                                        Err(e) => {
+                                            self.status_msg = format!("Paradigm conversion failed: {}", e);
+                                        }
+                                    }
+                                }
+
+                                if ui.button("Close").clicked() {
+                                    self.paradigm_converter_open = false;
+                                }
+                            });
+
+                            if let Some(ref report) = self.paradigm_last_report {
+                                ui.add_space(8.0);
+                                egui::Frame::NONE
+                                    .fill(p.bg_dark)
+                                    .stroke(Stroke::new(1.0_f32, p.success))
+                                    .inner_margin(egui::Margin::same(8))
+                                    .show(ui, |ui| {
+                                        ui.label(egui::RichText::new("CONVERSION MANIFOLD REPORT").strong().color(p.success));
+                                        for line in report.lines() {
+                                            ui.label(egui::RichText::new(line).size(9.0).monospace().color(p.text_main));
+                                        }
+                                    });
+                            }
                         });
                 }
 
