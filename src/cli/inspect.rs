@@ -17,7 +17,9 @@ pub struct InspectArgs {
 }
 
 pub fn execute(args: InspectArgs) -> Result<()> {
-    println!("Scanning model metadata at: {:?}", args.path);
+    if !args.json {
+        println!("Scanning model metadata at: {:?}", args.path);
+    }
     let model_ir = ModelImporter::import(&args.path)?;
 
     if args.json {

@@ -62,22 +62,28 @@ pub fn execute(args: ConvertArgs) -> Result<()> {
     };
 
     let model_ir = if let Some(ref path) = args.model {
-        println!("Scanning and importing source model from: {:?}", path);
+        if !args.json {
+            println!("Scanning and importing source model from: {:?}", path);
+        }
         ModelImporter::import(path)
             .with_context(|| format!("Failed to import model from {:?}", path))?
     } else {
-        println!("Using default 12-layer synthetic LLM baseline for conversion test.");
+        if !args.json {
+            println!("Using default 12-layer synthetic LLM baseline for conversion test.");
+        }
         ParadigmConverter::create_synthetic_baseline()
     };
 
     let source = ParadigmConverter::detect_paradigm(&model_ir);
-    println!(
-        "Detected Source Architecture: {} ({}) | Tensors: {} | Hidden Dim: {}",
-        source.display_name(),
-        source.code(),
-        model_ir.tensors.len(),
-        model_ir.hidden_size
-    );
+    if !args.json {
+        println!(
+            "Detected Source Architecture: {} ({}) | Tensors: {} | Hidden Dim: {}",
+            source.display_name(),
+            source.code(),
+            model_ir.tensors.len(),
+            model_ir.hidden_size
+        );
+    }
 
     let mut config = ParadigmConversionConfig::new(target);
     config.num_experts = args.experts;
@@ -113,9 +119,16 @@ pub fn execute(args: ConvertArgs) -> Result<()> {
             expected_memory_savings_pct: Some(report.storage_savings_pct as f32),
         };
         let recipe_json = serde_json::to_string_pretty(&recipe)?;
+        if let Some(parent) = recipe_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
         std::fs::write(recipe_path, recipe_json)
             .with_context(|| format!("Failed to write recipe to {:?}", recipe_path))?;
-        println!("Saved declarative surgery recipe to: {:?}", recipe_path);
+        if !args.json {
+            println!("Saved declarative surgery recipe to: {:?}", recipe_path);
+        } else {
+            eprintln!("Saved declarative surgery recipe to: {:?}", recipe_path);
+        }
     }
 
     if args.json {

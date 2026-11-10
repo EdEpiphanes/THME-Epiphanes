@@ -54,21 +54,27 @@ pub struct SpeculateArgs {
 
 pub fn execute(args: SpeculateArgs) -> Result<()> {
     let target_model = if let Some(ref path) = args.model {
-        println!("Loading target model from: {:?}", path);
+        if !args.json {
+            println!("Loading target model from: {:?}", path);
+        }
         ModelImporter::import(path)
             .with_context(|| format!("Failed to import model from {:?}", path))?
     } else {
-        println!("Using default 12-layer synthetic LLM baseline as Target Model.");
+        if !args.json {
+            println!("Using default 12-layer synthetic LLM baseline as Target Model.");
+        }
         ParadigmConverter::create_synthetic_baseline()
     };
 
-    println!(
-        "Target Model: '{}' | Layers: {} | Hidden Dim: {} | Params: {}",
-        target_model.name,
-        target_model.num_layers,
-        target_model.hidden_size,
-        target_model.num_parameters
-    );
+    if !args.json {
+        println!(
+            "Target Model: '{}' | Layers: {} | Hidden Dim: {} | Params: {}",
+            target_model.name,
+            target_model.num_layers,
+            target_model.hidden_size,
+            target_model.num_parameters
+        );
+    }
 
     // 1. Synthesize Draft Model
     let draft_cfg = DraftExtractionConfig {
@@ -90,10 +96,17 @@ pub fn execute(args: SpeculateArgs) -> Result<()> {
             .map_err(|e| anyhow::anyhow!("Draft model synthesis failed: {}", e))?;
 
     if let Some(ref out_path) = args.export_draft {
+        if let Some(parent) = out_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
         let json_str = serde_json::to_string_pretty(&draft_model)?;
         std::fs::write(out_path, json_str)
             .with_context(|| format!("Failed to export draft model to {:?}", out_path))?;
-        println!("Exported draft model IR to: {:?}", out_path);
+        if !args.json {
+            println!("Exported draft model IR to: {:?}", out_path);
+        } else {
+            eprintln!("Exported draft model IR to: {:?}", out_path);
+        }
     }
 
     // 2. Evaluate Speculative Decoding Run

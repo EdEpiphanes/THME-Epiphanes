@@ -29,7 +29,7 @@ pub struct RooflineArgs {
     pub seq_len: usize,
 
     /// Model FlashAttention-2 tiling arithmetic intensity instead of standard attention
-    #[arg(long, default_value_t = true)]
+    #[arg(long, default_value_t = true, action = clap::ArgAction::Set, num_args = 0..=1, default_missing_value = "true")]
     pub flash_attn: bool,
 
     /// Simulate dynamic TDP power consumption and thermal throttling
@@ -47,11 +47,15 @@ pub struct RooflineArgs {
 
 pub fn execute(args: RooflineArgs) -> Result<()> {
     let model = if let Some(ref path) = args.model {
-        println!("Loading model from: {:?}", path);
+        if !args.json {
+            println!("Loading model from: {:?}", path);
+        }
         ModelImporter::import(path)
             .with_context(|| format!("Failed to import model from {:?}", path))?
     } else {
-        println!("Using default 12-layer synthetic LLM baseline for roofline profiling.");
+        if !args.json {
+            println!("Using default 12-layer synthetic LLM baseline for roofline profiling.");
+        }
         ParadigmConverter::create_synthetic_baseline()
     };
 
