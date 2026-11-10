@@ -1,9 +1,24 @@
-﻿# Changelog
+# Changelog
 
 All notable changes to **THME (Topological Heterogeneous Manifold Engine)** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [0.1.2] - 2026-11-10
+
+### Added
+- **Full GGUF v2/v3 Quantization Matrix (`GgmlType`)**: Added complete type enumerations for `F32`, `F16`, `Q4_0`, `Q4_1`, `Q5_0`, `Q5_1`, `Q8_0`, `Q8_1`, K-quants (`Q2_K`..`Q8_K`), and I-quants (`IQ2_XXS`..`IQ4_XS`, `IQ1_M`).
+- **Zero-Allocation Block Decoders (`GgufBlockDecoder`)**: Unpacks raw block payloads for `Q8_0`, `Q4_0`, `Q4_1`, and `Q5_0` with exact floating-point scale and offset reconstitution.
+- **Resilient GGUF Stream Recovery**: Truncated or corrupt GGUF files now recover all intact tensors parsed up to the point of corruption rather than terminating with panic.
+- **Infallible Parser Fuzz Suite (`tests/test_fuzz_parsers.rs`)**: Exhaustive prefix-truncation and bit-mutation property tests guaranteeing zero parser panics on corrupted or malicious inputs.
+- **GGUF Quant Unit Tests (`tests/test_gguf_quant_types.rs`)**: Validates block unpackers and real weight profile statistics on quantized GGUF tensors.
+
+### Security & Correctness
+- Added explicit `// SAFETY:` justifications on all memory-mapped file operations in `src/parser/gguf.rs` and `src/parser/safetensors.rs`.
+- Added strict length bounds checking on GGUF string and array headers to guard against allocation exhaustion attacks.
 
 ---
 

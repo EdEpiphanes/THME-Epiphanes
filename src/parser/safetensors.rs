@@ -57,10 +57,48 @@ impl SafetensorsScanner {
     }
 
     /// Read tensor metadata via zero-copy memory mapping without loading tensor buffers into RAM
+    /// Parse SafeTensors metadata from raw in-memory bytes with bounds validation
+    pub fn parse_metadata_from_slice(data: &[u8]) -> Result<Vec<TensorIR>> {
+        if data.len() < 8 {
+            anyhow::bail!(
+                "Buffer too short for SafeTensors: {} bytes (minimum 8)",
+                data.len()
+            );
+        }
+        let header_len = u64::from_le_bytes(data[0..8].try_into().unwrap()) as usize;
+        if header_len > data.len().saturating_sub(8) {
+            anyhow::bail!(
+                "Malformed SafeTensors header length {} exceeds buffer size {}",
+                header_len,
+                data.len().saturating_sub(8)
+            );
+        }
+
+        let safetensors = SafeTensors::deserialize(data)
+            .with_context(|| "Failed to parse SafeTensors header from memory slice")?;
+
+        let mut tensors = Vec::new();
+        for (name, view) in safetensors.tensors() {
+            let shape = view.shape().to_vec();
+            let dtype = format!("{:?}", view.dtype());
+            let byte_size = view.data().len();
+
+            let mut tensor_ir = TensorIR::new(name, shape, dtype.clone(), byte_size);
+            tensor_ir.weight_profile = Some(crate::profiling::WeightAnalyzer::profile_tensor(
+                view.data(),
+                &dtype,
+            ));
+            tensors.push(tensor_ir);
+        }
+
+        Ok(tensors)
+    }
+
     pub fn parse_metadata_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<TensorIR>> {
         let file = File::open(path.as_ref())
             .with_context(|| format!("Failed to open safetensors file: {:?}", path.as_ref()))?;
 
+        // SAFETY: File descriptor is open and unmodified during the lifetime of this read-only memory map.
         let mmap = unsafe { Mmap::map(&file)? };
         let safetensors = SafeTensors::deserialize(&mmap).with_context(|| {
             format!(

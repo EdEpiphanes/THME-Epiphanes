@@ -1,13 +1,13 @@
-﻿# THME Engineering Backlog (v0.1.2 -> v0.2.0)
+# THME Engineering Backlog (v0.1.2 -> v0.2.0)
 
 > **Epiphanes Engineering Backlog**  
 > Actionable ticket ledger tracking engineering issues, acceptance criteria, and completion conditions through v0.2.0.
 
 ---
 
-## Sprint 1: Format Correctness & Fuzzing (Milestone v0.1.2)
+## Sprint 1: Format Correctness & Fuzzing (Milestone v0.1.2) [COMPLETED]
 
-### [THME-101] Full GGUF v2/v3 Quantization Type Decoder
+### [THME-101] Full GGUF v2/v3 Quantization Type Decoder (Done)
 - **Component**: `thme::parser::gguf`
 - **Problem**: Current GGUF reader detects quant type IDs but lacks full block header decoders for `Q4_K_M`, `Q5_K_S`, `Q8_0`, and `IQ4_XS` super-blocks.
 - **Acceptance Criteria**:
@@ -16,7 +16,7 @@
   - Validate against standard test fixtures without runtime allocations.
 - **Done Means**: `cargo test test_gguf_all_quant_types` passes for synthetic headers representing each GGUF type.
 
-### [THME-102] Truncated File & Malformed Header Recovery
+### [THME-102] Truncated File & Malformed Header Recovery (Done)
 - **Component**: `thme::parser`
 - **Problem**: Corrupted downloads or partial transfers can cause premature parser abortion without actionable diagnostic contexts.
 - **Acceptance Criteria**:

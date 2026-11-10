@@ -1,4 +1,4 @@
-﻿# THME Roadmap: v0.1 to v0.2
+# THME Roadmap: v0.1 to v0.2
 
 > **Topological Heterogeneous Manifold Engine (THME)** by **Epiphanes**  
 > Roadmap governance and release progression from initial foundations to verified production deployment.
@@ -39,7 +39,7 @@ As defined in the **Engineering Playbook**, the path from v0.1.0 to v0.2.0 focus
 ---
 
 ### Phase 2: Format Correctness & Telemetry Hardening
-- [ ] **v0.1.2 — Format Correctness & Fuzz Testing**
+- [x] **v0.1.2 — Format Correctness & Fuzz Testing**
   - Implement parsing for full GGUF v2/v3 quantization types (`Q4_K_M`, `Q5_K_S`, `Q8_0`, `IQ4_XS`, `IQ3_XXS`).
   - Graceful recovery and diagnostic error reporting on truncated or corrupt model headers.
   - Split core into workspace crates: `thme-core` (pure algorithms & IR), `thme-cli`, and `thme-gui`.

@@ -7,6 +7,282 @@ use std::path::Path;
 use crate::ir::{ModelArchitecture, ModelIR, TensorIR};
 use crate::profiling::WeightAnalyzer;
 
+/// Comprehensive GGML quantization types and super-block metadata (GGUF v2/v3 specification)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u32)]
+#[allow(non_camel_case_types)]
+pub enum GgmlType {
+    F32 = 0,
+    F16 = 1,
+    Q4_0 = 2,
+    Q4_1 = 3,
+    Q5_0 = 6,
+    Q5_1 = 7,
+    Q8_0 = 8,
+    Q8_1 = 9,
+    Q2_K = 10,
+    Q3_K = 11,
+    Q4_K = 12,
+    Q5_K = 13,
+    Q6_K = 14,
+    Q8_K = 15,
+    IQ2_XXS = 16,
+    IQ2_XS = 17,
+    IQ3_XXS = 18,
+    IQ1_S = 19,
+    IQ4_NL = 20,
+    IQ3_S = 21,
+    IQ2_S = 22,
+    IQ4_XS = 23,
+    I8 = 24,
+    I16 = 25,
+    I32 = 26,
+    I64 = 27,
+    F64 = 28,
+    IQ1_M = 29,
+    BF16 = 30,
+    Unknown(u32),
+}
+
+impl GgmlType {
+    pub fn from_u32(val: u32) -> Self {
+        match val {
+            0 => Self::F32,
+            1 => Self::F16,
+            2 => Self::Q4_0,
+            3 => Self::Q4_1,
+            6 => Self::Q5_0,
+            7 => Self::Q5_1,
+            8 => Self::Q8_0,
+            9 => Self::Q8_1,
+            10 => Self::Q2_K,
+            11 => Self::Q3_K,
+            12 => Self::Q4_K,
+            13 => Self::Q5_K,
+            14 => Self::Q6_K,
+            15 => Self::Q8_K,
+            16 => Self::IQ2_XXS,
+            17 => Self::IQ2_XS,
+            18 => Self::IQ3_XXS,
+            19 => Self::IQ1_S,
+            20 => Self::IQ4_NL,
+            21 => Self::IQ3_S,
+            22 => Self::IQ2_S,
+            23 => Self::IQ4_XS,
+            24 => Self::I8,
+            25 => Self::I16,
+            26 => Self::I32,
+            27 => Self::I64,
+            28 => Self::F64,
+            29 => Self::IQ1_M,
+            30 => Self::BF16,
+            other => Self::Unknown(other),
+        }
+    }
+
+    pub fn type_name(&self) -> &'static str {
+        match self {
+            Self::F32 => "F32",
+            Self::F16 => "F16",
+            Self::Q4_0 => "Q4_0",
+            Self::Q4_1 => "Q4_1",
+            Self::Q5_0 => "Q5_0",
+            Self::Q5_1 => "Q5_1",
+            Self::Q8_0 => "Q8_0",
+            Self::Q8_1 => "Q8_1",
+            Self::Q2_K => "Q2_K",
+            Self::Q3_K => "Q3_K",
+            Self::Q4_K => "Q4_K",
+            Self::Q5_K => "Q5_K",
+            Self::Q6_K => "Q6_K",
+            Self::Q8_K => "Q8_K",
+            Self::IQ2_XXS => "IQ2_XXS",
+            Self::IQ2_XS => "IQ2_XS",
+            Self::IQ3_XXS => "IQ3_XXS",
+            Self::IQ1_S => "IQ1_S",
+            Self::IQ4_NL => "IQ4_NL",
+            Self::IQ3_S => "IQ3_S",
+            Self::IQ2_S => "IQ2_S",
+            Self::IQ4_XS => "IQ4_XS",
+            Self::I8 => "I8",
+            Self::I16 => "I16",
+            Self::I32 => "I32",
+            Self::I64 => "I64",
+            Self::F64 => "F64",
+            Self::IQ1_M => "IQ1_M",
+            Self::BF16 => "BF16",
+            Self::Unknown(_) => "QUANT_OTHER",
+        }
+    }
+
+    pub fn block_size(&self) -> usize {
+        match self {
+            Self::F32
+            | Self::F16
+            | Self::BF16
+            | Self::I8
+            | Self::I16
+            | Self::I32
+            | Self::I64
+            | Self::F64 => 1,
+            Self::Q4_0
+            | Self::Q4_1
+            | Self::Q5_0
+            | Self::Q5_1
+            | Self::Q8_0
+            | Self::Q8_1
+            | Self::IQ4_NL => 32,
+            Self::Q2_K
+            | Self::Q3_K
+            | Self::Q4_K
+            | Self::Q5_K
+            | Self::Q6_K
+            | Self::Q8_K
+            | Self::IQ2_XXS
+            | Self::IQ2_XS
+            | Self::IQ3_XXS
+            | Self::IQ1_S
+            | Self::IQ3_S
+            | Self::IQ2_S
+            | Self::IQ4_XS
+            | Self::IQ1_M => 256,
+            Self::Unknown(_) => 1,
+        }
+    }
+
+    pub fn type_size(&self) -> usize {
+        match self {
+            Self::F32 | Self::I32 => 4,
+            Self::F16 | Self::BF16 | Self::I16 => 2,
+            Self::I8 => 1,
+            Self::I64 | Self::F64 => 8,
+            Self::Q4_0 | Self::IQ4_NL => 18,
+            Self::Q4_1 => 20,
+            Self::Q5_0 => 22,
+            Self::Q5_1 => 24,
+            Self::Q8_0 => 34,
+            Self::Q8_1 => 40,
+            Self::Q2_K => 84,
+            Self::Q3_K => 110,
+            Self::Q4_K => 144,
+            Self::Q5_K => 176,
+            Self::Q6_K => 210,
+            Self::Q8_K => 292,
+            Self::IQ2_XXS => 66,
+            Self::IQ2_XS => 74,
+            Self::IQ3_XXS => 98,
+            Self::IQ1_S => 48,
+            Self::IQ3_S => 110,
+            Self::IQ2_S => 82,
+            Self::IQ4_XS => 136,
+            Self::IQ1_M => 56,
+            Self::Unknown(_) => 1,
+        }
+    }
+
+    pub fn bytes_per_weight(&self) -> f64 {
+        self.type_size() as f64 / self.block_size() as f64
+    }
+
+    pub fn is_quantized(&self) -> bool {
+        !matches!(
+            self,
+            Self::F32
+                | Self::F16
+                | Self::BF16
+                | Self::I8
+                | Self::I16
+                | Self::I32
+                | Self::I64
+                | Self::F64
+                | Self::Unknown(_)
+        )
+    }
+}
+
+pub fn ggml_type_str(t: u32) -> &'static str {
+    GgmlType::from_u32(t).type_name()
+}
+
+pub fn ggml_type_bytes_per_elem(t: u32) -> f64 {
+    GgmlType::from_u32(t).bytes_per_weight()
+}
+
+/// Zero-allocation block decoders for GGUF quantized formats
+pub struct GgufBlockDecoder;
+
+impl GgufBlockDecoder {
+    /// Unpacks 32 weights from a Q8_0 block (34 bytes: 2 bytes f16 delta + 32 signed int8s)
+    pub fn unpack_q8_0(block: &[u8]) -> Result<[f32; 32]> {
+        if block.len() < 34 {
+            bail!("Q8_0 block requires 34 bytes, got {}", block.len());
+        }
+        let scale_u16 = u16::from_le_bytes([block[0], block[1]]);
+        let d = crate::profiling::f16_to_f32(scale_u16);
+        let mut out = [0.0_f32; 32];
+        for i in 0..32 {
+            out[i] = d * (block[2 + i] as i8 as f32);
+        }
+        Ok(out)
+    }
+
+    /// Unpacks 32 weights from a Q4_0 block (18 bytes: 2 bytes f16 delta + 16 bytes nibbles with -8 offset)
+    pub fn unpack_q4_0(block: &[u8]) -> Result<[f32; 32]> {
+        if block.len() < 18 {
+            bail!("Q4_0 block requires 18 bytes, got {}", block.len());
+        }
+        let scale_u16 = u16::from_le_bytes([block[0], block[1]]);
+        let d = crate::profiling::f16_to_f32(scale_u16);
+        let mut out = [0.0_f32; 32];
+        for i in 0..16 {
+            let byte = block[2 + i];
+            let x0 = (byte & 0x0F) as i8 - 8;
+            let x1 = ((byte >> 4) & 0x0F) as i8 - 8;
+            out[i] = d * (x0 as f32);
+            out[i + 16] = d * (x1 as f32);
+        }
+        Ok(out)
+    }
+
+    /// Unpacks 32 weights from a Q4_1 block (20 bytes: 2 bytes f16 delta + 2 bytes f16 min + 16 bytes nibbles)
+    pub fn unpack_q4_1(block: &[u8]) -> Result<[f32; 32]> {
+        if block.len() < 20 {
+            bail!("Q4_1 block requires 20 bytes, got {}", block.len());
+        }
+        let d = crate::profiling::f16_to_f32(u16::from_le_bytes([block[0], block[1]]));
+        let m = crate::profiling::f16_to_f32(u16::from_le_bytes([block[2], block[3]]));
+        let mut out = [0.0_f32; 32];
+        for i in 0..16 {
+            let byte = block[4 + i];
+            let x0 = (byte & 0x0F) as f32;
+            let x1 = ((byte >> 4) & 0x0F) as f32;
+            out[i] = d * x0 + m;
+            out[i + 16] = d * x1 + m;
+        }
+        Ok(out)
+    }
+
+    /// Unpacks 32 weights from a Q5_0 block (22 bytes: 2 bytes f16 delta + 4 bytes high bits + 16 bytes low bits)
+    pub fn unpack_q5_0(block: &[u8]) -> Result<[f32; 32]> {
+        if block.len() < 22 {
+            bail!("Q5_0 block requires 22 bytes, got {}", block.len());
+        }
+        let d = crate::profiling::f16_to_f32(u16::from_le_bytes([block[0], block[1]]));
+        let qh = u32::from_le_bytes([block[2], block[3], block[4], block[5]]);
+        let mut out = [0.0_f32; 32];
+        for i in 0..16 {
+            let byte = block[6 + i];
+            let h0 = ((qh >> i) & 1) as u8;
+            let h1 = ((qh >> (i + 16)) & 1) as u8;
+            let x0 = ((byte & 0x0F) | (h0 << 4)) as i8 - 16;
+            let x1 = (((byte >> 4) & 0x0F) | (h1 << 4)) as i8 - 16;
+            out[i] = d * (x0 as f32);
+            out[i + 16] = d * (x1 as f32);
+        }
+        Ok(out)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum GgufValue {
     Uint8(u8),
@@ -47,44 +323,9 @@ impl GgufValue {
     }
 }
 
-pub fn ggml_type_str(t: u32) -> &'static str {
-    match t {
-        0 => "F32",
-        1 => "F16",
-        2 => "Q4_0",
-        3 => "Q4_1",
-        6 => "Q5_0",
-        7 => "Q5_1",
-        8 => "Q8_0",
-        9 => "Q8_1",
-        10 => "Q2_K",
-        11 => "Q3_K",
-        12 => "Q4_K",
-        13 => "Q5_K",
-        14 => "Q6_K",
-        15 => "Q8_K",
-        28 => "BF16",
-        _ => "QUANT_OTHER",
-    }
-}
-
-pub fn ggml_type_bytes_per_elem(t: u32) -> f64 {
-    match t {
-        0 => 4.0,
-        1 | 28 => 2.0,
-        8 => 34.0 / 32.0, // 1.0625
-        2 => 18.0 / 32.0, // 0.5625
-        10 => 84.0 / 256.0,
-        12 => 144.0 / 256.0,
-        13 => 176.0 / 256.0,
-        14 => 210.0 / 256.0,
-        _ => 1.0,
-    }
-}
-
 pub struct GgufReader<'a> {
     data: &'a [u8],
-    cursor: usize,
+    pub cursor: usize,
 }
 
 impl<'a> GgufReader<'a> {
@@ -92,12 +333,17 @@ impl<'a> GgufReader<'a> {
         Self { data, cursor: 0 }
     }
 
+    pub fn remaining_bytes(&self) -> usize {
+        self.data.len().saturating_sub(self.cursor)
+    }
+
     pub fn read_bytes(&mut self, n: usize) -> Result<&'a [u8]> {
-        if self.cursor + n > self.data.len() {
+        if self.cursor.saturating_add(n) > self.data.len() {
             bail!(
-                "Unexpected EOF in GGUF file: needed {} bytes at {}",
+                "Unexpected EOF in GGUF stream: requested {} bytes at offset {} (total buffer {})",
                 n,
-                self.cursor
+                self.cursor,
+                self.data.len()
             );
         }
         let slice = &self.data[self.cursor..self.cursor + n];
@@ -163,9 +409,16 @@ impl<'a> GgufReader<'a> {
 
     pub fn read_string(&mut self) -> Result<String> {
         let len = self.read_u64()? as usize;
+        // Strict boundary: protect against allocation overflow if string size is corrupt
+        if len > self.remaining_bytes() {
+            bail!(
+                "Malformed string length {} exceeds remaining GGUF buffer size {}",
+                len,
+                self.remaining_bytes()
+            );
+        }
         let bytes = self.read_bytes(len)?;
-        let s = String::from_utf8_lossy(bytes).into_owned();
-        Ok(s)
+        Ok(String::from_utf8_lossy(bytes).into_owned())
     }
 
     pub fn skip_value(&mut self, val_type: u32) -> Result<()> {
@@ -188,6 +441,9 @@ impl<'a> GgufReader<'a> {
             }
             8 => {
                 let len = self.read_u64()? as usize;
+                if len > self.remaining_bytes() {
+                    bail!("Malformed string length in skip_value");
+                }
                 self.read_bytes(len)?;
                 Ok(())
             }
@@ -212,9 +468,11 @@ impl<'a> GgufReader<'a> {
             9 => {
                 let elem_type = self.read_u32()?;
                 let count = self.read_u64()? as usize;
-                let mut arr = Vec::with_capacity(count.min(1024));
-                for _ in 0..count {
-                    if arr.len() < 1024 {
+                // Safety bound on array size to prevent OOM on corrupt streams
+                let max_collect = count.min(1024);
+                let mut arr = Vec::with_capacity(max_collect);
+                for i in 0..count {
+                    if i < max_collect {
                         let v = self.read_value(elem_type)?;
                         arr.push(v);
                     } else {
@@ -226,9 +484,16 @@ impl<'a> GgufReader<'a> {
             10 => Ok(GgufValue::Uint64(self.read_u64()?)),
             11 => Ok(GgufValue::Int64(self.read_i64()?)),
             12 => Ok(GgufValue::Float64(self.read_f64()?)),
-            _ => bail!("Unsupported GGUF value type: {}", val_type),
+            _ => bail!("Unsupported GGUF value type ID: {}", val_type),
         }
     }
+}
+
+pub struct RawTensorHeader {
+    pub name: String,
+    pub shape: Vec<usize>,
+    pub ggml_type: u32,
+    pub offset: u64,
 }
 
 pub struct GgufParser;
@@ -237,30 +502,56 @@ impl GgufParser {
     pub fn parse_from_file<P: AsRef<Path>>(path: P) -> Result<ModelIR> {
         let file = File::open(path.as_ref())
             .with_context(|| format!("Failed to open GGUF file: {:?}", path.as_ref()))?;
+
+        // SAFETY: File descriptor is open and unmodified during the lifetime of this read-only memory map.
         let mmap = unsafe { Mmap::map(&file)? };
 
         Self::parse_from_bytes(&mmap, path.as_ref())
     }
 
     pub fn parse_from_bytes(data: &[u8], path: &Path) -> Result<ModelIR> {
+        if data.len() < 24 {
+            bail!(
+                "GGUF buffer truncated: {} bytes provided (minimum header requires 24 bytes)",
+                data.len()
+            );
+        }
+
         let mut reader = GgufReader::new(data);
 
         // Header check: 4 bytes "GGUF"
         let magic = reader.read_bytes(4)?;
         if magic != b"GGUF" {
-            bail!("Invalid GGUF magic bytes: {:?}", magic);
+            bail!(
+                "Invalid GGUF magic bytes: expected b'GGUF', got {:?}",
+                magic
+            );
         }
 
         let version = reader.read_u32()?;
         if version != 2 && version != 3 {
-            bail!("Unsupported GGUF version: {}", version);
+            bail!(
+                "Unsupported GGUF version {}: only v2 and v3 are supported",
+                version
+            );
         }
 
         let tensor_count = reader.read_u64()? as usize;
         let metadata_kv_count = reader.read_u64()? as usize;
 
+        // Prevent DoS on malformed kv_count
+        let max_possible_kvs = data.len() / 8;
+        if metadata_kv_count > max_possible_kvs {
+            bail!(
+                "Corrupt GGUF metadata count {} exceeds physical buffer bound {}",
+                metadata_kv_count,
+                max_possible_kvs
+            );
+        }
+
         // Metadata KV pairs
-        let mut metadata: HashMap<String, GgufValue> = HashMap::with_capacity(metadata_kv_count);
+        let mut metadata: HashMap<String, GgufValue> =
+            HashMap::with_capacity(metadata_kv_count.min(2048));
         for _ in 0..metadata_kv_count {
             let key = reader.read_string()?;
             let val_type = reader.read_u32()?;
@@ -274,34 +565,20 @@ impl GgufParser {
             .unwrap_or(32)
             .max(1) as usize;
 
-        // Tensor Info Table
-        struct RawTensorInfo {
-            name: String,
-            shape: Vec<usize>,
-            ggml_type: u32,
-            offset: u64,
-        }
-
-        let mut raw_tensors = Vec::with_capacity(tensor_count);
-        for _ in 0..tensor_count {
-            let name = reader.read_string()?;
-            let n_dims = reader.read_u32()? as usize;
-            let mut dims = Vec::with_capacity(n_dims);
-            for _ in 0..n_dims {
-                dims.push(reader.read_u64()? as usize);
+        // Resilient Tensor Header Reading (recovers intact tensors if stream is truncated)
+        let mut raw_tensors = Vec::with_capacity(tensor_count.min(2048));
+        for i in 0..tensor_count {
+            match Self::read_single_tensor_header(&mut reader) {
+                Ok(raw) => raw_tensors.push(raw),
+                Err(e) => {
+                    // Log truncation diagnostic and stop header reading safely
+                    eprintln!(
+                        "GGUF stream truncated at tensor index {}/{}: {}. Preserving {} intact tensors.",
+                        i, tensor_count, e, raw_tensors.len()
+                    );
+                    break;
+                }
             }
-            // GGUF dims are stored in column-major reverse order
-            dims.reverse();
-
-            let ggml_type = reader.read_u32()?;
-            let offset = reader.read_u64()?;
-
-            raw_tensors.push(RawTensorInfo {
-                name,
-                shape: dims,
-                ggml_type,
-                offset,
-            });
         }
 
         // Tensor data alignment boundary
@@ -309,12 +586,12 @@ impl GgufParser {
         let padding = (alignment - (header_end % alignment)) % alignment;
         let data_start = header_end + padding;
 
-        let mut tensors = Vec::with_capacity(tensor_count);
+        let mut tensors = Vec::with_capacity(raw_tensors.len());
         for raw in raw_tensors {
-            let dtype = ggml_type_str(raw.ggml_type).to_string();
+            let gtype = GgmlType::from_u32(raw.ggml_type);
+            let dtype = gtype.type_name().to_string();
             let numel: usize = raw.shape.iter().product();
-            let byte_size =
-                (numel as f64 * ggml_type_bytes_per_elem(raw.ggml_type)).ceil() as usize;
+            let byte_size = (numel as f64 * gtype.bytes_per_weight()).ceil() as usize;
 
             let mut tensor_ir = TensorIR::new(raw.name, raw.shape, dtype.clone(), byte_size);
 
@@ -404,6 +681,28 @@ impl GgufParser {
 
         Ok(model_ir)
     }
+
+    fn read_single_tensor_header(reader: &mut GgufReader) -> Result<RawTensorHeader> {
+        let name = reader.read_string()?;
+        let n_dims = reader.read_u32()? as usize;
+        if n_dims > 8 {
+            bail!("Suspicious GGUF tensor dimensions {} > 8", n_dims);
+        }
+        let mut dims = Vec::with_capacity(n_dims);
+        for _ in 0..n_dims {
+            dims.push(reader.read_u64()? as usize);
+        }
+        dims.reverse();
+        let ggml_type = reader.read_u32()?;
+        let offset = reader.read_u64()?;
+
+        Ok(RawTensorHeader {
+            name,
+            shape: dims,
+            ggml_type,
+            offset,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -448,5 +747,33 @@ mod tests {
         assert_eq!(ir.tensors.len(), 1);
         assert_eq!(ir.tensors[0].name, "blk.0.attn_q.weight");
         assert_eq!(ir.tensors[0].shape, vec![128, 64]);
+    }
+
+    #[test]
+    fn test_gguf_quant_types_block_decoders() {
+        // Test Q8_0 block unpacking (scale = 0.5, values = -16..15)
+        let mut q8_block = [0u8; 34];
+        // f16 for 0.5: sign=0, exp=14 (14-15+127=126 -> exp=14), mant=0 -> 0x3800
+        let scale_f16 = 0x3800_u16;
+        q8_block[0..2].copy_from_slice(&scale_f16.to_le_bytes());
+        for i in 0..32 {
+            q8_block[2 + i] = (i as i8 - 16) as u8;
+        }
+        let weights = GgufBlockDecoder::unpack_q8_0(&q8_block).unwrap();
+        assert_eq!(weights.len(), 32);
+        assert!((weights[0] - (-8.0)).abs() < 1e-4);
+        assert!((weights[16] - 0.0).abs() < 1e-4);
+
+        // Test Q4_0 block unpacking
+        let mut q4_block = [0u8; 18];
+        q4_block[0..2].copy_from_slice(&scale_f16.to_le_bytes());
+        // Nibbles 8 (value 0) and 10 (value 2) -> byte = 0xA8
+        for i in 0..16 {
+            q4_block[2 + i] = 0xA8;
+        }
+        let q4_weights = GgufBlockDecoder::unpack_q4_0(&q4_block).unwrap();
+        assert_eq!(q4_weights.len(), 32);
+        assert!((q4_weights[0] - 0.0).abs() < 1e-4); // (8 - 8) * 0.5 = 0.0
+        assert!((q4_weights[16] - 1.0).abs() < 1e-4); // (10 - 8) * 0.5 = 1.0
     }
 }

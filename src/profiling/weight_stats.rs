@@ -80,6 +80,94 @@ impl WeightAnalyzer {
                     samples.push(f16_to_f32(u));
                 }
             }
+        } else if lower.contains("q4_0") {
+            let block_size = 18;
+            let num_blocks = raw_data.len() / block_size;
+            let stride = (num_blocks / (max_samples / 32).max(1)).max(1);
+            for i in (0..num_blocks).step_by(stride) {
+                let offset = i * block_size;
+                if offset + block_size <= raw_data.len() {
+                    if let Ok(weights) = crate::parser::gguf::GgufBlockDecoder::unpack_q4_0(
+                        &raw_data[offset..offset + block_size],
+                    ) {
+                        for w in weights {
+                            samples.push(w);
+                            if samples.len() >= max_samples {
+                                break;
+                            }
+                        }
+                    }
+                }
+                if samples.len() >= max_samples {
+                    break;
+                }
+            }
+        } else if lower.contains("q8_0") {
+            let block_size = 34;
+            let num_blocks = raw_data.len() / block_size;
+            let stride = (num_blocks / (max_samples / 32).max(1)).max(1);
+            for i in (0..num_blocks).step_by(stride) {
+                let offset = i * block_size;
+                if offset + block_size <= raw_data.len() {
+                    if let Ok(weights) = crate::parser::gguf::GgufBlockDecoder::unpack_q8_0(
+                        &raw_data[offset..offset + block_size],
+                    ) {
+                        for w in weights {
+                            samples.push(w);
+                            if samples.len() >= max_samples {
+                                break;
+                            }
+                        }
+                    }
+                }
+                if samples.len() >= max_samples {
+                    break;
+                }
+            }
+        } else if lower.contains("q4_1") {
+            let block_size = 20;
+            let num_blocks = raw_data.len() / block_size;
+            let stride = (num_blocks / (max_samples / 32).max(1)).max(1);
+            for i in (0..num_blocks).step_by(stride) {
+                let offset = i * block_size;
+                if offset + block_size <= raw_data.len() {
+                    if let Ok(weights) = crate::parser::gguf::GgufBlockDecoder::unpack_q4_1(
+                        &raw_data[offset..offset + block_size],
+                    ) {
+                        for w in weights {
+                            samples.push(w);
+                            if samples.len() >= max_samples {
+                                break;
+                            }
+                        }
+                    }
+                }
+                if samples.len() >= max_samples {
+                    break;
+                }
+            }
+        } else if lower.contains("q5_0") {
+            let block_size = 22;
+            let num_blocks = raw_data.len() / block_size;
+            let stride = (num_blocks / (max_samples / 32).max(1)).max(1);
+            for i in (0..num_blocks).step_by(stride) {
+                let offset = i * block_size;
+                if offset + block_size <= raw_data.len() {
+                    if let Ok(weights) = crate::parser::gguf::GgufBlockDecoder::unpack_q5_0(
+                        &raw_data[offset..offset + block_size],
+                    ) {
+                        for w in weights {
+                            samples.push(w);
+                            if samples.len() >= max_samples {
+                                break;
+                            }
+                        }
+                    }
+                }
+                if samples.len() >= max_samples {
+                    break;
+                }
+            }
         } else if lower.contains("i8") || lower.contains("int8") || lower.contains("q8") {
             let num_bytes = raw_data.len();
             let stride = (num_bytes / max_samples).max(1);
