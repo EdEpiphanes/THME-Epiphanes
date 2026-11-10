@@ -1,6 +1,6 @@
 ﻿{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/EdEpiphanes/THME/main/docs/schemas/surgery-recipe-v1.json",
+  "$id": "https://raw.githubusercontent.com/EdEpiphanes/THME-Epiphanes/main/docs/schemas/surgery-recipe-v1.json",
   "title": "THMESurgeryRecipe",
   "description": "Declarative JSON specification for automated Teacher LLM architecture modifications, pruning, and heterogeneous precision allocation.",
   "type": "object",

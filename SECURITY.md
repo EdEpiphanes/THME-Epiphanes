@@ -10,7 +10,7 @@
 
 We take the security of **THME** by **Epiphanes** seriously. If you discover a vulnerability or security flaw, please do not disclose it publicly in an issue or forum.
 
-Instead, please report vulnerabilities by contacting the maintainers directly through GitHub private vulnerability reporting or contacting the Epiphanes team at `https://github.com/EdEpiphanes/THME/security/advisories`.
+Instead, please report vulnerabilities by contacting the maintainers directly through GitHub private vulnerability reporting or contacting the Epiphanes team at `https://github.com/EdEpiphanes/THME-Epiphanes/security/advisories`.
 
 Please provide:
 - A description of the vulnerability and its potential impact.

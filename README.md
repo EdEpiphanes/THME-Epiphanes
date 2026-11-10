@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/GUI-eframe%20%2F%20egui%20(Native%2060%20FPS)-06b6d4?style=flat-square" alt="GUI eframe" />
   <img src="https://img.shields.io/badge/Formats-SafeTensors%20%2B%20GGUF%20v2%2Fv3-10b981?style=flat-square" alt="Formats" />
   <img src="https://img.shields.io/badge/Memory-Zero--Copy%20MMap-f59e0b?style=flat-square" alt="Zero-Copy" />
-  <a href="https://github.com/EdEpiphanes/THME/actions/workflows/ci.yml"><img src="https://github.com/EdEpiphanes/THME/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/EdEpiphanes/THME-Epiphanes/actions/workflows/ci.yml"><img src="https://github.com/EdEpiphanes/THME-Epiphanes/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <img src="https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square" alt="License" />
   <img src="https://img.shields.io/badge/Tests-20%20Passed-success?style=flat-square" alt="Tests" />
 </p>
@@ -274,7 +274,7 @@ flowchart TD
 
 ### Installation
 ```bash
-git clone https://github.com/EdEpiphanes/THME.git
+git clone https://github.com/EdEpiphanes/THME-Epiphanes-Epiphanes.git
 cd THME
 cargo build --release
 ```

@@ -8,7 +8,7 @@
 
 - **Project Name**: THME (Topological Heterogeneous Manifold Engine)
 - **Organization / Company**: Epiphanes
-- **Repository**: `https://github.com/EdEpiphanes/THME`
+- **Repository**: `https://github.com/EdEpiphanes/THME-Epiphanes`
 - **Backwards-Compatible CLI Alias**: `llm-tweaker`
 - **Core Mission**: Provide an open-source, mathematically principled framework for zero-copy LLM memory profiling, layer sensitivity estimation, Pareto precision optimization, and automated Teacher LLM surgery.
 

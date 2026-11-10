@@ -27,7 +27,7 @@ All contributors and maintainers are expected to follow our [Code of Conduct](CO
    ```
 2. Clone the repository:
    ```bash
-   git clone https://github.com/EdEpiphanes/THME.git
+   git clone https://github.com/EdEpiphanes/THME-Epiphanes-Epiphanes.git
    cd THME
    ```
 3. Run test suite:
