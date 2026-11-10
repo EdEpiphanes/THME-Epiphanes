@@ -35,7 +35,7 @@ fn test_hadamard_orthogonality_and_energy() {
     let mut v = vec![0.5, -1.2, 3.4, -0.8, 2.1, -0.3, 1.5, -2.5];
     let orig_energy: f32 = v.iter().map(|x| x * x).sum();
 
-    MatrixMath::fast_walsh_hadamard_transform(&mut v);
+    MatrixMath::fast_walsh_hadamard_transform(&mut v).expect("Power-of-two vector");
     let trans_energy: f32 = v.iter().map(|x| x * x).sum();
 
     // Energy must be conserved under orthonormal WHT

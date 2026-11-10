@@ -1,7 +1,7 @@
 # THME: Topological Heterogeneous Manifold Engine
 
 <p align="center">
-  <img src="assets/live_neural_benchmark.gif" alt="THME Desktop Studio - Live Neural Network Token Flow and Telemetry Benchmarker" width="840" />
+  <img src="assets/live_neural_benchmark.gif" alt="THME Desktop Studio - Live Neural Network Token Flow and Telemetry Benchmarker" width="920" />
 </p>
 
 <p align="center">
@@ -16,7 +16,7 @@
   <img src="https://img.shields.io/badge/Memory-Zero--Copy%20MMap-f59e0b?style=flat-square" alt="Zero-Copy" />
   <a href="https://github.com/EdEpiphanes/THME-Epiphanes/actions/workflows/ci.yml"><img src="https://github.com/EdEpiphanes/THME-Epiphanes/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <img src="https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square" alt="License" />
-  <img src="https://img.shields.io/badge/Tests-20%20Passed-success?style=flat-square" alt="Tests" />
+  <img src="https://img.shields.io/badge/Tests-30%20Passed-success?style=flat-square" alt="Tests" />
 </p>
 
 <p align="center">
@@ -59,14 +59,14 @@ thme-gui
 ```
 
 ```text
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚  THME v2.0  UNIVERSAL LLM RESTRUCTURER, MATRIX ENGINE & STUDIO                          [ðŸ“ Load Model] â”‚
-â”‚  Llama-3-8B [GGUF • LLAMA] (32 Layers • Hidden Dim 4096 • 8030M Params)                                 â”‚
-â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
-â”‚ [Master Dashboard] [Models] [Layer Tweaker] [Matrix & Distill] [Benchmarks] [History] [Audit] [Export]  â”‚
-â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
-â”‚  THROUGHPUT: 44.2 tok/s  |  VRAM STORAGE: 3820 MB  |  TRAFFIC/TOK: 28.4 MB  |  DEPTH: 82%  | EXIT: 80%  â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
++---------------------------------------------------------------------------------------------------------+
+| [●][●][●] [THME]  THME STUDIO v0.1.2 // EPIPHANES TOPOLOGICAL MANIFOLD ENGINE      [Obsidian Cyan] [60 FPS] |
+| Llama-3-8B [GGUF • LLAMA] (32 Layers • Hidden Dim 4096 • 8030M Params)                                  |
++---------------------------------------------------------------------------------------------------------+
+| [Master Dashboard] [Models] [Layer Tweaker] [Matrix Engine] [Benchmarks] [History] [Audit Log] [Surgery] |
++---------------------------------------------------------------------------------------------------------+
+|  THROUGHPUT: 44.2 tok/s  |  VRAM STORAGE: 4.2 GB  |  PARETO RETENTION: 98.92%  |  STATUS: 13-STAGE LIVE |
++---------------------------------------------------------------------------------------------------------+
 ```
 
 ### The 8 Interactive Studio Workspaces
@@ -95,25 +95,25 @@ thme inspect models/llama-3-8b.gguf
 thme inspect /path/to/huggingface-dir --json
 ```
 
-```text
+`	ext
 === THME Model Inspection Summary ===
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚ Property              â”‚ Value                    â”‚
-â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
-â”‚ Model Name            â”‚ llama-3-8b               â”‚
-â”‚ Architecture          â”‚ Llama-family             â”‚
-â”‚ Total Parameters      â”‚ 8.03 B (8030261248)      â”‚
-â”‚ Raw Weight Size       â”‚ 14.96 GB                 â”‚
-â”‚ Hidden Size           â”‚ 4096                     â”‚
-â”‚ Number of Layers      â”‚ 32                       â”‚
-â”‚ Attention Heads (Q)   â”‚ 32                       â”‚
-â”‚ Key-Value Heads (KV)  â”‚ 8 (Grouped-Query GQA)    â”‚
-â”‚ Head Dimension        â”‚ 128                      â”‚
-â”‚ Vocabulary Size       â”‚ 128256                   â”‚
-â”‚ Max Context Length    â”‚ 8192                     â”‚
-â”‚ Total Tensors         â”‚ 291                      â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-```
++-----------------------+-----------------------------+
+| Property              | Value                       |
++-----------------------+-----------------------------+
+| Model Name            | llama-3-8b                  |
+| Architecture          | Llama-family                |
+| Total Parameters      | 8.03 B (8030261248)         |
+| Raw Weight Size       | 14.96 GB                    |
+| Hidden Size           | 4096                        |
+| Number of Layers      | 32                          |
+| Attention Heads (Q)   | 32                          |
+| Key-Value Heads (KV)  | 8 (Grouped-Query GQA)       |
+| Head Dimension        | 128                         |
+| Vocabulary Size       | 128256                      |
+| Max Context Length    | 8192                        |
+| Total Tensors         | 291                         |
++-----------------------+-----------------------------+
+`
 
 ### Profile layer sensitivity and KV cache
 Project memory scaling across context windows from 1k to 128k+ tokens:
@@ -240,8 +240,8 @@ Detailed milestone definitions and exit criteria are specified in [ROADMAP.md](R
 flowchart TD
     v010["v0.1.0 Foundations: Zero-Copy Parsing, Pareto Allocator & Studio GUI (Done)"]
     v011["v0.1.1 Path Hygiene & CI: 3-OS Matrix, Leak Guard, Surgery Schema (Done)"]
-    v012["v0.1.2 Format Correctness: Full GGUF Quants, Fuzz Testing & Crate Split"]
-    v013["v0.1.3 Real Measurement: AVX2 / NEON Kernels & Criterion Benchmarks"]
+    v012["v0.1.2 Format Correctness: Full GGUF Quants, Resilient Recovery & Fuzzing (Done)"]
+    v013["v0.1.3 Real Measurement: AVX2 / NEON Kernels & Criterion Benchmarks (In Progress)"]
     v014["v0.1.4 Quality Gate: External Perplexity Bridge & Automated Rollback"]
     v015["v0.1.5 Surgery Daemon: Headless JSON-RPC & REST Server for Teacher LLMs"]
     v020["v0.2.0 Production Release: Verified Quant Exporter & Small-Model Demo"]
@@ -259,8 +259,8 @@ flowchart TD
 
 - **v0.1.0 (Released):** Zero-copy SafeTensors and GGUF v2/v3 memory-mapped parsing, Pareto allocator, 60 FPS Desktop Studio with 5 themes, matrix distillation engine, token flow simulator, audit logging, and declarative surgery recipes.
 - **v0.1.1 (Released):** Rebranded to THME under Epiphanes, 3-OS GitHub Actions CI matrix, automated path-leak guard, tag-driven release publishing, zero clippy warnings, and surgery recipe JSON schema.
-- **v0.1.2 (Planned):** Full GGUF quantization type decoders (`Q4_K_M`, `Q5_K_S`, `Q8_0`), continuous parser fuzz testing, and crate split into `thme-core`, `thme-cli`, `thme-gui`.
-- **v0.1.3 (Planned):** AVX2, AVX-512, and ARM NEON SIMD kernels for matrix transformations, with criterion micro-benchmarks verified in CI.
+- **v0.1.2 (Completed):** Full GGUF v2/v3 quantization matrix (28 GGML types including K-quants and I-quants), zero-allocation block decoders (`Q4_0`, `Q4_1`, `Q5_0`, `Q8_0`), truncated stream recovery, and infallible 1,000-iteration parser fuzz testing suite.
+- **v0.1.3 (In Progress):** AVX2, AVX-512, and ARM NEON SIMD kernels for matrix transformations, with criterion micro-benchmarks verified in CI.
 - **v0.1.4 (Planned):** Empirical quality validation bridge against baseline models with automated degradation gating (Delta PPL <= epsilon).
 - **v0.1.5 (Planned):** Headless JSON-RPC and REST daemon allowing remote Teacher LLMs to inspect model IR and dispatch surgery recipes programmatically.
 - **v0.2.0 (Target):** Verified quantization exporter for BitNet b1.58 and calibrated scales, accompanied by an end-to-end reproducible small-model demonstration.

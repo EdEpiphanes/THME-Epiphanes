@@ -138,10 +138,16 @@ pub struct MatrixMath;
 impl MatrixMath {
     /// Computes the Walsh-Hadamard Transform (WHT) of a power-of-two 1D float slice.
     /// Rotates the basis to evenly spread energy and eliminate high-amplitude outliers.
-    pub fn fast_walsh_hadamard_transform(data: &mut [f32]) {
+    /// Returns an error if the slice length is not a power of two.
+    pub fn fast_walsh_hadamard_transform(data: &mut [f32]) -> Result<(), String> {
         let n = data.len();
-        if n < 2 || (n & (n - 1)) != 0 {
-            return;
+        if n < 2 {
+            return Ok(());
+        }
+        if (n & (n - 1)) != 0 {
+            return Err(format!(
+                "Fast Walsh-Hadamard Transform requires power-of-two length; got {n}"
+            ));
         }
 
         let mut len = 1;
@@ -164,6 +170,8 @@ impl MatrixMath {
         for x in data.iter_mut() {
             *x *= norm;
         }
+
+        Ok(())
     }
 
     /// Truncated SVD power-iteration approximation for rank-1 projection:
@@ -551,9 +559,15 @@ mod tests {
     fn test_fast_walsh_hadamard_transform() {
         let mut signal = vec![1.0, 2.0, 3.0, 4.0];
         let orig_norm_sq: f32 = signal.iter().map(|x| x * x).sum();
-        MatrixMath::fast_walsh_hadamard_transform(&mut signal);
+        MatrixMath::fast_walsh_hadamard_transform(&mut signal)
+            .expect("Should succeed on power-of-two");
         let transformed_norm_sq: f32 = signal.iter().map(|x| x * x).sum();
         assert!((orig_norm_sq - transformed_norm_sq).abs() < 1e-4);
+
+        // Verify rejection of non-power-of-two dimensions
+        let mut odd_signal = vec![1.0, 2.0, 3.0];
+        let res = MatrixMath::fast_walsh_hadamard_transform(&mut odd_signal);
+        assert!(res.is_err(), "Should reject non-power-of-two dimension");
     }
 
     #[test]

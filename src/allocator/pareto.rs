@@ -113,10 +113,17 @@ impl ParetoAllocator {
                     .sum::<usize>() as f64
                     / (1024.0 * 1024.0);
 
-                // Majority format in this layer
-                let rep_fmt = tensor_allocations
-                    .get(&tensors[0].name)
-                    .cloned()
+                // Majority format in this layer weighted by parameter volume
+                let mut fmt_volume = std::collections::HashMap::new();
+                for t in tensors {
+                    if let Some(f) = tensor_allocations.get(&t.name) {
+                        *fmt_volume.entry(f.clone()).or_insert(0u64) += t.numel as u64;
+                    }
+                }
+                let rep_fmt = fmt_volume
+                    .into_iter()
+                    .max_by_key(|(_, vol)| *vol)
+                    .map(|(f, _)| f)
                     .unwrap_or(TensorFormat::FP16);
 
                 layer_allocations.push(LayerAllocation {

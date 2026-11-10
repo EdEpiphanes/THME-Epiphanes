@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Resilient GGUF Stream Recovery**: Truncated or corrupt GGUF files now recover all intact tensors parsed up to the point of corruption rather than terminating with panic.
 - **Infallible Parser Fuzz Suite (`tests/test_fuzz_parsers.rs`)**: Exhaustive prefix-truncation and bit-mutation property tests guaranteeing zero parser panics on corrupted or malicious inputs.
 - **GGUF Quant Unit Tests (`tests/test_gguf_quant_types.rs`)**: Validates block unpackers and real weight profile statistics on quantized GGUF tensors.
+- **High-Definition Studio Showcase GIF (`assets/live_neural_benchmark.gif`)**: 920x520 widescreen multi-panel animation showcasing all 8 studio tabs, 8x8 weight slice matrix heatmap, 16-bar distribution histogram, and 13-stage Transformer forward token stream.
+
+### Fixed & Improved
+- **Weighted Majority Layer Precision Reporting**: `src/allocator/pareto.rs` now aggregates format distribution by parameter volume (`numel`) rather than indexing the first tensor (`tensors[0]`).
+- **Fast Walsh-Hadamard Dimension Validation**: `MatrixMath::fast_walsh_hadamard_transform` now explicitly asserts and returns error for non-power-of-two dimensions instead of silent no-ops.
+- **Unicode & Mojibake Cleansing**: Eliminated double-UTF8 mojibake sequences across GUI autotuner telemetry, Greek mathematical symbols ($\alpha, \beta, \gamma, \mu, \sigma, \tau, \epsilon$), and iconography.
+- **Dependency Hygiene**: Removed unused dependencies (`thiserror`, `serde_yaml`, `indicatif`) from `Cargo.toml`.
 
 ### Security & Correctness
 - Added explicit `// SAFETY:` justifications on all memory-mapped file operations in `src/parser/gguf.rs` and `src/parser/safetensors.rs`.

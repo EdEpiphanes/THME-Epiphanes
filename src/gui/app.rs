@@ -918,7 +918,7 @@ impl THMEApp {
         }
 
         let gen_text = f!(
-            "{}\n\n[Baseline Architecture Scan & Benchmark]\nArchitecture: {} Ã¢â‚¬Â¢ {} Layers Ã¢â‚¬Â¢ Hidden Dim {} Ã¢â‚¬Â¢ Parameters: {}M.\nExecution profile: {:.1} tok/s | TTFT: {:.1}ms | KV Cache: {:.2} MB.\nReady for Sequential Layer-by-Layer Auto-Tuning.",
+            "{}\n\n[Baseline Architecture Scan & Benchmark]\nArchitecture: {} • {} Layers • Hidden Dim {} • Parameters: {}M.\nExecution profile: {:.1} tok/s | TTFT: {:.1}ms | KV Cache: {:.2} MB.\nReady for Sequential Layer-by-Layer Auto-Tuning.",
             self.baseline_prompt, self.model().architecture, num_layers, hidden, self.model().total_parameters / 1_000_000,
             tokens_per_sec, ttft_ms, kv_cache_mb
         );
@@ -1034,7 +1034,7 @@ impl THMEApp {
             let cand_distortion = (cand.alpha * 0.04) + (cand.beta * 0.012) + (cand.gamma * 0.018);
 
             self.live_tuner_log.push(f!(
-                "[Layer {}] Iteration {}/{} testing '{}' ({}%ÃŽÂ±, {}%ÃŽÂ², {}%ÃŽÂ³) -> Latency: {:.2}ms, Distortion: {:.4}",
+                "[Layer {}] Iteration {}/{} testing '{}' ({}%α, {}%β, {}%γ) -> Latency: {:.2}ms, Distortion: {:.4}",
                 l_idx, iter + 1, candidates.len(), cand.name, (cand.alpha*100.0) as u32, (cand.beta*100.0) as u32, (cand.gamma*100.0) as u32,
                 cand_latency, cand_distortion
             ));
@@ -1088,7 +1088,7 @@ impl THMEApp {
             layer.estimated_distortion = opt_dist;
 
             self.live_tuner_log.push(f!(
-                "--> WINNER LOCKED for Layer {}: {} ({}%ÃŽÂ± / {}%ÃŽÂ² / {}%ÃŽÂ³) | Latency: {:.2}ms | Storage: {:.2} MB",
+                "--> WINNER LOCKED for Layer {}: {} ({}%α / {}%β / {}%γ) | Latency: {:.2}ms | Storage: {:.2} MB",
                 l_idx, best_mixer, (best_alpha * 100.0) as u32, (best_beta * 100.0) as u32, (best_gamma * 100.0) as u32,
                 opt_lat, layer_size_mb
             ));
@@ -1112,7 +1112,7 @@ impl THMEApp {
                 "OPTIMIZE",
                 "LayerTuned",
                 &format!(
-                    "Layer {} locked: {} ({:.0}%ÃŽÂ±/{:.0}%ÃŽÂ²/{:.0}%ÃŽÂ³)",
+                    "Layer {} locked: {} ({:.0}%α/{:.0}%β/{:.0}%γ)",
                     l_idx,
                     best_mixer,
                     best_alpha * 100.0,
@@ -1231,7 +1231,8 @@ impl eframe::App for THMEApp {
             )
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    let (rect, _) = ui.allocate_exact_size(Vec2::new(96.0, 24.0), egui::Sense::hover());
+                    let (rect, _) =
+                        ui.allocate_exact_size(Vec2::new(96.0, 24.0), egui::Sense::hover());
                     ui.painter().rect_filled(rect, 4.0, p.primary);
                     ui.painter().text(
                         rect.center(),
@@ -1244,15 +1245,17 @@ impl eframe::App for THMEApp {
                     ui.add_space(8.0);
                     ui.vertical(|ui| {
                         ui.heading(
-                            egui::RichText::new("UNIVERSAL LLM RESTRUCTURER, MATRIX ENGINE & STUDIO")
-                                .strong()
-                                .size(13.0)
-                                .color(p.text_main),
+                            egui::RichText::new(
+                                "UNIVERSAL LLM RESTRUCTURER, MATRIX ENGINE & STUDIO",
+                            )
+                            .strong()
+                            .size(13.0)
+                            .color(p.text_main),
                         );
                         let m = self.model();
                         ui.label(
                             egui::RichText::new(f!(
-                                "{} [{} Ã¢â‚¬Â¢ {}] ({} Layers Ã¢â‚¬Â¢ Hidden Dim {} Ã¢â‚¬Â¢ {}M Params)",
+                                "{} [{} • {}] ({} Layers • Hidden Dim {} • {}M Params)",
                                 m.name,
                                 m.format.to_uppercase(),
                                 m.architecture,
@@ -1268,23 +1271,47 @@ impl eframe::App for THMEApp {
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         // Theme Selector
-                        ui.label(egui::RichText::new("Ã°Å¸Å½Â¨ Scheme:").size(11.0).color(p.text_muted));
+                        ui.label(
+                            egui::RichText::new("🎨 Scheme:")
+                                .size(11.0)
+                                .color(p.text_muted),
+                        );
                         egui::ComboBox::from_id_salt("theme_selector_combo")
                             .selected_text(self.theme.name())
                             .width(135.0)
                             .show_ui(ui, |ui| {
-                                ui.selectable_value(&mut self.theme, GuiTheme::ObsidianCyan, "Obsidian Cyan");
-                                ui.selectable_value(&mut self.theme, GuiTheme::CyberpunkNeon, "Cyberpunk Neon");
-                                ui.selectable_value(&mut self.theme, GuiTheme::MatrixEmerald, "Matrix Emerald");
-                                ui.selectable_value(&mut self.theme, GuiTheme::NordicFrost, "Nordic Frost");
-                                ui.selectable_value(&mut self.theme, GuiTheme::SolarizedAmber, "Solarized Amber");
+                                ui.selectable_value(
+                                    &mut self.theme,
+                                    GuiTheme::ObsidianCyan,
+                                    "Obsidian Cyan",
+                                );
+                                ui.selectable_value(
+                                    &mut self.theme,
+                                    GuiTheme::CyberpunkNeon,
+                                    "Cyberpunk Neon",
+                                );
+                                ui.selectable_value(
+                                    &mut self.theme,
+                                    GuiTheme::MatrixEmerald,
+                                    "Matrix Emerald",
+                                );
+                                ui.selectable_value(
+                                    &mut self.theme,
+                                    GuiTheme::NordicFrost,
+                                    "Nordic Frost",
+                                );
+                                ui.selectable_value(
+                                    &mut self.theme,
+                                    GuiTheme::SolarizedAmber,
+                                    "Solarized Amber",
+                                );
                             });
 
                         ui.add_space(12.0);
 
                         if ui
                             .button(
-                                egui::RichText::new("Ã¢Å¡Â¡ Auto-Decide Plan")
+                                egui::RichText::new("⚡ Auto-Decide Plan")
                                     .color(Color32::BLACK)
                                     .strong(),
                             )
@@ -1294,14 +1321,17 @@ impl eframe::App for THMEApp {
                             self.active_tab = 3;
                         }
 
-                        if ui.button("Ã°Å¸Å¡â‚¬ Sequential Tuner").clicked() {
+                        if ui.button("🚀 Sequential Tuner").clicked() {
                             self.active_tab = 4;
                             self.start_layerwise_auto_tuner();
                         }
 
-                        if ui.button("Ã°Å¸â€œÂ Load Model File...").clicked() {
+                        if ui.button("📄 Load Model File...").clicked() {
                             if let Some(path) = rfd::FileDialog::new()
-                                .add_filter("All Models (*.gguf, *.safetensors)", &["gguf", "safetensors", "thme"])
+                                .add_filter(
+                                    "All Models (*.gguf, *.safetensors)",
+                                    &["gguf", "safetensors", "thme"],
+                                )
                                 .add_filter("GGUF Models (*.gguf)", &["gguf"])
                                 .add_filter("SafeTensors (*.safetensors)", &["safetensors"])
                                 .pick_file()
@@ -1311,11 +1341,22 @@ impl eframe::App for THMEApp {
                                         let name = m.name.clone();
                                         self.models.push(m);
                                         self.active_model_idx = self.models.len() - 1;
-                                        self.checkpoint_layer_idx = (self.model().layers.len() as f32 * 0.30).round() as usize;
+                                        self.checkpoint_layer_idx =
+                                            (self.model().layers.len() as f32 * 0.30).round()
+                                                as usize;
                                         self.auto_scan_and_benchmark();
                                         self.run_auto_decider_internal();
-                                        self.log_audit("INFO", "ModelLoad", &format!("Imported file: {:?}", path), &name);
-                                        self.status_msg = f!("Loaded model [{}]: {:?}", self.model().format, path);
+                                        self.log_audit(
+                                            "INFO",
+                                            "ModelLoad",
+                                            &format!("Imported file: {:?}", path),
+                                            &name,
+                                        );
+                                        self.status_msg = f!(
+                                            "Loaded model [{}]: {:?}",
+                                            self.model().format,
+                                            path
+                                        );
                                     }
                                     Err(err) => {
                                         self.status_msg = f!("Error loading file: {}", err);
@@ -1324,17 +1365,24 @@ impl eframe::App for THMEApp {
                             }
                         }
 
-                        if ui.button("Ã°Å¸â€œâ€š Load Model Folder...").clicked() {
+                        if ui.button("📁 Load Model Folder...").clicked() {
                             if let Some(dir) = rfd::FileDialog::new().pick_folder() {
                                 match UniversalModel::load_universal(&dir) {
                                     Ok(m) => {
                                         let name = m.name.clone();
                                         self.models.push(m);
                                         self.active_model_idx = self.models.len() - 1;
-                                        self.checkpoint_layer_idx = (self.model().layers.len() as f32 * 0.30).round() as usize;
+                                        self.checkpoint_layer_idx =
+                                            (self.model().layers.len() as f32 * 0.30).round()
+                                                as usize;
                                         self.auto_scan_and_benchmark();
                                         self.run_auto_decider_internal();
-                                        self.log_audit("INFO", "ModelLoad", &format!("Imported directory: {:?}", dir), &name);
+                                        self.log_audit(
+                                            "INFO",
+                                            "ModelLoad",
+                                            &format!("Imported directory: {:?}", dir),
+                                            &name,
+                                        );
                                         self.status_msg = f!("Loaded model directory: {:?}", dir);
                                     }
                                     Err(err) => {
@@ -1381,7 +1429,7 @@ impl eframe::App for THMEApp {
                     );
                     render_stat_box(
                         &mut cols[3],
-                        "DEPTH (fÃŒâ€ž)",
+                        "DEPTH (f̄)",
                         f!("{:.0}%", f_bar * 100.0),
                         p.warning,
                         &p,
@@ -1452,44 +1500,26 @@ impl eframe::App for THMEApp {
         // Central Panel with Tab Navigation
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
+                tab_button(ui, "🎛 Master Dashboard", 0, &mut self.active_tab, &p);
+                tab_button(ui, "📦 Models Manager", 1, &mut self.active_tab, &p);
                 tab_button(
                     ui,
-                    "Ã°Å¸Å½â€ºÃ¯Â¸Â Master Dashboard",
-                    0,
-                    &mut self.active_tab,
-                    &p,
-                );
-                tab_button(ui, "Ã°Å¸â€œÂ¦ Models Manager", 1, &mut self.active_tab, &p);
-                tab_button(
-                    ui,
-                    "Ã°Å¸â€Â¬ Layer Tweaker & Sections",
+                    "🔬 Layer Tweaker & Sections",
                     2,
                     &mut self.active_tab,
                     &p,
                 );
                 tab_button(
                     ui,
-                    "Ã¢Å¡Â¡ Distillation & Matrix Engine",
+                    "⚡ Distillation & Matrix Engine",
                     3,
                     &mut self.active_tab,
                     &p,
                 );
-                tab_button(ui, "Ã°Å¸â€œÅ  Full Benchmarks", 4, &mut self.active_tab, &p);
-                tab_button(
-                    ui,
-                    "Ã°Å¸â€¢â€™ History & Checkpoints",
-                    5,
-                    &mut self.active_tab,
-                    &p,
-                );
-                tab_button(ui, "Ã°Å¸â€œâ€¹ Audit Log", 6, &mut self.active_tab, &p);
-                tab_button(
-                    ui,
-                    "Ã°Å¸â€™Â¾ Export & Surgery",
-                    7,
-                    &mut self.active_tab,
-                    &p,
-                );
+                tab_button(ui, "📊 Full Benchmarks", 4, &mut self.active_tab, &p);
+                tab_button(ui, "🕒 History & Checkpoints", 5, &mut self.active_tab, &p);
+                tab_button(ui, "📋 Audit Log", 6, &mut self.active_tab, &p);
+                tab_button(ui, "💾 Export & Surgery", 7, &mut self.active_tab, &p);
             });
 
             ui.separator();
@@ -1526,9 +1556,9 @@ impl THMEApp {
                         .inner_margin(egui::Margin::same(12))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new("Ã°Å¸â€œÂ¦ MODELS REPOSITORY").strong().color(p.primary));
+                                ui.label(egui::RichText::new("📦 MODELS REPOSITORY").strong().color(p.primary));
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    if ui.small_button("Manage Ã¢â€ â€™").clicked() {
+                                    if ui.small_button("Manage →").clicked() {
                                         self.active_tab = 1;
                                     }
                                 });
@@ -1550,9 +1580,9 @@ impl THMEApp {
                         .inner_margin(egui::Margin::same(12))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new("Ã¢Å¡Â¡ MATRIX & DISTILLATION PLAN").strong().color(p.success));
+                                ui.label(egui::RichText::new("⚡ MATRIX & DISTILLATION PLAN").strong().color(p.success));
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    if ui.small_button("Engine Ã¢â€ â€™").clicked() {
+                                    if ui.small_button("Engine →").clicked() {
                                         self.active_tab = 3;
                                     }
                                 });
@@ -1577,9 +1607,9 @@ impl THMEApp {
                         .inner_margin(egui::Margin::same(12))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new("Ã°Å¸â€œÅ  BENCHMARKS & FLOW").strong().color(p.secondary));
+                                ui.label(egui::RichText::new("📊 BENCHMARKS & FLOW").strong().color(p.secondary));
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    if ui.small_button("Benchmarks Ã¢â€ â€™").clicked() {
+                                    if ui.small_button("Benchmarks →").clicked() {
                                         self.active_tab = 4;
                                     }
                                 });
@@ -1598,21 +1628,21 @@ impl THMEApp {
 
             // Dashboard Quick Action Bar
             ui.horizontal(|ui| {
-                if ui.button(egui::RichText::new("Ã¢Å¡Â¡ Run Auto-Decider For All Parameters").strong().color(Color32::BLACK)).clicked() {
+                if ui.button(egui::RichText::new("⚡ Run Auto-Decider For All Parameters").strong().color(Color32::BLACK)).clicked() {
                     self.run_auto_decider_internal();
                     self.status_msg = "Evaluated all parameters and generated Pareto-optimal matrix & distillation plan!".to_string();
                 }
 
-                if ui.button(egui::RichText::new("Ã°Å¸Å¡â‚¬ Execute Global Transformation Plan").strong().color(Color32::WHITE)).clicked() {
+                if ui.button(egui::RichText::new("🚀 Execute Global Transformation Plan").strong().color(Color32::WHITE)).clicked() {
                     self.execute_global_transformation_plan();
                 }
 
-                if ui.button("Ã°Å¸â€œÂ¸ Snapshot Checkpoint").clicked() {
+                if ui.button("📸 Snapshot Checkpoint").clicked() {
                     self.create_checkpoint("Manual Snapshot", "Saved state from Master Dashboard");
                     self.status_msg = "Snapshot checkpoint created.".to_string();
                 }
 
-                if ui.button("Ã¢â€“Â¶ Run Live Benchmark").clicked() {
+                if ui.button("▶ Run Live Benchmark").clicked() {
                     self.active_tab = 4;
                     self.simulator.start();
                 }
@@ -1716,7 +1746,7 @@ impl THMEApp {
                     ui.horizontal(|ui| {
                         ui.label(egui::RichText::new("RECENT HISTORY CHECKPOINTS").strong().color(p.text_main));
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.small_button("All Checkpoints Ã¢â€ â€™").clicked() {
+                            if ui.small_button("All Checkpoints →").clicked() {
                                 self.active_tab = 5;
                             }
                         });
@@ -1735,7 +1765,7 @@ impl THMEApp {
                     ui.horizontal(|ui| {
                         ui.label(egui::RichText::new("LIVE AUDIT EVENT STREAM").strong().color(p.text_main));
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.small_button("Full Audit Log Ã¢â€ â€™").clicked() {
+                            if ui.small_button("Full Audit Log →").clicked() {
                                 self.active_tab = 6;
                             }
                         });
@@ -1771,7 +1801,7 @@ impl THMEApp {
                 ui.add_space(8.0);
 
                 ui.horizontal(|ui| {
-                    if ui.button("Ã¢Å¾â€¢ Generate Synthetic Model").clicked() {
+                    if ui.button("➕ Generate Synthetic Model").clicked() {
                         let m = UniversalModel::create_synthetic(12, 2048);
                         let name = m.name.clone();
                         self.models.push(m);
@@ -1880,13 +1910,30 @@ impl THMEApp {
 
         ui.columns(2, |cols| {
             cols[0].vertical(|ui| {
-                ui.heading(egui::RichText::new("LAYER COMPONENT TWEAKER").size(13.0).color(p.text_main));
-                ui.label(egui::RichText::new("Adjust layer mixer, precision mix, scale factors, and pruning thresholds.").size(10.0).color(p.text_muted));
+                ui.heading(
+                    egui::RichText::new("LAYER COMPONENT TWEAKER")
+                        .size(13.0)
+                        .color(p.text_main),
+                );
+                ui.label(
+                    egui::RichText::new(
+                        "Adjust layer mixer, precision mix, scale factors, and pruning thresholds.",
+                    )
+                    .size(10.0)
+                    .color(p.text_muted),
+                );
                 ui.add_space(8.0);
 
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("Select Layer:").strong().color(p.text_main));
-                    ui.add(egui::Slider::new(&mut self.selected_layer_idx, 0..=max_l).text(f!("Layer {}", cur_l)));
+                    ui.label(
+                        egui::RichText::new("Select Layer:")
+                            .strong()
+                            .color(p.text_main),
+                    );
+                    ui.add(
+                        egui::Slider::new(&mut self.selected_layer_idx, 0..=max_l)
+                            .text(f!("Layer {}", cur_l)),
+                    );
                 });
 
                 ui.add_space(8.0);
@@ -1896,12 +1943,19 @@ impl THMEApp {
                     .inner_margin(egui::Margin::same(12))
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new(f!("Layer {} Parameters & Config", cur_l)).strong().color(p.primary));
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if ui.checkbox(&mut is_cp, "Early Exit Checkpoint").changed() {
-                                    layer_modified = true;
-                                }
-                            });
+                            ui.label(
+                                egui::RichText::new(f!("Layer {} Parameters & Config", cur_l))
+                                    .strong()
+                                    .color(p.primary),
+                            );
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if ui.checkbox(&mut is_cp, "Early Exit Checkpoint").changed() {
+                                        layer_modified = true;
+                                    }
+                                },
+                            );
                         });
                         ui.separator();
 
@@ -1911,11 +1965,31 @@ impl THMEApp {
                             egui::ComboBox::from_id_salt(f!("layer_tweaker_mixer_{}", cur_l))
                                 .selected_text(&l_mixer)
                                 .show_ui(ui, |ui| {
-                                    ui.selectable_value(&mut l_mixer, "gqa_attention".to_string(), "GQA Attention");
-                                    ui.selectable_value(&mut l_mixer, "gated_deltanet".to_string(), "Gated DeltaNet");
-                                    ui.selectable_value(&mut l_mixer, "phase_recurrence".to_string(), "Phase Recurrence");
-                                    ui.selectable_value(&mut l_mixer, "sliding_window".to_string(), "Sliding Window");
-                                    ui.selectable_value(&mut l_mixer, "mamba2".to_string(), "Mamba-2");
+                                    ui.selectable_value(
+                                        &mut l_mixer,
+                                        "gqa_attention".to_string(),
+                                        "GQA Attention",
+                                    );
+                                    ui.selectable_value(
+                                        &mut l_mixer,
+                                        "gated_deltanet".to_string(),
+                                        "Gated DeltaNet",
+                                    );
+                                    ui.selectable_value(
+                                        &mut l_mixer,
+                                        "phase_recurrence".to_string(),
+                                        "Phase Recurrence",
+                                    );
+                                    ui.selectable_value(
+                                        &mut l_mixer,
+                                        "sliding_window".to_string(),
+                                        "Sliding Window",
+                                    );
+                                    ui.selectable_value(
+                                        &mut l_mixer,
+                                        "mamba2".to_string(),
+                                        "Mamba-2",
+                                    );
                                 });
                             if l_mixer != prev_mixer {
                                 layer_modified = true;
@@ -1923,46 +1997,80 @@ impl THMEApp {
                         });
 
                         ui.add_space(8.0);
-                        ui.label(egui::RichText::new("Precision Allocation (ÃŽÂ± 1-bit / ÃŽÂ² 2-bit Ternary / ÃŽÂ³ Phase):").strong().size(10.0));
+                        ui.label(
+                            egui::RichText::new(
+                                "Precision Allocation (α 1-bit / β 2-bit Ternary / γ Phase):",
+                            )
+                            .strong()
+                            .size(10.0),
+                        );
 
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("ÃŽÂ± (Binary):").color(p.primary));
-                            if ui.add(egui::DragValue::new(&mut a_pct).range(0..=100).suffix("%")).changed() {
+                            ui.label(egui::RichText::new("α (Binary):").color(p.primary));
+                            if ui
+                                .add(egui::DragValue::new(&mut a_pct).range(0..=100).suffix("%"))
+                                .changed()
+                            {
                                 a_pct = a_pct.clamp(0, 100);
-                                if a_pct + b_pct > 100 { b_pct = 100 - a_pct; }
+                                if a_pct + b_pct > 100 {
+                                    b_pct = 100 - a_pct;
+                                }
                                 layer_modified = true;
                             }
 
-                            ui.label(egui::RichText::new("ÃŽÂ² (Ternary):").color(p.success));
-                            if ui.add(egui::DragValue::new(&mut b_pct).range(0..=100).suffix("%")).changed() {
+                            ui.label(egui::RichText::new("β (Ternary):").color(p.success));
+                            if ui
+                                .add(egui::DragValue::new(&mut b_pct).range(0..=100).suffix("%"))
+                                .changed()
+                            {
                                 b_pct = b_pct.clamp(0, 100);
-                                if a_pct + b_pct > 100 { a_pct = 100 - b_pct; }
+                                if a_pct + b_pct > 100 {
+                                    a_pct = 100 - b_pct;
+                                }
                                 layer_modified = true;
                             }
 
                             let g_pct = (100 - a_pct - b_pct).max(0);
-                            ui.label(egui::RichText::new(f!("ÃŽÂ³ (Phase): {}%", g_pct)).color(p.warning));
+                            ui.label(
+                                egui::RichText::new(f!("γ (Phase): {}%", g_pct)).color(p.warning),
+                            );
                         });
 
                         ui.add_space(8.0);
                         ui.horizontal(|ui| {
                             ui.label("Scale Factor:");
-                            ui.add(egui::Slider::new(&mut self.layer_scale_factor, 0.5..=2.0).text("Multiplier"));
+                            ui.add(
+                                egui::Slider::new(&mut self.layer_scale_factor, 0.5..=2.0)
+                                    .text("Multiplier"),
+                            );
                         });
 
                         ui.horizontal(|ui| {
                             ui.label("Bias Offset:");
-                            ui.add(egui::Slider::new(&mut self.layer_bias_offset, -0.1..=0.1).text("Offset"));
+                            ui.add(
+                                egui::Slider::new(&mut self.layer_bias_offset, -0.1..=0.1)
+                                    .text("Offset"),
+                            );
                         });
 
                         ui.horizontal(|ui| {
                             ui.label("Pruning Sparsity:");
-                            ui.add(egui::Slider::new(&mut self.layer_pruning_sparsity, 0.0..=0.8).text("Zeros"));
+                            ui.add(
+                                egui::Slider::new(&mut self.layer_pruning_sparsity, 0.0..=0.8)
+                                    .text("Zeros"),
+                            );
                         });
                     });
 
                 ui.add_space(8.0);
-                if ui.button(egui::RichText::new("Ã°Å¸Â¤â€“ Auto-Select Best Algorithm for This Layer").strong().color(Color32::BLACK)).clicked() {
+                if ui
+                    .button(
+                        egui::RichText::new("🤖 Auto-Select Best Algorithm for This Layer")
+                            .strong()
+                            .color(Color32::BLACK),
+                    )
+                    .clicked()
+                {
                     auto_select_clicked = true;
                 }
             });
@@ -1989,8 +2097,18 @@ impl THMEApp {
                 .collect();
 
             cols[1].vertical(|ui| {
-                ui.heading(egui::RichText::new("LAYER SECTION & PARAMETERS DRILL-DOWN").size(13.0).color(p.text_main));
-                ui.label(egui::RichText::new("Inspect Attention Q/K/V/O, MLP Gate/Up/Down, and LayerNorm weight slices.").size(10.0).color(p.text_muted));
+                ui.heading(
+                    egui::RichText::new("LAYER SECTION & PARAMETERS DRILL-DOWN")
+                        .size(13.0)
+                        .color(p.text_main),
+                );
+                ui.label(
+                    egui::RichText::new(
+                        "Inspect Attention Q/K/V/O, MLP Gate/Up/Down, and LayerNorm weight slices.",
+                    )
+                    .size(10.0)
+                    .color(p.text_muted),
+                );
                 ui.add_space(8.0);
 
                 if !tensor_metas.is_empty() {
@@ -1999,10 +2117,26 @@ impl THMEApp {
                         egui::ComboBox::from_id_salt("layer_section_filter_cb")
                             .selected_text(&self.selected_section_filter)
                             .show_ui(ui, |ui| {
-                                ui.selectable_value(&mut self.selected_section_filter, "All Sections".to_string(), "All Sections");
-                                ui.selectable_value(&mut self.selected_section_filter, "Attention".to_string(), "Attention (Q/K/V/O)");
-                                ui.selectable_value(&mut self.selected_section_filter, "Mlp".to_string(), "MLP (Gate/Up/Down)");
-                                ui.selectable_value(&mut self.selected_section_filter, "LayerNorm".to_string(), "LayerNorm");
+                                ui.selectable_value(
+                                    &mut self.selected_section_filter,
+                                    "All Sections".to_string(),
+                                    "All Sections",
+                                );
+                                ui.selectable_value(
+                                    &mut self.selected_section_filter,
+                                    "Attention".to_string(),
+                                    "Attention (Q/K/V/O)",
+                                );
+                                ui.selectable_value(
+                                    &mut self.selected_section_filter,
+                                    "Mlp".to_string(),
+                                    "MLP (Gate/Up/Down)",
+                                );
+                                ui.selectable_value(
+                                    &mut self.selected_section_filter,
+                                    "LayerNorm".to_string(),
+                                    "LayerNorm",
+                                );
                             });
                     });
 
@@ -2037,29 +2171,80 @@ impl THMEApp {
                             .width(280.0)
                             .show_ui(ui, |ui| {
                                 for m in &filtered {
-                                    ui.selectable_value(&mut self.selected_tensor_idx, m.idx, format!("{} [{:?}]", m.role, m.shape));
+                                    ui.selectable_value(
+                                        &mut self.selected_tensor_idx,
+                                        m.idx,
+                                        format!("{} [{:?}]", m.role, m.shape),
+                                    );
                                 }
                             });
                     });
 
                     if let Some(t) = self.model().tensors.get(self.selected_tensor_idx) {
                         ui.add_space(8.0);
-                        ui.label(egui::RichText::new(f!("Shape: {:?} | DType: {} | Elements: {}", t.shape, t.dtype, t.num_elements)).monospace().size(10.0).color(p.primary));
+                        ui.label(
+                            egui::RichText::new(f!(
+                                "Shape: {:?} | DType: {} | Elements: {}",
+                                t.shape,
+                                t.dtype,
+                                t.num_elements
+                            ))
+                            .monospace()
+                            .size(10.0)
+                            .color(p.primary),
+                        );
                         ui.columns(2, |sub| {
-                            render_stat_box(&mut sub[0], "RANGE (MIN..MAX)", f!("{:.4} .. {:.4}", t.min_val, t.max_val), p.text_main, &p);
-                            render_stat_box(&mut sub[1], "MOMENTS (ÃŽÂ¼ Ã‚Â± ÃÆ’)", f!("{:.4} Ã‚Â± {:.4}", t.mean_val, t.std_val), p.warning, &p);
+                            render_stat_box(
+                                &mut sub[0],
+                                "RANGE (MIN..MAX)",
+                                f!("{:.4} .. {:.4}", t.min_val, t.max_val),
+                                p.text_main,
+                                &p,
+                            );
+                            render_stat_box(
+                                &mut sub[1],
+                                "MOMENTS (μ ± σ)",
+                                f!("{:.4} ± {:.4}", t.mean_val, t.std_val),
+                                p.warning,
+                                &p,
+                            );
                         });
                         ui.add_space(4.0);
                         ui.columns(2, |sub| {
-                            render_stat_box(&mut sub[0], "SPARSITY", f!("{:.2}%", t.sparsity * 100.0), p.success, &p);
-                            render_stat_box(&mut sub[1], "OUTLIERS (>3ÃÆ’)", f!("{:.3}%", t.outlier_ratio * 100.0), p.danger, &p);
+                            render_stat_box(
+                                &mut sub[0],
+                                "SPARSITY",
+                                f!("{:.2}%", t.sparsity * 100.0),
+                                p.success,
+                                &p,
+                            );
+                            render_stat_box(
+                                &mut sub[1],
+                                "OUTLIERS (>3σ)",
+                                f!("{:.3}%", t.outlier_ratio * 100.0),
+                                p.danger,
+                                &p,
+                            );
                         });
 
                         ui.add_space(8.0);
-                        ui.label(egui::RichText::new("Interactive 8Ãƒâ€”8 Numerical Weight Matrix Slice:").strong().size(10.0).color(p.text_main));
-                        let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 130.0), egui::Sense::hover());
+                        ui.label(
+                            egui::RichText::new("Interactive 8×8 Numerical Weight Matrix Slice:")
+                                .strong()
+                                .size(10.0)
+                                .color(p.text_main),
+                        );
+                        let (rect, _) = ui.allocate_exact_size(
+                            Vec2::new(ui.available_width(), 130.0),
+                            egui::Sense::hover(),
+                        );
                         ui.painter().rect_filled(rect, 4.0, p.bg_input);
-                        ui.painter().rect_stroke(rect, 4.0, Stroke::new(1.0_f32, p.border), egui::StrokeKind::Outside);
+                        ui.painter().rect_stroke(
+                            rect,
+                            4.0,
+                            Stroke::new(1.0_f32, p.border),
+                            egui::StrokeKind::Outside,
+                        );
 
                         let cell_w = (rect.width() - 16.0) / 8.0;
                         let cell_h = (rect.height() - 16.0) / 8.0;
@@ -2072,20 +2257,41 @@ impl THMEApp {
 
                                 let cell_col = if norm_v > 0.0 {
                                     Color32::from_rgb(
-                                        (p.bg_card.r() as f32 + (p.primary.r() as f32 - p.bg_card.r() as f32) * norm_v) as u8,
-                                        (p.bg_card.g() as f32 + (p.primary.g() as f32 - p.bg_card.g() as f32) * norm_v) as u8,
-                                        (p.bg_card.b() as f32 + (p.primary.b() as f32 - p.bg_card.b() as f32) * norm_v) as u8,
+                                        (p.bg_card.r() as f32
+                                            + (p.primary.r() as f32 - p.bg_card.r() as f32)
+                                                * norm_v)
+                                            as u8,
+                                        (p.bg_card.g() as f32
+                                            + (p.primary.g() as f32 - p.bg_card.g() as f32)
+                                                * norm_v)
+                                            as u8,
+                                        (p.bg_card.b() as f32
+                                            + (p.primary.b() as f32 - p.bg_card.b() as f32)
+                                                * norm_v)
+                                            as u8,
                                     )
                                 } else {
                                     Color32::from_rgb(
-                                        (p.bg_card.r() as f32 + (p.danger.r() as f32 - p.bg_card.r() as f32) * norm_v.abs()) as u8,
-                                        (p.bg_card.g() as f32 + (p.danger.g() as f32 - p.bg_card.g() as f32) * norm_v.abs()) as u8,
-                                        (p.bg_card.b() as f32 + (p.danger.b() as f32 - p.bg_card.b() as f32) * norm_v.abs()) as u8,
+                                        (p.bg_card.r() as f32
+                                            + (p.danger.r() as f32 - p.bg_card.r() as f32)
+                                                * norm_v.abs())
+                                            as u8,
+                                        (p.bg_card.g() as f32
+                                            + (p.danger.g() as f32 - p.bg_card.g() as f32)
+                                                * norm_v.abs())
+                                            as u8,
+                                        (p.bg_card.b() as f32
+                                            + (p.danger.b() as f32 - p.bg_card.b() as f32)
+                                                * norm_v.abs())
+                                            as u8,
                                     )
                                 };
 
                                 let cell_rect = Rect::from_min_size(
-                                    Pos2::new(rect.min.x + 8.0 + (c as f32 * cell_w), rect.min.y + 8.0 + (r as f32 * cell_h)),
+                                    Pos2::new(
+                                        rect.min.x + 8.0 + (c as f32 * cell_w),
+                                        rect.min.y + 8.0 + (r as f32 * cell_h),
+                                    ),
                                     Vec2::new(cell_w - 2.0, cell_h - 2.0),
                                 );
                                 ui.painter().rect_filled(cell_rect, 2.0, cell_col);
@@ -2169,7 +2375,7 @@ impl THMEApp {
         ui.horizontal(|ui| {
             if ui
                 .button(
-                    egui::RichText::new("Ã¢Å¡Â¡ Run Automated Parameter Decider")
+                    egui::RichText::new("⚡ Run Automated Parameter Decider")
                         .strong()
                         .color(Color32::BLACK),
                 )
@@ -2182,7 +2388,7 @@ impl THMEApp {
 
             if ui
                 .button(
-                    egui::RichText::new("Ã°Å¸Å¡â‚¬ Execute Global Transformation Plan")
+                    egui::RichText::new("🚀 Execute Global Transformation Plan")
                         .strong()
                         .color(Color32::WHITE),
                 )
@@ -2192,11 +2398,11 @@ impl THMEApp {
             }
 
             ui.add_space(12.0);
-            ui.label("Distillation Temp (Ãâ€ž):");
+            ui.label("Distillation Temp (τ):");
             ui.add(egui::Slider::new(&mut self.distill_temperature, 1.0..=5.0).text("Temperature"));
 
             ui.add_space(8.0);
-            ui.label("Quality Gate (ÃŽÂµ):");
+            ui.label("Quality Gate (ε):");
             if ui
                 .add(egui::Slider::new(&mut self.quality_tolerance, 0.01..=0.08).text("Tolerance"))
                 .changed()
@@ -2224,7 +2430,7 @@ impl THMEApp {
                     &mut cols[1],
                     "MEAN DISTORTION",
                     f!("{:.4} SNR", summary.average_distortion_snr),
-                    "Under Gate ÃŽÂµ".to_string(),
+                    "Under Gate ε".to_string(),
                     p.success,
                     &p,
                 );
@@ -2375,7 +2581,7 @@ impl THMEApp {
                 ui.horizontal(|ui| {
                     match snap.status {
                         crate::profiling::TokenFlowStatus::Idle | crate::profiling::TokenFlowStatus::Completed => {
-                            if ui.button(egui::RichText::new("Ã¢â€“Â¶ Start Live Flow Benchmark").strong().color(Color32::BLACK)).clicked() {
+                            if ui.button(egui::RichText::new("▶ Start Live Flow Benchmark").strong().color(Color32::BLACK)).clicked() {
                                 self.simulator = crate::profiling::LiveFlowSimulator::new(
                                     &self.baseline_prompt,
                                     self.baseline_tokens,
@@ -2391,12 +2597,12 @@ impl THMEApp {
                             }
                         }
                         crate::profiling::TokenFlowStatus::Generating | crate::profiling::TokenFlowStatus::Prefill => {
-                            if ui.button(egui::RichText::new("Ã¢ÂÂ¸ Pause").strong().color(Color32::WHITE)).clicked() {
+                            if ui.button(egui::RichText::new("⏸ Pause").strong().color(Color32::WHITE)).clicked() {
                                 self.simulator.pause();
                             }
                         }
                         crate::profiling::TokenFlowStatus::Paused => {
-                            if ui.button(egui::RichText::new("Ã¢â€“Â¶ Resume").strong().color(Color32::WHITE)).clicked() {
+                            if ui.button(egui::RichText::new("▶ Resume").strong().color(Color32::WHITE)).clicked() {
                                 self.simulator.resume();
                             }
                         }
@@ -2431,7 +2637,7 @@ impl THMEApp {
                     .inner_margin(egui::Margin::same(10))
                     .show(ui, |ui| {
                         let stream_text = if snap.token_stream.is_empty() {
-                            "[Press Ã¢â€“Â¶ Start to initiate live token generation flow...]".to_string()
+                            "[Press ▶ Start to initiate live token generation flow...]".to_string()
                         } else {
                             format!("{}: {}", self.baseline_prompt, snap.token_stream.join(" "))
                         };
@@ -2502,18 +2708,12 @@ impl THMEApp {
         ui.add_space(8.0);
 
         ui.horizontal(|ui| {
-            if ui
-                .button("Ã°Å¸â€œÂ¸ Create Manual Snapshot Checkpoint")
-                .clicked()
-            {
+            if ui.button("📸 Create Manual Snapshot Checkpoint").clicked() {
                 self.create_checkpoint("Manual Snapshot", "Saved state from History tab");
                 self.status_msg = "Manual checkpoint recorded.".to_string();
             }
 
-            if ui
-                .button("Ã°Å¸â€™Â¾ Export History Report (JSON)")
-                .clicked()
-            {
+            if ui.button("💾 Export History Report (JSON)").clicked() {
                 if let Ok(json) = serde_json::to_string_pretty(&self.history) {
                     let _ = std::fs::write("history_report.json", json);
                     self.status_msg = "Exported history_report.json successfully!".to_string();
@@ -2601,7 +2801,7 @@ impl THMEApp {
                                 .color(p.text_muted),
                         );
 
-                        if ui.button("Ã¢â€ Âº Restore").clicked() {
+                        if ui.button("↩ Restore").clicked() {
                             restore_idx = Some(idx);
                         }
                         ui.end_row();
@@ -2816,7 +3016,7 @@ impl THMEApp {
                 });
 
                 ui.add_space(16.0);
-                if ui.button(egui::RichText::new("Ã°Å¸â€™Â¾ Export Optimized Model Package").strong().color(Color32::WHITE)).clicked() {
+                if ui.button(egui::RichText::new("💾 Export Optimized Model Package").strong().color(Color32::WHITE)).clicked() {
                     let export_info = serde_json::to_string_pretty(self.model()).unwrap_or_default();
                     match std::fs::write(&self.export_path, export_info) {
                         Ok(_) => {
@@ -2837,13 +3037,13 @@ impl THMEApp {
                 ui.add_space(8.0);
 
                 ui.horizontal(|ui| {
-                    if ui.button("Ã°Å¸â€œâ€¹ Load Default Recipe").clicked() {
+                    if ui.button("📋 Load Default Recipe").clicked() {
                         let rec = crate::surgery::TweakRecipe::default();
                         self.tweak_recipe_text = serde_json::to_string_pretty(&rec).unwrap_or_default();
                         self.status_msg = "Loaded default Teacher LLM restructuring recipe.".to_string();
                     }
 
-                    if ui.button("Ã°Å¸â€œÂ Load Recipe File...").clicked() {
+                    if ui.button("📄 Load Recipe File...").clicked() {
                         if let Some(path) = rfd::FileDialog::new().add_filter("JSON Recipe", &["json"]).pick_file() {
                             if let Ok(content) = std::fs::read_to_string(&path) {
                                 self.tweak_recipe_text = content;
@@ -2852,7 +3052,7 @@ impl THMEApp {
                         }
                     }
 
-                    if ui.button("Ã°Å¸â€™Â¾ Save Recipe File...").clicked() {
+                    if ui.button("💾 Save Recipe File...").clicked() {
                         if let Some(path) = rfd::FileDialog::new().add_filter("JSON Recipe", &["json"]).save_file() {
                             let _ = std::fs::write(&path, &self.tweak_recipe_text);
                             self.status_msg = f!("Saved recipe to: {:?}", path);
@@ -2861,7 +3061,7 @@ impl THMEApp {
                 });
 
                 ui.add_space(6.0);
-                if ui.button(egui::RichText::new("Ã°Å¸â€™â€° Apply Teacher LLM Surgery Recipe").strong().color(Color32::BLACK)).clicked() {
+                if ui.button(egui::RichText::new("💉 Apply Teacher LLM Surgery Recipe").strong().color(Color32::BLACK)).clicked() {
                     match serde_json::from_str::<crate::surgery::TweakRecipe>(&self.tweak_recipe_text) {
                         Ok(recipe) => {
                             let mut model_ir = crate::ir::ModelIR::new(
