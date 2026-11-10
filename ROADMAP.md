@@ -7,9 +7,9 @@
 
 ## Strategic Overview
 
-The mission of THME is to provide a mathematically principled, verifiable framework for Large Language Model memory profiling, layer sensitivity estimation, Pareto precision allocation, and automated Teacher LLM architecture surgery.
+The mission of THME is to provide a mathematically principled, verifiable framework for Large Language Model memory profiling, layer sensitivity estimation, Pareto precision allocation, automated Teacher LLM architecture surgery, and high-performance heterogeneous hardware execution.
 
-As defined in the **Engineering Playbook**, the path from v0.1.0 to v0.2.0 focuses strictly on **correctness, honesty, reproducible measurements, and verified transformation**. High-complexity execution runtimes (Vulkan / Metal / CUDA kernels, 70B out-of-core streaming, and Mixture-of-Experts routing) are deliberately scheduled for **v0.3.0+** so that the core analytical and surgical engines are hardened first.
+The path from v0.1.0 to v0.2.0 focuses strictly on **correctness, honesty, reproducible measurements, and verified transformation**. High-performance hardware execution (direct GPU drivers, out-of-core NVMe SSD streaming, multi-node clustering, and the Universal Agentic AI Gateway) is formally integrated across **v0.2.1 through v0.2.4**, followed by advanced dynamic Mixture-of-Experts routing in **v0.3.0+**.
 
 ---
 
@@ -55,17 +55,22 @@ As defined in the **Engineering Playbook**, the path from v0.1.0 to v0.2.0 focus
 
 ---
 
-### Phase 3: Empirical Quality Verification & Distributed Surgery
-- [ ] **v0.1.4 — Empirical Quality Gate Evaluation & Perplexity Verification Bridge**
+### Phase 3: Empirical Quality Verification & Universal Integration
+- [x] **v0.1.4 — Empirical Quality Gate Evaluation & Perplexity Verification Bridge**
   - Real perplexity evaluation bridge supporting standard test sets (WikiText-2, C4, PTB) and local token scoring harness.
   - Perplexity degradation computation: $\Delta PPL = PPL_{\text{candidate}} - PPL_{\text{baseline}}$ with automated quality gate decision ($\Delta PPL \le \epsilon$).
   - Automated rollback trigger: if degradation exceeds tolerance, rollback to last baseline checkpoint immediately and emit structured audit diagnostics.
   - `thme validate` CLI command with `--corpus`, `--max-ppl-delta`, and JSON output flags.
 
-- [ ] **v0.1.5 — Surgery Daemon & Programmatic Remote API**
-  - Headless daemon mode (`thme daemon`) exposing JSON-RPC 2.0 and REST endpoints.
-  - Remote Teacher LLM integration: automated agents can inspect model IR, receive AutoDecider recommendations, and submit surgery recipes programmatically over HTTP.
-  - Cryptographic attestation and HMAC-SHA256 signature on executed surgery recipes to guarantee provenance.
+- [x] **v0.1.5 — Surgery Daemon, IDE Extensions & PyTorch/CUDA Interop Bridge**
+  - Headless Model Context Protocol (MCP) server (`thme mcp`) exposing 7 specialized LLM surgical tools.
+  - Packaged Visual Studio Code extension (`editors/vscode/thme-vscode-0.1.5.vsix`) with 4 Explorer sidebar panels.
+  - GitHub Copilot Language Model Tools integration (`thme_copilot_inspect`, `thme_copilot_surgery`, `thme_copilot_validate`).
+  - PyTorch & CUDA fine-tuning interoperability bridge (`src/interop/`):
+    - Synthesizes standalone, self-contained `train_cuda.py` scripts with LoRA, QLoRA (BitsAndBytes 4-bit), Unsloth Fast, and DeepSpeed ZeRO-2/3.
+    - Hugging Face `config.json` generator for LLaMA, Mistral, Gemma, Qwen, and DeepSeek model families.
+    - Pure Rust PEFT LoRA adapter checkpoint parser and zero-copy weight merger ($W = W_0 + \frac{\alpha}{r} B \times A$).
+    - `thme export` / `thme interop` CLI command for instant pipeline transitions.
 
 - [ ] **v0.1.6 — Speculative Decoding & Draft Model Synthesizer**
   - Draft model manifold synthesizer extracting lightweight sub-models from early-exit checkpoints (e.g., first 4 layers of 16-layer model).
@@ -92,7 +97,7 @@ As defined in the **Engineering Playbook**, the path from v0.1.0 to v0.2.0 focus
 
 ---
 
-### Phase 5: Production Release
+### Phase 5: Production Core Release
 - [ ] **v0.2.0 — Production-Ready Verified Release**
   - Verified production deployment demonstration on a real open-weights model (e.g. SmolLM-135M / LLaMA-3.2-1B) with published before-and-after checkpoints.
   - End-to-end reproducible script generating published benchmark tables, perplexity figures, and energy measurements.
@@ -100,9 +105,40 @@ As defined in the **Engineering Playbook**, the path from v0.1.0 to v0.2.0 focus
 
 ---
 
+### Phase 6: Tiered Hardware Execution & Universal Agentic Connectivity
+- [ ] **v0.2.1 — Direct GPU Driver Execution Engine (Vulkan / Metal / CUDA Driver API)**
+  - Direct pure Rust GPU driver execution engine bypassing heavy external runtimes:
+    - NVIDIA CUDA Driver API via `cudarc` (bypassing the Python runtime).
+    - Cross-platform Vulkan 1.3 compute shaders via SPIR-V for Windows and Linux.
+    - Apple Metal 3 Performance Shaders for macOS Apple Silicon unified memory.
+  - Unified hardware abstraction layer: `HardwareDevice`, `DeviceMemoryBuffer`, `KernelLaunchConfig`.
+  - Fused low-bit matrix multiplication micro-kernels, RMSNorm, and SwiGLU activation kernels.
+
+- [ ] **v0.2.2 — Tiered Heterogeneous Memory & Out-of-Core NVMe SSD Streaming**
+  - Three-tier hierarchical memory pipeline: GPU VRAM $\leftrightarrow$ Host RAM $\leftrightarrow$ NVMe SSD direct asynchronous I/O (`io_uring` on Linux, Overlapped I/O on Windows).
+  - AirLLM-style sequential layer weight streaming enabling 70B parameter inference and surgery on 8 GB consumer GPUs.
+  - Zero-copy pinned memory staging buffers and background double-buffering prefetch queue.
+
+- [ ] **v0.2.3 — Distributed Heterogeneous Multi-Node Clustering (Pipeline & Tensor Parallelism)**
+  - Intra-node Tensor Parallelism (TP) across mixed GPUs (e.g., discrete NVIDIA RTX + integrated Apple Silicon / AMD).
+  - Inter-node Pipeline Parallelism (PP) over standard Ethernet / InfiniBand / Thunderbolt networks.
+  - Pure Rust asynchronous TCP/RDMA ring all-reduce communication primitives.
+  - Dynamic fault tolerance: heartbeat monitors, automated layer re-sharding on node failure, and cluster health telemetry.
+
+- [ ] **v0.2.4 — Universal Agentic AI Connectivity Gateway (CLI, Harness, Desktop, IDE)**
+  - Headless JSON-RPC 2.0 daemon and high-performance WebSocket streaming gateway (`thme daemon`).
+  - Universal Agent Adapter Matrix:
+    - Autonomous CLI Agents (Claude Code, Gemini CLI, Aider, OpenHands).
+    - CI/CD & Orchestration Harnesses (Harness CI/CD, GitHub Actions, GitLab CI, Airflow).
+    - Native Desktop Studio App (`thme-gui`).
+    - IDEs & Copilots (VS Code, Cursor, Windsurf, GitHub Copilot Language Model Tools).
+  - Bidirectional event streaming: layer progress, token throughput, thermal throttling, memory pressure.
+  - Cryptographic HMAC-SHA256 surgery recipe verification and provenance attestation.
+
+---
+
 ## Long-Term Backlog (Deferred to v0.3.0+)
 
-These advanced initiatives are documented in the backlog and intentionally deferred to subsequent major milestones:
-- **Hardware GPU Execution Backends**: Native Vulkan compute, Apple Metal Performance Shaders, and CUDA custom kernels.
-- **Out-of-Core 70B Streaming**: AirLLM-style sequential layer paging from NVMe SSD into constrained VRAM (e.g., 70B inference in 8 GB VRAM).
-- **Mixture-of-Experts (MoE) Routing**: Dynamic expert sensitivity profiling and routing topology re-structuring for models like Mixtral and DeepSeek-V2/V3.
+These advanced algorithmic initiatives are documented in the backlog and intentionally deferred to subsequent major milestones:
+- **Mixture-of-Experts (MoE) Dynamic Specialist Routing**: Dynamic expert sensitivity profiling and routing topology restructuring for models like Mixtral and DeepSeek-V2/V3.
+- **Continuous Online RL Adaptation**: Real-time layer manifold adjustment guided by continuous reinforcement learning feedback loops.

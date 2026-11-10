@@ -86,9 +86,13 @@ cargo test
 | **v0.1.2** | Format Correctness | Full GGUF v2/v3 quant matrix (K-quants, I-quants), zero-allocation block decoders, truncated stream recovery, and infallible parser fuzz suite. | Completed |
 | **v0.1.3** | BYOA & REA-LLM Engine | Bring Your Own Algorithm registry with JSON import/export, architecture rebuilder from scratch, open weights remapping, REA-LLM EWHA routing & energy telemetry, layer anatomy deconstruction, dataset ingestion, and micro-trainer. | Completed |
 | **v0.1.4** | Empirical Quality Gate | External perplexity evaluation bridge (WikiText-2, C4) with automated rollback gating (Delta PPL <= epsilon) and CLI validate enhancements. | Completed |
-| **v0.1.5** | Surgery Daemon & IDE Integration | Headless JSON-RPC MCP server (`thme mcp`), VS Code extension packaging (`.vsix`), and GitHub Copilot Language Model Tools. | Completed |
+| **v0.1.5** | Surgery Daemon, IDE & Interop | Headless JSON-RPC MCP server (`thme mcp`), VS Code extension (`thme-vscode-0.1.5.vsix`), GitHub Copilot LM Tools, and PyTorch/CUDA ecosystem interop bridge with PEFT LoRA zero-copy merge. | Completed |
 | **v0.1.6** | Speculative Decoding Synthesizer | Draft model manifold extraction from early-exit checkpoints and multi-token tree speculation verification engine. | Planned |
 | **v0.1.7** | Roofline & Kernel Profiler | Hardware-calibrated Arithmetic Intensity vs Memory Bandwidth roofline model with L1/L2/L3/HBM cache hierarchy simulation. | Planned |
 | **v0.1.8** | Binary Quantization Exporter | Direct serialization to deployable GGUF and SafeTensors files with BitNet b1.58 ternary packed weights and calibrated per-channel scale factors. | Planned |
 | **v0.1.9** | Closed-Loop Teacher Surgery | Autonomous Teacher-Student co-surgery optimization pipeline: automated recipe generation, delta-PPL verification, and iterative Pareto tuning. | Planned |
-| **v0.2.0** | Production Release | Verified production deployment on real open weights (SmolLM-135M / LLaMA-3.2-1B) with reproducible before-and-after benchmarks and signed release binaries. | Target |
+| **v0.2.0** | Production Core Release | Verified production deployment on real open weights (SmolLM-135M / LLaMA-3.2-1B) with reproducible before-and-after benchmarks and signed release binaries. | Target |
+| **v0.2.1** | Direct GPU Driver Engine | Pure Rust GPU execution via Vulkan 1.3 SPIR-V, Apple Metal 3, and NVIDIA CUDA Driver API bypassing Python runtimes. | Scheduled |
+| **v0.2.2** | Tiered Out-of-Core SSD Streaming | Three-tier memory hierarchy (VRAM <-> RAM <-> NVMe SSD) with asynchronous direct I/O for 70B inference in 8 GB VRAM. | Scheduled |
+| **v0.2.3** | Multi-Node Heterogeneous Clustering | Distributed Pipeline and Tensor Parallelism across mixed nodes with pure Rust async TCP/RDMA ring all-reduce. | Scheduled |
+| **v0.2.4** | Universal Agentic AI Gateway | JSON-RPC 2.0 / WebSocket daemon connecting CLI agents, CI/CD harnesses, desktop studio, and IDEs with HMAC-SHA256 recipe attestation. | Scheduled |

@@ -58,9 +58,9 @@
 
 ---
 
-## Sprint 3: Empirical Quality Verification (Milestone v0.1.4)
+## Sprint 3: Empirical Quality Verification (Milestone v0.1.4) [COMPLETED]
 
-### [THME-301] External Perplexity Evaluation Bridge
+### [THME-301] External Perplexity Evaluation Bridge (Done)
 - **Component**: `thme::quality::evaluator`
 - **Problem**: Quality gates require ground-truth perplexity ($PPL$) evaluation on benchmark corpora (WikiText-2, C4).
 - **Acceptance Criteria**:
@@ -69,7 +69,7 @@
   - Calculate empirical degradation $\Delta PPL = PPL_{\text{opt}} - PPL_{\text{base}}$.
 - **Done Means**: `thme validate --model <path> --test-set wikitext2` runs end-to-end and outputs structured pass/fail gate verdict.
 
-### [THME-302] Automated Anti-Degradation Quality Gate
+### [THME-302] Automated Anti-Degradation Quality Gate (Done)
 - **Component**: `thme::quality::gate`
 - **Problem**: Models must automatically reject optimizations that exceed allowable perplexity degradation ($\epsilon = 2.0\%$).
 - **Acceptance Criteria**:
@@ -79,16 +79,32 @@
 
 ---
 
-## Sprint 4: Surgery Daemon & API (Milestone v0.1.5)
+## Sprint 4: Surgery Daemon, IDE Extensions & PyTorch Bridge (Milestone v0.1.5) [COMPLETED]
 
-### [THME-401] Headless Surgery Daemon (`thme daemon`)
-- **Component**: `thme::daemon`
-- **Problem**: Teacher LLMs running on remote compute clusters need an API to query model IR and dispatch surgery recipes.
+### [THME-401] Model Context Protocol (MCP) Server (`thme mcp`) (Done)
+- **Component**: `thme::cli::mcp`
+- **Problem**: Autonomous agents, IDEs, and Teacher LLMs need standard JSON-RPC tools to inspect model topology and apply surgery.
 - **Acceptance Criteria**:
-  - Lightweight async server listening on localhost port (configurable via `--port`).
-  - Endpoints: `GET /v1/model/ir`, `POST /v1/surgery/apply`, `GET /v1/telemetry/stream`.
-  - JSON Schema validation on all incoming surgery payloads.
-- **Done Means**: Remote curl request sends recipe JSON, modifies loaded model IR, and receives audit verification response.
+  - Standard JSON-RPC 2024-11-05 protocol implementation over stdin/stdout.
+  - Expose 7 specialized tools: inspect model, autodecide, apply surgery, validate quality, simulate token flow, run experiment, micro-train.
+- **Done Means**: `cargo test --test test_mcp` verifies tool discovery, schema generation, and execution.
+
+### [THME-402] VS Code Extension & GitHub Copilot Integration (Done)
+- **Component**: `editors/vscode`
+- **Problem**: Developers need native IDE access to model topologies, surgery recipes, and Copilot tools.
+- **Acceptance Criteria**:
+  - Packaged extension (`thme-vscode-0.1.5.vsix`) with 4 explorer sidebars.
+  - GitHub Copilot Language Model Tools integration (`thme_copilot_inspect`, `thme_copilot_surgery`, `thme_copilot_validate`).
+- **Done Means**: Extension packages cleanly with zero warnings and installs in VS Code.
+
+### [THME-403] PyTorch & CUDA Ecosystem Interoperability Bridge (Done)
+- **Component**: `thme::interop`
+- **Problem**: Practitioners requiring traditional fine-tuning need seamless migration to and from PyTorch/CUDA environments.
+- **Acceptance Criteria**:
+  - Pure Rust generator for `train_cuda.py` supporting LoRA, QLoRA (BitsAndBytes 4-bit), Unsloth Fast, and DeepSpeed ZeRO-2/3.
+  - Hugging Face `config.json` generator for major architectures (LLaMA, Mistral, Gemma, Qwen, DeepSeek).
+  - PEFT LoRA adapter zero-copy weight merger ($W = W_0 + \frac{\alpha}{r} B \times A$).
+- **Done Means**: `cargo test --test test_interop` passes for script generation, configs, and LoRA math.
 
 ---
 
@@ -110,3 +126,73 @@
   - Provide automated download and profiling script for a real open-weights model (e.g. SmolLM-135M or Qwen-2.5-0.5B).
   - Produce public verification report showing exact compression ratio, throughput gain, and zero-shot accuracy preservation.
 - **Done Means**: Script runs on clean machine in < 3 minutes and outputs verified comparison table.
+
+---
+
+## Sprint 6: Tiered Hardware Execution & Universal Agentic Connectivity (Milestones v0.2.1 – v0.2.4)
+
+### [THME-1101] Direct Pure Rust GPU Driver Engine
+- **Component**: `thme::hardware::drivers`
+- **Problem**: Relying on external runtimes introduces heavy dependencies; THME requires direct driver communication.
+- **Acceptance Criteria**:
+  - NVIDIA CUDA Driver API integration via `cudarc` (pure Rust, bypasses Python).
+  - Vulkan 1.3 SPIR-V compute pipeline for Windows and Linux.
+  - Apple Metal 3 Performance Shaders integration for Apple Silicon unified memory.
+- **Done Means**: Device discovery enumerates GPUs and runs a benchmark vector-add kernel on CUDA, Vulkan, and Metal.
+
+### [THME-1102] Unified Hardware Abstraction Layer
+- **Component**: `thme::hardware::hal`
+- **Problem**: Heterogeneous backends have distinct memory and execution paradigms.
+- **Acceptance Criteria**:
+  - Traits: `HardwareDevice`, `DeviceMemoryBuffer`, `KernelLaunchConfig`.
+  - Unified memory allocation, host-to-device transfers, and kernel dispatch.
+- **Done Means**: Layer forward pass executes identically across CPU, CUDA, and Vulkan backends.
+
+### [THME-1103] Out-of-Core NVMe SSD Layer Streaming Engine
+- **Component**: `thme::storage::nvme_stream`
+- **Problem**: Large 70B parameter models exceed consumer GPU VRAM capacity.
+- **Acceptance Criteria**:
+  - Asynchronous direct I/O: `io_uring` on Linux, Overlapped I/O on Windows.
+  - Sequential layer streaming (AirLLM-style) directly from NVMe SSD (PCIe 4.0/5.0 at 6,000+ MB/s).
+  - Double-buffered prefetch queue: compute layer $N$ while asynchronously loading layer $N+1$.
+- **Done Means**: Full 70B parameter forward pass completes in 8 GB VRAM without out-of-memory errors.
+
+### [THME-1104] Tiered Heterogeneous Memory Manager
+- **Component**: `thme::memory::tiered`
+- **Problem**: Optimal performance requires intelligent paging between VRAM, Host RAM, and NVMe SSD.
+- **Acceptance Criteria**:
+  - Automated tier placement based on layer reach probability $q_l$: hot layers ($q_l = 1.0$) pinned in VRAM, warm layers in Host RAM, deep layers ($q_l = 0.20$) streamed from SSD.
+  - Zero-copy memory-mapped staging buffers.
+- **Done Means**: Memory accountant maintains strict target VRAM budget under arbitrary layer depths.
+
+### [THME-1105] Heterogeneous Multi-Node Pipeline & Tensor Parallelism
+- **Component**: `thme::cluster::parallel`
+- **Problem**: Distributed execution across mixed clusters (e.g. Mac Studio + Linux RTX) requires hybrid parallelism.
+- **Acceptance Criteria**:
+  - Intra-node Tensor Parallelism (TP) for split matrix multiplications.
+  - Inter-node Pipeline Parallelism (PP) assigning sequential layer partitions across cluster nodes.
+- **Done Means**: Distributed forward pass executes across two networked physical nodes.
+
+### [THME-1106] Pure Rust Async TCP/RDMA Ring All-Reduce
+- **Component**: `thme::cluster::comm`
+- **Problem**: Multi-node synchronization requires low-latency communication without MPI or NCCL dependencies.
+- **Acceptance Criteria**:
+  - Pure Rust asynchronous Ring All-Reduce over TCP sockets with RDMA / RoCE fallback.
+  - Automatic heartbeats, network partition detection, and dynamic layer re-sharding on node departure.
+- **Done Means**: 100 MB gradient buffer synchronizes across 4 nodes with verified bitwise consistency.
+
+### [THME-1107] Universal Agentic Gateway Daemon & WebSocket Streaming
+- **Component**: `thme::daemon::gateway`
+- **Problem**: Autonomous AI agents need continuous real-time telemetry and programmatic control.
+- **Acceptance Criteria**:
+  - Headless JSON-RPC 2.0 daemon and WebSocket event stream (`thme daemon --port 9090`).
+  - Cryptographic HMAC-SHA256 signature verification on executed surgery recipes.
+  - Real-time telemetry broadcast: token throughput, layer progress, thermal and memory pressure.
+- **Done Means**: Client agent receives continuous streaming telemetry and dispatches recipe over WebSocket.
+
+### [THME-1108] Universal Agent Adapter Matrix
+- **Component**: `thme::daemon::adapters`
+- **Problem**: Diverse agent ecosystems (CLI, CI/CD harnesses, Desktop apps, IDE copilots) need native connectors.
+- **Acceptance Criteria**:
+  - Adapters for: Autonomous CLI Agents (Claude Code, Gemini CLI, Aider), Orchestration Harnesses (Harness CI/CD, GitHub Actions), Native Studio Desktop (`thme-gui`), and IDEs (VS Code, Copilot).
+- **Done Means**: All 4 client archetypes connect, inspect, and execute surgery recipes through standardized adapters.

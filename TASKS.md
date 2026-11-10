@@ -302,11 +302,57 @@ git grep -inE "(C:\\\\Users\\\\[a-zA-Z0-9_-]+|/home/[a-zA-Z0-9_-]+)"
 
 ---
 
+### ⏳ Milestone v0.2.1: Direct GPU Driver Execution Engine
+*Goal: Pure Rust execution on NVIDIA CUDA, Vulkan 1.3, and Apple Metal 3 bypassing external Python/PyTorch runtimes.*
+
+- [ ] **[THME-1101] Direct Pure Rust GPU Driver Engine**
+  - **Target**: `src/hardware/drivers/`
+  - **Deliverable**: Direct driver execution via `cudarc` (CUDA Driver API), Vulkan 1.3 SPIR-V shaders, and Metal 3 Performance Shaders.
+- [ ] **[THME-1102] Unified Hardware Abstraction Layer (HAL)**
+  - **Target**: `src/hardware/hal.rs`
+  - **Deliverable**: `HardwareDevice`, `DeviceMemoryBuffer`, and `KernelLaunchConfig` traits with automated compute backend selection.
+
+---
+
+### ⏳ Milestone v0.2.2: Tiered Heterogeneous Memory & Out-of-Core NVMe SSD Streaming
+*Goal: AirLLM-style sequential layer streaming enabling 70B parameter inference and surgery on 8 GB consumer GPUs.*
+
+- [ ] **[THME-1103] Out-of-Core NVMe SSD Layer Streaming Engine**
+  - **Target**: `src/storage/nvme_stream.rs`
+  - **Deliverable**: Asynchronous direct I/O via `io_uring` (Linux) and Overlapped I/O (Windows) with double-buffered layer prefetching.
+- [ ] **[THME-1104] Tiered Heterogeneous Memory Manager**
+  - **Target**: `src/memory/tiered.rs`
+  - **Deliverable**: Three-tier memory management (GPU VRAM <-> Host RAM <-> NVMe SSD) allocating layers according to EWHA reach probability $q_l$.
+
+---
+
+### ⏳ Milestone v0.2.3: Distributed Heterogeneous Multi-Node Clustering
+*Goal: Distributed Pipeline & Tensor Parallelism across mixed hardware nodes with pure Rust async communication.*
+
+- [ ] **[THME-1105] Heterogeneous Pipeline & Tensor Parallelism**
+  - **Target**: `src/cluster/parallel.rs`
+  - **Deliverable**: Intra-node Tensor Parallelism across mixed local GPUs and inter-node Pipeline Parallelism across cluster nodes.
+- [ ] **[THME-1106] Pure Rust Async TCP/RDMA Ring All-Reduce**
+  - **Target**: `src/cluster/comm.rs`
+  - **Deliverable**: Asynchronous ring all-reduce communication primitive with node heartbeats, fault tolerance, and dynamic re-sharding.
+
+---
+
+### ⏳ Milestone v0.2.4: Universal Agentic AI Connectivity Gateway
+*Goal: Universal gateway connecting CLI agents, CI/CD harnesses, desktop apps, and IDE copilots.*
+
+- [ ] **[THME-1107] Universal Agentic Gateway Daemon & WebSocket Streaming**
+  - **Target**: `src/daemon/gateway.rs`
+  - **Deliverable**: Headless JSON-RPC 2.0 daemon and high-throughput WebSocket telemetry stream with HMAC-SHA256 surgery attestation.
+- [ ] **[THME-1108] Universal Agent Adapter Matrix**
+  - **Target**: `src/daemon/adapters/`
+  - **Deliverable**: Standardized client adapters for Autonomous CLI Agents (Claude Code, Gemini CLI, Aider), CI/CD Harnesses, Desktop Studio GUI, and IDEs (VS Code, Copilot).
+
+---
+
 ## 4. Long-Term Backlog (Deferred to v0.3.0+)
 
-These high-complexity initiatives are intentionally scheduled after the core v0.2.0 analytical and surgical engine is fully hardened:
+These advanced initiatives are intentionally scheduled after the hardware execution and agentic gateway engines (v0.2.1 – v0.2.4) are established:
 
-1. **Hardware GPU Execution Backends**: Native Vulkan compute, Apple Metal Performance Shaders, and CUDA custom kernels for direct GPU inference execution.
-2. **Out-of-Core 70B Streaming**: AirLLM-style sequential layer paging from NVMe SSD directly into constrained VRAM (e.g., executing 70B inference in 8 GB VRAM).
-3. **Mixture-of-Experts (MoE) Routing**: Dynamic expert sensitivity profiling and routing topology restructuring for models like Mixtral and DeepSeek-V2/V3.
-4. **CPUs Vector Micro-Kernels**: AVX-512 and ARM NEON handwritten vector butterfly stages for FWHT and ternary packing.
+1. **Mixture-of-Experts (MoE) Dynamic Specialist Routing**: Dynamic expert sensitivity profiling and routing topology restructuring for models like Mixtral and DeepSeek-V2/V3.
+2. **Continuous Online RL Adaptation**: Real-time layer manifold adjustment guided by continuous reinforcement learning feedback loops.
