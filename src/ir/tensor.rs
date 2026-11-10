@@ -127,6 +127,46 @@ pub struct TensorIR {
     pub candidate_formats: Vec<TensorFormat>,
     pub selected_format: TensorFormat,
     pub metadata: HashMap<String, String>,
+    pub weight_profile: Option<WeightProfile>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WeightProfile {
+    pub min_val: f32,
+    pub max_val: f32,
+    pub mean_val: f32,
+    pub std_val: f32,
+    pub sparsity: f32,
+    pub outlier_ratio: f32,
+    pub histogram: [f32; 32],
+    pub sample_weights: Vec<f32>,
+}
+
+impl Default for WeightProfile {
+    fn default() -> Self {
+        let mut hist = [0.0; 32];
+        for (i, h) in hist.iter_mut().enumerate() {
+            let x = (i as f32 - 15.5) / 5.0;
+            *h = (-0.5 * x * x).exp();
+        }
+        let sum: f32 = hist.iter().sum();
+        if sum > 0.0 {
+            for h in hist.iter_mut() {
+                *h /= sum;
+            }
+        }
+
+        Self {
+            min_val: -0.15,
+            max_val: 0.15,
+            mean_val: 0.0,
+            std_val: 0.025,
+            sparsity: 0.0,
+            outlier_ratio: 0.003,
+            histogram: hist,
+            sample_weights: Vec::new(),
+        }
+    }
 }
 
 impl TensorIR {
@@ -153,6 +193,7 @@ impl TensorIR {
             ],
             selected_format: TensorFormat::FP16,
             metadata: HashMap::new(),
+            weight_profile: None,
         }
     }
 

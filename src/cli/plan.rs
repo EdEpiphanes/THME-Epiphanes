@@ -28,7 +28,7 @@ pub struct PlanArgs {
 
 pub fn execute(args: PlanArgs) -> Result<()> {
     println!("Computing heterogeneous precision Pareto plan for: {:?}", args.path);
-    let mut model_ir = ModelImporter::import_from_dir(&args.path)?;
+    let mut model_ir = ModelImporter::import(&args.path)?;
 
     // Profile sensitivity first
     SensitivityProfiler::profile_model(&mut model_ir);

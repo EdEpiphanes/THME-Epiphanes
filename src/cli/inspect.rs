@@ -18,7 +18,7 @@ pub struct InspectArgs {
 
 pub fn execute(args: InspectArgs) -> Result<()> {
     println!("Scanning model metadata at: {:?}", args.path);
-    let model_ir = ModelImporter::import_from_dir(&args.path)?;
+    let model_ir = ModelImporter::import(&args.path)?;
 
     if args.json {
         let json_str = serde_json::to_string_pretty(&model_ir)?;

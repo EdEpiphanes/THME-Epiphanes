@@ -9,9 +9,7 @@ use egui::{Color32, Pos2, Rect, Stroke, Vec2};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-// =========================================================================
-// THEME COLORS (THME Dark Studio)
-// =========================================================================
+// Theme palette
 const COLOR_BG_DARK: Color32 = Color32::from_rgb(11, 15, 25);
 const COLOR_BG_CARD: Color32 = Color32::from_rgb(21, 30, 46);
 const COLOR_BG_INPUT: Color32 = Color32::from_rgb(30, 41, 59);
@@ -26,10 +24,7 @@ const COLOR_PURPLE: Color32 = Color32::from_rgb(168, 85, 247);
 const COLOR_ROSE: Color32 = Color32::from_rgb(244, 63, 94);
 const COLOR_BLUE: Color32 = Color32::from_rgb(59, 130, 246);
 
-// =========================================================================
-// DATA STRUCTURES
-// =========================================================================
-
+// Layer node and model representations
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LayerNode {
     pub layer_index: usize,
@@ -55,6 +50,12 @@ pub struct TensorInfo {
     pub max_val: f32,
     pub mean_val: f32,
     pub std_val: f32,
+    pub sparsity: f32,
+    pub outlier_ratio: f32,
+    pub histogram: [f32; 32],
+    pub sample_weights: Vec<f32>,
+    pub layer_index: Option<usize>,
+    pub role: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -123,10 +124,6 @@ struct LayerCandidate {
     mixer: &'static str,
 }
 
-// =========================================================================
-// MODEL LOADERS & PARSERS (PURE RUST)
-// =========================================================================
-
 impl UniversalModel {
     pub fn create_synthetic(num_layers: usize, hidden_size: usize) -> Self {
         let mut layers = Vec::new();
@@ -164,6 +161,14 @@ impl UniversalModel {
         }
 
         let mut tensors = Vec::new();
+        let default_wp = crate::ir::WeightProfile::default();
+        let sample_vals = vec![
+            0.024, -0.142, 0.001, 0.089, -0.053, 0.112, -0.007, 0.045,
+            -0.088, 0.019, 0.134, -0.021, 0.000, 0.067, -0.115, 0.038,
+            0.071, -0.049, 0.012, -0.095, 0.028, 0.084, -0.003, 0.126,
+            -0.108, 0.033, 0.055, -0.076, 0.000, 0.041, -0.032, 0.099,
+        ];
+
         for l in 0..num_layers.min(6) {
             tensors.push(TensorInfo {
                 name: f!("model.layers.{}.self_attn.q_proj.weight", l),
@@ -174,6 +179,12 @@ impl UniversalModel {
                 max_val: 0.138,
                 mean_val: 0.0002,
                 std_val: 0.024,
+                sparsity: 0.03,
+                outlier_ratio: 0.0025,
+                histogram: default_wp.histogram,
+                sample_weights: sample_vals.clone(),
+                layer_index: Some(l),
+                role: "AttentionQ".to_string(),
             });
             tensors.push(TensorInfo {
                 name: f!("model.layers.{}.mlp.down_proj.weight", l),
@@ -184,6 +195,12 @@ impl UniversalModel {
                 max_val: 0.208,
                 mean_val: -0.0001,
                 std_val: 0.031,
+                sparsity: 0.05,
+                outlier_ratio: 0.0041,
+                histogram: default_wp.histogram,
+                sample_weights: sample_vals.clone(),
+                layer_index: Some(l),
+                role: "MlpDown".to_string(),
             });
         }
 
@@ -202,7 +219,11 @@ impl UniversalModel {
     }
 
     pub fn load_safetensors(path: &Path) -> Result<Self, String> {
-        let model_ir = crate::parser::ModelImporter::import_from_dir(path)
+        Self::load_universal(path)
+    }
+
+    pub fn load_universal(path: &Path) -> Result<Self, String> {
+        let model_ir = crate::parser::ModelImporter::import(path)
             .map_err(|e| format!("Failed to import model: {}", e))?;
 
         let num_layers = model_ir.num_layers.max(1);
@@ -237,21 +258,36 @@ impl UniversalModel {
         let tensors = model_ir
             .tensors
             .into_iter()
-            .map(|t| TensorInfo {
-                name: t.name,
-                shape: t.shape,
-                dtype: t.original_dtype,
-                num_elements: t.numel,
-                min_val: -0.15,
-                max_val: 0.15,
-                mean_val: 0.0,
-                std_val: 0.025,
+            .map(|t| {
+                let wp = t.weight_profile.unwrap_or_default();
+                TensorInfo {
+                    name: t.name,
+                    shape: t.shape,
+                    dtype: t.original_dtype,
+                    num_elements: t.numel,
+                    min_val: wp.min_val,
+                    max_val: wp.max_val,
+                    mean_val: wp.mean_val,
+                    std_val: wp.std_val,
+                    sparsity: wp.sparsity,
+                    outlier_ratio: wp.outlier_ratio,
+                    histogram: wp.histogram,
+                    sample_weights: wp.sample_weights,
+                    layer_index: t.layer_index,
+                    role: format!("{:?}", t.role),
+                }
             })
             .collect();
 
+        let fmt_name = if path.extension().map_or(false, |ext| ext.eq_ignore_ascii_case("gguf")) {
+            "GGUF".to_string()
+        } else {
+            "SafeTensors".to_string()
+        };
+
         Ok(Self {
             name: model_ir.name,
-            format: "SafeTensors".to_string(),
+            format: fmt_name,
             architecture: model_ir.architecture.display_name().to_string(),
             num_layers,
             hidden_size: model_ir.hidden_size,
@@ -313,10 +349,7 @@ impl UniversalModel {
     }
 }
 
-// =========================================================================
-// APPLICATION STATE
-// =========================================================================
-
+// Application state
 pub struct THMEApp {
     model: UniversalModel,
     active_tab: usize, // 0: Layers, 1: Baseline, 2: Auto-Tuner, 3: DAG, 4: Weights, 5: Export
@@ -345,10 +378,18 @@ pub struct THMEApp {
 
     // Tab 5: Weights
     selected_tensor_idx: usize,
+    weight_search_query: String,
+    weight_role_filter: String,
 
-    // Tab 6: Export
+    // Live Flow Benchmarker Engine
+    simulator: crate::profiling::LiveFlowSimulator,
+    sim_speed: f32,
+
+    // Tab 6: Export & Surgery
     export_path: String,
     export_format: String,
+    tweak_recipe_text: String,
+    surgery_diff: Option<crate::surgery::SurgeryDiff>,
 }
 
 impl THMEApp {
@@ -357,13 +398,26 @@ impl THMEApp {
         let cp_idx = (model.layers.len() as f32 * 0.30).round() as usize;
         model.update_exit_routing(80.0, cp_idx);
 
+        let default_recipe = crate::surgery::TweakRecipe::default();
+        let default_recipe_json = serde_json::to_string_pretty(&default_recipe).unwrap_or_default();
+
+        let prompt = "Explain how heterogeneous layerwise representations reduce energy and memory bandwidth.".to_string();
+        let simulator = crate::profiling::LiveFlowSimulator::new(
+            &prompt,
+            48,
+            model.layers.len(),
+            model.hidden_size,
+            cp_idx,
+            0.80,
+        );
+
         let mut app = Self {
             model,
             active_tab: 0,
             status_msg: "THME Engine initialized with 12-layer synthetic model".to_string(),
             exit_ratio_pct: 80.0,
             checkpoint_layer_idx: cp_idx,
-            baseline_prompt: "Explain how heterogeneous layerwise representations reduce energy and memory bandwidth.".to_string(),
+            baseline_prompt: prompt,
             baseline_tokens: 48,
             baseline_temp: 0.7,
             baseline_results: None,
@@ -377,8 +431,14 @@ impl THMEApp {
             audit_trail: Vec::new(),
             live_tuner_log: Vec::new(),
             selected_tensor_idx: 0,
+            weight_search_query: String::new(),
+            weight_role_filter: "All".to_string(),
+            simulator,
+            sim_speed: 1.0,
             export_path: "models/exported_tuned_model.safetensors".to_string(),
             export_format: "SafeTensors".to_string(),
+            tweak_recipe_text: default_recipe_json,
+            surgery_diff: None,
         };
 
         app.auto_scan_and_benchmark();
@@ -583,10 +643,6 @@ impl THMEApp {
     }
 }
 
-// =========================================================================
-// GUI RENDERING VIA EFRAME / EGUI
-// =========================================================================
-
 impl eframe::App for THMEApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if self.auto_tune_running && self.auto_step_mode {
@@ -598,13 +654,21 @@ impl eframe::App for THMEApp {
             ctx.request_repaint();
         }
 
+        if self.simulator.status == crate::profiling::TokenFlowStatus::Generating
+            || self.simulator.status == crate::profiling::TokenFlowStatus::Prefill
+        {
+            self.simulator.speed_multiplier = self.sim_speed;
+            self.simulator.update(ctx.input(|i| i.stable_dt));
+            ctx.request_repaint();
+        }
+
         let mut visuals = egui::Visuals::dark();
         visuals.override_text_color = Some(COLOR_TEXT_MAIN);
         visuals.panel_fill = COLOR_BG_DARK;
         visuals.window_fill = COLOR_BG_CARD;
         ctx.set_visuals(visuals);
 
-        // 1. TOP HEADER PANEL
+        // Top control and status bar
         egui::TopBottomPanel::top("header_panel")
             .frame(
                 egui::Frame::NONE
@@ -664,18 +728,35 @@ impl eframe::App for THMEApp {
                             self.auto_scan_and_benchmark();
                         }
 
-                        if ui.button("📁 Load LLM File...").clicked() {
-                            if let Some(path) = rfd::FileDialog::new()
-                                .add_filter("All LLMs", &["safetensors", "gguf", "thme"])
-                                .add_filter("SafeTensors", &["safetensors"])
-                                .pick_file()
-                            {
-                                match UniversalModel::load_safetensors(&path) {
+                        if ui.button("📂 Load Model Folder...").clicked() {
+                            if let Some(dir) = rfd::FileDialog::new().pick_folder() {
+                                match UniversalModel::load_universal(&dir) {
                                     Ok(m) => {
                                         self.model = m;
                                         self.checkpoint_layer_idx = (self.model.layers.len() as f32 * 0.30).round() as usize;
                                         self.auto_scan_and_benchmark();
-                                        self.status_msg = f!("Loaded and benchmarked model: {:?}", path);
+                                        self.status_msg = f!("Loaded model directory: {:?}", dir);
+                                    }
+                                    Err(err) => {
+                                        self.status_msg = f!("Error loading directory: {}", err);
+                                    }
+                                }
+                            }
+                        }
+
+                        if ui.button("📁 Load LLM File...").clicked() {
+                            if let Some(path) = rfd::FileDialog::new()
+                                .add_filter("All Models (*.gguf, *.safetensors)", &["gguf", "safetensors", "thme"])
+                                .add_filter("GGUF Models (*.gguf)", &["gguf"])
+                                .add_filter("SafeTensors (*.safetensors)", &["safetensors"])
+                                .pick_file()
+                            {
+                                match UniversalModel::load_universal(&path) {
+                                    Ok(m) => {
+                                        self.model = m;
+                                        self.checkpoint_layer_idx = (self.model.layers.len() as f32 * 0.30).round() as usize;
+                                        self.auto_scan_and_benchmark();
+                                        self.status_msg = f!("Loaded model [{}]: {:?}", self.model.format, path);
                                     }
                                     Err(err) => {
                                         self.status_msg = f!("Error loading file: {}", err);
@@ -707,7 +788,6 @@ impl eframe::App for THMEApp {
                 });
             });
 
-        // 3. BOTTOM STATUS BAR
         egui::TopBottomPanel::bottom("status_bar")
             .frame(
                 egui::Frame::NONE
@@ -730,7 +810,6 @@ impl eframe::App for THMEApp {
                 });
             });
 
-        // 4. MAIN CENTRAL WORKSPACE (TABBED INTERFACE)
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
                 tab_button(ui, "1. Layerwise Distribution Matrix", 0, &mut self.active_tab);
@@ -744,7 +823,7 @@ impl eframe::App for THMEApp {
             ui.separator();
             ui.add_space(4.0);
 
-            // GLOBAL CONFIGURABLE EARLY EXIT BAR (CUSTOMIZABLE, NOT FIXED 80/20)
+            // Speculative early exit threshold and checkpoint configuration
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new("Adaptive Early Exit Speculation:").strong().size(11.0).color(COLOR_EMERALD));
                 ui.label(egui::RichText::new("Exit Target:").size(10.0).color(COLOR_TEXT_MUTED));
@@ -781,10 +860,6 @@ impl eframe::App for THMEApp {
         });
     }
 }
-
-// =========================================================================
-// TAB IMPLEMENTATIONS
-// =========================================================================
 
 impl THMEApp {
     fn render_tab_layers(&mut self, ui: &mut egui::Ui) {
@@ -944,10 +1019,12 @@ impl THMEApp {
     }
 
     fn render_tab_baseline(&mut self, ui: &mut egui::Ui) {
+        let snap = self.simulator.snapshot();
+
         ui.columns(2, |cols| {
             cols[0].vertical(|ui| {
-                ui.heading(egui::RichText::new("ORIGINAL DENSE LLM PROFILER").size(13.0).color(COLOR_TEXT_MAIN));
-                ui.label(egui::RichText::new("Capture initial benchmark across all layers to establish the reference baseline.").size(10.0).color(COLOR_TEXT_MUTED));
+                ui.heading(egui::RichText::new("LIVE TOKEN & PROCESS FLOW BENCHMARKER").size(13.0).color(COLOR_TEXT_MAIN));
+                ui.label(egui::RichText::new("Simulates real-time token generation, memory bandwidth saturation, and layer execution waterfall.").size(10.0).color(COLOR_TEXT_MUTED));
                 ui.add_space(8.0);
 
                 ui.label("Evaluation Prompt:");
@@ -956,79 +1033,208 @@ impl THMEApp {
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
                     ui.label("Max Tokens:");
-                    ui.add(egui::DragValue::new(&mut self.baseline_tokens).range(8..=256));
-                    ui.add_space(10.0);
-                    ui.label("Temperature:");
+                    if ui.add(egui::DragValue::new(&mut self.baseline_tokens).range(8..=256)).changed() {
+                        self.simulator.target_tokens = self.baseline_tokens;
+                    }
+                    ui.add_space(8.0);
+                    ui.label("Temp:");
                     ui.add(egui::DragValue::new(&mut self.baseline_temp).speed(0.05).range(0.1..=1.5));
+                    ui.add_space(8.0);
+                    ui.label("Speed:");
+                    ui.add(egui::Slider::new(&mut self.sim_speed, 0.5..=10.0).text("x"));
+                });
+
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    match snap.status {
+                        crate::profiling::TokenFlowStatus::Idle | crate::profiling::TokenFlowStatus::Completed => {
+                            if ui.button(egui::RichText::new("▶ Start Live Flow Benchmark").strong().color(Color32::BLACK)).clicked() {
+                                self.simulator = crate::profiling::LiveFlowSimulator::new(
+                                    &self.baseline_prompt,
+                                    self.baseline_tokens,
+                                    self.model.layers.len(),
+                                    self.model.hidden_size,
+                                    self.checkpoint_layer_idx,
+                                    self.exit_ratio_pct / 100.0,
+                                );
+                                self.simulator.start();
+                                self.status_msg = "Live token flow simulation started!".to_string();
+                            }
+                        }
+                        crate::profiling::TokenFlowStatus::Generating | crate::profiling::TokenFlowStatus::Prefill => {
+                            if ui.button(egui::RichText::new("⏸ Pause").strong().color(Color32::WHITE)).clicked() {
+                                self.simulator.pause();
+                            }
+                        }
+                        crate::profiling::TokenFlowStatus::Paused => {
+                            if ui.button(egui::RichText::new("▶ Resume").strong().color(Color32::WHITE)).clicked() {
+                                self.simulator.resume();
+                            }
+                        }
+                    }
+
+                    if ui.button("⏭ Step Pipeline").clicked() {
+                        self.simulator.step_pipeline();
+                    }
+
+                    if ui.button("⏹ Reset").clicked() {
+                        self.simulator.reset();
+                        self.status_msg = "Simulator reset to idle state.".to_string();
+                    }
                 });
 
                 ui.add_space(10.0);
-                if ui.button(egui::RichText::new("▶ Run Model Benchmark Now").strong().color(Color32::WHITE)).clicked() {
-                    self.auto_scan_and_benchmark();
-                }
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("STATUS:").size(10.0).strong().color(COLOR_TEXT_MUTED));
+                    let (status_text, status_col) = match snap.status {
+                        crate::profiling::TokenFlowStatus::Idle => ("IDLE", COLOR_TEXT_MUTED),
+                        crate::profiling::TokenFlowStatus::Prefill => ("PREFILL (TTFT)", COLOR_AMBER),
+                        crate::profiling::TokenFlowStatus::Generating => ("GENERATING TOKENS", COLOR_EMERALD),
+                        crate::profiling::TokenFlowStatus::Paused => ("PAUSED", COLOR_ROSE),
+                        crate::profiling::TokenFlowStatus::Completed => ("COMPLETED", COLOR_CYAN),
+                    };
+                    ui.label(egui::RichText::new(status_text).size(10.0).strong().color(status_col));
+
+                    ui.add_space(10.0);
+                    ui.label(egui::RichText::new("ACTIVE STAGE:").size(10.0).strong().color(COLOR_TEXT_MUTED));
+                    ui.label(egui::RichText::new(snap.active_stage.display_name()).size(10.0).monospace().color(COLOR_CYAN));
+                });
+
+                ui.add_space(10.0);
+                ui.columns(2, |sub| {
+                    render_stat_box(&mut sub[0], "THROUGHPUT", f!("{:.1} tok/s", snap.current_tok_per_sec), COLOR_CYAN);
+                    render_stat_box(&mut sub[1], "TIME/TOKEN", f!("{:.1} ms", snap.time_per_token_ms), Color32::WHITE);
+                });
+                ui.add_space(4.0);
+                ui.columns(2, |sub| {
+                    render_stat_box(&mut sub[0], "KV CACHE FOOTPRINT", f!("{:.2} MB", snap.kv_cache_mb), COLOR_AMBER);
+                    render_stat_box(&mut sub[1], "MEMORY BANDWIDTH", f!("{:.1} GB/s", snap.memory_bandwidth_gbps), COLOR_EMERALD);
+                });
 
                 ui.add_space(12.0);
-                ui.label(egui::RichText::new("Benchmark Report:").strong());
-                let output_text = self.baseline_results.as_ref().map(|r| r.generated_text.as_str()).unwrap_or("Running benchmark...");
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Live Token Stream Terminal:").strong());
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(egui::RichText::new(f!("{}/{} tokens", snap.tokens_generated, snap.target_tokens)).monospace().size(10.0).color(COLOR_TEXT_MUTED));
+                    });
+                });
+
                 egui::Frame::NONE
                     .fill(COLOR_BG_CARD)
                     .stroke(Stroke::new(1.0_f32, COLOR_BORDER))
-                    .inner_margin(egui::Margin::same(8))
+                    .inner_margin(egui::Margin::same(10))
                     .show(ui, |ui| {
-                        ui.label(egui::RichText::new(output_text).monospace().size(10.0));
+                        let stream_text = if snap.token_stream.is_empty() {
+                            if snap.status == crate::profiling::TokenFlowStatus::Prefill {
+                                "[Prefilling prompt into KV cache memory...]".to_string()
+                            } else {
+                                "[Press ▶ Start to initiate live token generation flow...]".to_string()
+                            }
+                        } else {
+                            format!("{}: {}", self.baseline_prompt, snap.token_stream.join(" "))
+                        };
+                        ui.label(egui::RichText::new(stream_text).monospace().size(10.0).color(COLOR_TEXT_MAIN));
                     });
             });
 
             cols[1].vertical(|ui| {
-                ui.heading(egui::RichText::new("BASELINE HARDWARE EXECUTION PROFILE").size(13.0).color(COLOR_TEXT_MAIN));
+                ui.heading(egui::RichText::new("TRANSFORMER DATA & TOKEN FLOW PIPELINE").size(13.0).color(COLOR_TEXT_MAIN));
+                ui.label(egui::RichText::new("Live graphical telemetry of token progression through layers, KV cache & exit gates.").size(10.0).color(COLOR_TEXT_MUTED));
                 ui.add_space(6.0);
 
-                if let Some(res) = &self.baseline_results {
-                    ui.columns(2, |sub| {
-                        render_stat_box(&mut sub[0], "SPEED", f!("{:.1} tok/s", res.tokens_per_sec), COLOR_CYAN);
-                        render_stat_box(&mut sub[1], "TTFT", f!("{:.1} ms", res.ttft_ms), Color32::WHITE);
-                    });
-                    ui.add_space(4.0);
-                    ui.columns(2, |sub| {
-                        render_stat_box(&mut sub[0], "KV CACHE", f!("{:.2} MB", res.kv_cache_mb), COLOR_AMBER);
-                        render_stat_box(&mut sub[1], "ENERGY", f!("{:.2} mJ/tok", res.energy_mj_per_token), COLOR_ROSE);
-                    });
+                // Graphical Token Flow Canvas
+                let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 200.0), egui::Sense::hover());
+                ui.painter().rect_filled(rect, 4.0, COLOR_BG_CARD);
 
-                    ui.add_space(12.0);
-                    ui.label(egui::RichText::new("Layer-by-Layer Latency Waterfall (ms):").strong());
+                let num_layers = snap.total_layers.max(1);
+                let start_x = rect.min.x + 30.0;
+                let spacing_x = (rect.width() - 60.0) / (num_layers + 2) as f32;
+                let cy = rect.center().y;
 
-                    let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 180.0), egui::Sense::hover());
-                    ui.painter().rect_filled(rect, 4.0, COLOR_BG_CARD);
+                // Connecting backbone line
+                ui.painter().line_segment(
+                    [Pos2::new(start_x, cy), Pos2::new(start_x + (num_layers + 1) as f32 * spacing_x, cy)],
+                    Stroke::new(2.0_f32, COLOR_BORDER),
+                );
 
-                    let num_layers = res.layer_latencies.len();
-                    let bar_h = (rect.height() - 16.0) / num_layers as f32;
+                // Input node
+                let in_rect = Rect::from_center_size(Pos2::new(start_x, cy), Vec2::new(32.0, 36.0));
+                let in_active = snap.active_stage == crate::profiling::TransformerStage::EmbeddingLookup;
+                ui.painter().rect_filled(in_rect, 4.0, if in_active { COLOR_CYAN } else { COLOR_BG_INPUT });
+                ui.painter().text(in_rect.center(), egui::Align2::CENTER_CENTER, "IN", egui::FontId::proportional(9.0), Color32::WHITE);
 
-                    for (l, lat) in res.layer_latencies.iter().enumerate() {
-                        let y = rect.min.y + 8.0 + (l as f32 * bar_h);
-                        let bw = (rect.width() - 100.0) * 0.85;
+                // Layer nodes
+                for l in 0..num_layers {
+                    let lx = start_x + (l + 1) as f32 * spacing_x;
+                    let l_rect = Rect::from_center_size(Pos2::new(lx, cy), Vec2::new(28.0, 44.0));
+                    let is_active_l = snap.status == crate::profiling::TokenFlowStatus::Generating && snap.active_layer == l;
+                    let is_cp = l == self.checkpoint_layer_idx;
 
-                        ui.painter().text(
-                            Pos2::new(rect.min.x + 8.0, y + bar_h / 2.0),
-                            egui::Align2::LEFT_CENTER,
-                            f!("L{} (Dense)", l),
-                            egui::FontId::monospace(9.0),
-                            COLOR_TEXT_MUTED,
-                        );
+                    let (node_bg, border_col) = if is_active_l {
+                        (COLOR_BG_INPUT, COLOR_CYAN)
+                    } else if is_cp {
+                        (COLOR_BG_CARD, COLOR_EMERALD)
+                    } else {
+                        (COLOR_BG_INPUT, COLOR_BORDER)
+                    };
 
-                        ui.painter().rect_filled(
-                            Rect::from_min_size(Pos2::new(rect.min.x + 60.0, y + 2.0), Vec2::new(bw, bar_h - 4.0)),
-                            2.0,
-                            COLOR_BLUE,
-                        );
+                    ui.painter().rect_filled(l_rect, 3.0, node_bg);
+                    ui.painter().rect_stroke(l_rect, 3.0, Stroke::new(if is_active_l { 2.5_f32 } else { 1.0_f32 }, border_col), egui::StrokeKind::Outside);
 
-                        ui.painter().text(
-                            Pos2::new(rect.min.x + 65.0 + bw, y + bar_h / 2.0),
-                            egui::Align2::LEFT_CENTER,
-                            f!("{:.2}ms", lat),
-                            egui::FontId::monospace(9.0),
-                            Color32::WHITE,
-                        );
+                    ui.painter().text(
+                        Pos2::new(lx, cy - 8.0),
+                        egui::Align2::CENTER_CENTER,
+                        f!("L{}", l),
+                        egui::FontId::proportional(9.0),
+                        if is_active_l { COLOR_CYAN } else { Color32::WHITE },
+                    );
+
+                    if is_cp {
+                        ui.painter().circle_filled(Pos2::new(lx, cy + 10.0), 3.0, COLOR_EMERALD);
                     }
+                }
+
+                // Output LM Head node
+                let out_x = start_x + (num_layers + 1) as f32 * spacing_x;
+                let out_rect = Rect::from_center_size(Pos2::new(out_x, cy), Vec2::new(34.0, 36.0));
+                let out_active = snap.active_stage == crate::profiling::TransformerStage::LmHeadProjection
+                    || snap.active_stage == crate::profiling::TransformerStage::SampleToken;
+                ui.painter().rect_filled(out_rect, 4.0, if out_active { COLOR_EMERALD } else { COLOR_BG_INPUT });
+                ui.painter().text(out_rect.center(), egui::Align2::CENTER_CENTER, "OUT", egui::FontId::proportional(9.0), Color32::WHITE);
+
+                ui.add_space(10.0);
+                ui.label(egui::RichText::new("Layer-by-Layer Latency Waterfall (ms):").strong());
+
+                let (w_rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 160.0), egui::Sense::hover());
+                ui.painter().rect_filled(w_rect, 4.0, COLOR_BG_CARD);
+
+                let bar_h = (w_rect.height() - 16.0) / num_layers as f32;
+                for (l, lat) in snap.layer_latencies_ms.iter().enumerate() {
+                    let y = w_rect.min.y + 8.0 + (l as f32 * bar_h);
+                    let is_cur = snap.status == crate::profiling::TokenFlowStatus::Generating && snap.active_layer == l;
+                    let bw = (w_rect.width() - 120.0) * 0.82;
+
+                    ui.painter().text(
+                        Pos2::new(w_rect.min.x + 8.0, y + bar_h / 2.0),
+                        egui::Align2::LEFT_CENTER,
+                        f!("L{} {}", l, if is_cur { "▶ RUN" } else { " " }),
+                        egui::FontId::monospace(9.0),
+                        if is_cur { COLOR_CYAN } else { COLOR_TEXT_MUTED },
+                    );
+
+                    ui.painter().rect_filled(
+                        Rect::from_min_size(Pos2::new(w_rect.min.x + 70.0, y + 2.0), Vec2::new(bw, bar_h - 4.0)),
+                        2.0,
+                        if is_cur { COLOR_CYAN } else { COLOR_BLUE },
+                    );
+
+                    ui.painter().text(
+                        Pos2::new(w_rect.min.x + 75.0 + bw, y + bar_h / 2.0),
+                        egui::Align2::LEFT_CENTER,
+                        f!("{:.2}ms", lat),
+                        egui::FontId::monospace(9.0),
+                        Color32::WHITE,
+                    );
                 }
             });
         });
@@ -1241,44 +1447,108 @@ impl THMEApp {
     fn render_tab_weights(&mut self, ui: &mut egui::Ui) {
         ui.columns(2, |cols| {
             cols[0].vertical(|ui| {
-                ui.heading(egui::RichText::new("TENSOR WEIGHT INSPECTOR").size(13.0).color(COLOR_TEXT_MAIN));
+                ui.heading(egui::RichText::new("TENSOR WEIGHT & PARAMETER INSPECTOR").size(13.0).color(COLOR_TEXT_MAIN));
+                ui.label(egui::RichText::new("Zero-copy memory mapped inspection of tensor distributions, sparsity & outliers.").size(10.0).color(COLOR_TEXT_MUTED));
                 ui.add_space(6.0);
 
-                if !self.model.tensors.is_empty() {
-                    let cur_name = self.model.tensors[self.selected_tensor_idx.min(self.model.tensors.len() - 1)].name.clone();
+                // Search & Filter Bar
+                ui.horizontal(|ui| {
+                    ui.label("Search:");
+                    ui.add(egui::TextEdit::singleline(&mut self.weight_search_query).hint_text("filter by name e.g. q_proj, mlp..."));
+                    if ui.button("Clear").clicked() {
+                        self.weight_search_query.clear();
+                    }
+
+                    ui.add_space(8.0);
+                    ui.label("Role:");
+                    egui::ComboBox::from_id_salt("role_filter_cb")
+                        .selected_text(&self.weight_role_filter)
+                        .width(110.0)
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut self.weight_role_filter, "All".to_string(), "All Roles");
+                            ui.selectable_value(&mut self.weight_role_filter, "Attention".to_string(), "Attention");
+                            ui.selectable_value(&mut self.weight_role_filter, "Mlp".to_string(), "MLP");
+                            ui.selectable_value(&mut self.weight_role_filter, "Embedding".to_string(), "Embedding");
+                        });
+                });
+
+                ui.add_space(4.0);
+
+                let matching_indices: Vec<usize> = self
+                    .model
+                    .tensors
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, t)| {
+                        let name_match = self.weight_search_query.is_empty()
+                            || t.name
+                                .to_lowercase()
+                                .contains(&self.weight_search_query.to_lowercase());
+                        let role_match = self.weight_role_filter == "All"
+                            || t.role.to_lowercase().contains(&self.weight_role_filter.to_lowercase());
+                        name_match && role_match
+                    })
+                    .map(|(idx, _)| idx)
+                    .collect();
+
+                if !matching_indices.is_empty() {
+                    let sel_pos = matching_indices
+                        .iter()
+                        .position(|&idx| idx == self.selected_tensor_idx)
+                        .unwrap_or(0);
+                    let mut current_pos = sel_pos;
+
+                    let cur_name = self.model.tensors[matching_indices[current_pos]].name.clone();
                     egui::ComboBox::from_id_salt("tensor_select_cb")
                         .selected_text(&cur_name)
+                        .width(360.0)
                         .show_ui(ui, |ui| {
-                            for (idx, t) in self.model.tensors.iter().enumerate() {
-                                ui.selectable_value(&mut self.selected_tensor_idx, idx, &t.name);
+                            for (pos, &idx) in matching_indices.iter().enumerate() {
+                                let t = &self.model.tensors[idx];
+                                let label = format!("{} [{} • {:?}]", t.name, t.dtype, t.shape);
+                                if ui.selectable_value(&mut current_pos, pos, label).clicked() {
+                                    self.selected_tensor_idx = idx;
+                                }
                             }
                         });
+                    self.selected_tensor_idx = matching_indices[current_pos];
 
-                    let t = &self.model.tensors[self.selected_tensor_idx.min(self.model.tensors.len() - 1)];
+                    let t = &self.model.tensors[self.selected_tensor_idx];
+                    ui.add_space(6.0);
+
                     ui.label(
                         egui::RichText::new(f!(
-                            "Shape: {:?} | Elements: {} | DType: {} | Min: {:.4} | Max: {:.4}",
-                            t.shape, t.num_elements, t.dtype, t.min_val, t.max_val
+                            "Shape: {:?} | Elements: {} | DType: {} | Role: {}",
+                            t.shape, t.num_elements, t.dtype, t.role
                         ))
                         .monospace()
                         .size(10.0)
-                        .color(COLOR_TEXT_MUTED),
+                        .color(COLOR_CYAN),
                     );
 
-                    ui.add_space(10.0);
-                    ui.label(egui::RichText::new("Weight Value Distribution (Histogram):").strong());
+                    ui.add_space(6.0);
+                    ui.columns(2, |sub| {
+                        render_stat_box(&mut sub[0], "VALUE RANGE", f!("{:.4} .. {:.4}", t.min_val, t.max_val), COLOR_TEXT_MAIN);
+                        render_stat_box(&mut sub[1], "MOMENTS (μ ± σ)", f!("{:.4} ± {:.4}", t.mean_val, t.std_val), COLOR_AMBER);
+                    });
+                    ui.add_space(4.0);
+                    ui.columns(2, |sub| {
+                        render_stat_box(&mut sub[0], "SPARSITY", f!("{:.2}% Zeros", t.sparsity * 100.0), COLOR_EMERALD);
+                        render_stat_box(&mut sub[1], "OUTLIERS (>3σ)", f!("{:.3}% Outliers", t.outlier_ratio * 100.0), COLOR_ROSE);
+                    });
 
-                    let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 160.0), egui::Sense::hover());
+                    ui.add_space(10.0);
+                    ui.label(egui::RichText::new("Computed Weight Distribution (32-Bin Histogram):").strong());
+
+                    let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 130.0), egui::Sense::hover());
                     ui.painter().rect_filled(rect, 4.0, COLOR_BG_INPUT);
 
-                    let num_bins = 28;
+                    let num_bins = 32;
                     let bin_w = (rect.width() - 20.0) / num_bins as f32;
+                    let max_h = t.histogram.iter().cloned().fold(0.0_f32, f32::max).max(1e-4);
 
                     for b in 0..num_bins {
-                        let center_norm = (b as f32 - (num_bins as f32 / 2.0)) / (num_bins as f32 / 4.0);
-                        let height_factor = (-0.5 * center_norm * center_norm).exp();
-                        let bh = height_factor * (rect.height() - 24.0);
-
+                        let bh = (t.histogram[b] / max_h) * (rect.height() - 24.0);
                         let x0 = rect.min.x + 10.0 + (b as f32 * bin_w);
                         let y0 = rect.max.y - 10.0 - bh;
                         let x1 = x0 + bin_w - 2.0;
@@ -1286,25 +1556,101 @@ impl THMEApp {
 
                         ui.painter().rect_filled(Rect::from_min_max(Pos2::new(x0, y0), Pos2::new(x1, y1)), 1.0, COLOR_CYAN);
                     }
+
+                    ui.add_space(10.0);
+                    ui.label(egui::RichText::new("Representative Weight Slice (8×8 Numerical Matrix):").strong());
+
+                    let (m_rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 150.0), egui::Sense::hover());
+                    ui.painter().rect_filled(m_rect, 4.0, COLOR_BG_CARD);
+
+                    let rows = 8;
+                    let cols = 8;
+                    let cell_w = (m_rect.width() - 16.0) / cols as f32;
+                    let cell_h = (m_rect.height() - 16.0) / rows as f32;
+
+                    for r in 0..rows {
+                        for c in 0..cols {
+                            let idx = r * cols + c;
+                            let val = if idx < t.sample_weights.len() {
+                                t.sample_weights[idx]
+                            } else {
+                                0.0
+                            };
+
+                            let cell_x = m_rect.min.x + 8.0 + (c as f32 * cell_w);
+                            let cell_y = m_rect.min.y + 8.0 + (r as f32 * cell_h);
+                            let cell_box = Rect::from_min_size(Pos2::new(cell_x, cell_y), Vec2::new(cell_w - 2.0, cell_h - 2.0));
+
+                            let cell_col = if val > 0.05 {
+                                COLOR_CYAN
+                            } else if val < -0.05 {
+                                COLOR_ROSE
+                            } else {
+                                COLOR_TEXT_MUTED
+                            };
+
+                            ui.painter().rect_filled(cell_box, 2.0, COLOR_BG_INPUT);
+                            ui.painter().text(
+                                cell_box.center(),
+                                egui::Align2::CENTER_CENTER,
+                                f!("{:+.2}", val),
+                                egui::FontId::monospace(8.0),
+                                cell_col,
+                            );
+                        }
+                    }
                 } else {
-                    ui.label("No tensors found in active model.");
+                    ui.label("No tensors match search criteria.");
                 }
             });
 
             cols[1].vertical(|ui| {
+                ui.heading(egui::RichText::new("ARCHITECTURE PARAMETER BREAKDOWN").size(13.0).color(COLOR_TEXT_MAIN));
+                ui.label(egui::RichText::new("Aggregated parameter and footprint distribution by architectural component.").size(10.0).color(COLOR_TEXT_MUTED));
+                ui.add_space(6.0);
+
+                let mut attn_params: u64 = 0;
+                let mut mlp_params: u64 = 0;
+                let mut embed_params: u64 = 0;
+                let mut norm_params: u64 = 0;
+
+                for t in &self.model.tensors {
+                    if t.role.contains("Attention") {
+                        attn_params += t.num_elements as u64;
+                    } else if t.role.contains("Mlp") {
+                        mlp_params += t.num_elements as u64;
+                    } else if t.role.contains("Embedding") || t.role.contains("LmHead") {
+                        embed_params += t.num_elements as u64;
+                    } else {
+                        norm_params += t.num_elements as u64;
+                    }
+                }
+
+                let total = (attn_params + mlp_params + embed_params + norm_params).max(1);
+                ui.columns(2, |sub| {
+                    render_stat_box(&mut sub[0], "ATTENTION PROJECTIONS", f!("{}M ({:.1}%)", attn_params / 1_000_000, (attn_params as f32 / total as f32) * 100.0), COLOR_CYAN);
+                    render_stat_box(&mut sub[1], "FFN / SWIGLU MLP", f!("{}M ({:.1}%)", mlp_params / 1_000_000, (mlp_params as f32 / total as f32) * 100.0), COLOR_PURPLE);
+                });
+                ui.add_space(4.0);
+                ui.columns(2, |sub| {
+                    render_stat_box(&mut sub[0], "VOCAB EMBEDDING & HEAD", f!("{}M ({:.1}%)", embed_params / 1_000_000, (embed_params as f32 / total as f32) * 100.0), COLOR_EMERALD);
+                    render_stat_box(&mut sub[1], "NORMALIZATIONS & BIAS", f!("{}K ({:.1}%)", norm_params / 1_000, (norm_params as f32 / total as f32) * 100.0), COLOR_AMBER);
+                });
+
+                ui.add_space(16.0);
                 ui.heading(egui::RichText::new("PHASE CONSTELLATION (|λ_j| < 1 Decay)").size(13.0).color(COLOR_TEXT_MAIN));
                 ui.label(egui::RichText::new("Visualizes discrete phase recurrence angles on the complex unit circle.").size(10.0).color(COLOR_TEXT_MUTED));
                 ui.add_space(6.0);
 
-                let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 260.0), egui::Sense::hover());
+                let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 200.0), egui::Sense::hover());
                 ui.painter().rect_filled(rect, 4.0, COLOR_BG_CARD);
 
                 let center = rect.center();
-                let radius = (rect.height().min(rect.width()) / 2.0) - 24.0;
+                let radius = (rect.height().min(rect.width()) / 2.0) - 20.0;
 
                 ui.painter().circle_stroke(center, radius, Stroke::new(1.5_f32, COLOR_BORDER));
-                ui.painter().line_segment([Pos2::new(center.x - radius - 10.0, center.y), Pos2::new(center.x + radius + 10.0, center.y)], Stroke::new(1.0_f32, COLOR_BORDER));
-                ui.painter().line_segment([Pos2::new(center.x, center.y - radius - 10.0), Pos2::new(center.x + radius + 10.0, center.y)], Stroke::new(1.0_f32, COLOR_BORDER));
+                ui.painter().line_segment([Pos2::new(center.x - radius - 8.0, center.y), Pos2::new(center.x + radius + 8.0, center.y)], Stroke::new(1.0_f32, COLOR_BORDER));
+                ui.painter().line_segment([Pos2::new(center.x, center.y - radius - 8.0), Pos2::new(center.x + radius + 8.0, center.y)], Stroke::new(1.0_f32, COLOR_BORDER));
 
                 for k in 0..8 {
                     let theta = 2.0 * std::f32::consts::PI * (k as f32) / 8.0;
@@ -1315,7 +1661,7 @@ impl THMEApp {
                     ui.painter().line_segment([center, Pos2::new(px, py)], Stroke::new(1.0_f32, COLOR_AMBER));
                     ui.painter().circle_filled(Pos2::new(px, py), 4.0, COLOR_AMBER);
                     ui.painter().text(
-                        Pos2::new(px + 12.0 * theta.cos(), py - 12.0 * theta.sin()),
+                        Pos2::new(px + 10.0 * theta.cos(), py - 10.0 * theta.sin()),
                         egui::Align2::CENTER_CENTER,
                         f!("θ_{}", k),
                         egui::FontId::monospace(8.0),
@@ -1327,55 +1673,130 @@ impl THMEApp {
     }
 
     fn render_tab_export(&mut self, ui: &mut egui::Ui) {
-        ui.heading(egui::RichText::new("EXPORT RE-STRUCTURED & TUNED MODEL").size(13.0).color(COLOR_TEXT_MAIN));
-        ui.label(egui::RichText::new("Ship the optimized, ultra-tuned and restructured LLM artifact matching research paper expectations.").size(10.0).color(COLOR_TEXT_MUTED));
-        ui.add_space(12.0);
+        ui.columns(2, |cols| {
+            cols[0].vertical(|ui| {
+                ui.heading(egui::RichText::new("EXPORT RE-STRUCTURED & TUNED MODEL").size(13.0).color(COLOR_TEXT_MAIN));
+                ui.label(egui::RichText::new("Ship the optimized, ultra-tuned and restructured LLM artifact matching research paper expectations.").size(10.0).color(COLOR_TEXT_MUTED));
+                ui.add_space(12.0);
 
-        ui.horizontal(|ui| {
-            ui.label("Target Format:");
-            egui::ComboBox::from_id_salt("export_fmt_cb")
-                .selected_text(&self.export_format)
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.export_format, "SafeTensors".to_string(), "SafeTensors (.safetensors)");
-                    ui.selectable_value(&mut self.export_format, "GGUF".to_string(), "GGUF (.gguf)");
-                    ui.selectable_value(&mut self.export_format, "THME".to_string(), "THME Bundle (.thme)");
+                ui.horizontal(|ui| {
+                    ui.label("Target Format:");
+                    egui::ComboBox::from_id_salt("export_fmt_cb")
+                        .selected_text(&self.export_format)
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut self.export_format, "SafeTensors".to_string(), "SafeTensors (.safetensors)");
+                            ui.selectable_value(&mut self.export_format, "GGUF".to_string(), "GGUF (.gguf)");
+                            ui.selectable_value(&mut self.export_format, "THME".to_string(), "THME Bundle (.thme)");
+                        });
                 });
-        });
 
-        ui.add_space(10.0);
-        ui.horizontal(|ui| {
-            ui.label("Export Destination Path:");
-            ui.text_edit_singleline(&mut self.export_path);
-            if ui.button("Browse...").clicked() {
-                if let Some(dest) = rfd::FileDialog::new()
-                    .add_filter("SafeTensors", &["safetensors"])
-                    .add_filter("GGUF", &["gguf"])
-                    .add_filter("THME", &["thme"])
-                    .save_file()
-                {
-                    self.export_path = dest.to_string_lossy().to_string();
-                }
-            }
-        });
+                ui.add_space(10.0);
+                ui.horizontal(|ui| {
+                    ui.label("Export Destination Path:");
+                    ui.text_edit_singleline(&mut self.export_path);
+                    if ui.button("Browse...").clicked() {
+                        if let Some(dest) = rfd::FileDialog::new()
+                            .add_filter("SafeTensors", &["safetensors"])
+                            .add_filter("GGUF", &["gguf"])
+                            .add_filter("THME", &["thme"])
+                            .save_file()
+                        {
+                            self.export_path = dest.to_string_lossy().to_string();
+                        }
+                    }
+                });
 
-        ui.add_space(16.0);
-        if ui.button(egui::RichText::new("💾 Export Optimized Model Package").strong().color(Color32::WHITE)).clicked() {
-            let export_info = serde_json::to_string_pretty(&self.model).unwrap_or_default();
-            match std::fs::write(&self.export_path, export_info) {
-                Ok(_) => {
-                    self.status_msg = f!("Model successfully exported to: {}", self.export_path);
+                ui.add_space(16.0);
+                if ui.button(egui::RichText::new("💾 Export Optimized Model Package").strong().color(Color32::WHITE)).clicked() {
+                    let export_info = serde_json::to_string_pretty(&self.model).unwrap_or_default();
+                    match std::fs::write(&self.export_path, export_info) {
+                        Ok(_) => {
+                            self.status_msg = f!("Model successfully exported to: {}", self.export_path);
+                        }
+                        Err(err) => {
+                            self.status_msg = f!("Export failed: {}", err);
+                        }
+                    }
                 }
-                Err(err) => {
-                    self.status_msg = f!("Export failed: {}", err);
+            });
+
+            cols[1].vertical(|ui| {
+                ui.heading(egui::RichText::new("TEACHER LLM SURGERY & RESTRUCTURING RECIPES").size(13.0).color(COLOR_TEXT_MAIN));
+                ui.label(egui::RichText::new("Execute declarative JSON mutation recipes from automated agents and Teacher LLMs.").size(10.0).color(COLOR_TEXT_MUTED));
+                ui.add_space(8.0);
+
+                ui.horizontal(|ui| {
+                    if ui.button("📋 Load Default Recipe").clicked() {
+                        let rec = crate::surgery::TweakRecipe::default();
+                        self.tweak_recipe_text = serde_json::to_string_pretty(&rec).unwrap_or_default();
+                        self.status_msg = "Loaded default Teacher LLM restructuring recipe.".to_string();
+                    }
+
+                    if ui.button("📁 Load Recipe File...").clicked() {
+                        if let Some(path) = rfd::FileDialog::new().add_filter("JSON Recipe", &["json"]).pick_file() {
+                            if let Ok(content) = std::fs::read_to_string(&path) {
+                                self.tweak_recipe_text = content;
+                                self.status_msg = f!("Loaded recipe from: {:?}", path);
+                            }
+                        }
+                    }
+
+                    if ui.button("💾 Save Recipe File...").clicked() {
+                        if let Some(path) = rfd::FileDialog::new().add_filter("JSON Recipe", &["json"]).save_file() {
+                            let _ = std::fs::write(&path, &self.tweak_recipe_text);
+                            self.status_msg = f!("Saved recipe to: {:?}", path);
+                        }
+                    }
+                });
+
+                ui.add_space(6.0);
+                if ui.button(egui::RichText::new("💉 Apply Teacher LLM Surgery Recipe").strong().color(Color32::BLACK)).clicked() {
+                    match serde_json::from_str::<crate::surgery::TweakRecipe>(&self.tweak_recipe_text) {
+                        Ok(recipe) => {
+                            let mut model_ir = crate::ir::ModelIR::new(
+                                self.model.name.clone(),
+                                crate::ir::ModelArchitecture::Llama,
+                                self.model.layers.len(),
+                                self.model.hidden_size,
+                                32,
+                                32,
+                                32000,
+                                4096,
+                                Vec::new(),
+                            );
+                            let diff = crate::surgery::SurgeryEngine::apply_recipe(&mut model_ir, &recipe);
+                            self.status_msg = f!("Applied recipe '{}': Saved {:.1} MB ({:.1}%)!", diff.recipe_name, diff.memory_saved_bytes as f32 / 1024.0 / 1024.0, diff.savings_percent);
+                            self.surgery_diff = Some(diff);
+                        }
+                        Err(e) => {
+                            self.status_msg = f!("Recipe JSON parsing error: {}", e);
+                        }
+                    }
                 }
-            }
-        }
+
+                if let Some(diff) = &self.surgery_diff {
+                    ui.add_space(8.0);
+                    ui.columns(3, |sub| {
+                        render_stat_box(&mut sub[0], "MODIFIED TENSORS", f!("{}", diff.modified_tensors_count), COLOR_CYAN);
+                        render_stat_box(&mut sub[1], "STORAGE SAVED", f!("{:.1}%", diff.savings_percent), COLOR_EMERALD);
+                        render_stat_box(&mut sub[2], "EST. SPEEDUP", f!("{:.2}x", diff.estimated_speedup), COLOR_AMBER);
+                    });
+                }
+
+                ui.add_space(8.0);
+                ui.label(egui::RichText::new("Recipe JSON Specification:").strong().size(10.0));
+                egui::ScrollArea::vertical().max_height(180.0).show(ui, |ui| {
+                    ui.add(
+                        egui::TextEdit::multiline(&mut self.tweak_recipe_text)
+                            .font(egui::TextStyle::Monospace)
+                            .desired_width(f32::INFINITY)
+                            .desired_rows(12),
+                    );
+                });
+            });
+        });
     }
 }
-
-// =========================================================================
-// WIDGET HELPERS
-// =========================================================================
 
 fn render_stat_box(ui: &mut egui::Ui, title: &str, value: String, color: Color32) {
     egui::Frame::NONE

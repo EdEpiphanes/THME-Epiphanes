@@ -68,7 +68,8 @@ impl SafetensorsScanner {
             let dtype = format!("{:?}", view.dtype());
             let byte_size = view.data().len();
 
-            let tensor_ir = TensorIR::new(name, shape, dtype, byte_size);
+            let mut tensor_ir = TensorIR::new(name, shape, dtype.clone(), byte_size);
+            tensor_ir.weight_profile = Some(crate::profiling::WeightAnalyzer::profile_tensor(view.data(), &dtype));
             tensors.push(tensor_ir);
         }
 

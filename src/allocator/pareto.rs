@@ -19,7 +19,11 @@ impl ParetoAllocator {
 
         // Compute desired compression ratio from target_vram_gb if provided
         let target_ratio = if let Some(target_gb) = target_vram_gb {
-            (original_gb / target_gb).max(1.0)
+            if target_gb > 0.0 {
+                (original_gb / target_gb).max(1.0)
+            } else {
+                4.0
+            }
         } else {
             // Default compression ratio derived from degradation tolerance
             1.0 + (max_degradation_pct / 2.0).clamp(0.5, 4.0)

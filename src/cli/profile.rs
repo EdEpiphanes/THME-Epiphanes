@@ -27,7 +27,7 @@ pub struct ProfileArgs {
 
 pub fn execute(args: ProfileArgs) -> Result<()> {
     println!("Profiling manifold sensitivity & memory for: {:?}", args.path);
-    let mut model_ir = ModelImporter::import_from_dir(&args.path)?;
+    let mut model_ir = ModelImporter::import(&args.path)?;
 
     // 1. Calculate layer sensitivity
     SensitivityProfiler::profile_model(&mut model_ir);

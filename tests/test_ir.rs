@@ -148,4 +148,8 @@ fn test_model_ir_and_pareto_planner() {
         plan.tensor_allocations.get("model.norm.weight"),
         Some(&TensorFormat::FP16)
     );
+
+    // Test zero target budget edge case (should not panic or produce NaN)
+    let zero_budget_plan = ParetoAllocator::plan_allocation(&model, Some(0.0), 2.0);
+    assert!(zero_budget_plan.compression_ratio >= 1.0);
 }
