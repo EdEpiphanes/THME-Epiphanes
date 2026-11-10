@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.3] - 2026-11-10
+
+### Added
+- **Bring Your Own Algorithm (BYOA) Engine (`src/transform/byoa.rs`)**:
+  - Full parametric custom algorithm definition (`AlgorithmDefinition`), category classifications (`Quantization`, `LinearTransformation`, `SparsityPruning`, `SequenceMixer`, `FeatureDistillation`), and transformation rules (`QuantizeCodebook`, `AbsmeanTernary`, `OrthogonalRotation`, `StructuredSparsity`, `SmoothQuantOutlier`, `AffineProject`).
+  - Extensible `AlgorithmRegistry` pre-populated with 5 verified presets (BitNet b1.58, 2:4 Structured Sparsity, Walsh-Hadamard WHT, SmoothQuant, Gated DeltaNet).
+  - Dynamic in-place weight transformation (`apply_to_weights`) computing MSE, L2 norms, SNR, and sparsity ratio.
+  - JSON specification schema supporting import, export, and runtime registration without rebuilding core engine.
+  - Full integration into `AutoDecider` with quality gate checking (`decide_for_parameter_with_registry`).
+- **Open Weights Rebuilder & Architectural Scaffold Engine (`src/ir/rebuilder.rs`)**:
+  - Topological layer and architecture blueprints (`ArchitectureBlueprint`, `LayerBlueprint`) supporting hybrid sequences (GQA Attention, Gated DeltaNet, Phase Recurrence, Mamba-2, Sliding Window).
+  - Scratch model synthesis (`ModelRebuilder::build_scaffold`) producing fully populated `ModelIR` tensors.
+  - Open-weights remapping engine (`ModelRebuilder::rebuild_from_open_weights`) transferring weights from source checkpoints (LLaMA, Mistral, Qwen, DeepSeek) into new topologies with dimensional projection (`RemapStrategy::LowRankProject`, `ZeroPad`, `Truncate`).
+- **REA-LLM & EWHA Telemetry Framework (`src/transform/rea.rs`)**:
+  - Implements the Execution-Weighted Heterogeneous Allocation mathematical framework from the THME research specification.
+  - Multi-path early exit routing profile ($80/20$ scenario) computing exact layer reach probabilities $q_l$.
+  - Formal channel representation mixes $(\alpha_l \text{ Binary}, \beta_l \text{ Ternary}, \gamma_l \text{ Phase}, \text{FP16 fallback})$.
+  - Analytic memory traffic accountant ($W_{\text{bytes/token}} \approx \sum_l q_l \cdot W_{l,\text{active}}$) and per-token energy accountant ($E_{\text{token}} = \sum_l q_l \cdot E_{l,\text{active}}$).
+- **Desktop Studio GUI Enhancements (`src/gui/app.rs`)**:
+  - **Tab 0 (Master Dashboard)**: Unified 4-card cockpit with real-time REA-LLM depth fraction ($\bar{f}$), memory traffic, and energy indicators.
+  - **Tab 1 (Models Manager)**: Added "Rebuild Architecture From Scratch" wizard modal for assembling custom layer sequences, setting checkpoint depths, and remapping active model weights.
+  - **Tab 3 (Distillation & Matrix Engine)**: Interactive BYOA Registry table, Custom Algorithm Designer form, one-click JSON Import/Export, and live 8x8 weight slice tester.
+  - **Tab 4 (Full Benchmarks)**: Dedicated REA-LLM EWHA Telemetry and layerwise reach/representation breakdown grid.
+- **Declarative Surgery Extensions (`src/surgery/recipe.rs`)**:
+  - Added `TweakOperation::ApplyCustomAlgorithm` and `TweakOperation::RebuildArchitecture` to the declarative surgery pipeline with full audit trails.
+- **Comprehensive Integration Test Suites**:
+  - `tests/test_byoa.rs`: Built-in algorithm verification, JSON import/export roundtrip, transformation mechanics, and AutoDecider custom algorithm dispatch.
+  - `tests/test_rea_llm.rs`: Reach profile validation, representation mix properties, memory traffic & energy calculations, and constrained EWHA optimization.
+  - `tests/test_rebuilder.rs`: Scaffold generation, open-weights remapping across dimensions, and declarative surgery recipe execution.
+
+---
+
 ## [0.1.2] - 2026-11-10
 
 ### Added

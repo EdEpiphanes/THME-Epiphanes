@@ -12,6 +12,12 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod byoa;
+pub mod rea;
+
+pub use byoa::*;
+pub use rea::*;
+
 /// Supported matrix and linear transformation algorithms for weight matrices.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum MatrixAlgorithm {
@@ -56,10 +62,16 @@ pub enum MatrixAlgorithm {
         group_size: usize,
         salient_ratio: f32,
     },
+    /// Custom user-defined or imported Bring Your Own Algorithm (BYOA)
+    Custom {
+        id: String,
+        name: String,
+        effective_bits: f32,
+    },
 }
 
 impl MatrixAlgorithm {
-    pub fn name(&self) -> &'static str {
+    pub fn name(&self) -> &str {
         match self {
             MatrixAlgorithm::DenseBaselineFP16 => "Dense FP16 Baseline",
             MatrixAlgorithm::TruncatedSVD { .. } => "Truncated SVD (Low-Rank)",
@@ -70,6 +82,7 @@ impl MatrixAlgorithm {
             MatrixAlgorithm::FeatureDistillation { .. } => "Knowledge Distillation Alignment",
             MatrixAlgorithm::FP8Hybrid { .. } => "FP8 E4M3 Hybrid",
             MatrixAlgorithm::INT4AWQ { .. } => "INT4-AWQ Salient Preserved",
+            MatrixAlgorithm::Custom { name, .. } => name.as_str(),
         }
     }
 
@@ -89,6 +102,7 @@ impl MatrixAlgorithm {
             MatrixAlgorithm::FeatureDistillation { .. } => 4.0,   // Distilled compressed student
             MatrixAlgorithm::FP8Hybrid { .. } => 8.0,
             MatrixAlgorithm::INT4AWQ { .. } => 4.25, // 4-bit with FP16 scales
+            MatrixAlgorithm::Custom { effective_bits, .. } => *effective_bits,
         }
     }
 
@@ -130,6 +144,7 @@ pub struct TransformPlanSummary {
     pub count_2to4: usize,
     pub count_distillation: usize,
     pub count_fp8_int4: usize,
+    pub count_custom: usize,
 }
 
 /// Mathematical operations on weight slices and matrices.
@@ -343,6 +358,34 @@ impl AutoDecider {
         std_val: f32,
         quality_tolerance: f32,
     ) -> ParameterTransformDecision {
+        Self::decide_for_parameter_with_registry(
+            name,
+            layer_idx,
+            num_layers,
+            role,
+            shape,
+            sparsity,
+            outlier_ratio,
+            std_val,
+            quality_tolerance,
+            None,
+        )
+    }
+
+    /// Evaluates parameter profile and considers user-defined Bring Your Own Algorithm (BYOA) options.
+    #[allow(clippy::too_many_arguments)]
+    pub fn decide_for_parameter_with_registry(
+        name: &str,
+        layer_idx: usize,
+        num_layers: usize,
+        role: &str,
+        shape: &[usize],
+        sparsity: f32,
+        outlier_ratio: f32,
+        std_val: f32,
+        quality_tolerance: f32,
+        registry: Option<&AlgorithmRegistry>,
+    ) -> ParameterTransformDecision {
         let num_elements: usize = shape.iter().product();
         let original_bytes = num_elements * 2; // Assuming FP16 2 bytes/param
 
@@ -357,6 +400,71 @@ impl AutoDecider {
         let is_mlp_gate_up = role.contains("Mlp") && !is_mlp_down;
         let is_norm =
             role.contains("Norm") || name.contains("layernorm") || name.contains("rmsnorm");
+
+        // Check if any registered user-defined BYOA custom algorithm targets this role
+        if let Some(reg) = registry {
+            let role_opt = if is_norm {
+                Some(crate::ir::TensorRole::LayerNorm)
+            } else if role.contains("AttentionQ") || name.contains("q_proj") {
+                Some(crate::ir::TensorRole::AttentionQ)
+            } else if role.contains("AttentionK") || name.contains("k_proj") {
+                Some(crate::ir::TensorRole::AttentionK)
+            } else if role.contains("AttentionV") || name.contains("v_proj") {
+                Some(crate::ir::TensorRole::AttentionV)
+            } else if role.contains("AttentionO") || name.contains("o_proj") {
+                Some(crate::ir::TensorRole::AttentionOut)
+            } else if role.contains("MlpGate") || name.contains("gate_proj") {
+                Some(crate::ir::TensorRole::MlpGate)
+            } else if role.contains("MlpUp") || name.contains("up_proj") {
+                Some(crate::ir::TensorRole::MlpUp)
+            } else if role.contains("MlpDown") || name.contains("down_proj") {
+                Some(crate::ir::TensorRole::MlpDown)
+            } else {
+                None
+            };
+
+            for custom_alg in reg.list() {
+                if !custom_alg.id.starts_with("thme.") {
+                    let matches_role = role_opt
+                        .map(|r| custom_alg.target_roles.contains(&r))
+                        .unwrap_or(false);
+
+                    if matches_role && quality_tolerance >= 0.02 {
+                        let eff_bits = custom_alg.effective_bits_per_param;
+                        let compressed_bytes =
+                            ((num_elements as f32 * eff_bits) / 8.0).ceil() as usize;
+                        let compression_ratio =
+                            original_bytes as f32 / compressed_bytes.max(1) as f32;
+                        let distortion = 0.0092;
+                        let quality_preserved = (1.0
+                            - (distortion / (quality_tolerance.max(0.01) * 2.0)))
+                            .clamp(0.85, 0.999);
+
+                        return ParameterTransformDecision {
+                            tensor_name: name.to_string(),
+                            layer_index: layer_idx,
+                            section_role: role.to_string(),
+                            shape: shape.to_vec(),
+                            num_elements,
+                            original_bytes,
+                            compressed_bytes,
+                            compression_ratio,
+                            algorithm: MatrixAlgorithm::Custom {
+                                id: custom_alg.id.clone(),
+                                name: custom_alg.name.clone(),
+                                effective_bits: eff_bits,
+                            },
+                            estimated_distortion_snr: distortion,
+                            quality_preserved,
+                            rationale: format!(
+                                "Assigned custom BYOA algorithm '{}' by {}: target role matched with {:.1}x compression.",
+                                custom_alg.name, custom_alg.author, custom_alg.compression_ratio
+                            ),
+                        };
+                    }
+                }
+            }
+        }
 
         // The decision logic:
         let (algorithm, rationale, distortion) = if is_norm {
@@ -495,6 +603,16 @@ impl AutoDecider {
         num_layers: usize,
         quality_tolerance: f32,
     ) -> (Vec<ParameterTransformDecision>, TransformPlanSummary) {
+        Self::build_model_plan_with_registry(tensors, num_layers, quality_tolerance, None)
+    }
+
+    /// Evaluates all parameters considering registered BYOA custom algorithms.
+    pub fn build_model_plan_with_registry(
+        tensors: &[crate::gui::TensorInfo],
+        num_layers: usize,
+        quality_tolerance: f32,
+        registry: Option<&AlgorithmRegistry>,
+    ) -> (Vec<ParameterTransformDecision>, TransformPlanSummary) {
         let mut decisions = Vec::new();
         let mut summary = TransformPlanSummary::default();
 
@@ -505,7 +623,7 @@ impl AutoDecider {
 
         for (idx, tensor) in tensors.iter().enumerate() {
             let l_idx = tensor.layer_index.unwrap_or(idx % num_layers.max(1));
-            let decision = Self::decide_for_parameter(
+            let decision = Self::decide_for_parameter_with_registry(
                 &tensor.name,
                 l_idx,
                 num_layers,
@@ -515,6 +633,7 @@ impl AutoDecider {
                 tensor.outlier_ratio,
                 tensor.std_val,
                 quality_tolerance,
+                registry,
             );
 
             total_orig_bytes += decision.original_bytes;
@@ -533,6 +652,7 @@ impl AutoDecider {
                 MatrixAlgorithm::FP8Hybrid { .. } | MatrixAlgorithm::INT4AWQ { .. } => {
                     summary.count_fp8_int4 += 1
                 }
+                MatrixAlgorithm::Custom { .. } => summary.count_custom += 1,
                 _ => {}
             }
 

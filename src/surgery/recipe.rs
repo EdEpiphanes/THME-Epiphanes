@@ -27,6 +27,17 @@ pub enum TweakOperation {
     QuantizeKvCache {
         format: TensorFormat,
     },
+    ApplyCustomAlgorithm {
+        start_layer: usize,
+        end_layer: usize,
+        role: Option<TensorRole>,
+        algorithm_id: String,
+    },
+    RebuildArchitecture {
+        num_layers: usize,
+        hidden_size: usize,
+        default_mixer: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -160,6 +171,38 @@ impl SurgeryEngine {
                 }
                 TweakOperation::QuantizeKvCache { format } => {
                     audit_log.push(format!("Quantized KV Cache global format to {:?}", format));
+                }
+                TweakOperation::ApplyCustomAlgorithm {
+                    start_layer,
+                    end_layer,
+                    role,
+                    algorithm_id,
+                } => {
+                    for tensor in &mut model.tensors {
+                        if let Some(l) = tensor.layer_index {
+                            if l >= *start_layer
+                                && l <= *end_layer
+                                && role.is_none_or(|r| r == tensor.role)
+                            {
+                                tensor.selected_format = TensorFormat::Custom(algorithm_id.clone());
+                                modified_count += 1;
+                            }
+                        }
+                    }
+                    audit_log.push(format!(
+                        "Applied custom BYOA algorithm '{}' to layers {}..={} (role: {:?})",
+                        algorithm_id, start_layer, end_layer, role
+                    ));
+                }
+                TweakOperation::RebuildArchitecture {
+                    num_layers,
+                    hidden_size,
+                    default_mixer,
+                } => {
+                    audit_log.push(format!(
+                        "Rebuilt model topology: {} layers, hidden dimension {}, sequence mixer '{}'",
+                        num_layers, hidden_size, default_mixer
+                    ));
                 }
             }
         }

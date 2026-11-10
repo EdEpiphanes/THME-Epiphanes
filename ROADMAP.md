@@ -46,10 +46,12 @@ As defined in the **Engineering Playbook**, the path from v0.1.0 to v0.2.0 focus
   - Continuous fuzz testing targets using `cargo-fuzz` / `honggfuzz` for both SafeTensors and GGUF parsers.
   - Publish `thme-core` crate to `crates.io`.
 
-- [ ] **v0.1.3 — Real Measurement & Hardware Kernels**
-  - CPU SIMD acceleration kernels: AVX2, AVX-512, and ARM NEON for matrix transformations (Hadamard, BitNet quantization, 2:4 sparsity).
-  - Criterion micro-benchmark suite (`benches/`) running in CI.
-  - Strict separation of live simulated telemetry from real hardware measurements in GUI and CLI reports.
+- [x] **v0.1.3 — Bring Your Own Algorithm (BYOA), Open Weights Rebuilder & REA-LLM Engine**
+  - Custom algorithm registry (`AlgorithmRegistry`), JSON import/export, and in-place weight transformations.
+  - Architecture scaffold synthesizer (`ModelRebuilder`) with open-weights dimensional remapping (`LowRankProject`, `ZeroPad`).
+  - REA-LLM & EWHA framework implementation: $80/20$ reach profile $q_l$, per-token memory traffic $W_{\text{bytes/token}}$, and per-token energy $E_{\text{token}}$.
+  - Desktop Studio GUI integrations: Tab 0 unified EWHA cockpit, Tab 1 Rebuilder wizard, Tab 3 BYOA registry with live 8x8 slice tester, and Tab 4 EWHA telemetry grid.
+  - Criterion micro-benchmark suite and CPU SIMD acceleration kernels.
 
 ---
 

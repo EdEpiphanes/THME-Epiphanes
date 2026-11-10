@@ -84,7 +84,7 @@ cargo test
 | **v0.1.0** | Core Foundations | Zero-copy SafeTensors/GGUF parsing, Pareto precision allocator, live 60 FPS studio GUI, matrix distillation engine, token flow simulator, audit logging, and declarative surgery recipes. | Completed |
 | **v0.1.1** | Path Hygiene & CI | Rebranded to THME under Epiphanes, 3-OS GitHub Actions CI matrix, automated path-leak guard, release automation, zero linter warnings, surgery JSON schema. | Completed |
 | **v0.1.2** | Format Correctness | Full GGUF v2/v3 quant matrix (K-quants, I-quants), zero-allocation block decoders, truncated stream recovery, and infallible parser fuzz suite. | Completed |
-| **v0.1.3** | Real Telemetry & SIMD | AVX2 / AVX-512 / ARM NEON vector micro-kernels for matrix transformations, and Criterion benchmarks integrated into CI. | In Progress |
+| **v0.1.3** | BYOA & REA-LLM Engine | Bring Your Own Algorithm registry with JSON import/export, architecture rebuilder from scratch, open weights remapping, REA-LLM EWHA routing & energy telemetry. | Completed |
 | **v0.1.4** | Empirical Quality Gate | External perplexity evaluation bridge (WikiText-2, C4) with automated rollback gating (Delta PPL <= epsilon). | Planned |
 | **v0.1.5** | Surgery Daemon & API | Headless JSON-RPC & REST server allowing remote Teacher LLMs to query model IR and dispatch surgery recipes programmatically. | Planned |
 | **v0.2.0** | Production Release | Verified BitNet b1.58 and calibrated scale quantization exporter with end-to-end reproducible small-model demonstration. | Target |

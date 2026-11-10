@@ -446,6 +446,19 @@ impl UniversalModel {
         let model_ir = crate::parser::ModelImporter::import(path)
             .map_err(|e| format!("Failed to import model: {}", e))?;
 
+        let fmt_name = if path
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("gguf"))
+        {
+            "GGUF".to_string()
+        } else {
+            "SafeTensors".to_string()
+        };
+
+        Ok(Self::from_model_ir(model_ir, &fmt_name))
+    }
+
+    pub fn from_model_ir(model_ir: crate::ir::ModelIR, format_name: &str) -> Self {
         let num_layers = model_ir.num_layers.max(1);
         let cp_idx = (num_layers as f32 * 0.30).round() as usize;
 
@@ -499,25 +512,54 @@ impl UniversalModel {
             })
             .collect();
 
-        let fmt_name = if path
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("gguf"))
-        {
-            "GGUF".to_string()
-        } else {
-            "SafeTensors".to_string()
-        };
-
-        Ok(Self {
+        Self {
             name: model_ir.name,
-            format: fmt_name,
+            format: format_name.to_string(),
             architecture: model_ir.architecture.display_name().to_string(),
             num_layers,
             hidden_size: model_ir.hidden_size,
             total_parameters: (model_ir.num_parameters as u64).max(10_000_000),
             layers,
             tensors,
-        })
+        }
+    }
+
+    pub fn to_model_ir(&self) -> crate::ir::ModelIR {
+        let tensors = self
+            .tensors
+            .iter()
+            .map(|t| {
+                let mut tir = crate::ir::TensorIR::new(
+                    t.name.clone(),
+                    t.shape.clone(),
+                    t.dtype.clone(),
+                    t.num_elements * 2,
+                );
+                tir.weight_profile = Some(crate::ir::WeightProfile {
+                    min_val: t.min_val,
+                    max_val: t.max_val,
+                    mean_val: t.mean_val,
+                    std_val: t.std_val,
+                    sparsity: t.sparsity,
+                    outlier_ratio: t.outlier_ratio,
+                    histogram: t.histogram,
+                    sample_weights: t.sample_weights.clone(),
+                });
+                tir
+            })
+            .collect();
+
+        crate::ir::ModelIR::new(
+            self.name.clone(),
+            crate::ir::ModelArchitecture::from_str_name(&self.architecture),
+            self.num_layers,
+            self.hidden_size,
+            self.hidden_size.checked_div(128).unwrap_or(16).max(1),
+            self.hidden_size.checked_div(128 * 4).unwrap_or(4).max(1),
+            32000,
+            4096,
+            tensors,
+        )
     }
 
     pub fn compute_costs(&self) -> (f32, f32, f32, f32, f32) {
@@ -640,6 +682,25 @@ pub struct THMEApp {
     export_format: String,
     tweak_recipe_text: String,
     surgery_diff: Option<crate::surgery::SurgeryDiff>,
+
+    // Bring Your Own Algorithm (BYOA)
+    pub algorithm_registry: crate::transform::byoa::AlgorithmRegistry,
+    selected_byoa_id: String,
+    byoa_test_status: String,
+    byoa_designer_open: bool,
+    new_byoa_id: String,
+    new_byoa_name: String,
+    new_byoa_author: String,
+    new_byoa_bits: f32,
+    new_byoa_category_idx: usize,
+
+    // Rebuilding Model From Scratch
+    rebuilder_open: bool,
+    rebuild_model_name: String,
+    rebuild_num_layers: usize,
+    rebuild_hidden_dim: usize,
+    rebuild_checkpoint_layer: usize,
+    rebuild_remap_open_weights: bool,
 }
 
 impl THMEApp {
@@ -706,6 +767,25 @@ impl THMEApp {
             export_format: "SafeTensors".to_string(),
             tweak_recipe_text: default_recipe_json,
             surgery_diff: None,
+
+            // Bring Your Own Algorithm (BYOA)
+            algorithm_registry: crate::transform::byoa::AlgorithmRegistry::new(),
+            selected_byoa_id: "thme.bitnet_b158".to_string(),
+            byoa_test_status: String::new(),
+            byoa_designer_open: false,
+            new_byoa_id: "user.custom_quant_v1".to_string(),
+            new_byoa_name: "My Custom Quantizer".to_string(),
+            new_byoa_author: "Research Contributor".to_string(),
+            new_byoa_bits: 2.0,
+            new_byoa_category_idx: 0,
+
+            // Rebuilding Model From Scratch
+            rebuilder_open: false,
+            rebuild_model_name: "rebuilt-hybrid-deltanet".to_string(),
+            rebuild_num_layers: 16,
+            rebuild_hidden_dim: 2048,
+            rebuild_checkpoint_layer: 4,
+            rebuild_remap_open_weights: true,
         };
 
         app.log_audit(
@@ -823,10 +903,11 @@ impl THMEApp {
     }
 
     fn run_auto_decider_internal(&mut self) {
-        let (decisions, summary) = crate::transform::AutoDecider::build_model_plan(
+        let (decisions, summary) = crate::transform::AutoDecider::build_model_plan_with_registry(
             &self.model().tensors,
             self.model().layers.len(),
             self.quality_tolerance,
+            Some(&self.algorithm_registry),
         );
         self.parameter_decisions = decisions;
         self.plan_summary = Some(summary);
@@ -1547,7 +1628,7 @@ impl THMEApp {
         let p = self.palette();
 
         egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.columns(3, |cols| {
+            ui.columns(4, |cols| {
                 // Card 1: Models & Active Architecture
                 cols[0].vertical(|ui| {
                     egui::Frame::NONE
@@ -1580,7 +1661,7 @@ impl THMEApp {
                         .inner_margin(egui::Margin::same(12))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new("⚡ MATRIX & DISTILLATION PLAN").strong().color(p.success));
+                                ui.label(egui::RichText::new("⚡ MATRIX ENGINE").strong().color(p.success));
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                     if ui.small_button("Engine →").clicked() {
                                         self.active_tab = 3;
@@ -1589,17 +1670,17 @@ impl THMEApp {
                             });
                             ui.separator();
                             if let Some(summary) = &self.plan_summary {
-                                ui.label(egui::RichText::new(f!("Plan Compression: {:.2}x", summary.overall_compression_ratio)).strong().color(p.primary));
-                                ui.label(egui::RichText::new(f!("Storage: {:.1} MB -> {:.1} MB", summary.original_storage_mb, summary.optimized_storage_mb)).size(10.0).color(p.text_muted));
-                                ui.label(egui::RichText::new(f!("Avg Distortion: {:.4} | Quality: {:.1}%", summary.average_distortion_snr, summary.mean_quality_score * 100.0)).size(10.0).color(p.warning));
-                                ui.label(egui::RichText::new(f!("SVD: {} | BitNet: {} | 2:4: {} | Distill: {}", summary.count_svd, summary.count_bitnet, summary.count_2to4, summary.count_distillation)).size(9.0).color(p.text_muted));
+                                ui.label(egui::RichText::new(f!("Compression: {:.2}x", summary.overall_compression_ratio)).strong().color(p.primary));
+                                ui.label(egui::RichText::new(f!("{:.1} MB -> {:.1} MB", summary.original_storage_mb, summary.optimized_storage_mb)).size(10.0).color(p.text_muted));
+                                ui.label(egui::RichText::new(f!("Distortion: {:.4} | Qual: {:.1}%", summary.average_distortion_snr, summary.mean_quality_score * 100.0)).size(10.0).color(p.warning));
+                                ui.label(egui::RichText::new(f!("BYOA Custom: {} | SVD: {} | BitNet: {}", summary.count_custom, summary.count_svd, summary.count_bitnet)).size(9.0).color(p.text_muted));
                             } else {
                                 ui.label(egui::RichText::new("Auto-Decider plan pending.").color(p.text_muted));
                             }
                         });
                 });
 
-                // Card 3: Benchmarks & Live Telemetry
+                // Card 3: REA-LLM & EWHA Telemetry
                 cols[2].vertical(|ui| {
                     egui::Frame::NONE
                         .fill(p.bg_card)
@@ -1607,19 +1688,43 @@ impl THMEApp {
                         .inner_margin(egui::Margin::same(12))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new("📊 BENCHMARKS & FLOW").strong().color(p.secondary));
+                                ui.label(egui::RichText::new("🌐 REA-LLM / EWHA").strong().color(p.accent));
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    if ui.small_button("Benchmarks →").clicked() {
+                                    if ui.small_button("Metrics →").clicked() {
+                                        self.active_tab = 4;
+                                    }
+                                });
+                            });
+                            ui.separator();
+                            let (_, total_traffic_mb, f_bar, joules, _) = self.model().compute_costs();
+                            ui.label(egui::RichText::new(f!("Depth Fraction: {:.1}%", f_bar * 100.0)).strong().color(p.accent));
+                            ui.label(egui::RichText::new(f!("Traffic W: {:.2} MB/tok", total_traffic_mb)).size(10.0).color(p.text_main));
+                            ui.label(egui::RichText::new(f!("Energy E: {:.2} mJ/tok", joules * 1000.0)).size(10.0).color(p.success));
+                            ui.label(egui::RichText::new(f!("Checkpoint: L{} (80/20 Exit)", self.checkpoint_layer_idx)).size(9.0).color(p.text_muted));
+                        });
+                });
+
+                // Card 4: Benchmarks & Live Telemetry
+                cols[3].vertical(|ui| {
+                    egui::Frame::NONE
+                        .fill(p.bg_card)
+                        .stroke(Stroke::new(1.0_f32, p.border))
+                        .inner_margin(egui::Margin::same(12))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("📊 FLOW TELEMETRY").strong().color(p.secondary));
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    if ui.small_button("Flow →").clicked() {
                                         self.active_tab = 4;
                                     }
                                 });
                             });
                             ui.separator();
                             let snap = self.simulator.snapshot();
-                            ui.label(egui::RichText::new(f!("Live Throughput: {:.1} tok/s", snap.current_tok_per_sec)).strong().color(p.primary));
-                            ui.label(egui::RichText::new(f!("Active Stage: {}", snap.active_stage.display_name())).size(10.0).color(p.text_muted));
-                            ui.label(egui::RichText::new(f!("Progress: {}/{} tokens generated", snap.tokens_generated, snap.target_tokens)).size(10.0).color(p.text_muted));
-                            ui.label(egui::RichText::new(f!("KV Cache Footprint: {:.2} MB", snap.kv_cache_mb)).size(10.0).color(p.warning));
+                            ui.label(egui::RichText::new(f!("Live: {:.1} tok/s", snap.current_tok_per_sec)).strong().color(p.primary));
+                            ui.label(egui::RichText::new(f!("Stage: {}", snap.active_stage.display_name())).size(10.0).color(p.text_muted));
+                            ui.label(egui::RichText::new(f!("Progress: {}/{} tokens", snap.tokens_generated, snap.target_tokens)).size(10.0).color(p.text_muted));
+                            ui.label(egui::RichText::new(f!("KV Cache: {:.2} MB", snap.kv_cache_mb)).size(10.0).color(p.warning));
                         });
                 });
             });
@@ -1810,7 +1915,84 @@ impl THMEApp {
                         self.run_auto_decider_internal();
                         self.log_audit("INFO", "ModelCreated", "Generated 12-layer synthetic model", &name);
                     }
+
+                    if ui.button("🛠 Rebuild Architecture From Scratch").clicked() {
+                        self.rebuilder_open = !self.rebuilder_open;
+                    }
                 });
+
+                if self.rebuilder_open {
+                    ui.add_space(6.0);
+                    egui::Frame::NONE
+                        .fill(p.bg_card)
+                        .stroke(Stroke::new(1.0_f32, p.primary))
+                        .inner_margin(egui::Margin::same(10))
+                        .show(ui, |ui| {
+                            ui.label(egui::RichText::new("🛠 REBUILD ARCHITECTURE FROM SCRATCH").strong().color(p.primary));
+                            ui.label(egui::RichText::new("Define topological layer sequences, assign early-exit depth, and optionally remap open weights.").size(9.0).color(p.text_muted));
+                            ui.add_space(4.0);
+
+                            ui.horizontal(|ui| {
+                                ui.label("Model Name:");
+                                ui.text_edit_singleline(&mut self.rebuild_model_name);
+                            });
+
+                            ui.horizontal(|ui| {
+                                ui.label("Layers:");
+                                ui.add(egui::Slider::new(&mut self.rebuild_num_layers, 4..=48).text("L"));
+                                ui.label("Dim:");
+                                egui::ComboBox::from_id_salt("rebuild_dim_select")
+                                    .selected_text(format!("{}", self.rebuild_hidden_dim))
+                                    .show_ui(ui, |ui| {
+                                        ui.selectable_value(&mut self.rebuild_hidden_dim, 1024, "1024");
+                                        ui.selectable_value(&mut self.rebuild_hidden_dim, 2048, "2048");
+                                        ui.selectable_value(&mut self.rebuild_hidden_dim, 4096, "4096");
+                                    });
+                            });
+
+                            ui.horizontal(|ui| {
+                                ui.label("Exit Checkpoint:");
+                                let max_cp = self.rebuild_num_layers.saturating_sub(1);
+                                ui.add(egui::Slider::new(&mut self.rebuild_checkpoint_layer, 1..=max_cp).text("Idx"));
+                            });
+
+                            ui.checkbox(&mut self.rebuild_remap_open_weights, "Transfer / Remap Open Weights From Active Model");
+
+                            ui.add_space(6.0);
+                            ui.horizontal(|ui| {
+                                if ui.button(egui::RichText::new("🚀 Assemble & Activate New Architecture").strong().color(Color32::BLACK)).clicked() {
+                                    let bp = crate::ir::ArchitectureBlueprint::new_hybrid_llama(
+                                        &self.rebuild_model_name,
+                                        self.rebuild_num_layers,
+                                        self.rebuild_hidden_dim,
+                                        self.rebuild_checkpoint_layer,
+                                    );
+
+                                    let new_ir = if self.rebuild_remap_open_weights && !self.model().tensors.is_empty() {
+                                        let source_ir = self.model().to_model_ir();
+                                        crate::ir::ModelRebuilder::rebuild_from_open_weights(&bp, &source_ir, crate::ir::RemapStrategy::LowRankProject)
+                                    } else {
+                                        crate::ir::ModelRebuilder::build_scaffold(&bp)
+                                    };
+
+                                    let mut new_m = UniversalModel::from_model_ir(new_ir, "CustomScaffold");
+                                    new_m.update_exit_routing(self.exit_ratio_pct, self.rebuild_checkpoint_layer);
+                                    let name = new_m.name.clone();
+                                    self.models.push(new_m);
+                                    self.active_model_idx = self.models.len() - 1;
+                                    self.rebuilder_open = false;
+                                    self.auto_scan_and_benchmark();
+                                    self.run_auto_decider_internal();
+                                    self.log_audit("INFO", "ArchitectureRebuilt", "Assembled and activated custom architecture", &name);
+                                    self.status_msg = format!("Assembled custom model '{}' ({} layers) successfully!", name, self.rebuild_num_layers);
+                                }
+
+                                if ui.button("Cancel").clicked() {
+                                    self.rebuilder_open = false;
+                                }
+                            });
+                        });
+                }
 
                 ui.add_space(8.0);
                 ui.label(egui::RichText::new("Active Models List:").strong().color(p.text_main));
@@ -2452,9 +2634,9 @@ impl THMEApp {
                 );
                 render_scorecard_box(
                     &mut cols[4],
-                    "BITNET & 2:4",
-                    f!("{} / {}", summary.count_bitnet, summary.count_2to4),
-                    "Ternary & Sparse".to_string(),
+                    "BITNET & BYOA",
+                    f!("{} / {}", summary.count_bitnet, summary.count_custom),
+                    "Ternary & Custom".to_string(),
                     p.danger,
                     &p,
                 );
@@ -2469,7 +2651,7 @@ impl THMEApp {
         );
 
         egui::ScrollArea::vertical()
-            .max_height(340.0)
+            .max_height(280.0)
             .show(ui, |ui| {
                 egui::Grid::new("decisions_grid")
                     .striped(true)
@@ -2546,6 +2728,225 @@ impl THMEApp {
                             ui.end_row();
                         }
                     });
+            });
+
+        ui.add_space(10.0);
+        egui::Frame::NONE
+            .fill(p.bg_card)
+            .stroke(Stroke::new(1.0_f32, p.border))
+            .inner_margin(egui::Margin::same(12))
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("🧩 BRING YOUR OWN ALGORITHM (BYOA) REGISTRY").strong().color(p.primary));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button("➕ Design Custom Algorithm").clicked() {
+                            self.byoa_designer_open = !self.byoa_designer_open;
+                        }
+                        if ui.button("📁 Import (.json)").clicked() {
+                            if let Some(path) = rfd::FileDialog::new()
+                                .add_filter("JSON", &["json"])
+                                .pick_file()
+                            {
+                                if let Ok(content) = std::fs::read_to_string(&path) {
+                                    match crate::transform::byoa::AlgorithmDefinition::from_json(&content) {
+                                        Ok(def) => {
+                                            let id = def.id.clone();
+                                            self.algorithm_registry.register(def);
+                                            self.selected_byoa_id = id.clone();
+                                            self.status_msg = format!("Imported custom algorithm: {}", id);
+                                            self.log_audit("INFO", "BYOA_Import", &format!("Imported algorithm {}", id), "BYOA");
+                                            self.run_auto_decider_internal();
+                                        }
+                                        Err(e) => {
+                                            self.status_msg = format!("Failed to parse algorithm JSON: {}", e);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if ui.button("💾 Export Selected (.json)").clicked() {
+                            if let Some(alg) = self.algorithm_registry.get(&self.selected_byoa_id) {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("JSON", &["json"])
+                                    .set_file_name(format!("{}.json", alg.id))
+                                    .save_file()
+                                {
+                                    if let Ok(json) = alg.to_json() {
+                                        let _ = std::fs::write(path, json);
+                                        self.status_msg = format!("Exported algorithm '{}' to JSON file!", alg.id);
+                                    }
+                                }
+                            }
+                        }
+                    });
+                });
+                ui.label(egui::RichText::new("Register custom quantization, linear transformations, sparsity masks, and sequence mixers. Evaluated dynamically by the Auto-Decider.").size(9.0).color(p.text_muted));
+
+                if self.byoa_designer_open {
+                    ui.add_space(8.0);
+                    egui::Frame::NONE
+                        .fill(p.bg_input)
+                        .stroke(Stroke::new(1.0_f32, p.primary))
+                        .inner_margin(egui::Margin::same(10))
+                        .show(ui, |ui| {
+                            ui.label(egui::RichText::new("🛠 Custom Algorithm Designer").strong().color(p.primary));
+                            ui.horizontal(|ui| {
+                                ui.label("ID:");
+                                ui.text_edit_singleline(&mut self.new_byoa_id);
+                                ui.label("Name:");
+                                ui.text_edit_singleline(&mut self.new_byoa_name);
+                                ui.label("Author:");
+                                ui.text_edit_singleline(&mut self.new_byoa_author);
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("Category:");
+                                egui::ComboBox::from_id_salt("byoa_designer_cat")
+                                    .selected_text(match self.new_byoa_category_idx {
+                                        0 => "Quantization",
+                                        1 => "LinearTransform",
+                                        2 => "SparsityMask",
+                                        _ => "SequenceMixer",
+                                    })
+                                    .show_ui(ui, |ui| {
+                                        ui.selectable_value(&mut self.new_byoa_category_idx, 0, "Quantization");
+                                        ui.selectable_value(&mut self.new_byoa_category_idx, 1, "LinearTransform");
+                                        ui.selectable_value(&mut self.new_byoa_category_idx, 2, "SparsityMask");
+                                        ui.selectable_value(&mut self.new_byoa_category_idx, 3, "SequenceMixer");
+                                    });
+                                ui.label("Bits/Param:");
+                                ui.add(egui::Slider::new(&mut self.new_byoa_bits, 0.5..=16.0).step_by(0.1));
+                            });
+                            ui.horizontal(|ui| {
+                                if ui.button(egui::RichText::new("✔ Register Algorithm").strong().color(Color32::BLACK)).clicked()
+                                    && !self.new_byoa_id.is_empty()
+                                    && !self.new_byoa_name.is_empty()
+                                {
+                                    let cat = match self.new_byoa_category_idx {
+                                            0 => crate::transform::byoa::AlgorithmCategory::Quantization,
+                                            1 => crate::transform::byoa::AlgorithmCategory::LinearTransformation,
+                                            2 => crate::transform::byoa::AlgorithmCategory::SparsityPruning,
+                                            _ => crate::transform::byoa::AlgorithmCategory::SequenceMixer,
+                                        };
+                                        let rule = match self.new_byoa_category_idx {
+                                            0 => crate::transform::byoa::TransformationRule::AbsmeanTernary {
+                                                scale_gamma: 0.0,
+                                                zero_band: 0.05,
+                                            },
+                                            1 => crate::transform::byoa::TransformationRule::OrthogonalRotation {
+                                                block_size: 64,
+                                                basis: "Hadamard".to_string(),
+                                            },
+                                            2 => crate::transform::byoa::TransformationRule::StructuredSparsity {
+                                                m: 2,
+                                                n: 4,
+                                            },
+                                            _ => crate::transform::byoa::TransformationRule::AffineProject {
+                                                target_dim: 1024,
+                                                rank: 64,
+                                            },
+                                        };
+                                        let alg = crate::transform::byoa::AlgorithmDefinition {
+                                            id: self.new_byoa_id.clone(),
+                                            name: self.new_byoa_name.clone(),
+                                            author: self.new_byoa_author.clone(),
+                                            version: "1.0.0".to_string(),
+                                            category: cat,
+                                            description: format!("Custom {} algorithm", self.new_byoa_name),
+                                            effective_bits_per_param: self.new_byoa_bits,
+                                            compression_ratio: 16.0 / self.new_byoa_bits.max(0.5),
+                                            hardware_speedup_factor: 16.0 / self.new_byoa_bits.max(0.5),
+                                            target_roles: vec![
+                                                crate::ir::TensorRole::AttentionQ,
+                                                crate::ir::TensorRole::AttentionK,
+                                                crate::ir::TensorRole::AttentionV,
+                                                crate::ir::TensorRole::MlpUp,
+                                                crate::ir::TensorRole::MlpDown,
+                                            ],
+                                            rule,
+                                        };
+                                        self.selected_byoa_id = alg.id.clone();
+                                        self.algorithm_registry.register(alg);
+                                        self.byoa_designer_open = false;
+                                        self.status_msg = format!("Registered new custom algorithm '{}'!", self.new_byoa_id);
+                                        self.run_auto_decider_internal();
+                                    }
+                                    if ui.button("Cancel").clicked() {
+                                        self.byoa_designer_open = false;
+                                    }
+                            });
+                        });
+                }
+
+                ui.add_space(6.0);
+                egui::Grid::new("byoa_registry_grid")
+                    .striped(true)
+                    .spacing([14.0, 4.0])
+                    .show(ui, |ui| {
+                        ui.label(egui::RichText::new("ID").strong().size(9.0).color(p.text_main));
+                        ui.label(egui::RichText::new("Name").strong().size(9.0).color(p.text_main));
+                        ui.label(egui::RichText::new("Category").strong().size(9.0).color(p.text_main));
+                        ui.label(egui::RichText::new("Bits/Param").strong().size(9.0).color(p.text_main));
+                        ui.label(egui::RichText::new("Speedup").strong().size(9.0).color(p.text_main));
+                        ui.label(egui::RichText::new("Author").strong().size(9.0).color(p.text_main));
+                        ui.label(egui::RichText::new("Action").strong().size(9.0).color(p.text_main));
+                        ui.end_row();
+
+                        for alg in self.algorithm_registry.list() {
+                            let is_sel = alg.id == self.selected_byoa_id;
+                            ui.label(egui::RichText::new(&alg.id).monospace().size(8.0).color(if is_sel { p.primary } else { p.text_main }));
+                            ui.label(egui::RichText::new(&alg.name).strong().size(9.0));
+                            ui.label(egui::RichText::new(alg.category.display_name()).size(8.0).color(p.warning));
+                            ui.label(egui::RichText::new(format!("{:.1}", alg.effective_bits_per_param)).size(8.0));
+                            ui.label(egui::RichText::new(format!("{:.1}x", alg.hardware_speedup_factor)).size(8.0).color(p.success));
+                            ui.label(egui::RichText::new(&alg.author).size(8.0).color(p.text_muted));
+
+                            if ui.small_button(if is_sel { "✔ Selected" } else { "Select" }).clicked() {
+                                self.selected_byoa_id = alg.id.clone();
+                            }
+                            ui.end_row();
+                        }
+                    });
+
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    if ui.button(egui::RichText::new("🔬 Live Test Selected Algorithm On 8x8 Weight Slice").strong().color(p.text_main)).clicked() {
+                        if let Some(alg) = self.algorithm_registry.get(&self.selected_byoa_id) {
+                            let mut sample = if let Some(t) = self.model().tensors.first() {
+                                if t.sample_weights.len() >= 64 {
+                                    t.sample_weights[0..64].to_vec()
+                                } else {
+                                    vec![0.05; 64]
+                                }
+                            } else {
+                                vec![0.05; 64]
+                            };
+
+                            let orig_norm: f32 = sample.iter().map(|w| w * w).sum::<f32>().sqrt();
+                            let _ = alg.apply_to_weights(&mut sample);
+                            let mut mse = 0.0;
+                            let mut zeros = 0;
+                            for (i, &w) in sample.iter().enumerate() {
+                                if w.abs() < 1e-6 { zeros += 1; }
+                                let orig = if let Some(t) = self.model().tensors.first() {
+                                    if t.sample_weights.len() > i { t.sample_weights[i] } else { 0.05 }
+                                } else { 0.05 };
+                                mse += (w - orig).powi(2);
+                            }
+                            mse /= sample.len() as f32;
+                            let sparsity = zeros as f32 / sample.len() as f32;
+
+                            self.byoa_test_status = format!(
+                                "Tested '{}': MSE={:.6}, Sparsity={:.1}%, OrigNorm={:.3}",
+                                alg.name, mse, sparsity * 100.0, orig_norm
+                            );
+                        } else {
+                            self.byoa_test_status = "No algorithm selected.".to_string();
+                        }
+                    }
+                    if !self.byoa_test_status.is_empty() {
+                        ui.label(egui::RichText::new(&self.byoa_test_status).strong().color(p.success).size(10.0));
+                    }
+                });
             });
     }
 
@@ -2692,6 +3093,64 @@ impl THMEApp {
                 });
             });
         });
+
+        ui.add_space(10.0);
+        egui::Frame::NONE
+            .fill(p.bg_card)
+            .stroke(Stroke::new(1.0_f32, p.border))
+            .inner_margin(egui::Margin::same(12))
+            .show(ui, |ui| {
+                ui.heading(
+                    egui::RichText::new("🌐 REA-LLM: EXECUTION-WEIGHTED HETEROGENEOUS ALLOCATION (EWHA) TELEMETRY")
+                        .size(12.0)
+                        .color(p.primary),
+                );
+                ui.label(
+                    egui::RichText::new(
+                        "Execution reach profile q_l under 80/20 routing, realized per-token memory traffic W_bytes/token, per-token energy E_token, and (α, β, γ) representation family mix."
+                    )
+                    .size(9.0)
+                    .color(p.text_muted),
+                );
+                ui.add_space(8.0);
+
+                let (_, traffic_mb, f_bar, joules, throughput) = self.model().compute_costs();
+
+                ui.columns(4, |sub| {
+                    render_stat_box(&mut sub[0], "DEPTH FRACTION (f̄)", format!("{:.1}%", f_bar * 100.0), p.accent, &p);
+                    render_stat_box(&mut sub[1], "TRAFFIC (W_bytes/tok)", format!("{:.2} MB", traffic_mb), p.primary, &p);
+                    render_stat_box(&mut sub[2], "ENERGY (E_token)", format!("{:.2} mJ", joules * 1000.0), p.success, &p);
+                    render_stat_box(&mut sub[3], "EST. THROUGHPUT", format!("{:.1} tok/s", throughput), p.secondary, &p);
+                });
+
+                ui.add_space(8.0);
+                ui.label(egui::RichText::new("Layerwise Reach & Representation Family Breakdown:").strong().size(10.0).color(p.text_main));
+
+                egui::Grid::new("rea_layer_grid")
+                    .striped(true)
+                    .spacing([14.0, 4.0])
+                    .show(ui, |ui| {
+                        ui.label(egui::RichText::new("Layer").strong().size(9.0).color(p.text_main));
+                        ui.label(egui::RichText::new("Reach q_l").strong().size(9.0).color(p.text_main));
+                        ui.label(egui::RichText::new("α (Binary)").strong().size(9.0).color(p.text_main));
+                        ui.label(egui::RichText::new("β (Ternary)").strong().size(9.0).color(p.text_main));
+                        ui.label(egui::RichText::new("γ (Phase)").strong().size(9.0).color(p.text_main));
+                        ui.label(egui::RichText::new("Layer Type").strong().size(9.0).color(p.text_main));
+                        ui.label(egui::RichText::new("Checkpoint").strong().size(9.0).color(p.text_main));
+                        ui.end_row();
+
+                        for l in &self.model().layers {
+                            ui.label(f!("L{}", l.layer_index));
+                            ui.label(egui::RichText::new(f!("{:.0}%", l.reach_probability * 100.0)).strong().color(if l.reach_probability > 0.5 { p.primary } else { p.text_muted }));
+                            ui.label(f!("{:.0}%", l.alpha_binary * 100.0));
+                            ui.label(f!("{:.0}%", l.beta_ternary * 100.0));
+                            ui.label(f!("{:.0}%", l.gamma_phase * 100.0));
+                            ui.label(egui::RichText::new(&l.layer_type).size(8.0).color(p.warning));
+                            ui.label(if l.is_exit_checkpoint { egui::RichText::new("EXIT").color(p.success).strong() } else { egui::RichText::new("-").color(p.text_muted) });
+                            ui.end_row();
+                        }
+                    });
+            });
     }
 
     /// TAB 5: History & Checkpoints (Timeline of optimization checkpoints, diffs, rollback)
