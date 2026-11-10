@@ -1,6 +1,6 @@
 # THME Roadmap: v0.1 to v0.2
 
-> **Topological Heterogeneous Manifold Engine (THME)** by **Epiphanes**  
+> **Topological Heterogeneous Manifold Engine (THME)** by **Epiphanes**
 > Roadmap governance and release progression from initial foundations to verified production deployment.
 
 ---
