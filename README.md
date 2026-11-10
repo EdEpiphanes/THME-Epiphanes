@@ -598,9 +598,9 @@ flowchart TD
     v012["v0.1.2 Format Correctness: Full GGUF Quants, Resilient Recovery & Fuzzing (Done)"]
     v013["v0.1.3 BYOA & REA-LLM: Algorithm Registry, Open Weights Rebuilder & Micro-Trainer (Done)"]
     v014["v0.1.4 Quality Gate: External Perplexity Bridge & Automated Rollback (Done)"]
-    v015["v0.1.5 Surgery Daemon, IDE & Interop: MCP, Copilot & PyTorch/CUDA Bridge (Done)"]
-    v016["v0.1.6 Speculative Decoding: Draft Model Synthesizer & Verification Engine"]
-    v017["v0.1.7 Roofline Profiler: FLOP/byte Arithmetic Intensity & Cache Hierarchy"]
+    v015["v0.1.5 Surgery Daemon & 8 AI Models: MCP, Copilot, PyTorch & Paradigm Matrix (Done)"]
+    v016["v0.1.6 Speculative Decoding: Draft Model Synthesizer & Tree Engine (Done)"]
+    v017["v0.1.7 Roofline Profiler: FLOP/byte Arithmetic Intensity & Cache Hierarchy (Active)"]
     v018["v0.1.8 Quant Exporter: Direct GGUF / SafeTensors Serialization & BitNet b1.58"]
     v019["v0.1.9 Co-Surgery: Autonomous Teacher-Student Closed-Loop Optimization"]
     v020["v0.2.0 Production Core Release: Verified Small-Model Open-Weights Demo"]
@@ -612,7 +612,7 @@ flowchart TD
     v010 --> v011 --> v012 --> v013 --> v014 --> v015 --> v016 --> v017 --> v018 --> v019 --> v020 --> v021 --> v022 --> v023 --> v024
 
     subgraph Backlog_v03 ["v0.3.0+ Backlog (Deferred)"]
-        v031["Mixture-of-Experts (MoE) Dynamic Specialist Routing"]
+        v031["Topological Hyper-Graph Neural Architecture Search"]
         v032["Continuous Online RL Adaptation"]
     end
 
@@ -624,14 +624,14 @@ flowchart TD
 - **v0.1.2 (Completed):** Full GGUF v2/v3 quantization matrix (28 GGML types including K-quants and I-quants), zero-allocation block decoders (`Q4_0`, `Q4_1`, `Q5_0`, `Q8_0`), truncated stream recovery, and infallible 1,000-iteration parser fuzz testing suite.
 - **v0.1.3 (Completed):** Bring Your Own Algorithm (BYOA) registry with JSON import/export, architecture rebuilder from scratch, open weights remapping, REA-LLM EWHA routing & energy telemetry, layer anatomy deconstruction, multi-format dataset ingestion, non-conventional experimentation lab, and on-device micro-trainer.
 - **v0.1.4 (Completed):** Empirical Quality Gate & Perplexity Verification Bridge (WikiText-2, C4, PTB) with automated rollback gating ($\Delta PPL \le \epsilon$), and enhanced CLI `validate` reporting.
-- **v0.1.5 (Completed):** Headless JSON-RPC Model Context Protocol (MCP) server (`thme mcp`), VS Code extension packaging (`thme-vscode-0.1.5.vsix`), Language Model Tools for GitHub Copilot (`thme_copilot_inspect`, `thme_copilot_surgery`, `thme_copilot_validate`), and PyTorch & CUDA fine-tuning interop bridge with PEFT LoRA adapter merge math ($W = W_0 + \frac{\alpha}{r} B \times A$).
-- **v0.1.6 (Planned):** Speculative Decoding Synthesizer: draft model manifold extraction from early-exit checkpoints and multi-token tree verification simulation.
-- **v0.1.7 (Planned):** Roofline & Kernel Profiler: hardware-calibrated Arithmetic Intensity vs. Memory Bandwidth roofline model with L1/L2/L3/HBM cache hierarchy simulation.
-- **v0.1.8 (Planned):** Direct binary serialization to deployable GGUF and SafeTensors files with BitNet b1.58 ternary packed weights and calibrated per-channel scales.
-- **v0.1.9 (Planned):** Closed-Loop Teacher Surgery: autonomous Teacher-Student co-surgery optimization daemon with iterative recipe generation and delta-PPL verification.
-- **v0.2.0 (Target):** Verified production deployment on real open weights (SmolLM-135M / LLaMA-3.2-1B) with reproducible before-and-after benchmarks and signed release binaries.
-- **v0.2.1 (Scheduled):** Direct GPU Driver Execution Engine: Vulkan 1.3 SPIR-V compute, Apple Metal 3, and NVIDIA CUDA Driver API via pure Rust (`cudarc`), bypassing Python runtimes.
-- **v0.2.2 (Scheduled):** Tiered Heterogeneous Memory & Out-of-Core NVMe SSD Streaming: asynchronous direct I/O (`io_uring`/Overlapped I/O) enabling 70B parameter inference and surgery in 8 GB consumer VRAM.
+- **v0.1.5 (Completed):** Headless JSON-RPC Model Context Protocol (MCP) server (`thme mcp`), VS Code extension packaging (`thme-vscode-0.1.5.vsix`), Language Model Tools for GitHub Copilot (`thme_copilot_inspect`, `thme_copilot_surgery`, `thme_copilot_validate`), PyTorch & CUDA fine-tuning interop bridge with PEFT LoRA adapter merge math ($W = W_0 + \frac{\alpha}{r} B \times A$), and Universal 8 Specialized AI Model Paradigm Converter (LLM, LCM, LAM, MoE, VLM, SLM, MLM, SAM) with sparse upcycling and BitNet b1.58 edge compaction.
+- **v0.1.6 (Completed):** Speculative Decoding Synthesizer: draft model manifold extraction (prefix layers, strided layers, low-rank projection, BitNet b1.58 ternary draft with 76.8% memory reduction), multi-token speculative rejection sampling verification ($S = \frac{\mathbb{E}[k]+1}{1+\gamma \cdot r} \ge 1.53\times$), Medusa/Eagle multi-branch tree speculation topology with 2D causal tree attention mask synthesis, CLI `thme speculate`, MCP tool `thme_simulate_speculative_decoding`, and Desktop Studio Tab 4 benchmark deck.
+- **v0.1.7 (Active):** Roofline & Kernel Profiler: hardware-calibrated Arithmetic Intensity ($\text{FLOPs/byte}$) vs. Memory Bandwidth saturation roofline models across target architectures (NVIDIA Ada/Blackwell, Apple Silicon M-series, AMD CDNA/RDNA, Intel/AMD AVX-512), multi-level memory hierarchy cache simulation (L1, L2, L3, HBM3/DDR5) predicting cache miss latency penalties, and power/thermal throttling projection curves.
+- **v0.1.8 (Planned):** Binary Quantization Exporter: direct serialization to deployable GGUF v3 and SafeTensors files with BitNet b1.58 ternary packed bitstreams (2 bits/weight, 4 weights/byte) and calibrated per-channel scale factors, ensuring direct compatibility with downstream runtimes (`llama.cpp`, Ollama, vLLM).
+- **v0.1.9 (Planned):** Closed-Loop Teacher Surgery: autonomous Teacher-Student co-surgery optimization daemon with iterative recipe generation, delta-PPL verification, and multi-objective Pareto auto-tuning balancing latency, memory traffic, and representation fidelity.
+- **v0.2.0 (Target):** Verified production deployment on real open weights (SmolLM-135M / LLaMA-3.2-1B) with reproducible before-and-after benchmarks, published checkpoints, and signed release binaries.
+- **v0.2.1 (Scheduled):** Direct GPU Driver Execution Engine: pure Rust GPU execution via Vulkan 1.3 SPIR-V compute shaders, Apple Metal 3 Performance Shaders, and NVIDIA CUDA Driver API via `cudarc` bypassing Python runtimes with fused low-bit GEMM kernels.
+- **v0.2.2 (Scheduled):** Tiered Heterogeneous Memory & Out-of-Core NVMe SSD Streaming: asynchronous direct I/O (`io_uring`/Overlapped I/O) enabling 70B parameter inference and surgery in 8 GB consumer VRAM via sequential layer streaming.
 - **v0.2.3 (Scheduled):** Distributed Heterogeneous Multi-Node Clustering: Tensor and Pipeline Parallelism across mixed hardware nodes with pure Rust async TCP/RDMA ring all-reduce.
 - **v0.2.4 (Scheduled):** Universal Agentic AI Connectivity Gateway: JSON-RPC 2.0 / WebSocket daemon connecting CLI agents, CI/CD harnesses, desktop apps, and IDE copilots with HMAC-SHA256 surgery attestation.
 
