@@ -1,11 +1,11 @@
 # LLM-Tweaker / THME
 
 <p align="center">
-  <img src="assets/live_neural_benchmark.gif" alt="THME Desktop Studio - Live Neural Network Token Flow & Telemetry Benchmarker" width="840" />
+  <img src="assets/live_neural_benchmark.gif" alt="THME Desktop Studio - Live Neural Network Token Flow and Telemetry Benchmarker" width="840" />
 </p>
 
 <p align="center">
-  <strong>Topological Heterogeneous Manifold Engine (THME) & LLM-Tweaker Studio</strong><br>
+  <strong>Topological Heterogeneous Manifold Engine (THME) and LLM-Tweaker Studio</strong><br>
   <em>Open-source framework for Large Language Model memory profiling, zero-copy weight analysis, live token flow telemetry, and automated Teacher LLM architecture surgery.</em>
 </p>
 
@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <a href="#key-features">Key Features</a> •
+  <a href="#overview">Overview</a> •
   <a href="#desktop-studio-showcase">Desktop Studio</a> •
   <a href="#cli-tools">CLI Tools</a> •
   <a href="#teacher-llm-surgery">Teacher LLM Surgery</a> •
@@ -32,20 +32,20 @@
 
 ## Overview
 
-**LLM-Tweaker (THME)** transforms massive Large Language Models into memory-efficient, high-throughput inference artifacts without indiscriminate uniform quantization. Instead of blindly compressing every weight matrix to 4-bit, THME profiles the topological manifold sensitivity of each attention projection and MLP block, automatically generating a **Pareto-optimal heterogeneous precision plan** constrained by anti-degradation quality gates ($Q_{\text{candidate}} \ge Q_{\text{baseline}} - \epsilon$).
+**LLM-Tweaker (THME)** profiles and optimizes Large Language Models using heterogeneous precision allocation and sequential execution. Rather than applying a single uniform bit-width across an entire model, THME measures the topological sensitivity of each attention projection and feed-forward block, building a Pareto-optimal precision plan constrained by quality gates ($Q_{\text{candidate}} \ge Q_{\text{baseline}} - \epsilon$).
 
-Built entirely in **pure Rust** without heavy Python or C++ runtime dependencies:
-- **Universal Model Importer**: Zero-copy memory-mapped parsing of **GGUF v2/v3** and **SafeTensors** (single file or sharded Hugging Face directory) with fallback parameter deduction.
-- **Deep Weight Statistics & Slice Matrix**: Computes real-time moments ($\mu, \sigma$), sparsity (% zeros), outlier ratio ($>3\sigma$), 32-bin histograms, and renders interactive 8×8 numerical weight matrices.
-- **Live Token & Process Flow Benchmarker**: Simulates live token generation through 13 discrete Transformer stages ($\text{Embedding} \to \text{Attention QKV} \to \text{RoPE} \to \text{KV Cache Append} \to \text{Scaled Dot-Product} \to \text{SwiGLU FFN} \to \text{Adaptive Exit Check} \to \text{LM Head}$) with 60 FPS real-time telemetry.
-- **Teacher LLM Restructuring & Surgery Engine**: Declarative JSON recipe system enabling automated AI agents (Claude, Gemini, GPT-4) to restructure model precisions, swap layer sequence mixers, and prune components.
-- **Standalone GPU-Accelerated Desktop Studio**: Shipped as a 5.7 MB zero-dependency native executable ([`LLM-Tweaker-Studio.exe`](file:///LLM-Tweaker-Studio.exe)).
+Built in pure Rust without external runtime dependencies:
+- **Universal model importer**: Zero-copy memory-mapped parsing of GGUF v2/v3 and SafeTensors files or sharded directories, with fallback architecture deduction when `config.json` is absent.
+- **Weight analysis and numerical slice matrix**: Computes statistical moments ($\mu, \sigma$), sparsity ratio, outlier counts ($>3\sigma$), 32-bin histograms, and an interactive 8x8 numerical matrix slice viewer.
+- **Live token flow benchmarker**: Models token generation across 13 Transformer stages ($\text{Embedding} \to \text{Attention QKV} \to \text{RoPE} \to \text{KV Cache Append} \to \text{Scaled Dot-Product} \to \text{SwiGLU FFN} \to \text{Adaptive Exit Check} \to \text{LM Head}$) with 60 FPS real-time telemetry.
+- **Teacher LLM surgery engine**: Declarative JSON recipe format allowing automated agents (such as Claude, Gemini, or custom scripts) to adjust layer precisions, replace sequence mixers, and prune components.
+- **Standalone native desktop studio**: Compiles to a 5.7 MB zero-dependency executable ([`LLM-Tweaker-Studio.exe`](file:///LLM-Tweaker-Studio.exe)).
 
 ---
 
 ## Desktop Studio Showcase
 
-Launch the native desktop application without opening a browser or localhost server:
+Launch the native desktop application on Windows, macOS, or Linux:
 ```bash
 thme gui
 # Or run the dedicated binaries:
@@ -53,7 +53,7 @@ thme-gui
 ./LLM-Tweaker-Studio.exe
 ```
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
 │  THME v2.0  LLM RE-STRUCTURER, OPTIMIZER & TUNER                     [📁 Load Model]  │
 │  Llama-3-8B [GGUF • LLAMA] (32 Layers • Hidden Dim 4096 • 8030M Params)                │
@@ -64,25 +64,25 @@ thme-gui
 └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### The 6 Interactive Studio Workspaces:
+### The 6 Interactive Studio Workspaces
 
 | Workspace Tab | Focus | Core Capabilities |
 |---|---|---|
-| **1. Layerwise Distribution Matrix** | Architecture Shaping | Independent per-layer sliders for $\alpha$ (1-bit XNOR), $\beta$ (BitNet b1.58 Ternary), and $\gamma$ (Phase recurrence) enforcing $\alpha + \beta + \gamma = 100\%$. Sequence mixer selector (Gated DeltaNet, Phase Recurrence, Sliding Window, Mamba2, GQA). |
-| **2. Live Token Flow Benchmarker** | Real-Time Telemetry | Interactive token generator (`▶ Start`, `⏸ Pause`, `⏭ Step`, `⏹ Reset`, $0.5\times \dots 10\times$ speed). Displays live streaming token terminal, instantaneous throughput (`tok/s`), TTFT, dynamic KV Cache MB allocation, and animated pulse traveling through layers. |
-| **3. Sequential Layer Auto-Tuner** | AirLLM Optimization | AirLLM-style layer-by-layer optimization loop. Tests candidate representations against distortion threshold $\epsilon_{\text{tol}}$, locks winning Pareto configurations, and advances sequentially through the network. |
-| **4. Architecture DAG Visualizer** | Topological Manifold | Interactive topological manifold displaying layer reach probabilities ($q_l = 1 - p_{\text{exit}}$) and early-exit speculation branches. |
-| **5. Weight & Parameter Studio** | Deep Introspection | Live search and role filter (`Attention`, `MLP`, `Embedding`). Computes real 32-bin histograms, sparsity (% zeros), outlier ratio ($>3\sigma$), and renders an **8×8 numerical weight slice matrix** color-coded by magnitude. |
-| **6. Export & Teacher LLM Surgery** | Restructuring & Export | Exports tuned models to SafeTensors, GGUF, or THME formats. Includes interactive multiline JSON editor and 1-click execution for Teacher LLM restructuring recipes. |
+| **Layerwise Distribution Matrix** | Layer precision tuning | Per-layer sliders for $\alpha$ (1-bit XNOR), $\beta$ (BitNet b1.58 ternary), and $\gamma$ (Phase recurrence) enforcing $\alpha + \beta + \gamma = 100\%$. Sequence mixer selector (Gated DeltaNet, Phase Recurrence, Sliding Window, Mamba2, GQA). |
+| **Live Token Flow Benchmarker** | Execution telemetry | Interactive benchmark runner (`▶ Start`, `⏸ Pause`, `⏭ Step`, `⏹ Reset`, $0.5\times \dots 10\times$ speed). Displays real-time token stream, instantaneous throughput (`tok/s`), TTFT, dynamic KV cache allocation, and animated layer flow. |
+| **Sequential Layer Auto-Tuner** | Layer-by-layer optimization | AirLLM-style iterative optimization loop. Evaluates candidate representations against distortion threshold $\epsilon_{\text{tol}}$, locks winning Pareto configurations, and advances sequentially through the model. |
+| **Architecture DAG Visualizer** | Topology graph | Graph displaying layer reach probabilities ($q_l = 1 - p_{\text{exit}}$) and speculative early-exit checkpoint branches. |
+| **Weight and Parameter Studio** | Weight inspection | Search and filter by tensor name and role (`Attention`, `MLP`, `Embedding`). Computes real 32-bin histograms, sparsity, outlier counts ($>3\sigma$), and an 8x8 numerical weight slice matrix. |
+| **Export and Teacher LLM Surgery** | Surgery and export | Exports tuned models to SafeTensors, GGUF, or THME formats. Includes a multiline JSON specification editor and direct execution for Teacher LLM restructuring recipes. |
 
 ---
 
-## CLI Tools & Subcommands
+## CLI Tools
 
 LLM-Tweaker provides dual-binary CLI support (`thme` or `llm-tweaker`):
 
-### 1. Zero-Copy Model Inspection
-Scan any GGUF or SafeTensors file in milliseconds without high RAM overhead:
+### Inspect model weights
+Scan local GGUF or SafeTensors files zero-copy:
 ```bash
 thme inspect models/llama-3-8b.gguf
 thme inspect /path/to/huggingface-dir --json
@@ -108,26 +108,26 @@ thme inspect /path/to/huggingface-dir --json
 └───────────────────────┴──────────────────────────┘
 ```
 
-### 2. Sensitivity Profiling & KV-Cache Projection
+### Profile layer sensitivity and KV cache
 Project memory scaling across context windows from 1k to 128k+ tokens:
 ```bash
 thme profile models/llama-3-8b.gguf --batch-size 1 --context-lengths 2048,8192,32768,131072
 ```
 
-### 3. Pareto Heterogeneous Precision Planning
-Solve multi-objective optimization targeting a specific VRAM budget:
+### Generate Pareto precision allocation
+Compute a precision plan targeting a specific memory budget:
 ```bash
 thme plan models/llama-3-8b.gguf --budget-gb 8.0 --output optimization_plan.json
 ```
 
-### 4. Teacher LLM Model Surgery Headless CLI
-Apply declarative transformation recipes created by automated Teacher LLMs:
+### Apply Teacher LLM surgery recipe
+Execute transformation recipes created by automated Teacher LLMs:
 ```bash
 thme tweak --model models/llama-3-8b.gguf --recipe recipes/deltanet_hybrid.json --output models/restructured.json
 ```
 
-### 5. Strict Quality Gate Enforcement
-Validate candidate scores against baseline benchmarks with directional metric checking (lower-is-better for Perplexity; higher-is-better for Accuracy):
+### Evaluate quality gates
+Validate candidate scores against baseline benchmarks with directional checking (lower-is-better for Perplexity; higher-is-better for Accuracy):
 ```bash
 thme validate --baseline 85.0 --candidate 84.4 --max-degradation 1.0
 thme validate --suite-file configs/quality_gates.yaml
@@ -135,9 +135,9 @@ thme validate --suite-file configs/quality_gates.yaml
 
 ---
 
-## Teacher LLM Surgery & Tweak Recipes
+## Teacher LLM Surgery
 
-External AI agents (such as Claude, Gemini, or custom tuning algorithms) can programmatically restructure imported models by emitting a standard declarative JSON recipe:
+External AI agents can programmatically restructure imported models by writing declarative JSON recipes:
 
 ```json
 {
@@ -205,27 +205,27 @@ Quantized KV Cache global format to INT8
 
 ---
 
-## Mathematical Foundation & Research Paper
+## Mathematical Foundation
 
-The scientific architecture is detailed in [`docs/research/THME_Research_Programme_v2.pdf`](docs/research/THME_Research_Programme_v2.pdf).
+The scientific architecture is documented in [`docs/research/THME_Research_Programme_v2.pdf`](docs/research/THME_Research_Programme_v2.pdf).
 
-### 1. KV-Cache Memory Formula
-Autoregressive attention requires caching historical Key and Value tensors for every active sequence. THME calculates exact footprint via:
+### KV cache memory formula
+Autoregressive generation stores historical Key and Value representations. THME computes this footprint using:
 $$M_{\mathrm{KV}} = 2 \times L \times B \times S \times H_{\mathrm{KV}} \times D_{\mathrm{head}} \times \text{bytes}$$
-where $L$ is number of layers, $B$ is batch size, $S$ is sequence length, $H_{\mathrm{KV}}$ is key-value heads (distinguishing Grouped-Query Attention GQA from Multi-Head Attention MHA), and $D_{\mathrm{head}}$ is head dimension.
+where $L$ is layer count, $B$ is batch size, $S$ is context sequence length, $H_{\mathrm{KV}}$ is key-value head count (distinguishing Grouped-Query Attention from Multi-Head Attention), and $D_{\mathrm{head}}$ is head dimension.
 
-### 2. Adaptive Speculative Early Exit Routing
-Tokens evaluate entropy at checkpoint layer $L_{\mathrm{exit}}$. Layer reach probability is:
+### Adaptive speculative early-exit routing
+Tokens evaluate confidence at checkpoint layer $L_{\mathrm{exit}}$. Layer reach probability is:
 $$q_l = \begin{cases} 1.0 & \text{if } l \leq L_{\mathrm{exit}} \\ 1.0 - p_{\mathrm{exit}} & \text{if } l > L_{\mathrm{exit}} \end{cases}$$
-Mean computational depth fraction is $\bar{f} = \frac{1}{N} \sum_{l=0}^{N-1} q_l$, delivering dramatic memory bandwidth savings.
+Mean computational depth fraction is $\bar{f} = \frac{1}{N} \sum_{l=0}^{N-1} q_l$, reducing memory bandwidth consumption accordingly.
 
-### 3. Layerwise Parabolic Manifold Sensitivity
-Empirical perturbation analysis demonstrates that initial layers (embedding projection) and terminal layers (LM head logits) are vulnerable to quantization noise, while intermediate layers tolerate aggressive compression:
+### Layerwise parabolic sensitivity
+Perturbation tests indicate that initial projection layers and terminal output heads are more sensitive to quantization noise, while intermediate layers tolerate lower precision:
 $$s(l) = s_{\mathrm{base}} + 4 \cdot \Delta_{\mathrm{depth}} \cdot \left(\frac{l}{N - 1} - 0.5\right)^2$$
 
 ---
 
-## Production Roadmap (v0.1.0 → v0.1.9)
+## Production Roadmap
 
 ```mermaid
 flowchart TD
@@ -243,16 +243,16 @@ flowchart TD
     v010 --> v011 --> v012 --> v013 --> v014 --> v015 --> v016 --> v017 --> v018 --> v019
 ```
 
-- **v0.1.0 (Current):** Zero-copy SafeTensors + GGUF v2/v3 parser, Pareto multi-objective precision allocator, directional Quality Gate, Desktop Studio GUI with 6 tabs, live token flow telemetry, and headless surgery CLI.
+- **v0.1.0:** Zero-copy SafeTensors and GGUF parser, Pareto precision allocator, directional Quality Gate, Desktop Studio GUI with 6 tabs, live token flow telemetry, and headless surgery CLI.
 - **v0.1.1:** Exhaustive GGML quantization types (`Q2_K`, `Q3_K`, `Q4_K_M`, `Q5_K_M`, `Q6_K`, `IQ2_XXS`), sharded split GGUF, and truncated file recovery.
-- **v0.1.2:** AVX-512 / AVX2 / NEON SIMD micro-kernels for real CPU dot-product latency and layer-wise activation SNR measurement.
-- **v0.1.3:** `wgpu` (Vulkan/Metal) and CUDA hardware backends for true on-device GPU layer profiling and PCIe transfer measurement.
+- **v0.1.2:** AVX-512, AVX2, and ARM NEON SIMD micro-kernels for real CPU dot-product latency and layer-wise activation SNR measurement.
+- **v0.1.3:** `wgpu` (Vulkan/Metal) and CUDA hardware backends for on-device GPU layer profiling and PCIe transfer measurement.
 - **v0.1.4:** Sequential AirLLM asynchronous double-buffered disk-to-VRAM weight streamer allowing 70B models to run on 8GB VRAM.
-- **v0.1.5:** Headless daemon (`thme daemon --port 8080`) exposing JSON-RPC / REST endpoints for autonomous Claude/GPT-4 model surgery agents.
+- **v0.1.5:** Headless daemon (`thme daemon --port 8080`) exposing JSON-RPC and REST endpoints for autonomous model surgery agents.
 - **v0.1.6:** Quantization writer exporting serialized `.gguf` and `.safetensors` files packed with BitNet b1.58 ternary and calibrated scales.
 - **v0.1.7:** In-engine Perplexity evaluator on WikiText-2 and zero-shot MMLU benchmarking suite.
 - **v0.1.8:** Sparse Mixture-of-Experts (MoE) support for DeepSeek-V2/V3 and Mixtral 8x22B with expert pruning and routing analysis.
-- **v0.1.9:** Multi-platform packaging (Windows MSI/exe, Linux AppImage, macOS universal DMG), fuzz testing, and signed releases.
+- **v0.1.9:** Multi-platform packaging (Windows MSI/exe, Linux AppImage, macOS universal DMG), fuzz testing, and verified release binaries.
 
 ---
 
@@ -283,7 +283,7 @@ cargo test
 
 ## Contributing & Community
 
-LLM-Tweaker is an open-source project created to give back to the global AI and systems community. We welcome contributions, RFCs, bug reports, and research extensions:
+LLM-Tweaker is an open-source project. We welcome contributions, RFCs, bug reports, and research extensions:
 - Review [CONTRIBUTING.md](CONTRIBUTING.md) for architecture guidelines and coding standards.
 - Read [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 - Security policy is documented in [SECURITY.md](SECURITY.md).
