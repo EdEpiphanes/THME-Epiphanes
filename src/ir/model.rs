@@ -125,3 +125,19 @@ impl ModelIR {
         map
     }
 }
+
+impl Default for ModelIR {
+    fn default() -> Self {
+        Self::new(
+            "Llama-3-8B".to_string(),
+            ModelArchitecture::Llama,
+            32,
+            4096,
+            32,
+            8,
+            128256,
+            8192,
+            Vec::new(),
+        )
+    }
+}

@@ -3,6 +3,7 @@ pub mod cli;
 pub mod dataset;
 pub mod experiment;
 pub mod gui;
+pub mod interop;
 pub mod ir;
 pub mod parser;
 pub mod profiling;
@@ -16,6 +17,10 @@ pub use allocator::{AllocationPlan, ParetoAllocator};
 pub use dataset::{Dataset, DatasetFormat, DatasetSample, DatasetSummary};
 pub use experiment::{ExperimentLab, ExperimentMetrics, ExperimentTechnique};
 pub use gui::{launch_gui, THMEApp};
+pub use interop::{
+    HuggingFaceConfigGenerator, PeftLoraAdapter, PyTorchCUDATrainingStrategy, PyTorchInteropConfig,
+    PyTorchScriptGenerator,
+};
 pub use ir::{ModelArchitecture, ModelIR, TensorFormat, TensorIR, TensorRole};
 pub use parser::ModelImporter;
 pub use profiling::{KvCacheEstimator, SensitivityProfiler};

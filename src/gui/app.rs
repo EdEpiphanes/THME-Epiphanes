@@ -1477,7 +1477,7 @@ impl eframe::App for THMEApp {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         // Theme Selector
                         ui.label(
-                            egui::RichText::new("🎨 Scheme:")
+                            egui::RichText::new("Scheme:")
                                 .size(11.0)
                                 .color(p.text_muted),
                         );
@@ -1516,7 +1516,7 @@ impl eframe::App for THMEApp {
 
                         if ui
                             .button(
-                                egui::RichText::new("⚡ Auto-Decide Plan")
+                                egui::RichText::new("Auto-Decide Plan")
                                     .color(Color32::BLACK)
                                     .strong(),
                             )
@@ -1526,12 +1526,12 @@ impl eframe::App for THMEApp {
                             self.active_tab = 3;
                         }
 
-                        if ui.button("🚀 Sequential Tuner").clicked() {
+                        if ui.button("Sequential Tuner").clicked() {
                             self.active_tab = 4;
                             self.start_layerwise_auto_tuner();
                         }
 
-                        if ui.button("📄 Load Model File...").clicked() {
+                        if ui.button("Load Model File...").clicked() {
                             if let Some(path) = rfd::FileDialog::new()
                                 .add_filter(
                                     "All Models (*.gguf, *.safetensors)",
@@ -1570,7 +1570,7 @@ impl eframe::App for THMEApp {
                             }
                         }
 
-                        if ui.button("📁 Load Model Folder...").clicked() {
+                        if ui.button("Load Model Folder...").clicked() {
                             if let Some(dir) = rfd::FileDialog::new().pick_folder() {
                                 match UniversalModel::load_universal(&dir) {
                                     Ok(m) => {
@@ -1705,27 +1705,15 @@ impl eframe::App for THMEApp {
         // Central Panel with Tab Navigation
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
-                tab_button(ui, "🎛 Master Dashboard", 0, &mut self.active_tab, &p);
-                tab_button(ui, "📦 Models Manager", 1, &mut self.active_tab, &p);
-                tab_button(
-                    ui,
-                    "🔬 Layer Tweaker & Sections",
-                    2,
-                    &mut self.active_tab,
-                    &p,
-                );
-                tab_button(
-                    ui,
-                    "⚡ Distillation & Matrix Engine",
-                    3,
-                    &mut self.active_tab,
-                    &p,
-                );
-                tab_button(ui, "📊 Full Benchmarks", 4, &mut self.active_tab, &p);
-                tab_button(ui, "🕒 History & Checkpoints", 5, &mut self.active_tab, &p);
-                tab_button(ui, "📋 Audit Log", 6, &mut self.active_tab, &p);
-                tab_button(ui, "💾 Export & Surgery", 7, &mut self.active_tab, &p);
-                tab_button(ui, "🧪 Dev Lab & Training", 8, &mut self.active_tab, &p);
+                tab_button(ui, "Dashboard", 0, &mut self.active_tab, &p);
+                tab_button(ui, "Models", 1, &mut self.active_tab, &p);
+                tab_button(ui, "Layer Tweaker", 2, &mut self.active_tab, &p);
+                tab_button(ui, "Matrix Engine", 3, &mut self.active_tab, &p);
+                tab_button(ui, "Benchmarks", 4, &mut self.active_tab, &p);
+                tab_button(ui, "History", 5, &mut self.active_tab, &p);
+                tab_button(ui, "Audit Log", 6, &mut self.active_tab, &p);
+                tab_button(ui, "Surgery & Export", 7, &mut self.active_tab, &p);
+                tab_button(ui, "Dev Lab & Training", 8, &mut self.active_tab, &p);
             });
 
             ui.separator();
@@ -1763,7 +1751,7 @@ impl THMEApp {
                         .inner_margin(egui::Margin::same(12))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new("📦 MODELS REPOSITORY").strong().color(p.primary));
+                                ui.label(egui::RichText::new("MODELS REPOSITORY").strong().color(p.primary));
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                     if ui.small_button("Manage →").clicked() {
                                         self.active_tab = 1;
@@ -1787,7 +1775,7 @@ impl THMEApp {
                         .inner_margin(egui::Margin::same(12))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new("⚡ MATRIX ENGINE").strong().color(p.success));
+                                ui.label(egui::RichText::new("MATRIX ENGINE").strong().color(p.success));
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                     if ui.small_button("Engine →").clicked() {
                                         self.active_tab = 3;
@@ -1814,7 +1802,7 @@ impl THMEApp {
                         .inner_margin(egui::Margin::same(12))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new("🌐 REA-LLM / EWHA").strong().color(p.accent));
+                                ui.label(egui::RichText::new("REA-LLM / EWHA").strong().color(p.accent));
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                     if ui.small_button("Metrics →").clicked() {
                                         self.active_tab = 4;
@@ -1838,7 +1826,7 @@ impl THMEApp {
                         .inner_margin(egui::Margin::same(12))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new("📊 FLOW TELEMETRY").strong().color(p.secondary));
+                                ui.label(egui::RichText::new("FLOW TELEMETRY").strong().color(p.secondary));
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                     if ui.small_button("Flow →").clicked() {
                                         self.active_tab = 4;
@@ -1859,21 +1847,21 @@ impl THMEApp {
 
             // Dashboard Quick Action Bar
             ui.horizontal(|ui| {
-                if ui.button(egui::RichText::new("⚡ Run Auto-Decider For All Parameters").strong().color(Color32::BLACK)).clicked() {
+                if ui.button(egui::RichText::new("Run Auto-Decider For All Parameters").strong().color(Color32::BLACK)).clicked() {
                     self.run_auto_decider_internal();
                     self.status_msg = "Evaluated all parameters and generated Pareto-optimal matrix & distillation plan!".to_string();
                 }
 
-                if ui.button(egui::RichText::new("🚀 Execute Global Transformation Plan").strong().color(Color32::WHITE)).clicked() {
+                if ui.button(egui::RichText::new("Execute Global Transformation Plan").strong().color(Color32::WHITE)).clicked() {
                     self.execute_global_transformation_plan();
                 }
 
-                if ui.button("📸 Snapshot Checkpoint").clicked() {
+                if ui.button("Snapshot Checkpoint").clicked() {
                     self.create_checkpoint("Manual Snapshot", "Saved state from Master Dashboard");
                     self.status_msg = "Snapshot checkpoint created.".to_string();
                 }
 
-                if ui.button("▶ Run Live Benchmark").clicked() {
+                if ui.button("Run Live Benchmark").clicked() {
                     self.active_tab = 4;
                     self.simulator.start();
                 }
@@ -2032,7 +2020,7 @@ impl THMEApp {
                 ui.add_space(8.0);
 
                 ui.horizontal(|ui| {
-                    if ui.button("➕ Generate Synthetic Model").clicked() {
+                    if ui.button("Generate Synthetic Model").clicked() {
                         let m = UniversalModel::create_synthetic(12, 2048);
                         let name = m.name.clone();
                         self.models.push(m);
@@ -2042,7 +2030,7 @@ impl THMEApp {
                         self.log_audit("INFO", "ModelCreated", "Generated 12-layer synthetic model", &name);
                     }
 
-                    if ui.button("🛠 Rebuild Architecture From Scratch").clicked() {
+                    if ui.button("Rebuild Architecture From Scratch").clicked() {
                         self.rebuilder_open = !self.rebuilder_open;
                     }
                 });
@@ -2054,7 +2042,7 @@ impl THMEApp {
                         .stroke(Stroke::new(1.0_f32, p.primary))
                         .inner_margin(egui::Margin::same(10))
                         .show(ui, |ui| {
-                            ui.label(egui::RichText::new("🛠 REBUILD ARCHITECTURE FROM SCRATCH").strong().color(p.primary));
+                            ui.label(egui::RichText::new("REBUILD ARCHITECTURE FROM SCRATCH").strong().color(p.primary));
                             ui.label(egui::RichText::new("Define topological layer sequences, assign early-exit depth, and optionally remap open weights.").size(9.0).color(p.text_muted));
                             ui.add_space(4.0);
 
@@ -2086,7 +2074,7 @@ impl THMEApp {
 
                             ui.add_space(6.0);
                             ui.horizontal(|ui| {
-                                if ui.button(egui::RichText::new("🚀 Assemble & Activate New Architecture").strong().color(Color32::BLACK)).clicked() {
+                                if ui.button(egui::RichText::new("Assemble & Activate New Architecture").strong().color(Color32::BLACK)).clicked() {
                                     let bp = crate::ir::ArchitectureBlueprint::new_hybrid_llama(
                                         &self.rebuild_model_name,
                                         self.rebuild_num_layers,
@@ -2291,7 +2279,7 @@ impl THMEApp {
                 ui.horizontal(|ui| {
                     ui.label(
                         egui::RichText::new(f!(
-                            "🗺️ LAYER {} COMPONENT DECONSTRUCTION & FORWARD DATAFLOW MAP",
+                            "LAYER {} COMPONENT DECONSTRUCTION & FORWARD DATAFLOW MAP",
                             cur_l
                         ))
                         .strong()
@@ -2299,12 +2287,14 @@ impl THMEApp {
                     );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let route_badge = if decomp.is_exit_checkpoint {
-                            egui::RichText::new("🔀 Adaptive Checkpoint (80% Exit Head / 20% Pass)")
-                                .color(p.warning)
-                                .strong()
+                            egui::RichText::new(
+                                "[CP] Adaptive Checkpoint (80% Exit Head / 20% Pass)",
+                            )
+                            .color(p.warning)
+                            .strong()
                         } else {
                             egui::RichText::new(f!(
-                                "➡️ 100% Sequential Pass to Layer {}",
+                                "[SEQ] 100% Sequential Pass to Layer {}",
                                 cur_l + 1
                             ))
                             .color(p.success)
@@ -2340,7 +2330,11 @@ impl THMEApp {
                                                     .size(9.0),
                                             );
                                             if ui
-                                                .small_button(if is_sel { "✔" } else { "Select" })
+                                                .small_button(if is_sel {
+                                                    "Active"
+                                                } else {
+                                                    "Select"
+                                                })
                                                 .clicked()
                                             {
                                                 self.selected_subblock =
@@ -2365,7 +2359,7 @@ impl THMEApp {
                                                         .size(7.0)
                                                         .monospace(),
                                                 );
-                                                if ui.small_button("🔍").clicked() {
+                                                if ui.small_button("View").clicked() {
                                                     focused_tensor_name = Some(t.name.clone());
                                                     self.selected_subblock = Some(
                                                         crate::ir::SubBlockCategory::InputNorm,
@@ -2412,7 +2406,11 @@ impl THMEApp {
                                             .size(9.0),
                                         );
                                         if ui
-                                            .small_button(if is_sel_mix { "✔" } else { "Select" })
+                                            .small_button(if is_sel_mix {
+                                                "Active"
+                                            } else {
+                                                "Select"
+                                            })
                                             .clicked()
                                         {
                                             self.selected_subblock =
@@ -2464,7 +2462,7 @@ impl THMEApp {
                                                     .size(7.0)
                                                     .color(p.success),
                                             );
-                                            if ui.small_button("🔍").clicked() {
+                                            if ui.small_button("View").clicked() {
                                                 focused_tensor_name = Some(t.name.clone());
                                                 self.selected_subblock = Some(
                                                     crate::ir::SubBlockCategory::SequenceMixer,
@@ -2479,15 +2477,15 @@ impl THMEApp {
                                             .color(p.text_muted),
                                     );
                                     ui.label(
-                                        egui::RichText::new("→ Residual Highway 1 (⊕)")
+                                        egui::RichText::new("-> Residual Highway 1 (Add)")
                                             .size(8.0)
                                             .color(p.secondary),
                                     );
                                 });
 
-                            ui.label(egui::RichText::new("──►").size(14.0).color(p.primary));
+                            ui.label(egui::RichText::new("-->").size(14.0).color(p.primary));
 
-                            // Sub-Block 3: Residual Highway 1 (⊕ Add)
+                            // Sub-Block 3: Residual Highway 1 (Add)
                             egui::Frame::NONE
                                 .fill(p.bg_card)
                                 .stroke(Stroke::new(1.0_f32, p.border))
@@ -2501,7 +2499,7 @@ impl THMEApp {
                                             .size(9.0),
                                     );
                                     ui.label(
-                                        egui::RichText::new("⊕ Identity Add")
+                                        egui::RichText::new("Identity Add")
                                             .size(8.0)
                                             .color(p.text_muted),
                                     );
@@ -2518,7 +2516,7 @@ impl THMEApp {
                                     );
                                 });
 
-                            ui.label(egui::RichText::new("──►").size(14.0).color(p.primary));
+                            ui.label(egui::RichText::new("-->").size(14.0).color(p.primary));
 
                             // Sub-Block 4: Post-Mixer RMSNorm
                             if let Some(post_norm) = &decomp.post_mixer_norm {
@@ -2542,7 +2540,7 @@ impl THMEApp {
                                             );
                                             if ui
                                                 .small_button(if is_sel_post {
-                                                    "✔"
+                                                    "Active"
                                                 } else {
                                                     "Select"
                                                 })
@@ -2569,7 +2567,7 @@ impl THMEApp {
                                                         .size(7.0)
                                                         .monospace(),
                                                 );
-                                                if ui.small_button("🔍").clicked() {
+                                                if ui.small_button("View").clicked() {
                                                     focused_tensor_name = Some(t.name.clone());
                                                     self.selected_subblock = Some(
                                                         crate::ir::SubBlockCategory::PostMixerNorm,
@@ -2584,13 +2582,13 @@ impl THMEApp {
                                                 .color(p.text_muted),
                                         );
                                         ui.label(
-                                            egui::RichText::new("→ SwiGLU MLP")
+                                            egui::RichText::new("-> SwiGLU MLP")
                                                 .size(8.0)
                                                 .color(p.secondary),
                                         );
                                     });
 
-                                ui.label(egui::RichText::new("──►").size(14.0).color(p.primary));
+                                ui.label(egui::RichText::new("-->").size(14.0).color(p.primary));
                             }
 
                             // Sub-Block 5: Feed-Forward Network (SwiGLU MLP)
@@ -2615,7 +2613,7 @@ impl THMEApp {
                                             );
                                             if ui
                                                 .small_button(if is_sel_ffn {
-                                                    "✔"
+                                                    "Active"
                                                 } else {
                                                     "Select"
                                                 })
@@ -2670,7 +2668,7 @@ impl THMEApp {
                                                         .size(7.0)
                                                         .color(p.success),
                                                 );
-                                                if ui.small_button("🔍").clicked() {
+                                                if ui.small_button("View").clicked() {
                                                     focused_tensor_name = Some(t.name.clone());
                                                     self.selected_subblock = Some(
                                                         crate::ir::SubBlockCategory::FeedForwardMlp,
@@ -2904,7 +2902,7 @@ impl THMEApp {
                                 });
                         });
 
-                        if ui.button(egui::RichText::new("⚡ Apply Algorithm to Selected Sub-Block").strong().color(Color32::BLACK)).clicked() {
+                        if ui.button(egui::RichText::new("Apply Algorithm to Selected Sub-Block").strong().color(Color32::BLACK)).clicked() {
                             apply_subblock_algo = true;
                         }
 
@@ -2916,7 +2914,7 @@ impl THMEApp {
                         });
 
                         ui.add_space(4.0);
-                        if ui.button(egui::RichText::new("🤖 Auto-Select Pareto Optimal Configuration").strong().color(p.text_main)).clicked() {
+                        if ui.button(egui::RichText::new("Auto-Select Pareto Optimal Configuration").strong().color(p.text_main)).clicked() {
                             auto_select_clicked = true;
                         }
                     });
@@ -3189,7 +3187,7 @@ impl THMEApp {
         ui.horizontal(|ui| {
             if ui
                 .button(
-                    egui::RichText::new("⚡ Run Automated Parameter Decider")
+                    egui::RichText::new("Run Automated Parameter Decider")
                         .strong()
                         .color(Color32::BLACK),
                 )
@@ -3202,7 +3200,7 @@ impl THMEApp {
 
             if ui
                 .button(
-                    egui::RichText::new("🚀 Execute Global Transformation Plan")
+                    egui::RichText::new("Execute Global Transformation Plan")
                         .strong()
                         .color(Color32::WHITE),
                 )
@@ -3369,12 +3367,12 @@ impl THMEApp {
             .inner_margin(egui::Margin::same(12))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("🧩 BRING YOUR OWN ALGORITHM (BYOA) REGISTRY").strong().color(p.primary));
+                    ui.label(egui::RichText::new("BRING YOUR OWN ALGORITHM (BYOA) REGISTRY").strong().color(p.primary));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button("➕ Design Custom Algorithm").clicked() {
+                        if ui.button("Design Custom Algorithm").clicked() {
                             self.byoa_designer_open = !self.byoa_designer_open;
                         }
-                        if ui.button("📁 Import (.json)").clicked() {
+                        if ui.button("Import (.json)").clicked() {
                             if let Some(path) = rfd::FileDialog::new()
                                 .add_filter("JSON", &["json"])
                                 .pick_file()
@@ -3396,7 +3394,7 @@ impl THMEApp {
                                 }
                             }
                         }
-                        if ui.button("💾 Export Selected (.json)").clicked() {
+                        if ui.button("Export Selected (.json)").clicked() {
                             if let Some(alg) = self.algorithm_registry.get(&self.selected_byoa_id) {
                                 if let Some(path) = rfd::FileDialog::new()
                                     .add_filter("JSON", &["json"])
@@ -3421,7 +3419,7 @@ impl THMEApp {
                         .stroke(Stroke::new(1.0_f32, p.primary))
                         .inner_margin(egui::Margin::same(10))
                         .show(ui, |ui| {
-                            ui.label(egui::RichText::new("🛠 Custom Algorithm Designer").strong().color(p.primary));
+                            ui.label(egui::RichText::new("Custom Algorithm Designer").strong().color(p.primary));
                             ui.horizontal(|ui| {
                                 ui.label("ID:");
                                 ui.text_edit_singleline(&mut self.new_byoa_id);
@@ -3449,7 +3447,7 @@ impl THMEApp {
                                 ui.add(egui::Slider::new(&mut self.new_byoa_bits, 0.5..=16.0).step_by(0.1));
                             });
                             ui.horizontal(|ui| {
-                                if ui.button(egui::RichText::new("✔ Register Algorithm").strong().color(Color32::BLACK)).clicked()
+                                if ui.button(egui::RichText::new("Register Algorithm").strong().color(Color32::BLACK)).clicked()
                                     && !self.new_byoa_id.is_empty()
                                     && !self.new_byoa_name.is_empty()
                                 {
@@ -3532,7 +3530,7 @@ impl THMEApp {
                             ui.label(egui::RichText::new(format!("{:.1}x", alg.hardware_speedup_factor)).size(8.0).color(p.success));
                             ui.label(egui::RichText::new(&alg.author).size(8.0).color(p.text_muted));
 
-                            if ui.small_button(if is_sel { "✔ Selected" } else { "Select" }).clicked() {
+                            if ui.small_button(if is_sel { "Selected" } else { "Select" }).clicked() {
                                 self.selected_byoa_id = alg.id.clone();
                             }
                             ui.end_row();
@@ -3541,7 +3539,7 @@ impl THMEApp {
 
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
-                    if ui.button(egui::RichText::new("🔬 Live Test Selected Algorithm On 8x8 Weight Slice").strong().color(p.text_main)).clicked() {
+                    if ui.button(egui::RichText::new("Live Test Selected Algorithm On 8x8 Weight Slice").strong().color(p.text_main)).clicked() {
                         if let Some(alg) = self.algorithm_registry.get(&self.selected_byoa_id) {
                             let mut sample = if let Some(t) = self.model().tensors.first() {
                                 if t.sample_weights.len() >= 64 {
@@ -3614,7 +3612,7 @@ impl THMEApp {
                 ui.horizontal(|ui| {
                     match snap.status {
                         crate::profiling::TokenFlowStatus::Idle | crate::profiling::TokenFlowStatus::Completed => {
-                            if ui.button(egui::RichText::new("▶ Start Live Flow Benchmark").strong().color(Color32::BLACK)).clicked() {
+                            if ui.button(egui::RichText::new("Start Live Flow Benchmark").strong().color(Color32::BLACK)).clicked() {
                                 self.simulator = crate::profiling::LiveFlowSimulator::new(
                                     &self.baseline_prompt,
                                     self.baseline_tokens,
@@ -3630,12 +3628,12 @@ impl THMEApp {
                             }
                         }
                         crate::profiling::TokenFlowStatus::Generating | crate::profiling::TokenFlowStatus::Prefill => {
-                            if ui.button(egui::RichText::new("⏸ Pause").strong().color(Color32::WHITE)).clicked() {
+                            if ui.button(egui::RichText::new("Pause").strong().color(Color32::WHITE)).clicked() {
                                 self.simulator.pause();
                             }
                         }
                         crate::profiling::TokenFlowStatus::Paused => {
-                            if ui.button(egui::RichText::new("▶ Resume").strong().color(Color32::WHITE)).clicked() {
+                            if ui.button(egui::RichText::new("Resume").strong().color(Color32::WHITE)).clicked() {
                                 self.simulator.resume();
                             }
                         }
@@ -3670,7 +3668,7 @@ impl THMEApp {
                     .inner_margin(egui::Margin::same(10))
                     .show(ui, |ui| {
                         let stream_text = if snap.token_stream.is_empty() {
-                            "[Press ▶ Start to initiate live token generation flow...]".to_string()
+                            "[Press Start to initiate live token generation flow...]".to_string()
                         } else {
                             format!("{}: {}", self.baseline_prompt, snap.token_stream.join(" "))
                         };
@@ -3733,7 +3731,7 @@ impl THMEApp {
             .inner_margin(egui::Margin::same(12))
             .show(ui, |ui| {
                 ui.heading(
-                    egui::RichText::new("🌐 REA-LLM: EXECUTION-WEIGHTED HETEROGENEOUS ALLOCATION (EWHA) TELEMETRY")
+                    egui::RichText::new("REA-LLM: EXECUTION-WEIGHTED HETEROGENEOUS ALLOCATION (EWHA) TELEMETRY")
                         .size(12.0)
                         .color(p.primary),
                 );
@@ -3799,12 +3797,12 @@ impl THMEApp {
         ui.add_space(8.0);
 
         ui.horizontal(|ui| {
-            if ui.button("📸 Create Manual Snapshot Checkpoint").clicked() {
+            if ui.button("Create Manual Snapshot Checkpoint").clicked() {
                 self.create_checkpoint("Manual Snapshot", "Saved state from History tab");
                 self.status_msg = "Manual checkpoint recorded.".to_string();
             }
 
-            if ui.button("💾 Export History Report (JSON)").clicked() {
+            if ui.button("Export History Report (JSON)").clicked() {
                 if let Ok(json) = serde_json::to_string_pretty(&self.history) {
                     let _ = std::fs::write("history_report.json", json);
                     self.status_msg = "Exported history_report.json successfully!".to_string();
@@ -4107,7 +4105,7 @@ impl THMEApp {
                 });
 
                 ui.add_space(16.0);
-                if ui.button(egui::RichText::new("💾 Export Optimized Model Package").strong().color(Color32::WHITE)).clicked() {
+                if ui.button(egui::RichText::new("Export Optimized Model Package").strong().color(Color32::WHITE)).clicked() {
                     let export_info = serde_json::to_string_pretty(self.model()).unwrap_or_default();
                     match std::fs::write(&self.export_path, export_info) {
                         Ok(_) => {
@@ -4120,6 +4118,60 @@ impl THMEApp {
                         }
                     }
                 }
+
+                ui.add_space(16.0);
+                egui::Frame::NONE
+                    .fill(p.bg_card)
+                    .stroke(Stroke::new(1.0_f32, p.primary))
+                    .inner_margin(egui::Margin::same(10))
+                    .show(ui, |ui| {
+                        ui.label(egui::RichText::new("PYTORCH & CUDA ECOSYSTEM BRIDGE").strong().color(p.primary).size(11.0));
+                        ui.label(egui::RichText::new("Generate standalone PyTorch/CUDA fine-tuning scripts and Hugging Face configs.").size(9.0).color(p.text_muted));
+                        ui.add_space(6.0);
+
+                        if ui.button("Generate PyTorch CUDA Trainer (train_cuda.py)").clicked() {
+                            let config = crate::interop::PyTorchInteropConfig {
+                                model_id_or_path: self.model().name.clone(),
+                                ..Default::default()
+                            };
+                            let script = crate::interop::PyTorchScriptGenerator::generate_training_script(&config, None);
+                            if let Some(dest) = rfd::FileDialog::new()
+                                .add_filter("Python Script", &["py"])
+                                .set_file_name("train_cuda.py")
+                                .save_file()
+                            {
+                                let _ = std::fs::write(&dest, script);
+                                self.status_msg = format!("Generated PyTorch CUDA script: {:?}", dest);
+                                self.log_audit("INFO", "Interop", "Generated PyTorch CUDA training script", "PyTorchBridge");
+                            }
+                        }
+
+                        if ui.button("Export Hugging Face config.json").clicked() {
+                            let model_ir = crate::ir::ModelIR::new(
+                                self.model().name.clone(),
+                                crate::ir::ModelArchitecture::Llama,
+                                self.model().layers.len(),
+                                self.model().hidden_size,
+                                32,
+                                32,
+                                32000,
+                                4096,
+                                Vec::new(),
+                            );
+                            let hf_cfg = crate::interop::HuggingFaceConfigGenerator::generate_config_json(&model_ir);
+                            if let Some(dest) = rfd::FileDialog::new()
+                                .add_filter("JSON Config", &["json"])
+                                .set_file_name("config.json")
+                                .save_file()
+                            {
+                                if let Ok(json_str) = serde_json::to_string_pretty(&hf_cfg) {
+                                    let _ = std::fs::write(&dest, json_str);
+                                    self.status_msg = format!("Exported Hugging Face config: {:?}", dest);
+                                    self.log_audit("INFO", "Interop", "Exported Hugging Face config.json", "PyTorchBridge");
+                                }
+                            }
+                        }
+                    });
             });
 
             cols[1].vertical(|ui| {
@@ -4128,13 +4180,13 @@ impl THMEApp {
                 ui.add_space(8.0);
 
                 ui.horizontal(|ui| {
-                    if ui.button("📋 Load Default Recipe").clicked() {
+                    if ui.button("Load Default Recipe").clicked() {
                         let rec = crate::surgery::TweakRecipe::default();
                         self.tweak_recipe_text = serde_json::to_string_pretty(&rec).unwrap_or_default();
                         self.status_msg = "Loaded default Teacher LLM restructuring recipe.".to_string();
                     }
 
-                    if ui.button("📄 Load Recipe File...").clicked() {
+                    if ui.button("Load Recipe File...").clicked() {
                         if let Some(path) = rfd::FileDialog::new().add_filter("JSON Recipe", &["json"]).pick_file() {
                             if let Ok(content) = std::fs::read_to_string(&path) {
                                 self.tweak_recipe_text = content;
@@ -4143,7 +4195,7 @@ impl THMEApp {
                         }
                     }
 
-                    if ui.button("💾 Save Recipe File...").clicked() {
+                    if ui.button("Save Recipe File...").clicked() {
                         if let Some(path) = rfd::FileDialog::new().add_filter("JSON Recipe", &["json"]).save_file() {
                             let _ = std::fs::write(&path, &self.tweak_recipe_text);
                             self.status_msg = f!("Saved recipe to: {:?}", path);
@@ -4152,7 +4204,7 @@ impl THMEApp {
                 });
 
                 ui.add_space(6.0);
-                if ui.button(egui::RichText::new("💉 Apply Teacher LLM Surgery Recipe").strong().color(Color32::BLACK)).clicked() {
+                if ui.button(egui::RichText::new("Apply Teacher LLM Surgery Recipe").strong().color(Color32::BLACK)).clicked() {
                     match serde_json::from_str::<crate::surgery::TweakRecipe>(&self.tweak_recipe_text) {
                         Ok(recipe) => {
                             let mut model_ir = crate::ir::ModelIR::new(
@@ -4205,7 +4257,7 @@ impl THMEApp {
         let p = self.palette();
 
         ui.heading(
-            egui::RichText::new("🧪 DEVELOPER EXPERIMENTATION LAB & MULTI-DATASET MICRO-TRAINER")
+            egui::RichText::new("DEVELOPER EXPERIMENTATION LAB & MULTI-DATASET MICRO-TRAINER")
                 .size(13.0)
                 .color(p.text_main),
         );
@@ -4225,7 +4277,7 @@ impl THMEApp {
                 let ui0 = &mut cols[0];
                 ui0.group(|ui| {
                     ui.label(
-                        egui::RichText::new("📁 Arbitrary Dataset Ingestion & Tokenizer Deck")
+                        egui::RichText::new("Dataset Ingestion & Tokenizer Deck")
                             .strong()
                             .size(11.0)
                             .color(p.primary),
@@ -4235,7 +4287,7 @@ impl THMEApp {
                     ui.horizontal(|ui| {
                         if ui
                             .button(
-                                egui::RichText::new("📂 Load File")
+                                egui::RichText::new("Load File")
                                     .strong()
                                     .color(Color32::BLACK),
                             )
@@ -4280,7 +4332,7 @@ impl THMEApp {
 
                         if ui
                             .button(
-                                egui::RichText::new("✨ Synthetic Calibration")
+                                egui::RichText::new("Synthetic Calibration")
                                     .color(p.text_main),
                             )
                             .clicked()
@@ -4299,7 +4351,7 @@ impl THMEApp {
 
                         if ui
                             .button(
-                                egui::RichText::new("📥 Ingest Pasted Text")
+                                egui::RichText::new("Ingest Pasted Text")
                                     .color(p.text_main),
                             )
                             .clicked()
@@ -4412,7 +4464,7 @@ impl THMEApp {
                 let ui1 = &mut cols[1];
                 ui1.group(|ui| {
                     ui.label(
-                        egui::RichText::new("🔬 Non-Conventional Experimentation Laboratory")
+                        egui::RichText::new("Non-Conventional Experimentation Laboratory")
                             .strong()
                             .size(11.0)
                             .color(p.accent),
@@ -4573,7 +4625,7 @@ impl THMEApp {
 
                         if ui
                             .button(
-                                egui::RichText::new("⚡ Apply Transformation")
+                                egui::RichText::new("Apply Transformation")
                                     .strong()
                                     .color(Color32::WHITE),
                             )
@@ -4685,7 +4737,7 @@ impl THMEApp {
             // ROW 2: IN-ENGINE MICRO-TRAINING & ADAPTATION STUDIO
             ui.group(|ui| {
                 ui.label(
-                    egui::RichText::new("🧠 In-Engine Micro-Training & Parameter Adaptation Studio")
+                    egui::RichText::new("In-Engine Micro-Training & Parameter Adaptation Studio")
                         .strong()
                         .size(11.0)
                         .color(p.success),
@@ -4792,7 +4844,7 @@ impl THMEApp {
                     // TRAINING ACTION BUTTONS
                     if ui
                         .button(
-                            egui::RichText::new("▶ Run 1 Step")
+                            egui::RichText::new("Run 1 Step")
                                 .strong()
                                 .color(Color32::BLACK),
                         )
@@ -4837,7 +4889,7 @@ impl THMEApp {
 
                     if ui
                         .button(
-                            egui::RichText::new("⚡ Run 10 Steps")
+                            egui::RichText::new("Run 10 Steps")
                                 .strong()
                                 .color(Color32::WHITE),
                         )
@@ -4882,7 +4934,7 @@ impl THMEApp {
 
                     if ui
                         .button(
-                            egui::RichText::new("🔄 Reset Trainer")
+                            egui::RichText::new("Reset Trainer")
                                 .color(p.text_muted),
                         )
                         .clicked()
@@ -4946,7 +4998,7 @@ impl THMEApp {
                 } else {
                     ui.label(
                         egui::RichText::new(
-                            "No training steps executed yet. Click '▶ Run 1 Step' or '⚡ Run 10 Steps' to adapt parameters.",
+                            "No training steps executed yet. Click 'Run 1 Step' or 'Run 10 Steps' to adapt parameters.",
                         )
                         .size(9.5)
                         .color(p.text_muted),

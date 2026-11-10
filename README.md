@@ -16,7 +16,8 @@
   <img src="https://img.shields.io/badge/Memory-Zero--Copy%20MMap-f59e0b?style=flat-square" alt="Zero-Copy" />
   <a href="https://github.com/EdEpiphanes/THME-Epiphanes/actions/workflows/ci.yml"><img src="https://github.com/EdEpiphanes/THME-Epiphanes/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <img src="https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square" alt="License" />
-  <img src="https://img.shields.io/badge/Tests-63%20Passed-success?style=flat-square" alt="Tests" />
+  <img src="https://img.shields.io/badge/Tests-71%20Passed-success?style=flat-square" alt="Tests" />
+  <img src="https://img.shields.io/badge/PyTorch%20%2B%20CUDA-Compatible-ee4c2c?style=flat-square&logo=pytorch" alt="PyTorch CUDA" />
   <img src="https://img.shields.io/badge/IDE-VS%20Code%20%2B%20Copilot-blueviolet?style=flat-square" alt="VS Code Extension" />
 </p>
 
@@ -68,7 +69,7 @@ thme-gui
 | [●][●][●] [THME]  THME STUDIO v0.1.5 // EPIPHANES TOPOLOGICAL HETEROGENEOUS MANIFOLD ENGINE          [Obsidian Cyan] [60 FPS] |
 | Model: Llama-3-8B [GGUF • LLaMA-Family] (32 Layers • Hidden Dim 4096 • 8030M Params • Baseline FP16)                          |
 +-------------------------------------------------------------------------------------------------------------------------------+
-| [🎛 Dashboard] [📦 Models] [🔬 Layer Tweaker] [⚡ Matrix Engine] [📊 Benchmarks] [🕒 History] [📋 Audit Log] [💾 Surgery] [🧪 Dev Lab] |
+| [Dashboard] [Models] [Layer Tweaker] [Matrix Engine] [Benchmarks] [History] [Audit Log] [Surgery] [Dev Lab] |
 +-------------------------------------------------------------------------------------------------------------------------------+
 |  THROUGHPUT: 44.2 tok/s  |  VRAM STORAGE: 4.2 GB  |  PARETO RETENTION: 98.92%  |  EWHA ENERGY: 1.42 mJ/tok [STATUS: 13-STAGE LIVE] |
 +-------------------------------------------------------------------------------------------------------------------------------+
@@ -275,6 +276,39 @@ Based on the Energy-Wait-Hop-Activate (EWHA) paradigm, THME computes true physic
 - **Mean Computational Depth**: $\bar{f} = \frac{1}{N} \sum_{l=0}^{N-1} q_l$
 - **Total Dynamic Memory Traffic**: $T_{\mathrm{mem}} = \sum_{l=0}^{N-1} q_l \cdot \text{Bytes}(l)$
 - **Energy Accounting**: Real-time energy telemetry estimating Joules consumed per token based on DRAM I/O ($E_{\mathrm{DRAM}} \approx 20\,\mathrm{pJ/bit}$) and ALU operations ($E_{\mathrm{ALU}} \approx 1\,\mathrm{pJ/FLOP}$).
+
+---
+
+## PyTorch, CUDA & Fine-Tuning Tools Interoperability
+
+While THME's analytical, surgical, and precision allocation engine is built in 100% pure Rust, modern practitioners often operate distributed GPU clusters and existing pipelines entrenched in PyTorch, CUDA, Hugging Face, DeepSpeed, and PEFT. 
+
+THME provides seamless, zero-conversion compatibility across the entire PyTorch/CUDA ecosystem:
+
+### 1. PyTorch & CUDA Fine-Tuning Script Generator (`thme export`)
+Export an executable, production-grade PyTorch CUDA training harness matching THME's exact Pareto precision plan:
+```bash
+# Generate standalone LoRA training harness for CUDA:
+thme export --strategy lora --model meta-llama/Meta-Llama-3-8B --dataset data.jsonl --output-script train_cuda.py --cuda
+
+# Generate QLoRA 4-bit (BitsAndBytes) + LoRA training harness:
+thme export --strategy qlora --model meta-llama/Meta-Llama-3-8B --dataset data.jsonl --output-script train_qlora.py
+
+# Generate DeepSpeed ZeRO-3 sharded distributed harness:
+thme export --strategy deepspeed-zero3 --model meta-llama/Meta-Llama-3-8B --output-script train_deepspeed.py
+```
+
+### 2. Hugging Face State Dict & Config Compatibility
+Generate standard `config.json` compatible with `transformers.AutoModelForCausalLM`:
+```bash
+thme export --model-file models/llama-3-8b.gguf --output-config config.json
+```
+
+### 3. Native PEFT LoRA Adapter Ingestion & Zero-Copy Merge
+- **Automatic Detection**: Recognizes PEFT LoRA adapters (`adapter_model.safetensors`, `lora_A`, `lora_B`).
+- **In-Engine Pure Rust Weight Merging**: Merges low-rank adapters directly into base weights prior to quantization:
+  $$W_{\text{effective}} = W_0 + \frac{\alpha}{r} (B \times A)$$
+- Allows users to train adapters on CUDA using PyTorch, Axolotl, Unsloth, or Hugging Face Trainer, and immediately import, merge, and optimize them in THME without external runtime dependencies.
 
 ---
 

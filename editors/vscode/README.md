@@ -5,7 +5,7 @@
 
 ---
 
-## 🌟 Key Capabilities
+## Key Capabilities
 
 1. **Native GitHub Copilot Integration (`vscode.lm.registerTool`)**:
    - Equips GitHub Copilot Chat and Copilot Edits with direct tool calling into the THME engine.
@@ -25,7 +25,7 @@
 
 ---
 
-## 🛠️ GitHub Copilot Tools
+## GitHub Copilot Tools
 
 When installed, GitHub Copilot Chat has access to the following live tools:
 
@@ -38,7 +38,7 @@ When installed, GitHub Copilot Chat has access to the following live tools:
 
 ---
 
-## 🚀 Packaging & Installation
+## Packaging & Installation
 
 ### Option A: Install via VSIX Package
 To package the extension into an installable `.vsix` file:
@@ -81,7 +81,7 @@ Or with pre-compiled binary:
 
 ---
 
-## ⚙️ Configuration Settings
+## Configuration Settings
 
 - `thme.executablePath`: Custom path to the `thme` or `llm-tweaker` binary. Defaults to automatic workspace target resolution.
 - `thme.qualityTolerance`: Default quality tolerance epsilon ($\epsilon_Q$) for Pareto precision allocation (default: `0.025`).
@@ -89,6 +89,6 @@ Or with pre-compiled binary:
 
 ---
 
-## 📄 License
+## License
 
 Licensed under the Apache License, Version 2.0. Developed by Epiphanes.

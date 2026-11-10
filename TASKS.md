@@ -18,10 +18,11 @@ cargo fmt --check
 # 2. Strict linter (zero warnings tolerated)
 cargo clippy --all-targets -- -D warnings
 
-# 3. Full test suite execution (all 63 integration & unit tests)
+# 3. Full test suite execution (all 71 integration & unit tests)
 cargo test
 
 # 4. Subsystem-specific test runs:
+cargo test --test test_interop         # PyTorch, CUDA & PEFT LoRA adapter bridge
 cargo test --test test_dataset         # Multi-format dataset ingestion & tokenization
 cargo test --test test_experiment      # Non-conventional experimentation laboratory
 cargo test --test test_trainer         # On-device micro-training & adaptation engine
@@ -229,8 +230,12 @@ git grep -inE "(C:\\\\Users\\\\[a-zA-Z0-9_-]+|/home/[a-zA-Z0-9_-]+)"
   - **Status**: Verified Complete. Standard 2024-11-05 JSON-RPC MCP server over stdin/stdout exposing 7 tools (`thme_inspect_model`, `thme_auto_decide`, `thme_apply_surgery`, `thme_validate_quality`, `thme_simulate_token_flow`, `thme_run_experiment`, `thme_micro_train`).
 - [x] **VS Code & GitHub Copilot Extension Package (`editors/vscode/`)**
   - **Source**: `editors/vscode/package.json`, `editors/vscode/src/extension.ts`, `.vscode/mcp.json`
-  - **Verification**: `npx @vscode/vsce package --no-dependencies` (zero warnings, generates `thme-vscode-0.1.4.vsix`)
+  - **Verification**: `npx @vscode/vsce package --no-dependencies` (zero warnings, generates `thme-vscode-0.1.5.vsix`)
   - **Status**: Verified Complete. 4 Explorer sidebar views, Copilot Language Model Tools (`thme_copilot_inspect`, `thme_copilot_surgery`, `thme_copilot_validate`), and auto-wired MCP workspace config.
+- [x] **PyTorch & CUDA Ecosystem Interoperability Bridge (`src/interop/mod.rs`)**
+  - **Source**: `src/interop/pytorch.rs`, `src/cli/interop.rs`
+  - **Verification**: `cargo test --test test_interop` (3/3 passed)
+  - **Status**: Verified Complete. Pure Rust code generation for PyTorch CUDA scripts (`train_cuda.py`), Hugging Face `config.json` generator, and PEFT LoRA adapter merge math ($W = W_0 + \frac{\alpha}{r} B \times A$).
 
 ---
 

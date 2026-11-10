@@ -10,15 +10,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.5] - 2026-11-10
 
 ### Added
+- **PyTorch & CUDA Ecosystem Interoperability Bridge (`src/interop/mod.rs`, `src/interop/pytorch.rs`)**:
+  - Standalone PyTorch CUDA script generator (`train_cuda.py`) integrating THME's Pareto precision allocations with standard PyTorch 2.x, CUDA Tensor Cores, PEFT LoRA, QLoRA (BitsAndBytes 4-bit), Unsloth fast GPU kernels, and DeepSpeed ZeRO-2/3.
+  - Hugging Face `config.json` generator matching `transformers` causal LM architecture specs for LLaMA, Mistral, Gemma, Qwen, and DeepSeek.
+  - Native pure Rust PEFT LoRA adapter ingestion and zero-copy in-engine low-rank weight merging: $W_{\text{effective}} = W_0 + \frac{\alpha}{r}(B \times A)$.
+- **CLI `thme export` / `thme interop` (`src/cli/interop.rs`)**:
+  - Command-line generation of PyTorch CUDA harnesses, QLoRA scripts, and Hugging Face configuration files.
+- **PyTorch & CUDA Studio Deck in GUI (Tab 7 & Tab 8)**:
+  - 1-click generation of PyTorch CUDA training scripts and Hugging Face configs directly from the desktop studio.
 - **Universal Model Context Protocol (MCP) Server (`thme mcp`, `src/cli/mcp.rs`)**:
   - Implements standard 2024-11-05 JSON-RPC protocol over stdin/stdout, allowing AI coding agents (VS Code Copilot, Claude Desktop, Cursor, Antigravity) to inspect and optimize models programmatically.
   - Exposes 7 tools: `thme_inspect_model`, `thme_auto_decide`, `thme_apply_surgery`, `thme_validate_quality`, `thme_simulate_token_flow`, `thme_run_experiment`, `thme_micro_train`.
 - **VS Code & GitHub Copilot Extension (`editors/vscode/`)**:
-  - Packaged extension (`thme-vscode-0.1.4.vsix`) with Activity Bar sidebar views for Active Model & Layers, Pareto Precision Plan, REA-LLM & EWHA Telemetry, and Copilot Live Tools.
+  - Packaged extension (`thme-vscode-0.1.5.vsix`) with Activity Bar sidebar views for Active Model & Layers, Pareto Precision Plan, REA-LLM & EWHA Telemetry, and Copilot Live Tools.
   - Native Language Model Tools integration via `vscode.lm.registerTool`: `thme_copilot_inspect`, `thme_copilot_surgery`, and `thme_copilot_validate` enabling conversational Copilot debugging and surgery.
   - Auto-discovery workspace configuration `.vscode/mcp.json`.
-- **MCP Test Suite (`tests/test_mcp.rs`)**:
-  - Integration testing for MCP `initialize`, `ping`, `tools/list`, and `tools/call`.
+- **Interoperability Test Suite (`tests/test_interop.rs`)**:
+  - Tests for PyTorch script generation (LoRA, QLoRA, Unsloth, DeepSpeed ZeRO-2/3), Hugging Face config generation, and PEFT LoRA mathematical weight merging. Total test count expanded to 71 passing tests.
+
+### Changed
+- **Professional Engineering UI Refactoring**:
+  - Removed all emojis from visual elements across the Native Desktop Studio GUI, CLI, documentation, and VS Code extension in favor of clean, high-precision engineering typography.
 
 ---
 

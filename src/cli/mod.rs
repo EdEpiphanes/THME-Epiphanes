@@ -1,4 +1,5 @@
 pub mod inspect;
+pub mod interop;
 pub mod mcp;
 pub mod plan;
 pub mod profile;
@@ -48,6 +49,10 @@ pub enum Commands {
     /// View or export optimization plan reports
     Report(report::ReportArgs),
 
+    /// Export PyTorch / CUDA fine-tuning script or Hugging Face configurations
+    #[command(alias = "interop")]
+    Export(interop::InteropArgs),
+
     /// Run Model Context Protocol (MCP) server for VS Code, Copilot & AI agents
     #[command(alias = "daemon")]
     Mcp(mcp::McpArgs),
@@ -63,6 +68,7 @@ pub fn run() -> Result<()> {
         Commands::Validate(args) => validate::execute(args),
         Commands::Tweak(args) => tweak::execute(args),
         Commands::Report(args) => report::execute(args),
+        Commands::Export(args) => interop::execute(args),
         Commands::Mcp(args) => mcp::execute(args),
     }
 }
