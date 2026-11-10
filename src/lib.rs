@@ -19,7 +19,10 @@ pub use gui::{launch_gui, THMEApp};
 pub use ir::{ModelArchitecture, ModelIR, TensorFormat, TensorIR, TensorRole};
 pub use parser::ModelImporter;
 pub use profiling::{KvCacheEstimator, SensitivityProfiler};
-pub use quality::{GateDecision, GateResult, QualityGate};
+pub use quality::{
+    BenchmarkScore, EvaluationCorpus, EvaluatorConfig, GateDecision, GateResult, ModelEvaluator,
+    PerplexityGateDecision, PerplexityGateResult, PerplexityMetrics, QualityGate,
+};
 pub use surgery::{SurgeryDiff, SurgeryEngine, TweakOperation, TweakRecipe};
 pub use trainer::{
     MicroTrainer, OptimizerType, TrainingConfig, TrainingLossType, TrainingStepRecord,

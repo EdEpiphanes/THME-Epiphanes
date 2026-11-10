@@ -56,22 +56,46 @@ As defined in the **Engineering Playbook**, the path from v0.1.0 to v0.2.0 focus
 ---
 
 ### Phase 3: Empirical Quality Verification & Distributed Surgery
-- [ ] **v0.1.4 — Empirical Quality Gate Evaluation**
-  - Real perplexity evaluation bridge via external evaluators (e.g., `llama.cpp` perplexity tool) and local scoring harness.
-  - Automated degradation verification against baseline unquantized models across standard test sets (WikiText-2, C4).
-  - `thme validate` CLI command asserting zero quality degradation violations before model commitment.
+- [ ] **v0.1.4 — Empirical Quality Gate Evaluation & Perplexity Verification Bridge**
+  - Real perplexity evaluation bridge supporting standard test sets (WikiText-2, C4, PTB) and local token scoring harness.
+  - Perplexity degradation computation: $\Delta PPL = PPL_{\text{candidate}} - PPL_{\text{baseline}}$ with automated quality gate decision ($\Delta PPL \le \epsilon$).
+  - Automated rollback trigger: if degradation exceeds tolerance, rollback to last baseline checkpoint immediately and emit structured audit diagnostics.
+  - `thme validate` CLI command with `--corpus`, `--max-ppl-delta`, and JSON output flags.
 
-- [ ] **v0.1.5 — Surgery Daemon & Remote API**
-  - Headless daemon mode (`thme daemon`) exposing JSON-RPC and REST endpoints.
+- [ ] **v0.1.5 — Surgery Daemon & Programmatic Remote API**
+  - Headless daemon mode (`thme daemon`) exposing JSON-RPC 2.0 and REST endpoints.
   - Remote Teacher LLM integration: automated agents can inspect model IR, receive AutoDecider recommendations, and submit surgery recipes programmatically over HTTP.
-  - Cryptographic attestation and HMAC signature on executed surgery recipes.
+  - Cryptographic attestation and HMAC-SHA256 signature on executed surgery recipes to guarantee provenance.
+
+- [ ] **v0.1.6 — Speculative Decoding & Draft Model Synthesizer**
+  - Draft model manifold synthesizer extracting lightweight sub-models from early-exit checkpoints (e.g., first 4 layers of 16-layer model).
+  - Multi-token tree speculation verification engine calculating acceptance rate $\alpha_{\text{spec}}$ and effective latency speedup.
+  - Verification telemetry integrated into Studio GUI Benchmarks tab.
 
 ---
 
-### Phase 4: Production Release
+### Phase 4: Hardware Profiling, Serialization & Closed-Loop Surgery
+- [ ] **v0.1.7 — Hardware-Calibrated Roofline & Micro-Kernel Profiler**
+  - Empirical Roofline model graphing Arithmetic Intensity (FLOPs/byte) against memory bandwidth saturation curves across target hardware (NVIDIA Ada/Blackwell, Apple Silicon M-series, Intel/AMD AVX-512).
+  - Multi-level memory hierarchy cache simulator (L1, L2, L3, HBM3/DDR5) predicting cache hit rates and memory latency penalties.
+  - Power and thermal throttling projection curves for continuous edge inference workloads.
+
+- [ ] **v0.1.8 — BitNet b1.58 Calibrated Scale Quantization Exporter**
+  - Direct binary disk serialization for modified and distilled models into deployable GGUF and SafeTensors files.
+  - BitNet b1.58 ternary weight packing (2 bits per weight: -1, 0, +1 packed 4 weights per byte) with calibrated per-channel scale factors.
+  - Header reconstitution and metadata synchronization ensuring exported artifacts are directly loadable in standard runtimes (`llama.cpp`, Ollama, vLLM).
+
+- [ ] **v0.1.9 — Automated Teacher-Student Co-Surgery & Distillation Pipeline**
+  - Autonomous closed-loop optimization daemon: Teacher LLM analyzes layer sensitivity, generates declarative surgery recipes, THME applies them, and runs the evaluation bridge.
+  - Multi-objective Pareto auto-tuner balancing $\Delta PPL$, EWHA energy, and inference memory traffic.
+  - Self-healing recovery: automatically retries or adjusts quantization parameters when quality thresholds are breached.
+
+---
+
+### Phase 5: Production Release
 - [ ] **v0.2.0 — Production-Ready Verified Release**
-  - Verified Quantization Exporter: export modified and distilled models directly into deployable GGUF / SafeTensors files with BitNet b1.58 ternary weights and calibrated scales.
-  - Reproducible end-to-end demonstration on a real open-weights model (e.g., LLaMA-3.2-1B, Qwen-2.5-0.5B, or SmolLM-135M) with verified before-and-after perplexity measurements.
+  - Verified production deployment demonstration on a real open-weights model (e.g. SmolLM-135M / LLaMA-3.2-1B) with published before-and-after checkpoints.
+  - End-to-end reproducible script generating published benchmark tables, perplexity figures, and energy measurements.
   - Multi-platform signed release binaries, comprehensive documentation, and video walkthrough.
 
 ---

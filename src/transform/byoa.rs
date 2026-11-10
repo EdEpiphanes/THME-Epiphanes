@@ -224,7 +224,12 @@ impl AlgorithmDefinition {
                 }
             }
             TransformationRule::OrthogonalRotation { block_size, .. } => {
-                let b = (*block_size).max(2);
+                let raw_b = (*block_size).max(2);
+                let b = if raw_b.is_power_of_two() {
+                    raw_b
+                } else {
+                    1usize << (usize::BITS - 1 - raw_b.leading_zeros()).max(1)
+                };
                 for chunk in weights.chunks_mut(b) {
                     let len = chunk.len();
                     if len >= 2 && (len & (len - 1)) == 0 {

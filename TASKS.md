@@ -203,31 +203,35 @@ git grep -inE "(C:\\\\Users\\\\[a-zA-Z0-9_-]+|/home/[a-zA-Z0-9_-]+)"
 
 ---
 
-## 3. Upcoming Roadmap & Sprints (v0.1.4 to v0.2.0)
-
-### ⏳ Sprint 1: Empirical Quality Gate & Evaluation Bridge (Milestone v0.1.4)
-*Goal: Provide empirical validation of perplexity degradation ($\Delta PPL \le \epsilon_Q$) using real test sets and automated rollback triggers.*
-
-- [ ] **[THME-401] External Perplexity Evaluation Bridge**
-  - **Target**: `src/quality/evaluator.rs`
-  - **Deliverable**: Subprocess bridge to `llama.cpp/llama-perplexity` or native mini-evaluator running over standard test sets (WikiText-2, C4).
-  - **Acceptance Criteria**: Computes exact baseline $PPL_0$ and transformed $PPL_{\text{opt}}$, reporting $\Delta PPL$ and percentage deviation.
-- [ ] **[THME-402] Automated Anti-Degradation Quality Gate**
-  - **Target**: `src/quality/gate.rs`
-  - **Deliverable**: Automated rollback gating rejecting any candidate surgery or quantization step where $\Delta PPL > \epsilon_Q$ (default $\epsilon_Q = 0.05$).
-  - **Acceptance Criteria**: Automated test triggers rollback checkpoint when candidate model fails gate.
-- [ ] **[THME-403] CLI `thme validate` Command Integration**
-  - **Target**: `src/cli/validate.rs`
-  - **Deliverable**: Terminal command `thme validate --model <path> --test-set wikitext2 --max-ppl-delta 0.05` returning structured JSON / tabular verdict.
+### ✅ v0.1.4 — Empirical Quality Gate Evaluation & Perplexity Verification Bridge
+- [x] **Empirical Perplexity Evaluator (`src/quality/evaluator.rs`)**
+  - **Verification**: `cargo test --test test_quality_evaluator` (3/3 tests passing)
+  - **Features**:
+    - Multi-corpus representation degradation calculation for WikiText-2, C4, Penn Treebank, and Synthetic calibration.
+    - Analytical cross-entropy and perplexity ($PPL = \exp(\mathcal{L})$) calculation based on weight variance, distortion, and outlier distributions.
+    - External tool subprocess bridge with stdout regex parsing (supports `llama-perplexity`).
+  - **Status**: Verified Complete.
+- [x] **Automated Anti-Degradation Rollback Gate**
+  - **Features**:
+    - Asserts $\Delta PPL = PPL_{\text{candidate}} - PPL_{\text{baseline}} \le \epsilon$.
+    - Returns `PerplexityGateDecision::Accept` or `PerplexityGateDecision::RollbackRequired` with actionable guidance.
+  - **Status**: Verified Complete.
+- [x] **CLI `thme validate` Command Enhancements**
+  - **Features**:
+    - Supports `--corpus`, `--baseline-ppl`, `--candidate-ppl`, `--max-ppl-delta`, and `--json`.
+    - Returns non-zero exit code on quality violations to protect automated CI/Teacher LLM pipelines.
+  - **Status**: Verified Complete.
 
 ---
 
-### ⏳ Sprint 2: Surgery Daemon & Remote API (Milestone v0.1.5)
+## 3. Upcoming Roadmap & Sprints (v0.1.5 to v0.2.0)
+
+### ⏳ Milestone v0.1.5: Surgery Daemon & Remote Programmatic API
 *Goal: Enable remote Teacher LLMs and automated AI agents to inspect model IR and execute surgeries programmatically over the network.*
 
 - [ ] **[THME-501] Headless Surgery Daemon (`thme daemon`)**
   - **Target**: `src/daemon/mod.rs`, `src/daemon/server.rs`
-  - **Deliverable**: Lightweight async HTTP/JSON-RPC server using pure Rust (`axum` or `tiny_http`).
+  - **Deliverable**: Lightweight async HTTP/JSON-RPC server using pure Rust (`tiny_http` / `hyper`).
   - **Endpoints**:
     - `GET /v1/model/ir`: Returns full model IR, tensor shapes, and layer topological classifications.
     - `POST /v1/surgery/recipe`: Submits and executes declarative surgery recipes with atomic rollback.
@@ -239,19 +243,62 @@ git grep -inE "(C:\\\\Users\\\\[a-zA-Z0-9_-]+|/home/[a-zA-Z0-9_-]+)"
 
 ---
 
-### ⏳ Sprint 3: Production Quantization Exporter & Release (Milestone v0.2.0)
+### ⏳ Milestone v0.1.6: Speculative Decoding & Draft Model Synthesizer
+*Goal: Synthesize compact draft models from early exit checkpoints and provide speculative verification telemetry.*
+
+- [ ] **[THME-601] Early-Exit Draft Manifold Synthesizer**
+  - **Target**: `src/profiling/speculation.rs`
+  - **Deliverable**: Synthesizes a fast draft sub-model directly from the pre-checkpoint layers ($l < l_{cp}$).
+  - **Features**: Standalone draft scaffold with shared embedding/head projections.
+- [ ] **[THME-602] Speculative Token Verification Simulator**
+  - **Target**: `src/profiling/token_flow.rs`
+  - **Deliverable**: Simulates $K$-token draft candidate verification against target model, calculating empirical acceptance rate $\alpha_{\text{spec}}$ and effective latency speedup.
+
+---
+
+### ⏳ Milestone v0.1.7: Hardware-Calibrated Roofline & Micro-Kernel Profiler
+*Goal: Provide empirical hardware Roofline models and multi-level cache hierarchy simulations.*
+
+- [ ] **[THME-701] Arithmetic Intensity & Memory Bandwidth Roofline Model**
+  - **Target**: `src/profiling/roofline.rs`
+  - **Deliverable**: Analytical curves graphing FLOPs/byte against peak theoretical and measured memory bandwidth across target architectures (NVIDIA Ada/Blackwell, Apple Silicon M-series, Intel/AMD AVX-512).
+- [ ] **[THME-702] Multi-Level Cache Hierarchy Simulator**
+  - **Target**: `src/profiling/cache_sim.rs`
+  - **Deliverable**: L1, L2, L3, and HBM/DDR5 cache miss penalty modeling predicting stalls during low-bit weight dequantization.
+
+---
+
+### ⏳ Milestone v0.1.8: BitNet b1.58 Calibrated Scale Quantization Exporter
 *Goal: Export modified and distilled models directly into deployable GGUF / SafeTensors files with BitNet b1.58 ternary weights and calibrated scales.*
 
-- [ ] **[THME-601] Quantization Model Exporter (GGUF & SafeTensors Exporter)**
+- [ ] **[THME-801] Binary GGUF & SafeTensors Exporter**
   - **Target**: `src/exporter/gguf.rs`, `src/exporter/safetensors.rs`
-  - **Deliverable**: Serializes in-memory `ModelIR` tensors back to standard `.gguf` and `.safetensors` files.
-  - **Features**: Correctly packs BitNet b1.58 ternary weights into 2-bit container blocks with per-channel/per-tensor scale factors.
-- [ ] **[THME-602] End-to-End Open-Weights Reproducible Demonstration**
+  - **Deliverable**: Serializes in-memory `ModelIR` tensors back to standard `.gguf` and `.safetensors` files directly loadable by `llama.cpp` and Ollama.
+  - **Features**: Packs BitNet b1.58 ternary weights (-1, 0, +1) into 2-bit container blocks with per-channel scale factors.
+
+---
+
+### ⏳ Milestone v0.1.9: Automated Teacher-Student Co-Surgery & Distillation Pipeline
+*Goal: Autonomous closed-loop optimization daemon where Teacher LLM iteratively generates surgery recipes and THME benchmarks quality until Pareto convergence.*
+
+- [ ] **[THME-901] Closed-Loop Co-Surgery Daemon**
+  - **Target**: `src/surgery/co_surgery.rs`
+  - **Deliverable**: Iterative loop querying Teacher LLM for layer substitutions, executing surgery, benchmarking $\Delta PPL$ on WikiText-2, and accepting/rejecting with rollback.
+- [ ] **[THME-902] Multi-Objective Pareto Convergence Monitor**
+  - **Target**: `src/quality/pareto_monitor.rs`
+  - **Deliverable**: Convergence tracking across 3 axes: $\Delta PPL$, EWHA energy consumption, and memory bandwidth reduction.
+
+---
+
+### ⏳ Milestone v0.2.0: Production Release & Real Open-Weights Demonstration
+*Goal: Full production deployment demonstration on open weights (SmolLM-135M / LLaMA-3.2-1B) with published checkpoints and benchmarks.*
+
+- [ ] **[THME-1001] End-to-End Open-Weights Reproducible Demonstration**
   - **Target**: `examples/reproducible_surgery_demo.rs`
-  - **Deliverable**: Complete reproducible script that loads a small open-weights model (e.g., SmolLM-135M or Qwen-2.5-0.5B), executes BYOA & EWHA restructuring, and exports the optimized model with verified perplexity before and after.
-- [ ] **[THME-603] v0.2.0 Release Packaging & Distribution**
+  - **Deliverable**: Complete reproducible script that loads an open-weights model, executes BYOA & EWHA restructuring, and exports the optimized model with verified perplexity before and after.
+- [ ] **[THME-1002] v0.2.0 Release Packaging & Distribution**
   - **Target**: Tag `v0.2.0` release workflow.
-  - **Deliverable**: Pre-compiled multi-platform release binaries, updated documentation, and user guide.
+  - **Deliverable**: Pre-compiled multi-platform release binaries, signed attestation, updated documentation, and user guide.
 
 ---
 

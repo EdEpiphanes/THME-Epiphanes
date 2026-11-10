@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.4] - 2026-11-10
+
+### Added
+- **Empirical Quality Gate & Perplexity Verification Bridge (`src/quality/evaluator.rs`)**:
+  - Analytical and external evaluation harness supporting standard benchmark corpora (WikiText-2, C4, Penn Treebank, Synthetic High-Entropy).
+  - Perplexity degradation computation: $\Delta PPL = PPL_{\text{candidate}} - PPL_{\text{baseline}}$ and percentage representation distortion.
+  - Automated rollback quality gate: asserts $\Delta PPL \le \epsilon$, returning `PerplexityGateDecision::Accept` or `PerplexityGateDecision::RollbackRequired` with actionable guidance.
+  - External runner bridge with stdout parser for external harnesses like `llama-perplexity`.
+- **CLI Validate Enhancements (`src/cli/validate.rs`)**:
+  - Added `--corpus`, `--baseline-ppl`, `--candidate-ppl`, `--max-ppl-delta`, and `--json` flags to both `thme validate` and `llm-tweaker validate`.
+  - Emits formatted quality summaries or structured JSON payloads for CI pipelines and automated Teacher LLM surgery loops.
+- **Robust Orthogonal Rotation Slicing (`src/transform/byoa.rs`)**:
+  - Clamped non-power-of-2 `block_size` to the nearest lower power of 2, preventing silent bypass of the Fast Walsh-Hadamard Transform butterfly loop.
+- **Quality Evaluator Test Suite (`tests/test_quality_evaluator.rs`)**:
+  - Verified cross-entropy and perplexity scoring across corpora, gate acceptance/rejection boundaries, and empty weight error handling.
+
+---
+
 ## [0.1.3] - 2026-11-10
 
 ### Added

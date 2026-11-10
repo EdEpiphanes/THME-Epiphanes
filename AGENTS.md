@@ -84,7 +84,11 @@ cargo test
 | **v0.1.0** | Core Foundations | Zero-copy SafeTensors/GGUF parsing, Pareto precision allocator, live 60 FPS studio GUI, matrix distillation engine, token flow simulator, audit logging, and declarative surgery recipes. | Completed |
 | **v0.1.1** | Path Hygiene & CI | Rebranded to THME under Epiphanes, 3-OS GitHub Actions CI matrix, automated path-leak guard, release automation, zero linter warnings, surgery JSON schema. | Completed |
 | **v0.1.2** | Format Correctness | Full GGUF v2/v3 quant matrix (K-quants, I-quants), zero-allocation block decoders, truncated stream recovery, and infallible parser fuzz suite. | Completed |
-| **v0.1.3** | BYOA & REA-LLM Engine | Bring Your Own Algorithm registry with JSON import/export, architecture rebuilder from scratch, open weights remapping, REA-LLM EWHA routing & energy telemetry. | Completed |
-| **v0.1.4** | Empirical Quality Gate | External perplexity evaluation bridge (WikiText-2, C4) with automated rollback gating (Delta PPL <= epsilon). | Planned |
-| **v0.1.5** | Surgery Daemon & API | Headless JSON-RPC & REST server allowing remote Teacher LLMs to query model IR and dispatch surgery recipes programmatically. | Planned |
-| **v0.2.0** | Production Release | Verified BitNet b1.58 and calibrated scale quantization exporter with end-to-end reproducible small-model demonstration. | Target |
+| **v0.1.3** | BYOA & REA-LLM Engine | Bring Your Own Algorithm registry with JSON import/export, architecture rebuilder from scratch, open weights remapping, REA-LLM EWHA routing & energy telemetry, layer anatomy deconstruction, dataset ingestion, and micro-trainer. | Completed |
+| **v0.1.4** | Empirical Quality Gate | External perplexity evaluation bridge (WikiText-2, C4) with automated rollback gating (Delta PPL <= epsilon) and CLI validate enhancements. | In Progress |
+| **v0.1.5** | Surgery Daemon & API | Headless JSON-RPC & REST server allowing remote Teacher LLMs to query model IR and dispatch surgery recipes programmatically with HMAC signing. | Planned |
+| **v0.1.6** | Speculative Decoding Synthesizer | Draft model manifold extraction from early-exit checkpoints and multi-token tree speculation verification engine. | Planned |
+| **v0.1.7** | Roofline & Kernel Profiler | Hardware-calibrated Arithmetic Intensity vs Memory Bandwidth roofline model with L1/L2/L3/HBM cache hierarchy simulation. | Planned |
+| **v0.1.8** | Binary Quantization Exporter | Direct serialization to deployable GGUF and SafeTensors files with BitNet b1.58 ternary packed weights and calibrated per-channel scale factors. | Planned |
+| **v0.1.9** | Closed-Loop Teacher Surgery | Autonomous Teacher-Student co-surgery optimization pipeline: automated recipe generation, delta-PPL verification, and iterative Pareto tuning. | Planned |
+| **v0.2.0** | Production Release | Verified production deployment on real open weights (SmolLM-135M / LLaMA-3.2-1B) with reproducible before-and-after benchmarks and signed release binaries. | Target |
