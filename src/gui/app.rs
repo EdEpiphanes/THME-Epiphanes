@@ -10,20 +10,118 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::time::Instant;
 
-// Theme palette
-const COLOR_BG_DARK: Color32 = Color32::from_rgb(11, 15, 25);
-const COLOR_BG_CARD: Color32 = Color32::from_rgb(21, 30, 46);
-const COLOR_BG_INPUT: Color32 = Color32::from_rgb(30, 41, 59);
-const COLOR_BORDER: Color32 = Color32::from_rgb(51, 65, 85);
-const COLOR_TEXT_MAIN: Color32 = Color32::from_rgb(248, 250, 252);
-const COLOR_TEXT_MUTED: Color32 = Color32::from_rgb(148, 163, 184);
+/// UI/UX Pro Max Multi-Theme Palette Engine
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub enum GuiTheme {
+    ObsidianCyan,
+    CyberpunkNeon,
+    MatrixEmerald,
+    NordicFrost,
+    SolarizedAmber,
+}
 
-const COLOR_CYAN: Color32 = Color32::from_rgb(6, 182, 212);
-const COLOR_EMERALD: Color32 = Color32::from_rgb(16, 185, 129);
-const COLOR_AMBER: Color32 = Color32::from_rgb(245, 158, 11);
-const COLOR_PURPLE: Color32 = Color32::from_rgb(168, 85, 247);
-const COLOR_ROSE: Color32 = Color32::from_rgb(244, 63, 94);
-const COLOR_BLUE: Color32 = Color32::from_rgb(59, 130, 246);
+impl GuiTheme {
+    pub fn name(&self) -> &'static str {
+        match self {
+            GuiTheme::ObsidianCyan => "Obsidian Cyan",
+            GuiTheme::CyberpunkNeon => "Cyberpunk Neon",
+            GuiTheme::MatrixEmerald => "Matrix Emerald",
+            GuiTheme::NordicFrost => "Nordic Frost",
+            GuiTheme::SolarizedAmber => "Solarized Amber",
+        }
+    }
+
+    pub fn palette(&self) -> ThemePalette {
+        match self {
+            GuiTheme::ObsidianCyan => ThemePalette {
+                bg_dark: Color32::from_rgb(11, 15, 25),
+                bg_card: Color32::from_rgb(21, 30, 46),
+                bg_input: Color32::from_rgb(30, 41, 59),
+                border: Color32::from_rgb(51, 65, 85),
+                text_main: Color32::from_rgb(248, 250, 252),
+                text_muted: Color32::from_rgb(148, 163, 184),
+                primary: Color32::from_rgb(6, 182, 212),     // Cyan
+                secondary: Color32::from_rgb(168, 85, 247), // Purple
+                accent: Color32::from_rgb(59, 130, 246),    // Blue
+                success: Color32::from_rgb(16, 185, 129),   // Emerald
+                warning: Color32::from_rgb(245, 158, 11),   // Amber
+                danger: Color32::from_rgb(244, 63, 94),     // Rose
+            },
+            GuiTheme::CyberpunkNeon => ThemePalette {
+                bg_dark: Color32::from_rgb(15, 13, 26),
+                bg_card: Color32::from_rgb(28, 23, 46),
+                bg_input: Color32::from_rgb(42, 34, 69),
+                border: Color32::from_rgb(91, 33, 182),
+                text_main: Color32::from_rgb(253, 244, 255),
+                text_muted: Color32::from_rgb(196, 181, 253),
+                primary: Color32::from_rgb(244, 63, 94),     // Hot Rose
+                secondary: Color32::from_rgb(192, 132, 252), // Electric Lavender
+                accent: Color32::from_rgb(6, 182, 212),     // Neon Cyan
+                success: Color32::from_rgb(34, 197, 94),    // Neon Green
+                warning: Color32::from_rgb(251, 191, 36),   // Gold
+                danger: Color32::from_rgb(239, 68, 68),     // Red
+            },
+            GuiTheme::MatrixEmerald => ThemePalette {
+                bg_dark: Color32::from_rgb(5, 14, 8),
+                bg_card: Color32::from_rgb(11, 28, 18),
+                bg_input: Color32::from_rgb(19, 48, 30),
+                border: Color32::from_rgb(31, 88, 54),
+                text_main: Color32::from_rgb(236, 253, 245),
+                text_muted: Color32::from_rgb(110, 231, 183),
+                primary: Color32::from_rgb(16, 185, 129),   // Phosphor Emerald
+                secondary: Color32::from_rgb(52, 211, 153), // Mint
+                accent: Color32::from_rgb(6, 182, 212),     // Cyan
+                success: Color32::from_rgb(34, 197, 94),    // Green
+                warning: Color32::from_rgb(234, 179, 8),    // Yellow
+                danger: Color32::from_rgb(239, 68, 68),     // Red
+            },
+            GuiTheme::NordicFrost => ThemePalette {
+                bg_dark: Color32::from_rgb(15, 23, 42),
+                bg_card: Color32::from_rgb(30, 41, 59),
+                bg_input: Color32::from_rgb(51, 65, 85),
+                border: Color32::from_rgb(71, 85, 105),
+                text_main: Color32::from_rgb(241, 245, 249),
+                text_muted: Color32::from_rgb(148, 163, 184),
+                primary: Color32::from_rgb(56, 189, 248),   // Sky Polar Blue
+                secondary: Color32::from_rgb(129, 140, 248),// Indigo Ice
+                accent: Color32::from_rgb(45, 212, 191),   // Glacier Mint
+                success: Color32::from_rgb(52, 211, 153),   // Mint
+                warning: Color32::from_rgb(251, 146, 60),   // Arctic Sun
+                danger: Color32::from_rgb(248, 113, 113),   // Soft Red
+            },
+            GuiTheme::SolarizedAmber => ThemePalette {
+                bg_dark: Color32::from_rgb(20, 16, 12),
+                bg_card: Color32::from_rgb(36, 28, 21),
+                bg_input: Color32::from_rgb(56, 43, 31),
+                border: Color32::from_rgb(92, 70, 50),
+                text_main: Color32::from_rgb(254, 243, 199),
+                text_muted: Color32::from_rgb(217, 119, 6),
+                primary: Color32::from_rgb(245, 158, 11),   // Amber Gold
+                secondary: Color32::from_rgb(251, 146, 60), // Copper
+                accent: Color32::from_rgb(234, 88, 12),     // Burnt Orange
+                success: Color32::from_rgb(132, 204, 22),   // Lime Gold
+                warning: Color32::from_rgb(249, 115, 22),   // Orange
+                danger: Color32::from_rgb(239, 68, 68),     // Red
+            },
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ThemePalette {
+    pub bg_dark: Color32,
+    pub bg_card: Color32,
+    pub bg_input: Color32,
+    pub border: Color32,
+    pub text_main: Color32,
+    pub text_muted: Color32,
+    pub primary: Color32,
+    pub secondary: Color32,
+    pub accent: Color32,
+    pub success: Color32,
+    pub warning: Color32,
+    pub danger: Color32,
+}
 
 // Layer node and model representations
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -470,6 +568,9 @@ impl UniversalModel {
 
 /// Main Application State
 pub struct THMEApp {
+    // Theme Engine
+    pub theme: GuiTheme,
+
     // Models Repository
     models: Vec<UniversalModel>,
     active_model_idx: usize,
@@ -564,6 +665,7 @@ impl THMEApp {
         let start_instant = Instant::now();
 
         let mut app = Self {
+            theme: GuiTheme::ObsidianCyan,
             models: vec![initial_model],
             active_model_idx: 0,
             active_tab: 0,
@@ -612,6 +714,10 @@ impl THMEApp {
         app.create_checkpoint("Initial Baseline", "Unmodified model baseline configuration");
         app.run_auto_decider_internal();
         app
+    }
+
+    pub fn palette(&self) -> ThemePalette {
+        self.theme.palette()
     }
 
     pub fn model(&self) -> &UniversalModel {
@@ -957,23 +1063,26 @@ impl eframe::App for THMEApp {
             ctx.request_repaint();
         }
 
+        let p = self.palette();
+
         let mut visuals = egui::Visuals::dark();
-        visuals.override_text_color = Some(COLOR_TEXT_MAIN);
-        visuals.panel_fill = COLOR_BG_DARK;
-        visuals.window_fill = COLOR_BG_CARD;
+        visuals.override_text_color = Some(p.text_main);
+        visuals.panel_fill = p.bg_dark;
+        visuals.window_fill = p.bg_card;
         ctx.set_visuals(visuals);
 
         // Top Control Header
         egui::TopBottomPanel::top("header_panel")
             .frame(
                 egui::Frame::NONE
-                    .fill(COLOR_BG_CARD)
+                    .fill(p.bg_card)
+                    .stroke(Stroke::new(1.0_f32, p.border))
                     .inner_margin(egui::Margin::symmetric(16, 10)),
             )
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    let (rect, _) = ui.allocate_exact_size(Vec2::new(88.0, 24.0), egui::Sense::hover());
-                    ui.painter().rect_filled(rect, 4.0, COLOR_CYAN);
+                    let (rect, _) = ui.allocate_exact_size(Vec2::new(96.0, 24.0), egui::Sense::hover());
+                    ui.painter().rect_filled(rect, 4.0, p.primary);
                     ui.painter().text(
                         rect.center(),
                         egui::Align2::CENTER_CENTER,
@@ -985,10 +1094,10 @@ impl eframe::App for THMEApp {
                     ui.add_space(8.0);
                     ui.vertical(|ui| {
                         ui.heading(
-                            egui::RichText::new("UNIVERSAL LLM RESTRICTURER, MATRIX ENGINE & STUDIO")
+                            egui::RichText::new("UNIVERSAL LLM RESTRUCTURER, MATRIX ENGINE & STUDIO")
                                 .strong()
                                 .size(13.0)
-                                .color(COLOR_TEXT_MAIN),
+                                .color(p.text_main),
                         );
                         let m = self.model();
                         ui.label(
@@ -1003,14 +1112,29 @@ impl eframe::App for THMEApp {
                             ))
                             .monospace()
                             .size(10.0)
-                            .color(COLOR_TEXT_MUTED),
+                            .color(p.text_muted),
                         );
                     });
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        // Theme Selector
+                        ui.label(egui::RichText::new("🎨 Scheme:").size(11.0).color(p.text_muted));
+                        egui::ComboBox::from_id_salt("theme_selector_combo")
+                            .selected_text(self.theme.name())
+                            .width(135.0)
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut self.theme, GuiTheme::ObsidianCyan, "Obsidian Cyan");
+                                ui.selectable_value(&mut self.theme, GuiTheme::CyberpunkNeon, "Cyberpunk Neon");
+                                ui.selectable_value(&mut self.theme, GuiTheme::MatrixEmerald, "Matrix Emerald");
+                                ui.selectable_value(&mut self.theme, GuiTheme::NordicFrost, "Nordic Frost");
+                                ui.selectable_value(&mut self.theme, GuiTheme::SolarizedAmber, "Solarized Amber");
+                            });
+
+                        ui.add_space(12.0);
+
                         if ui
                             .button(
-                                egui::RichText::new("⚡ Auto-Select All Algorithms")
+                                egui::RichText::new("⚡ Auto-Decide Plan")
                                     .color(Color32::BLACK)
                                     .strong(),
                             )
@@ -1020,7 +1144,7 @@ impl eframe::App for THMEApp {
                             self.active_tab = 3;
                         }
 
-                        if ui.button("🚀 Layer Auto-Tuner").clicked() {
+                        if ui.button("🚀 Sequential Tuner").clicked() {
                             self.active_tab = 4;
                             self.start_layerwise_auto_tuner();
                         }
@@ -1073,23 +1197,23 @@ impl eframe::App for THMEApp {
                 });
             });
 
-        // Stats Ribbon
+        // Enhanced Stats Ribbon
         egui::TopBottomPanel::top("stats_ribbon")
             .frame(
                 egui::Frame::NONE
-                    .fill(COLOR_BG_DARK)
+                    .fill(p.bg_dark)
                     .inner_margin(egui::Margin::symmetric(14, 8)),
             )
             .show(ctx, |ui| {
                 let (store_mb, tr_mb, f_bar, joules, tok_sec) = self.model().compute_costs();
 
                 ui.columns(6, |cols| {
-                    render_stat_box(&mut cols[0], "PARAMETERS", f!("{}M", self.model().total_parameters / 1_000_000), COLOR_CYAN);
-                    render_stat_box(&mut cols[1], "VRAM STORAGE", f!("{:.1} MB", store_mb), COLOR_EMERALD);
-                    render_stat_box(&mut cols[2], "TRAFFIC/TOKEN", f!("{:.2} MB", tr_mb), COLOR_PURPLE);
-                    render_stat_box(&mut cols[3], "DEPTH (f̄)", f!("{:.0}%", f_bar * 100.0), COLOR_AMBER);
-                    render_stat_box(&mut cols[4], "ENERGY/TOKEN", f!("{:.2} mJ", joules * 1000.0), COLOR_ROSE);
-                    render_stat_box(&mut cols[5], "THROUGHPUT", f!("{:.0} tok/s", tok_sec), COLOR_CYAN);
+                    render_stat_box(&mut cols[0], "PARAMETERS", f!("{}M", self.model().total_parameters / 1_000_000), p.primary, &p);
+                    render_stat_box(&mut cols[1], "VRAM STORAGE", f!("{:.1} MB", store_mb), p.success, &p);
+                    render_stat_box(&mut cols[2], "TRAFFIC/TOKEN", f!("{:.2} MB", tr_mb), p.secondary, &p);
+                    render_stat_box(&mut cols[3], "DEPTH (f̄)", f!("{:.0}%", f_bar * 100.0), p.warning, &p);
+                    render_stat_box(&mut cols[4], "ENERGY/TOKEN", f!("{:.2} mJ", joules * 1000.0), p.danger, &p);
+                    render_stat_box(&mut cols[5], "THROUGHPUT", f!("{:.0} tok/s", tok_sec), p.accent, &p);
                 });
             });
 
@@ -1097,29 +1221,35 @@ impl eframe::App for THMEApp {
         egui::TopBottomPanel::bottom("status_bar")
             .frame(
                 egui::Frame::NONE
-                    .fill(COLOR_BG_CARD)
-                    .inner_margin(egui::Margin::symmetric(12, 4)),
+                    .fill(p.bg_card)
+                    .stroke(Stroke::new(1.0_f32, p.border))
+                    .inner_margin(egui::Margin::symmetric(12, 6)),
             )
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(
-                        egui::RichText::new("STATUS:")
-                            .size(10.0)
-                            .strong()
-                            .color(COLOR_TEXT_MUTED),
+                    let badge_rect = Rect::from_center_size(Pos2::new(ui.cursor().min.x + 30.0, ui.cursor().center().y), Vec2::new(56.0, 16.0));
+                    ui.painter().rect_filled(badge_rect, 3.0, p.bg_input);
+                    ui.painter().text(
+                        badge_rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        "ONLINE",
+                        egui::FontId::monospace(8.0),
+                        p.success,
                     );
+                    ui.add_space(64.0);
+
                     ui.label(
                         egui::RichText::new(&self.status_msg)
                             .size(10.0)
-                            .color(COLOR_CYAN),
+                            .color(p.text_main),
                     );
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.label(
-                            egui::RichText::new(f!("Audit Events: {} | Checkpoints: {}", self.audit_events.len(), self.history.len()))
+                            egui::RichText::new(f!("Audit Events: {} | Snapshots: {} | Theme: {}", self.audit_events.len(), self.history.len(), self.theme.name()))
                                 .monospace()
                                 .size(9.0)
-                                .color(COLOR_TEXT_MUTED),
+                                .color(p.text_muted),
                         );
                     });
                 });
@@ -1128,14 +1258,14 @@ impl eframe::App for THMEApp {
         // Central Panel with Tab Navigation
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
-                tab_button(ui, "Master Dashboard", 0, &mut self.active_tab);
-                tab_button(ui, "Models Manager", 1, &mut self.active_tab);
-                tab_button(ui, "Layer Tweaker & Sections", 2, &mut self.active_tab);
-                tab_button(ui, "Distillation & Matrix Engine", 3, &mut self.active_tab);
-                tab_button(ui, "Full Benchmarks", 4, &mut self.active_tab);
-                tab_button(ui, "History & Checkpoints", 5, &mut self.active_tab);
-                tab_button(ui, "Audit Log", 6, &mut self.active_tab);
-                tab_button(ui, "Export & Surgery", 7, &mut self.active_tab);
+                tab_button(ui, "🎛️ Master Dashboard", 0, &mut self.active_tab, &p);
+                tab_button(ui, "📦 Models Manager", 1, &mut self.active_tab, &p);
+                tab_button(ui, "🔬 Layer Tweaker & Sections", 2, &mut self.active_tab, &p);
+                tab_button(ui, "⚡ Distillation & Matrix Engine", 3, &mut self.active_tab, &p);
+                tab_button(ui, "📊 Full Benchmarks", 4, &mut self.active_tab, &p);
+                tab_button(ui, "🕒 History & Checkpoints", 5, &mut self.active_tab, &p);
+                tab_button(ui, "📋 Audit Log", 6, &mut self.active_tab, &p);
+                tab_button(ui, "💾 Export & Surgery", 7, &mut self.active_tab, &p);
             });
 
             ui.separator();
@@ -1160,17 +1290,19 @@ impl eframe::App for THMEApp {
 impl THMEApp {
     /// TAB 0: Master Dashboard (All tabs unified in one master cockpit)
     fn render_tab_dashboard(&mut self, ui: &mut egui::Ui) {
+        let p = self.palette();
+
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.columns(3, |cols| {
                 // Card 1: Models & Active Architecture
                 cols[0].vertical(|ui| {
                     egui::Frame::NONE
-                        .fill(COLOR_BG_CARD)
-                        .stroke(Stroke::new(1.0_f32, COLOR_BORDER))
-                        .inner_margin(egui::Margin::same(10))
+                        .fill(p.bg_card)
+                        .stroke(Stroke::new(1.0_f32, p.border))
+                        .inner_margin(egui::Margin::same(12))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new("MODELS REPOSITORY").strong().color(COLOR_CYAN));
+                                ui.label(egui::RichText::new("📦 MODELS REPOSITORY").strong().color(p.primary));
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                     if ui.small_button("Manage →").clicked() {
                                         self.active_tab = 1;
@@ -1179,22 +1311,22 @@ impl THMEApp {
                             });
                             ui.separator();
                             let m = self.model();
-                            ui.label(egui::RichText::new(f!("Active: {}", m.name)).strong());
-                            ui.label(egui::RichText::new(f!("Format: {} | Arch: {}", m.format, m.architecture)).size(10.0).color(COLOR_TEXT_MUTED));
-                            ui.label(egui::RichText::new(f!("Layers: {} | Params: {}M", m.layers.len(), m.total_parameters / 1_000_000)).size(10.0).color(COLOR_TEXT_MUTED));
-                            ui.label(egui::RichText::new(f!("Tensors Loaded: {}", m.tensors.len())).size(10.0).color(COLOR_EMERALD));
+                            ui.label(egui::RichText::new(f!("Active: {}", m.name)).strong().color(p.text_main));
+                            ui.label(egui::RichText::new(f!("Format: {} | Arch: {}", m.format, m.architecture)).size(10.0).color(p.text_muted));
+                            ui.label(egui::RichText::new(f!("Layers: {} | Params: {}M", m.layers.len(), m.total_parameters / 1_000_000)).size(10.0).color(p.text_muted));
+                            ui.label(egui::RichText::new(f!("Tensors Loaded: {}", m.tensors.len())).size(10.0).color(p.success));
                         });
                 });
 
                 // Card 2: Matrix & Distillation Plan Status
                 cols[1].vertical(|ui| {
                     egui::Frame::NONE
-                        .fill(COLOR_BG_CARD)
-                        .stroke(Stroke::new(1.0_f32, COLOR_BORDER))
-                        .inner_margin(egui::Margin::same(10))
+                        .fill(p.bg_card)
+                        .stroke(Stroke::new(1.0_f32, p.border))
+                        .inner_margin(egui::Margin::same(12))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new("MATRIX & DISTILLATION PLAN").strong().color(COLOR_EMERALD));
+                                ui.label(egui::RichText::new("⚡ MATRIX & DISTILLATION PLAN").strong().color(p.success));
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                     if ui.small_button("Engine →").clicked() {
                                         self.active_tab = 3;
@@ -1203,12 +1335,12 @@ impl THMEApp {
                             });
                             ui.separator();
                             if let Some(summary) = &self.plan_summary {
-                                ui.label(egui::RichText::new(f!("Plan Compression: {:.2}x", summary.overall_compression_ratio)).strong().color(COLOR_CYAN));
-                                ui.label(egui::RichText::new(f!("Storage: {:.1} MB -> {:.1} MB", summary.original_storage_mb, summary.optimized_storage_mb)).size(10.0).color(COLOR_TEXT_MUTED));
-                                ui.label(egui::RichText::new(f!("Avg Distortion: {:.4} | Quality: {:.1}%", summary.average_distortion_snr, summary.mean_quality_score * 100.0)).size(10.0).color(COLOR_AMBER));
-                                ui.label(egui::RichText::new(f!("SVD: {} | BitNet: {} | 2:4: {} | Distill: {}", summary.count_svd, summary.count_bitnet, summary.count_2to4, summary.count_distillation)).size(9.0).color(COLOR_TEXT_MUTED));
+                                ui.label(egui::RichText::new(f!("Plan Compression: {:.2}x", summary.overall_compression_ratio)).strong().color(p.primary));
+                                ui.label(egui::RichText::new(f!("Storage: {:.1} MB -> {:.1} MB", summary.original_storage_mb, summary.optimized_storage_mb)).size(10.0).color(p.text_muted));
+                                ui.label(egui::RichText::new(f!("Avg Distortion: {:.4} | Quality: {:.1}%", summary.average_distortion_snr, summary.mean_quality_score * 100.0)).size(10.0).color(p.warning));
+                                ui.label(egui::RichText::new(f!("SVD: {} | BitNet: {} | 2:4: {} | Distill: {}", summary.count_svd, summary.count_bitnet, summary.count_2to4, summary.count_distillation)).size(9.0).color(p.text_muted));
                             } else {
-                                ui.label(egui::RichText::new("Auto-Decider plan pending.").color(COLOR_TEXT_MUTED));
+                                ui.label(egui::RichText::new("Auto-Decider plan pending.").color(p.text_muted));
                             }
                         });
                 });
@@ -1216,12 +1348,12 @@ impl THMEApp {
                 // Card 3: Benchmarks & Live Telemetry
                 cols[2].vertical(|ui| {
                     egui::Frame::NONE
-                        .fill(COLOR_BG_CARD)
-                        .stroke(Stroke::new(1.0_f32, COLOR_BORDER))
-                        .inner_margin(egui::Margin::same(10))
+                        .fill(p.bg_card)
+                        .stroke(Stroke::new(1.0_f32, p.border))
+                        .inner_margin(egui::Margin::same(12))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new("BENCHMARKS & FLOW").strong().color(COLOR_PURPLE));
+                                ui.label(egui::RichText::new("📊 BENCHMARKS & FLOW").strong().color(p.secondary));
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                     if ui.small_button("Benchmarks →").clicked() {
                                         self.active_tab = 4;
@@ -1230,10 +1362,10 @@ impl THMEApp {
                             });
                             ui.separator();
                             let snap = self.simulator.snapshot();
-                            ui.label(egui::RichText::new(f!("Live Throughput: {:.1} tok/s", snap.current_tok_per_sec)).strong().color(COLOR_CYAN));
-                            ui.label(egui::RichText::new(f!("Active Stage: {}", snap.active_stage.display_name())).size(10.0).color(COLOR_TEXT_MUTED));
-                            ui.label(egui::RichText::new(f!("Progress: {}/{} tokens generated", snap.tokens_generated, snap.target_tokens)).size(10.0).color(COLOR_TEXT_MUTED));
-                            ui.label(egui::RichText::new(f!("KV Cache Footprint: {:.2} MB", snap.kv_cache_mb)).size(10.0).color(COLOR_AMBER));
+                            ui.label(egui::RichText::new(f!("Live Throughput: {:.1} tok/s", snap.current_tok_per_sec)).strong().color(p.primary));
+                            ui.label(egui::RichText::new(f!("Active Stage: {}", snap.active_stage.display_name())).size(10.0).color(p.text_muted));
+                            ui.label(egui::RichText::new(f!("Progress: {}/{} tokens generated", snap.tokens_generated, snap.target_tokens)).size(10.0).color(p.text_muted));
+                            ui.label(egui::RichText::new(f!("KV Cache Footprint: {:.2} MB", snap.kv_cache_mb)).size(10.0).color(p.warning));
                         });
                 });
             });
@@ -1267,22 +1399,24 @@ impl THMEApp {
             // Live Neural Network Stage Telemetry & Manifold Map
             ui.columns(2, |cols| {
                 cols[0].vertical(|ui| {
-                    ui.heading(egui::RichText::new("LIVE TOKEN FLOW TELEMETRY").size(12.0).color(COLOR_TEXT_MAIN));
-                    ui.label(egui::RichText::new("Real-time telemetry through 13 discrete Transformer execution stages.").size(9.0).color(COLOR_TEXT_MUTED));
+                    ui.heading(egui::RichText::new("LIVE TOKEN FLOW TELEMETRY").size(12.0).color(p.text_main));
+                    ui.label(egui::RichText::new("Real-time telemetry through 13 discrete Transformer execution stages.").size(9.0).color(p.text_muted));
                     ui.add_space(4.0);
 
                     let snap = self.simulator.snapshot();
                     let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 160.0), egui::Sense::hover());
-                    ui.painter().rect_filled(rect, 4.0, COLOR_BG_CARD);
+                    ui.painter().rect_filled(rect, 6.0, p.bg_card);
+                    ui.painter().rect_stroke(rect, 6.0, Stroke::new(1.0_f32, p.border), egui::StrokeKind::Outside);
 
                     let num_layers = snap.total_layers.max(1);
-                    let start_x = rect.min.x + 24.0;
-                    let spacing_x = (rect.width() - 48.0) / (num_layers + 2) as f32;
+                    let start_x = rect.min.x + 28.0;
+                    let spacing_x = (rect.width() - 56.0) / (num_layers + 2) as f32;
                     let cy = rect.center().y;
 
+                    // Backbone connecting line
                     ui.painter().line_segment(
                         [Pos2::new(start_x, cy), Pos2::new(start_x + (num_layers + 1) as f32 * spacing_x, cy)],
-                        Stroke::new(2.0_f32, COLOR_BORDER),
+                        Stroke::new(2.0_f32, p.border),
                     );
 
                     for l in 0..num_layers {
@@ -1291,28 +1425,33 @@ impl THMEApp {
                         let is_cp = l == self.checkpoint_layer_idx;
                         let l_rect = Rect::from_center_size(Pos2::new(lx, cy), Vec2::new(24.0, 36.0));
 
-                        let col = if is_cur { COLOR_CYAN } else if is_cp { COLOR_EMERALD } else { COLOR_BG_INPUT };
-                        ui.painter().rect_filled(l_rect, 3.0, col);
+                        let col = if is_cur { p.primary } else if is_cp { p.success } else { p.bg_input };
+                        ui.painter().rect_filled(l_rect, 4.0, col);
+                        if is_cur {
+                            ui.painter().rect_stroke(l_rect, 4.0, Stroke::new(2.0_f32, p.text_main), egui::StrokeKind::Outside);
+                        }
+
                         ui.painter().text(
                             Pos2::new(lx, cy),
                             egui::Align2::CENTER_CENTER,
                             f!("L{}", l),
                             egui::FontId::proportional(8.0),
-                            Color32::WHITE,
+                            if is_cur { Color32::BLACK } else { Color32::WHITE },
                         );
                     }
 
                     ui.add_space(6.0);
-                    ui.label(egui::RichText::new(f!("Generated Stream: {}", snap.token_stream.join(" "))).monospace().size(9.0).color(COLOR_TEXT_MUTED));
+                    ui.label(egui::RichText::new(f!("Generated Stream: {}", snap.token_stream.join(" "))).monospace().size(9.0).color(p.text_muted));
                 });
 
                 cols[1].vertical(|ui| {
-                    ui.heading(egui::RichText::new("LAYER MANIFOLD SENSITIVITY & ALLOCATION").size(12.0).color(COLOR_TEXT_MAIN));
-                    ui.label(egui::RichText::new("Parabolic sensitivity curve and precision bit-width distribution across layers.").size(9.0).color(COLOR_TEXT_MUTED));
+                    ui.heading(egui::RichText::new("LAYER MANIFOLD SENSITIVITY & ALLOCATION").size(12.0).color(p.text_main));
+                    ui.label(egui::RichText::new("Parabolic sensitivity curve and precision bit-width distribution across layers.").size(9.0).color(p.text_muted));
                     ui.add_space(4.0);
 
                     let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 160.0), egui::Sense::hover());
-                    ui.painter().rect_filled(rect, 4.0, COLOR_BG_CARD);
+                    ui.painter().rect_filled(rect, 6.0, p.bg_card);
+                    ui.painter().rect_stroke(rect, 6.0, Stroke::new(1.0_f32, p.border), egui::StrokeKind::Outside);
 
                     let n = self.model().layers.len().max(1);
                     let bar_w = (rect.width() - 32.0) / n as f32;
@@ -1322,11 +1461,11 @@ impl THMEApp {
                         let by = rect.max.y - 20.0 - bh;
 
                         let color = if layer.beta_ternary >= 0.5 {
-                            COLOR_EMERALD
+                            p.success
                         } else if layer.alpha_binary >= 0.35 {
-                            COLOR_CYAN
+                            p.primary
                         } else {
-                            COLOR_AMBER
+                            p.warning
                         };
 
                         ui.painter().rect_filled(
@@ -1339,7 +1478,7 @@ impl THMEApp {
                             egui::Align2::CENTER_CENTER,
                             f!("L{}", i),
                             egui::FontId::monospace(7.0),
-                            COLOR_TEXT_MUTED,
+                            p.text_muted,
                         );
                     }
                 });
@@ -1351,7 +1490,7 @@ impl THMEApp {
             ui.columns(2, |cols| {
                 cols[0].vertical(|ui| {
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("RECENT HISTORY CHECKPOINTS").strong().color(COLOR_TEXT_MAIN));
+                        ui.label(egui::RichText::new("RECENT HISTORY CHECKPOINTS").strong().color(p.text_main));
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if ui.small_button("All Checkpoints →").clicked() {
                                 self.active_tab = 5;
@@ -1361,16 +1500,16 @@ impl THMEApp {
                     ui.separator();
                     for cp in self.history.iter().rev().take(3) {
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new(f!("#{} [{}]", cp.id, cp.timestamp)).monospace().size(9.0).color(COLOR_CYAN));
+                            ui.label(egui::RichText::new(f!("#{} [{}]", cp.id, cp.timestamp)).monospace().size(9.0).color(p.primary));
                             ui.label(egui::RichText::new(&cp.label).strong().size(10.0));
-                            ui.label(egui::RichText::new(f!("{:.1} MB ({:.1}x)", cp.storage_mb, cp.compression_ratio)).size(9.0).color(COLOR_EMERALD));
+                            ui.label(egui::RichText::new(f!("{:.1} MB ({:.1}x)", cp.storage_mb, cp.compression_ratio)).size(9.0).color(p.success));
                         });
                     }
                 });
 
                 cols[1].vertical(|ui| {
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("LIVE AUDIT EVENT STREAM").strong().color(COLOR_TEXT_MAIN));
+                        ui.label(egui::RichText::new("LIVE AUDIT EVENT STREAM").strong().color(p.text_main));
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if ui.small_button("Full Audit Log →").clicked() {
                                 self.active_tab = 6;
@@ -1381,14 +1520,14 @@ impl THMEApp {
                     for ev in self.audit_events.iter().rev().take(3) {
                         ui.horizontal(|ui| {
                             let badge_col = match ev.level.as_str() {
-                                "OPTIMIZE" => COLOR_EMERALD,
-                                "DISTILL" => COLOR_CYAN,
-                                "SURGERY" => COLOR_PURPLE,
-                                "WARN" => COLOR_ROSE,
-                                _ => COLOR_BLUE,
+                                "OPTIMIZE" => p.success,
+                                "DISTILL" => p.primary,
+                                "SURGERY" => p.secondary,
+                                "WARN" => p.danger,
+                                _ => p.accent,
                             };
                             ui.label(egui::RichText::new(f!("[{}]", ev.level)).strong().size(9.0).color(badge_col));
-                            ui.label(egui::RichText::new(&ev.message).size(9.0).color(COLOR_TEXT_MUTED));
+                            ui.label(egui::RichText::new(&ev.message).size(9.0).color(p.text_muted));
                         });
                     }
                 });
@@ -1398,12 +1537,13 @@ impl THMEApp {
 
     /// TAB 1: Models Manager (Loaded models, GGUF/SafeTensors importer, tensor inventory)
     fn render_tab_models(&mut self, ui: &mut egui::Ui) {
+        let p = self.palette();
         let mut switch_idx = None;
 
         ui.columns(2, |cols| {
             cols[0].vertical(|ui| {
-                ui.heading(egui::RichText::new("LOADED MODELS REPOSITORY").size(13.0).color(COLOR_TEXT_MAIN));
-                ui.label(egui::RichText::new("Manage active model slots, import local files or directories, and switch architectures.").size(10.0).color(COLOR_TEXT_MUTED));
+                ui.heading(egui::RichText::new("LOADED MODELS REPOSITORY").size(13.0).color(p.text_main));
+                ui.label(egui::RichText::new("Manage active model slots, import local files or directories, and switch architectures.").size(10.0).color(p.text_muted));
                 ui.add_space(8.0);
 
                 ui.horizontal(|ui| {
@@ -1419,7 +1559,7 @@ impl THMEApp {
                 });
 
                 ui.add_space(8.0);
-                ui.label(egui::RichText::new("Active Models List:").strong());
+                ui.label(egui::RichText::new("Active Models List:").strong().color(p.text_main));
 
                 for i in 0..self.models.len() {
                     let is_active = i == self.active_model_idx;
@@ -1429,14 +1569,14 @@ impl THMEApp {
                     };
 
                     egui::Frame::NONE
-                        .fill(if is_active { COLOR_BG_INPUT } else { COLOR_BG_CARD })
-                        .stroke(Stroke::new(1.0_f32, if is_active { COLOR_CYAN } else { COLOR_BORDER }))
-                        .inner_margin(egui::Margin::same(8))
+                        .fill(if is_active { p.bg_input } else { p.bg_card })
+                        .stroke(Stroke::new(1.0_f32, if is_active { p.primary } else { p.border }))
+                        .inner_margin(egui::Margin::same(10))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
                                 ui.vertical(|ui| {
-                                    ui.label(egui::RichText::new(&name).strong().color(if is_active { COLOR_CYAN } else { COLOR_TEXT_MAIN }));
-                                    ui.label(egui::RichText::new(f!("Format: {} | Arch: {} | Layers: {}", format, arch, num_layers)).size(9.0).color(COLOR_TEXT_MUTED));
+                                    ui.label(egui::RichText::new(&name).strong().color(if is_active { p.primary } else { p.text_main }));
+                                    ui.label(egui::RichText::new(f!("Format: {} | Arch: {} | Layers: {}", format, arch, num_layers)).size(9.0).color(p.text_muted));
                                 });
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                     if !is_active {
@@ -1444,7 +1584,7 @@ impl THMEApp {
                                             switch_idx = Some(i);
                                         }
                                     } else {
-                                        ui.label(egui::RichText::new("ACTIVE").color(COLOR_EMERALD).strong().size(9.0));
+                                        ui.label(egui::RichText::new("ACTIVE").color(p.success).strong().size(9.0));
                                     }
                                 });
                             });
@@ -1454,8 +1594,8 @@ impl THMEApp {
             });
 
             cols[1].vertical(|ui| {
-                ui.heading(egui::RichText::new("TENSOR REGISTRY & INVENTORY").size(13.0).color(COLOR_TEXT_MAIN));
-                ui.label(egui::RichText::new("Detailed registry of all weights, shapes, and layer affiliations.").size(10.0).color(COLOR_TEXT_MUTED));
+                ui.heading(egui::RichText::new("TENSOR REGISTRY & INVENTORY").size(13.0).color(p.text_main));
+                ui.label(egui::RichText::new("Detailed registry of all weights, shapes, and layer affiliations.").size(10.0).color(p.text_muted));
                 ui.add_space(8.0);
 
                 ui.horizontal(|ui| {
@@ -1472,20 +1612,20 @@ impl THMEApp {
                         .striped(true)
                         .spacing([12.0, 4.0])
                         .show(ui, |ui| {
-                            ui.label(egui::RichText::new("Tensor Name").strong().size(9.0));
-                            ui.label(egui::RichText::new("Shape").strong().size(9.0));
-                            ui.label(egui::RichText::new("DType").strong().size(9.0));
-                            ui.label(egui::RichText::new("Elements").strong().size(9.0));
-                            ui.label(egui::RichText::new("Role").strong().size(9.0));
+                            ui.label(egui::RichText::new("Tensor Name").strong().size(9.0).color(p.text_main));
+                            ui.label(egui::RichText::new("Shape").strong().size(9.0).color(p.text_main));
+                            ui.label(egui::RichText::new("DType").strong().size(9.0).color(p.text_main));
+                            ui.label(egui::RichText::new("Elements").strong().size(9.0).color(p.text_main));
+                            ui.label(egui::RichText::new("Role").strong().size(9.0).color(p.text_main));
                             ui.end_row();
 
                             let q = self.weight_search_query.to_lowercase();
                             for t in self.model().tensors.iter().filter(|t| q.is_empty() || t.name.to_lowercase().contains(&q)) {
                                 ui.label(egui::RichText::new(&t.name).size(8.0).monospace());
                                 ui.label(egui::RichText::new(f!("{:?}", t.shape)).size(8.0).monospace());
-                                ui.label(egui::RichText::new(&t.dtype).size(8.0).color(COLOR_CYAN));
+                                ui.label(egui::RichText::new(&t.dtype).size(8.0).color(p.primary));
                                 ui.label(egui::RichText::new(f!("{}", t.num_elements)).size(8.0));
-                                ui.label(egui::RichText::new(&t.role).size(8.0).color(COLOR_AMBER));
+                                ui.label(egui::RichText::new(&t.role).size(8.0).color(p.warning));
                                 ui.end_row();
                             }
                         });
@@ -1502,6 +1642,7 @@ impl THMEApp {
 
     /// TAB 2: Layer Tweaker & Sections (drill-down into parameters, weights, and sections)
     fn render_tab_layer_tweaker(&mut self, ui: &mut egui::Ui) {
+        let p = self.palette();
         let max_l = self.model().layers.len().saturating_sub(1);
         let cur_l = self.selected_layer_idx.min(max_l);
 
@@ -1515,23 +1656,23 @@ impl THMEApp {
 
         ui.columns(2, |cols| {
             cols[0].vertical(|ui| {
-                ui.heading(egui::RichText::new("LAYER COMPONENT TWEAKER").size(13.0).color(COLOR_TEXT_MAIN));
-                ui.label(egui::RichText::new("Adjust layer mixer, precision mix, scale factors, and pruning thresholds.").size(10.0).color(COLOR_TEXT_MUTED));
+                ui.heading(egui::RichText::new("LAYER COMPONENT TWEAKER").size(13.0).color(p.text_main));
+                ui.label(egui::RichText::new("Adjust layer mixer, precision mix, scale factors, and pruning thresholds.").size(10.0).color(p.text_muted));
                 ui.add_space(8.0);
 
                 ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("Select Layer:").strong());
+                    ui.label(egui::RichText::new("Select Layer:").strong().color(p.text_main));
                     ui.add(egui::Slider::new(&mut self.selected_layer_idx, 0..=max_l).text(f!("Layer {}", cur_l)));
                 });
 
                 ui.add_space(8.0);
                 egui::Frame::NONE
-                    .fill(COLOR_BG_CARD)
-                    .stroke(Stroke::new(1.0_f32, COLOR_BORDER))
-                    .inner_margin(egui::Margin::same(10))
+                    .fill(p.bg_card)
+                    .stroke(Stroke::new(1.0_f32, p.border))
+                    .inner_margin(egui::Margin::same(12))
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new(f!("Layer {} Parameters & Config", cur_l)).strong().color(COLOR_CYAN));
+                            ui.label(egui::RichText::new(f!("Layer {} Parameters & Config", cur_l)).strong().color(p.primary));
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                 if ui.checkbox(&mut is_cp, "Early Exit Checkpoint").changed() {
                                     layer_modified = true;
@@ -1561,14 +1702,14 @@ impl THMEApp {
                         ui.label(egui::RichText::new("Precision Allocation (α 1-bit / β 2-bit Ternary / γ Phase):").strong().size(10.0));
 
                         ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("α (Binary):").color(COLOR_CYAN));
+                            ui.label(egui::RichText::new("α (Binary):").color(p.primary));
                             if ui.add(egui::DragValue::new(&mut a_pct).range(0..=100).suffix("%")).changed() {
                                 a_pct = a_pct.clamp(0, 100);
                                 if a_pct + b_pct > 100 { b_pct = 100 - a_pct; }
                                 layer_modified = true;
                             }
 
-                            ui.label(egui::RichText::new("β (Ternary):").color(COLOR_EMERALD));
+                            ui.label(egui::RichText::new("β (Ternary):").color(p.success));
                             if ui.add(egui::DragValue::new(&mut b_pct).range(0..=100).suffix("%")).changed() {
                                 b_pct = b_pct.clamp(0, 100);
                                 if a_pct + b_pct > 100 { a_pct = 100 - b_pct; }
@@ -1576,7 +1717,7 @@ impl THMEApp {
                             }
 
                             let g_pct = (100 - a_pct - b_pct).max(0);
-                            ui.label(egui::RichText::new(f!("γ (Phase): {}%", g_pct)).color(COLOR_AMBER));
+                            ui.label(egui::RichText::new(f!("γ (Phase): {}%", g_pct)).color(p.warning));
                         });
 
                         ui.add_space(8.0);
@@ -1624,8 +1765,8 @@ impl THMEApp {
                 .collect();
 
             cols[1].vertical(|ui| {
-                ui.heading(egui::RichText::new("LAYER SECTION & PARAMETERS DRILL-DOWN").size(13.0).color(COLOR_TEXT_MAIN));
-                ui.label(egui::RichText::new("Inspect Attention Q/K/V/O, MLP Gate/Up/Down, and LayerNorm weight slices.").size(10.0).color(COLOR_TEXT_MUTED));
+                ui.heading(egui::RichText::new("LAYER SECTION & PARAMETERS DRILL-DOWN").size(13.0).color(p.text_main));
+                ui.label(egui::RichText::new("Inspect Attention Q/K/V/O, MLP Gate/Up/Down, and LayerNorm weight slices.").size(10.0).color(p.text_muted));
                 ui.add_space(8.0);
 
                 if !tensor_metas.is_empty() {
@@ -1679,21 +1820,22 @@ impl THMEApp {
 
                     if let Some(t) = self.model().tensors.get(self.selected_tensor_idx) {
                         ui.add_space(8.0);
-                        ui.label(egui::RichText::new(f!("Shape: {:?} | DType: {} | Elements: {}", t.shape, t.dtype, t.num_elements)).monospace().size(10.0).color(COLOR_CYAN));
+                        ui.label(egui::RichText::new(f!("Shape: {:?} | DType: {} | Elements: {}", t.shape, t.dtype, t.num_elements)).monospace().size(10.0).color(p.primary));
                         ui.columns(2, |sub| {
-                            render_stat_box(&mut sub[0], "RANGE (MIN..MAX)", f!("{:.4} .. {:.4}", t.min_val, t.max_val), COLOR_TEXT_MAIN);
-                            render_stat_box(&mut sub[1], "MOMENTS (μ ± σ)", f!("{:.4} ± {:.4}", t.mean_val, t.std_val), COLOR_AMBER);
+                            render_stat_box(&mut sub[0], "RANGE (MIN..MAX)", f!("{:.4} .. {:.4}", t.min_val, t.max_val), p.text_main, &p);
+                            render_stat_box(&mut sub[1], "MOMENTS (μ ± σ)", f!("{:.4} ± {:.4}", t.mean_val, t.std_val), p.warning, &p);
                         });
                         ui.add_space(4.0);
                         ui.columns(2, |sub| {
-                            render_stat_box(&mut sub[0], "SPARSITY", f!("{:.2}%", t.sparsity * 100.0), COLOR_EMERALD);
-                            render_stat_box(&mut sub[1], "OUTLIERS (>3σ)", f!("{:.3}%", t.outlier_ratio * 100.0), COLOR_ROSE);
+                            render_stat_box(&mut sub[0], "SPARSITY", f!("{:.2}%", t.sparsity * 100.0), p.success, &p);
+                            render_stat_box(&mut sub[1], "OUTLIERS (>3σ)", f!("{:.3}%", t.outlier_ratio * 100.0), p.danger, &p);
                         });
 
                         ui.add_space(8.0);
-                        ui.label(egui::RichText::new("Interactive 8×8 Numerical Weight Matrix Slice:").strong().size(10.0));
+                        ui.label(egui::RichText::new("Interactive 8×8 Numerical Weight Matrix Slice:").strong().size(10.0).color(p.text_main));
                         let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 130.0), egui::Sense::hover());
-                        ui.painter().rect_filled(rect, 4.0, COLOR_BG_INPUT);
+                        ui.painter().rect_filled(rect, 4.0, p.bg_input);
+                        ui.painter().rect_stroke(rect, 4.0, Stroke::new(1.0_f32, p.border), egui::StrokeKind::Outside);
 
                         let cell_w = (rect.width() - 16.0) / 8.0;
                         let cell_h = (rect.height() - 16.0) / 8.0;
@@ -1705,9 +1847,17 @@ impl THMEApp {
                                 let norm_v = (val / 0.15).clamp(-1.0, 1.0);
 
                                 let cell_col = if norm_v > 0.0 {
-                                    Color32::from_rgb((20.0 + 80.0 * norm_v) as u8, (40.0 + 160.0 * norm_v) as u8, (40.0 + 140.0 * norm_v) as u8)
+                                    Color32::from_rgb(
+                                        (p.bg_card.r() as f32 + (p.primary.r() as f32 - p.bg_card.r() as f32) * norm_v) as u8,
+                                        (p.bg_card.g() as f32 + (p.primary.g() as f32 - p.bg_card.g() as f32) * norm_v) as u8,
+                                        (p.bg_card.b() as f32 + (p.primary.b() as f32 - p.bg_card.b() as f32) * norm_v) as u8,
+                                    )
                                 } else {
-                                    Color32::from_rgb((40.0 + 160.0 * norm_v.abs()) as u8, (30.0 + 50.0 * norm_v.abs()) as u8, 40)
+                                    Color32::from_rgb(
+                                        (p.bg_card.r() as f32 + (p.danger.r() as f32 - p.bg_card.r() as f32) * norm_v.abs()) as u8,
+                                        (p.bg_card.g() as f32 + (p.danger.g() as f32 - p.bg_card.g() as f32) * norm_v.abs()) as u8,
+                                        (p.bg_card.b() as f32 + (p.danger.b() as f32 - p.bg_card.b() as f32) * norm_v.abs()) as u8,
+                                    )
                                 };
 
                                 let cell_rect = Rect::from_min_size(
@@ -1771,13 +1921,15 @@ impl THMEApp {
 
     /// TAB 3: Distillation & Matrix Engine (All algorithms + Automated Parameter Decider)
     fn render_tab_matrix_distill(&mut self, ui: &mut egui::Ui) {
-        ui.heading(egui::RichText::new("DISTILLATION & MATRIX TRANSFORMATION ENGINE").size(13.0).color(COLOR_TEXT_MAIN));
+        let p = self.palette();
+
+        ui.heading(egui::RichText::new("DISTILLATION & MATRIX TRANSFORMATION ENGINE").size(13.0).color(p.text_main));
         ui.label(
             egui::RichText::new(
                 "Implements Truncated SVD, Walsh-Hadamard rotation, SmoothQuant, BitNet b1.58, 2:4 Sparsity, and Knowledge Distillation. The engine evaluates every parameter and assigns the optimal transformation.",
             )
             .size(10.0)
-            .color(COLOR_TEXT_MUTED),
+            .color(p.text_muted),
         );
         ui.add_space(8.0);
 
@@ -1806,41 +1958,41 @@ impl THMEApp {
 
         if let Some(summary) = &self.plan_summary {
             ui.columns(5, |cols| {
-                render_scorecard_box(&mut cols[0], "COMPRESSION", f!("{:.2}x Smaller", summary.overall_compression_ratio), f!("{:.1} MB Saved", summary.original_storage_mb - summary.optimized_storage_mb), COLOR_CYAN);
-                render_scorecard_box(&mut cols[1], "MEAN DISTORTION", f!("{:.4} SNR", summary.average_distortion_snr), "Under Gate ε".to_string(), COLOR_EMERALD);
-                render_scorecard_box(&mut cols[2], "QUALITY SCORE", f!("{:.1}%", summary.mean_quality_score * 100.0), "High Fidelity".to_string(), COLOR_AMBER);
-                render_scorecard_box(&mut cols[3], "SVD & HADAMARD", f!("{} / {}", summary.count_svd, summary.count_hadamard), "Low-Rank & Rotated".to_string(), COLOR_PURPLE);
-                render_scorecard_box(&mut cols[4], "BITNET & 2:4", f!("{} / {}", summary.count_bitnet, summary.count_2to4), "Ternary & Sparse".to_string(), COLOR_ROSE);
+                render_scorecard_box(&mut cols[0], "COMPRESSION", f!("{:.2}x Smaller", summary.overall_compression_ratio), f!("{:.1} MB Saved", summary.original_storage_mb - summary.optimized_storage_mb), p.primary, &p);
+                render_scorecard_box(&mut cols[1], "MEAN DISTORTION", f!("{:.4} SNR", summary.average_distortion_snr), "Under Gate ε".to_string(), p.success, &p);
+                render_scorecard_box(&mut cols[2], "QUALITY SCORE", f!("{:.1}%", summary.mean_quality_score * 100.0), "High Fidelity".to_string(), p.warning, &p);
+                render_scorecard_box(&mut cols[3], "SVD & HADAMARD", f!("{} / {}", summary.count_svd, summary.count_hadamard), "Low-Rank & Rotated".to_string(), p.secondary, &p);
+                render_scorecard_box(&mut cols[4], "BITNET & 2:4", f!("{} / {}", summary.count_bitnet, summary.count_2to4), "Ternary & Sparse".to_string(), p.danger, &p);
             });
         }
 
         ui.add_space(8.0);
-        ui.label(egui::RichText::new("Decided Parameter Transformations & Mathematical Rationale:").strong());
+        ui.label(egui::RichText::new("Decided Parameter Transformations & Mathematical Rationale:").strong().color(p.text_main));
 
         egui::ScrollArea::vertical().max_height(340.0).show(ui, |ui| {
             egui::Grid::new("decisions_grid")
                 .striped(true)
                 .spacing([12.0, 4.0])
                 .show(ui, |ui| {
-                    ui.label(egui::RichText::new("Layer").strong().size(9.0));
-                    ui.label(egui::RichText::new("Parameter").strong().size(9.0));
-                    ui.label(egui::RichText::new("Role").strong().size(9.0));
-                    ui.label(egui::RichText::new("Selected Algorithm").strong().size(9.0));
-                    ui.label(egui::RichText::new("Bits/Param").strong().size(9.0));
-                    ui.label(egui::RichText::new("Ratio").strong().size(9.0));
-                    ui.label(egui::RichText::new("Distortion").strong().size(9.0));
-                    ui.label(egui::RichText::new("Rationale").strong().size(9.0));
+                    ui.label(egui::RichText::new("Layer").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("Parameter").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("Role").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("Selected Algorithm").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("Bits/Param").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("Ratio").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("Distortion").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("Rationale").strong().size(9.0).color(p.text_main));
                     ui.end_row();
 
                     for dec in &self.parameter_decisions {
                         ui.label(f!("L{}", dec.layer_index));
                         ui.label(egui::RichText::new(&dec.tensor_name).monospace().size(8.0));
                         ui.label(&dec.section_role);
-                        ui.label(egui::RichText::new(dec.algorithm.name()).color(COLOR_CYAN).strong().size(9.0));
+                        ui.label(egui::RichText::new(dec.algorithm.name()).color(p.primary).strong().size(9.0));
                         ui.label(f!("{:.2}", dec.algorithm.effective_bits_per_param()));
                         ui.label(f!("{:.1}x", dec.compression_ratio));
                         ui.label(f!("{:.4}", dec.estimated_distortion_snr));
-                        ui.label(egui::RichText::new(&dec.rationale).size(8.0).color(COLOR_TEXT_MUTED));
+                        ui.label(egui::RichText::new(&dec.rationale).size(8.0).color(p.text_muted));
                         ui.end_row();
                     }
                 });
@@ -1849,12 +2001,13 @@ impl THMEApp {
 
     /// TAB 4: Full Benchmarks (Live Flow simulator, batch scaling, context length scaling)
     fn render_tab_full_benchmarks(&mut self, ui: &mut egui::Ui) {
+        let p = self.palette();
         let snap = self.simulator.snapshot();
 
         ui.columns(2, |cols| {
             cols[0].vertical(|ui| {
-                ui.heading(egui::RichText::new("LIVE TOKEN & PROCESS FLOW BENCHMARKER").size(13.0).color(COLOR_TEXT_MAIN));
-                ui.label(egui::RichText::new("Simulates real-time token generation, memory bandwidth saturation, and layer execution waterfall.").size(10.0).color(COLOR_TEXT_MUTED));
+                ui.heading(egui::RichText::new("LIVE TOKEN & PROCESS FLOW BENCHMARKER").size(13.0).color(p.text_main));
+                ui.label(egui::RichText::new("Simulates real-time token generation, memory bandwidth saturation, and layer execution waterfall.").size(10.0).color(p.text_muted));
                 ui.add_space(8.0);
 
                 ui.label("Evaluation Prompt:");
@@ -1917,42 +2070,42 @@ impl THMEApp {
 
                 ui.add_space(10.0);
                 ui.columns(2, |sub| {
-                    render_stat_box(&mut sub[0], "THROUGHPUT", f!("{:.1} tok/s", snap.current_tok_per_sec), COLOR_CYAN);
-                    render_stat_box(&mut sub[1], "TIME/TOKEN", f!("{:.1} ms", snap.time_per_token_ms), Color32::WHITE);
+                    render_stat_box(&mut sub[0], "THROUGHPUT", f!("{:.1} tok/s", snap.current_tok_per_sec), p.primary, &p);
+                    render_stat_box(&mut sub[1], "TIME/TOKEN", f!("{:.1} ms", snap.time_per_token_ms), p.text_main, &p);
                 });
                 ui.add_space(4.0);
                 ui.columns(2, |sub| {
-                    render_stat_box(&mut sub[0], "KV CACHE FOOTPRINT", f!("{:.2} MB", snap.kv_cache_mb), COLOR_AMBER);
-                    render_stat_box(&mut sub[1], "MEMORY BANDWIDTH", f!("{:.1} GB/s", snap.memory_bandwidth_gbps), COLOR_EMERALD);
+                    render_stat_box(&mut sub[0], "KV CACHE FOOTPRINT", f!("{:.2} MB", snap.kv_cache_mb), p.warning, &p);
+                    render_stat_box(&mut sub[1], "MEMORY BANDWIDTH", f!("{:.1} GB/s", snap.memory_bandwidth_gbps), p.success, &p);
                 });
 
                 ui.add_space(10.0);
-                ui.label(egui::RichText::new("Live Stream Terminal:").strong());
+                ui.label(egui::RichText::new("Live Stream Terminal:").strong().color(p.text_main));
                 egui::Frame::NONE
-                    .fill(COLOR_BG_CARD)
-                    .stroke(Stroke::new(1.0_f32, COLOR_BORDER))
-                    .inner_margin(egui::Margin::same(8))
+                    .fill(p.bg_card)
+                    .stroke(Stroke::new(1.0_f32, p.border))
+                    .inner_margin(egui::Margin::same(10))
                     .show(ui, |ui| {
                         let stream_text = if snap.token_stream.is_empty() {
                             "[Press ▶ Start to initiate live token generation flow...]".to_string()
                         } else {
                             format!("{}: {}", self.baseline_prompt, snap.token_stream.join(" "))
                         };
-                        ui.label(egui::RichText::new(stream_text).monospace().size(9.0).color(COLOR_TEXT_MAIN));
+                        ui.label(egui::RichText::new(stream_text).monospace().size(9.0).color(p.text_main));
                     });
             });
 
             cols[1].vertical(|ui| {
-                ui.heading(egui::RichText::new("BATCH & CONTEXT SCALABILITY STRESS SUITE").size(13.0).color(COLOR_TEXT_MAIN));
-                ui.label(egui::RichText::new("Analytical scaling curves across batch dimensions and extended sequence contexts.").size(10.0).color(COLOR_TEXT_MUTED));
+                ui.heading(egui::RichText::new("BATCH & CONTEXT SCALABILITY STRESS SUITE").size(13.0).color(p.text_main));
+                ui.label(egui::RichText::new("Analytical scaling curves across batch dimensions and extended sequence contexts.").size(10.0).color(p.text_muted));
                 ui.add_space(8.0);
 
-                ui.label(egui::RichText::new("Batch Size Latency Scaling:").strong());
+                ui.label(egui::RichText::new("Batch Size Latency Scaling:").strong().color(p.text_main));
                 egui::Grid::new("batch_grid").striped(true).spacing([16.0, 4.0]).show(ui, |ui| {
-                    ui.label(egui::RichText::new("Batch Size").strong().size(9.0));
-                    ui.label(egui::RichText::new("Total Throughput").strong().size(9.0));
-                    ui.label(egui::RichText::new("Latency/Token").strong().size(9.0));
-                    ui.label(egui::RichText::new("VRAM Traffic").strong().size(9.0));
+                    ui.label(egui::RichText::new("Batch Size").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("Total Throughput").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("Latency/Token").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("VRAM Traffic").strong().size(9.0).color(p.text_main));
                     ui.end_row();
 
                     for &b in &[1, 4, 8, 16, 32, 64] {
@@ -1968,12 +2121,12 @@ impl THMEApp {
                 });
 
                 ui.add_space(12.0);
-                ui.label(egui::RichText::new("Context Length KV Cache Growth:").strong());
+                ui.label(egui::RichText::new("Context Length KV Cache Growth:").strong().color(p.text_main));
                 egui::Grid::new("context_grid").striped(true).spacing([16.0, 4.0]).show(ui, |ui| {
-                    ui.label(egui::RichText::new("Sequence Length").strong().size(9.0));
-                    ui.label(egui::RichText::new("KV Cache (FP16)").strong().size(9.0));
-                    ui.label(egui::RichText::new("KV Cache (Tuned)").strong().size(9.0));
-                    ui.label(egui::RichText::new("Savings").strong().size(9.0));
+                    ui.label(egui::RichText::new("Sequence Length").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("KV Cache (FP16)").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("KV Cache (Tuned)").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("Savings").strong().size(9.0).color(p.text_main));
                     ui.end_row();
 
                     let num_layers = self.model().layers.len();
@@ -1983,7 +2136,7 @@ impl THMEApp {
                         ui.label(f!("{} tokens", ctx_len));
                         ui.label(f!("{:.2} MB", fp16_mb));
                         ui.label(f!("{:.2} MB", tuned_mb));
-                        ui.label(egui::RichText::new("70.0%").color(COLOR_EMERALD).strong());
+                        ui.label(egui::RichText::new("70.0%").color(p.success).strong());
                         ui.end_row();
                     }
                 });
@@ -1993,10 +2146,11 @@ impl THMEApp {
 
     /// TAB 5: History & Checkpoints (Timeline of optimization checkpoints, diffs, rollback)
     fn render_tab_history(&mut self, ui: &mut egui::Ui) {
+        let p = self.palette();
         let mut restore_idx = None;
 
-        ui.heading(egui::RichText::new("OPTIMIZATION HISTORY & ROLLBACK CHECKPOINTS").size(13.0).color(COLOR_TEXT_MAIN));
-        ui.label(egui::RichText::new("Every tuning session, manual tweak, and distillation pass records an immutable snapshot.").size(10.0).color(COLOR_TEXT_MUTED));
+        ui.heading(egui::RichText::new("OPTIMIZATION HISTORY & ROLLBACK CHECKPOINTS").size(13.0).color(p.text_main));
+        ui.label(egui::RichText::new("Every tuning session, manual tweak, and distillation pass records an immutable snapshot.").size(10.0).color(p.text_muted));
         ui.add_space(8.0);
 
         ui.horizontal(|ui| {
@@ -2020,26 +2174,26 @@ impl THMEApp {
                 .striped(true)
                 .spacing([14.0, 6.0])
                 .show(ui, |ui| {
-                    ui.label(egui::RichText::new("ID").strong().size(9.0));
-                    ui.label(egui::RichText::new("Timestamp").strong().size(9.0));
-                    ui.label(egui::RichText::new("Label").strong().size(9.0));
-                    ui.label(egui::RichText::new("Storage").strong().size(9.0));
-                    ui.label(egui::RichText::new("Throughput").strong().size(9.0));
-                    ui.label(egui::RichText::new("Compression").strong().size(9.0));
-                    ui.label(egui::RichText::new("Distortion").strong().size(9.0));
-                    ui.label(egui::RichText::new("Details").strong().size(9.0));
-                    ui.label(egui::RichText::new("Action").strong().size(9.0));
+                    ui.label(egui::RichText::new("ID").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("Timestamp").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("Label").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("Storage").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("Throughput").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("Compression").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("Distortion").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("Details").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("Action").strong().size(9.0).color(p.text_main));
                     ui.end_row();
 
                     for (idx, cp) in self.history.iter().enumerate() {
                         ui.label(f!("#{}", cp.id));
                         ui.label(egui::RichText::new(&cp.timestamp).monospace().size(8.0));
-                        ui.label(egui::RichText::new(&cp.label).strong().color(COLOR_CYAN));
+                        ui.label(egui::RichText::new(&cp.label).strong().color(p.primary));
                         ui.label(f!("{:.1} MB", cp.storage_mb));
                         ui.label(f!("{:.1} tok/s", cp.throughput_tok_s));
-                        ui.label(egui::RichText::new(f!("{:.2}x", cp.compression_ratio)).color(COLOR_EMERALD));
+                        ui.label(egui::RichText::new(f!("{:.2}x", cp.compression_ratio)).color(p.success));
                         ui.label(f!("{:.4}", cp.avg_distortion));
-                        ui.label(egui::RichText::new(&cp.details).size(8.0).color(COLOR_TEXT_MUTED));
+                        ui.label(egui::RichText::new(&cp.details).size(8.0).color(p.text_muted));
 
                         if ui.button("↺ Restore").clicked() {
                             restore_idx = Some(idx);
@@ -2056,8 +2210,10 @@ impl THMEApp {
 
     /// TAB 6: Audit Log (Structured filterable event stream)
     fn render_tab_audit_log(&mut self, ui: &mut egui::Ui) {
-        ui.heading(egui::RichText::new("STRUCTURED AUDIT LOG STREAM").size(13.0).color(COLOR_TEXT_MAIN));
-        ui.label(egui::RichText::new("Complete chronological compliance and operation audit trail for all operations.").size(10.0).color(COLOR_TEXT_MUTED));
+        let p = self.palette();
+
+        ui.heading(egui::RichText::new("STRUCTURED AUDIT LOG STREAM").size(13.0).color(p.text_main));
+        ui.label(egui::RichText::new("Complete chronological compliance and operation audit trail for all operations.").size(10.0).color(p.text_muted));
         ui.add_space(8.0);
 
         ui.horizontal(|ui| {
@@ -2113,22 +2269,22 @@ impl THMEApp {
                 .striped(true)
                 .spacing([12.0, 4.0])
                 .show(ui, |ui| {
-                    ui.label(egui::RichText::new("ID").strong().size(9.0));
-                    ui.label(egui::RichText::new("Timestamp").strong().size(9.0));
-                    ui.label(egui::RichText::new("Level").strong().size(9.0));
-                    ui.label(egui::RichText::new("Category").strong().size(9.0));
-                    ui.label(egui::RichText::new("Target").strong().size(9.0));
-                    ui.label(egui::RichText::new("Message").strong().size(9.0));
+                    ui.label(egui::RichText::new("ID").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("Timestamp").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("Level").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("Category").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("Target").strong().size(9.0).color(p.text_main));
+                    ui.label(egui::RichText::new("Message").strong().size(9.0).color(p.text_main));
                     ui.end_row();
 
                     for ev in filtered.iter().rev() {
                         let badge_col = match ev.level.as_str() {
-                            "OPTIMIZE" => COLOR_EMERALD,
-                            "DISTILL" => COLOR_CYAN,
-                            "SURGERY" => COLOR_PURPLE,
-                            "BENCHMARK" => COLOR_AMBER,
-                            "WARN" => COLOR_ROSE,
-                            _ => COLOR_BLUE,
+                            "OPTIMIZE" => p.success,
+                            "DISTILL" => p.primary,
+                            "SURGERY" => p.secondary,
+                            "BENCHMARK" => p.warning,
+                            "WARN" => p.danger,
+                            _ => p.accent,
                         };
 
                         ui.label(f!("#{}", ev.id));
@@ -2136,7 +2292,7 @@ impl THMEApp {
                         ui.label(egui::RichText::new(&ev.level).strong().size(9.0).color(badge_col));
                         ui.label(&ev.category);
                         ui.label(egui::RichText::new(&ev.target).monospace().size(8.0));
-                        ui.label(egui::RichText::new(&ev.message).size(9.0).color(COLOR_TEXT_MAIN));
+                        ui.label(egui::RichText::new(&ev.message).size(9.0).color(p.text_main));
                         ui.end_row();
                     }
                 });
@@ -2145,10 +2301,12 @@ impl THMEApp {
 
     /// TAB 7: Export & Surgery (Teacher LLM JSON recipes and model exporter)
     fn render_tab_export(&mut self, ui: &mut egui::Ui) {
+        let p = self.palette();
+
         ui.columns(2, |cols| {
             cols[0].vertical(|ui| {
-                ui.heading(egui::RichText::new("EXPORT RE-STRUCTURED & TUNED MODEL").size(13.0).color(COLOR_TEXT_MAIN));
-                ui.label(egui::RichText::new("Ship the optimized, ultra-tuned and restructured LLM artifact matching research paper expectations.").size(10.0).color(COLOR_TEXT_MUTED));
+                ui.heading(egui::RichText::new("EXPORT RE-STRUCTURED & TUNED MODEL").size(13.0).color(p.text_main));
+                ui.label(egui::RichText::new("Ship the optimized, ultra-tuned and restructured LLM artifact matching research paper expectations.").size(10.0).color(p.text_muted));
                 ui.add_space(12.0);
 
                 ui.horizontal(|ui| {
@@ -2195,8 +2353,8 @@ impl THMEApp {
             });
 
             cols[1].vertical(|ui| {
-                ui.heading(egui::RichText::new("TEACHER LLM SURGERY & RESTRUCTURING RECIPES").size(13.0).color(COLOR_TEXT_MAIN));
-                ui.label(egui::RichText::new("Execute declarative JSON mutation recipes from automated agents and Teacher LLMs.").size(10.0).color(COLOR_TEXT_MUTED));
+                ui.heading(egui::RichText::new("TEACHER LLM SURGERY & RESTRUCTURING RECIPES").size(13.0).color(p.text_main));
+                ui.label(egui::RichText::new("Execute declarative JSON mutation recipes from automated agents and Teacher LLMs.").size(10.0).color(p.text_muted));
                 ui.add_space(8.0);
 
                 ui.horizontal(|ui| {
@@ -2253,14 +2411,14 @@ impl THMEApp {
                 if let Some(diff) = &self.surgery_diff {
                     ui.add_space(8.0);
                     ui.columns(3, |sub| {
-                        render_stat_box(&mut sub[0], "MODIFIED TENSORS", f!("{}", diff.modified_tensors_count), COLOR_CYAN);
-                        render_stat_box(&mut sub[1], "STORAGE SAVED", f!("{:.1}%", diff.savings_percent), COLOR_EMERALD);
-                        render_stat_box(&mut sub[2], "EST. SPEEDUP", f!("{:.2}x", diff.estimated_speedup), COLOR_AMBER);
+                        render_stat_box(&mut sub[0], "MODIFIED TENSORS", f!("{}", diff.modified_tensors_count), p.primary, &p);
+                        render_stat_box(&mut sub[1], "STORAGE SAVED", f!("{:.1}%", diff.savings_percent), p.success, &p);
+                        render_stat_box(&mut sub[2], "EST. SPEEDUP", f!("{:.2}x", diff.estimated_speedup), p.warning, &p);
                     });
                 }
 
                 ui.add_space(8.0);
-                ui.label(egui::RichText::new("Recipe JSON Specification:").strong().size(10.0));
+                ui.label(egui::RichText::new("Recipe JSON Specification:").strong().size(10.0).color(p.text_main));
                 egui::ScrollArea::vertical().max_height(180.0).show(ui, |ui| {
                     ui.add(
                         egui::TextEdit::multiline(&mut self.tweak_recipe_text)
@@ -2274,38 +2432,80 @@ impl THMEApp {
     }
 }
 
-fn render_stat_box(ui: &mut egui::Ui, title: &str, value: String, color: Color32) {
-    egui::Frame::NONE
-        .fill(COLOR_BG_CARD)
-        .stroke(Stroke::new(1.0_f32, COLOR_BORDER))
-        .inner_margin(egui::Margin::symmetric(8, 6))
-        .show(ui, |ui| {
-            ui.label(egui::RichText::new(title).size(8.0).strong().color(COLOR_TEXT_MUTED));
-            ui.label(egui::RichText::new(value).size(12.0).strong().color(color));
-        });
+fn render_stat_box(ui: &mut egui::Ui, title: &str, value: String, color: Color32, p: &ThemePalette) {
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 46.0), egui::Sense::hover());
+    ui.painter().rect_filled(rect, 4.0, p.bg_card);
+    ui.painter().rect_stroke(rect, 4.0, Stroke::new(1.0_f32, p.border), egui::StrokeKind::Outside);
+    // Colored bottom accent indicator
+    ui.painter().rect_filled(
+        Rect::from_min_size(Pos2::new(rect.min.x + 4.0, rect.max.y - 3.0), Vec2::new(rect.width() - 8.0, 2.0)),
+        1.0,
+        color,
+    );
+    ui.painter().text(
+        Pos2::new(rect.min.x + 8.0, rect.min.y + 12.0),
+        egui::Align2::LEFT_CENTER,
+        title,
+        egui::FontId::proportional(8.0),
+        p.text_muted,
+    );
+    ui.painter().text(
+        Pos2::new(rect.min.x + 8.0, rect.min.y + 28.0),
+        egui::Align2::LEFT_CENTER,
+        value,
+        egui::FontId::proportional(12.0),
+        color,
+    );
 }
 
-fn render_scorecard_box(ui: &mut egui::Ui, title: &str, value: String, gain: String, color: Color32) {
-    egui::Frame::NONE
-        .fill(COLOR_BG_CARD)
-        .stroke(Stroke::new(1.0_f32, COLOR_BORDER))
-        .inner_margin(egui::Margin::symmetric(10, 10))
-        .show(ui, |ui| {
-            ui.label(egui::RichText::new(title).size(9.0).strong().color(COLOR_TEXT_MUTED));
-            ui.label(egui::RichText::new(value).size(15.0).strong().color(color));
-            ui.label(egui::RichText::new(gain).size(9.0).strong().color(COLOR_EMERALD));
-        });
+fn render_scorecard_box(ui: &mut egui::Ui, title: &str, value: String, gain: String, color: Color32, p: &ThemePalette) {
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 64.0), egui::Sense::hover());
+    ui.painter().rect_filled(rect, 6.0, p.bg_card);
+    ui.painter().rect_stroke(rect, 6.0, Stroke::new(1.0_f32, p.border), egui::StrokeKind::Outside);
+    // Left vertical accent bar
+    ui.painter().rect_filled(
+        Rect::from_min_size(Pos2::new(rect.min.x, rect.min.y), Vec2::new(3.0, rect.height())),
+        1.5,
+        color,
+    );
+    ui.painter().text(
+        Pos2::new(rect.min.x + 10.0, rect.min.y + 14.0),
+        egui::Align2::LEFT_CENTER,
+        title,
+        egui::FontId::proportional(9.0),
+        p.text_muted,
+    );
+    ui.painter().text(
+        Pos2::new(rect.min.x + 10.0, rect.min.y + 32.0),
+        egui::Align2::LEFT_CENTER,
+        value,
+        egui::FontId::proportional(15.0),
+        color,
+    );
+    ui.painter().text(
+        Pos2::new(rect.min.x + 10.0, rect.min.y + 50.0),
+        egui::Align2::LEFT_CENTER,
+        gain,
+        egui::FontId::proportional(9.0),
+        p.success,
+    );
 }
 
-fn tab_button(ui: &mut egui::Ui, title: &str, tab_idx: usize, active_tab: &mut usize) {
+fn tab_button(ui: &mut egui::Ui, title: &str, tab_idx: usize, active_tab: &mut usize, p: &ThemePalette) {
     let is_active = *active_tab == tab_idx;
-    let text_col = if is_active { COLOR_CYAN } else { COLOR_TEXT_MAIN };
-    let bg_col = if is_active { COLOR_BG_INPUT } else { Color32::TRANSPARENT };
+    let text_col = if is_active { p.text_main } else { p.text_muted };
+    let bg_col = if is_active { p.bg_input } else { Color32::TRANSPARENT };
+    let stroke = if is_active {
+        Stroke::new(1.5_f32, p.primary)
+    } else {
+        Stroke::NONE
+    };
 
     let btn = ui.add(
         egui::Button::new(egui::RichText::new(title).strong().color(text_col))
             .fill(bg_col)
-            .stroke(if is_active { Stroke::new(1.0_f32, COLOR_CYAN) } else { Stroke::NONE }),
+            .stroke(stroke)
+            .corner_radius(4.0),
     );
     if btn.clicked() {
         *active_tab = tab_idx;
