@@ -10,6 +10,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.3] - 2026-11-10
 
 ### Added
+- **Multi-Format Dataset Ingestion & Fast Tokenizer (`src/dataset/mod.rs`)**:
+  - Ingests and normalizes arbitrary training, fine-tuning, and calibration datasets from plain text (`.txt`), JSON Lines (`.jsonl`), JSON arrays (`.json`), and CSV/TSV files.
+  - Native multi-schema JSON parsers auto-detecting OpenAI chat messages (`[{"role": "...", "content": "..."}]`), Alpaca instructions (`instruction`, `input`, `output`), ShareGPT formats, and raw text records.
+  - High-speed Fowler-Noll-Vo hash projection tokenizer with length distribution statistics, vocabulary diversity estimations, and batch slicing (`get_batch`, `get_flat_batch`).
+- **Non-Conventional Experimentation Laboratory (`src/experiment/mod.rs`)**:
+  - Research suite for mathematical exploratory transformations directly applied to model weights:
+    1. *Stochastic Noise Injection*: Simulates analog hardware drift, thermal fluctuations, and low-voltage DRAM margins.
+    2. *Spectral Energy Reshaping*: Warps singular value spectra via power exponent $\sigma_i^\gamma$ to compress or accentuate representations.
+    3. *Complex Phase Modulation*: Unitary complex angle rotation $\cos(\omega j + \phi)$ across weight channels.
+    4. *Continuous Activation Warping*: Non-linear continuous manifold interpolation between SwiGLU, GELU, and harmonic sine functions.
+    5. *Stochastic DropBlock Sparsity*: Structured block-level zeroing for hardware-aligned sparsity benchmarking.
+  - Analytical metrics calculation tracking original vs. transformed L2 norm, MSE, SNR (dB), and sparsity delta.
+- **On-Device Micro-Trainer & Adaptation Engine (`src/trainer/mod.rs`)**:
+  - Lightweight parameter training and calibration loop for adapting model weights to ingested datasets.
+  - Multiple loss objectives: Autoregressive Cross-Entropy, Teacher Knowledge Distillation (with temperature $\tau$), and EWHA Energy-Regularized loss (with penalty parameter $\lambda_E$).
+  - Optimizers: AdamW with decoupled weight decay, SignSGD (for 1-bit / BitNet b1.58 ternary weights), and standard SGD with momentum.
+  - Real-time step telemetry recording Loss, Perplexity ($PPL = \exp(\mathcal{L})$), throughput (tokens/sec), and estimated energy (mJ).
+- **Tab 8 Developer Lab & Training Studio (`src/gui/app.rs`)**:
+  - Dedicated GUI tab providing dataset file loading, synthetic calibration generation, live sample previews, interactive experimentation sliders, target layer selection, step/epoch training execution, and live convergence telemetry.
+- **Layer Anatomy Deconstruction & Architecture Disassembly (`src/ir/layer_decomp.rs`)**:
+  - Deep inspection of internal layer composition (LayerNorm, QKV Attention, Attention Out, MLP Gate/Up, MLP Down, Post-Mixer Norm, Residual Connections).
+  - Component parameter counting, memory footprint calculation, active routing indicator, and hybrid conversion topology dispatch.
+  - Visual Anatomy & Dataflow Map in Tab 2 of Desktop Studio GUI.
 - **Bring Your Own Algorithm (BYOA) Engine (`src/transform/byoa.rs`)**:
   - Full parametric custom algorithm definition (`AlgorithmDefinition`), category classifications (`Quantization`, `LinearTransformation`, `SparsityPruning`, `SequenceMixer`, `FeatureDistillation`), and transformation rules (`QuantizeCodebook`, `AbsmeanTernary`, `OrthogonalRotation`, `StructuredSparsity`, `SmoothQuantOutlier`, `AffineProject`).
   - Extensible `AlgorithmRegistry` pre-populated with 5 verified presets (BitNet b1.58, 2:4 Structured Sparsity, Walsh-Hadamard WHT, SmoothQuant, Gated DeltaNet).

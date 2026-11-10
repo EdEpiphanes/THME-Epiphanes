@@ -18,10 +18,13 @@ cargo fmt --check
 # 2. Strict linter (zero warnings tolerated)
 cargo clippy --all-targets -- -D warnings
 
-# 3. Full test suite execution (all 41 integration & unit tests)
+# 3. Full test suite execution (all 57 integration & unit tests)
 cargo test
 
 # 4. Subsystem-specific test runs:
+cargo test --test test_dataset         # Multi-format dataset ingestion & tokenization
+cargo test --test test_experiment      # Non-conventional experimentation laboratory
+cargo test --test test_trainer         # On-device micro-training & adaptation engine
 cargo test --test test_byoa            # BYOA registry & weight transformation
 cargo test --test test_rea_llm         # REA-LLM EWHA routing & energy accounting
 cargo test --test test_rebuilder       # Open-weights architecture rebuilder & surgery
@@ -166,6 +169,36 @@ git grep -inE "(C:\\\\Users\\\\[a-zA-Z0-9_-]+|/home/[a-zA-Z0-9_-]+)"
     - **Tab 1 (Models Manager)**: Added "Rebuild Architecture From Scratch" wizard modal.
     - **Tab 3 (Distillation & Matrix Engine)**: Interactive BYOA Registry table, Custom Algorithm Designer form, one-click JSON Import/Export, and live 8×8 weight slice tester.
     - **Tab 4 (Full Benchmarks)**: Dedicated REA-LLM EWHA Telemetry and layerwise representation breakdown.
+  - **Status**: Verified Complete.
+- [x] **Multi-Format Dataset Ingestion & Fast Tokenizer**
+  - **Source**: `src/dataset/mod.rs`
+  - **Verification**: `cargo test --test test_dataset` (5/5 tests passing)
+  - **Features**:
+    - Ingests arbitrary training and calibration datasets from plain text (`.txt`), JSON Lines (`.jsonl`), JSON array (`.json`), CSV/TSV tables, and synthetic sequences.
+    - Automatic detection and extraction from OpenAI messages, Alpaca instructions, and raw text records.
+    - Fast hash projection tokenizer with length distribution statistics, vocabulary diversity estimations, and batch slicing (`get_batch`, `get_flat_batch`).
+  - **Status**: Verified Complete.
+- [x] **Non-Conventional Experimentation Laboratory Engine**
+  - **Source**: `src/experiment/mod.rs`
+  - **Verification**: `cargo test --test test_experiment` (5/5 tests passing)
+  - **Features**:
+    - 5 mathematical experimental transformations: Stochastic Noise Injection (simulating analog hardware drift & voltage margins), Spectral Energy Reshaping ($\sigma_i^\gamma$), Complex Phase Modulation ($\cos(\omega j + \phi)$), Continuous Activation Warping, and Stochastic DropBlock Sparsity.
+    - In-place tensor transformation with analytical metrics: Original vs Transformed L2 norm, Mean Squared Error, Signal-to-Noise Ratio (dB), and Sparsity Delta %.
+  - **Status**: Verified Complete.
+- [x] **On-Device Micro-Trainer & Parameter Adaptation Engine**
+  - **Source**: `src/trainer/mod.rs`
+  - **Verification**: `cargo test --test test_trainer` (3/3 tests passing)
+  - **Features**:
+    - In-engine parameter adaptation loop executing simulated forward passes, gradient updates, and convergence tracking.
+    - Loss objectives: Autoregressive Cross-Entropy, Teacher Knowledge Distillation ($\tau$), and EWHA Energy-Regularized loss ($\lambda_E$).
+    - Optimizers: AdamW (decoupled weight decay), SignSGD (for 1-bit and ternary weights), and standard SGD with momentum.
+    - Telemetry tracking: Step loss, Perplexity ($PPL$), throughput (tok/sec), and estimated energy (mJ).
+  - **Status**: Verified Complete.
+- [x] **Tab 8 Developer Lab & Training Studio GUI**
+  - **Source**: `src/gui/app.rs`
+  - **Verification**: `cargo check --bin thme-gui`
+  - **Features**:
+    - Integrated Tab 8 ("🧪 Dev Lab & Training") featuring Dataset Ingestion Deck, Non-Conventional Experimentation Lab, and Micro-Training & Adaptation Studio.
   - **Status**: Verified Complete.
 
 ---
