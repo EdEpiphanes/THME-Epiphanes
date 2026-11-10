@@ -79,7 +79,10 @@ impl TensorRole {
             Self::AttentionK
         } else if lower.contains("v_proj") || lower.contains("value") {
             Self::AttentionV
-        } else if lower.contains("o_proj") || lower.contains("out_proj") || lower.contains("dense") && lower.contains("attn") {
+        } else if lower.contains("o_proj")
+            || lower.contains("out_proj")
+            || lower.contains("dense") && lower.contains("attn")
+        {
             Self::AttentionOut
         } else if lower.contains("gate_proj") || lower.contains("w1") {
             Self::MlpGate
@@ -102,12 +105,12 @@ impl TensorRole {
     pub fn base_sensitivity_weight(&self) -> f64 {
         match self {
             Self::Embedding | Self::OutputHead => 2.5, // Embeddings & Heads directly dictate logit output
-            Self::FinalNorm | Self::LayerNorm => 3.0,  // Normalization parameters should stay high precision
+            Self::FinalNorm | Self::LayerNorm => 3.0, // Normalization parameters should stay high precision
             Self::AttentionQ | Self::AttentionK => 1.8, // Q & K preserve attention routing topology
             Self::AttentionV => 1.4,
             Self::AttentionOut => 1.2,
             Self::MlpGate | Self::MlpUp => 1.1,
-            Self::MlpDown => 1.0,                       // Typically most robust to compression
+            Self::MlpDown => 1.0, // Typically most robust to compression
             Self::Unknown => 1.0,
         }
     }

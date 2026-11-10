@@ -17,7 +17,11 @@ impl ModelImporter {
     pub fn import<P: AsRef<Path>>(path: P) -> Result<ModelIR> {
         let p = path.as_ref();
         if p.is_file() {
-            let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+            let ext = p
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .to_lowercase();
             if ext == "gguf" {
                 return GgufParser::parse_from_file(p);
             }
@@ -35,7 +39,11 @@ impl ModelImporter {
 
         // Check if user pointed to a GGUF file directly
         if dir_path.is_file() {
-            let ext = dir_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+            let ext = dir_path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .to_lowercase();
             if ext == "gguf" {
                 return GgufParser::parse_from_file(dir_path);
             }
@@ -49,7 +57,10 @@ impl ModelImporter {
             .map(|c| c.primary_architecture())
             .unwrap_or_else(|| {
                 // Infer from tensor naming
-                if tensors.iter().any(|t| t.name.contains("llama") || t.name.contains("q_proj")) {
+                if tensors
+                    .iter()
+                    .any(|t| t.name.contains("llama") || t.name.contains("q_proj"))
+                {
                     "LlamaForCausalLM".to_string()
                 } else if tensors.iter().any(|t| t.name.contains("mistral")) {
                     "MistralForCausalLM".to_string()

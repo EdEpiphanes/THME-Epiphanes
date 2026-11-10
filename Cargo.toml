@@ -1,6 +1,6 @@
 [package]
 name = "thme"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Epiphanes <https://github.com/EdEpiphanes>"]
 description = "THME: Topological Heterogeneous Manifold Engine by Epiphanes - Open-source framework for LLM memory profiling, weight sensitivity analysis, and Pareto precision optimization."

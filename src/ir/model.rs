@@ -60,6 +60,7 @@ pub struct ModelIR {
 }
 
 impl ModelIR {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         name: String,
         architecture: ModelArchitecture,
@@ -73,11 +74,7 @@ impl ModelIR {
     ) -> Self {
         let num_parameters: usize = tensors.iter().map(|t| t.numel).sum();
         let original_byte_size: usize = tensors.iter().map(|t| t.byte_size).sum();
-        let head_dim = if num_attention_heads > 0 {
-            hidden_size / num_attention_heads
-        } else {
-            128
-        };
+        let head_dim = hidden_size.checked_div(num_attention_heads).unwrap_or(128);
 
         Self {
             name,

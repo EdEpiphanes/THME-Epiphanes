@@ -1,5 +1,7 @@
 use thme::allocator::ParetoAllocator;
-use thme::ir::{extract_layer_index, ModelArchitecture, ModelIR, TensorFormat, TensorIR, TensorRole};
+use thme::ir::{
+    extract_layer_index, ModelArchitecture, ModelIR, TensorFormat, TensorIR, TensorRole,
+};
 use thme::profiling::{KvCacheEstimator, SensitivityProfiler};
 use thme::quality::{BenchmarkScore, GateDecision, QualityGate};
 

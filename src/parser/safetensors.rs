@@ -14,10 +14,13 @@ impl SafetensorsScanner {
     pub fn find_safetensors_files<P: AsRef<Path>>(dir: P) -> Result<Vec<PathBuf>> {
         let dir_path = dir.as_ref();
         if !dir_path.is_dir() {
-            if dir_path.is_file() && dir_path.extension().map_or(false, |ext| ext == "safetensors") {
+            if dir_path.is_file() && dir_path.extension().is_some_and(|ext| ext == "safetensors") {
                 return Ok(vec![dir_path.to_path_buf()]);
             }
-            anyhow::bail!("Path is not a valid directory or safetensors file: {:?}", dir_path);
+            anyhow::bail!(
+                "Path is not a valid directory or safetensors file: {:?}",
+                dir_path
+            );
         }
 
         // Check if sharded index exists
@@ -45,7 +48,7 @@ impl SafetensorsScanner {
         for entry in std::fs::read_dir(dir_path)? {
             let entry = entry?;
             let path = entry.path();
-            if path.is_file() && path.extension().map_or(false, |ext| ext == "safetensors") {
+            if path.is_file() && path.extension().is_some_and(|ext| ext == "safetensors") {
                 files.push(path);
             }
         }
@@ -57,10 +60,14 @@ impl SafetensorsScanner {
     pub fn parse_metadata_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<TensorIR>> {
         let file = File::open(path.as_ref())
             .with_context(|| format!("Failed to open safetensors file: {:?}", path.as_ref()))?;
-        
+
         let mmap = unsafe { Mmap::map(&file)? };
-        let safetensors = SafeTensors::deserialize(&mmap)
-            .with_context(|| format!("Failed to parse safetensors header from {:?}", path.as_ref()))?;
+        let safetensors = SafeTensors::deserialize(&mmap).with_context(|| {
+            format!(
+                "Failed to parse safetensors header from {:?}",
+                path.as_ref()
+            )
+        })?;
 
         let mut tensors = Vec::new();
         for (name, view) in safetensors.tensors() {
@@ -69,7 +76,10 @@ impl SafetensorsScanner {
             let byte_size = view.data().len();
 
             let mut tensor_ir = TensorIR::new(name, shape, dtype.clone(), byte_size);
-            tensor_ir.weight_profile = Some(crate::profiling::WeightAnalyzer::profile_tensor(view.data(), &dtype));
+            tensor_ir.weight_profile = Some(crate::profiling::WeightAnalyzer::profile_tensor(
+                view.data(),
+                &dtype,
+            ));
             tensors.push(tensor_ir);
         }
 

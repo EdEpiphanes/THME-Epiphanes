@@ -1,0 +1,42 @@
+﻿{
+  "$schema": "../../docs/schemas/surgery-recipe-v1.json",
+  "name": "llama3_hybrid_deltanet_surgery",
+  "target_architecture": "LLaMA",
+  "description": "Transforms middle MLP blocks to BitNet b1.58 ternary representation and replaces alternating self-attention blocks with Gated DeltaNet linear recurrence.",
+  "author": "Epiphanes Teacher LLM v1.0",
+  "operations": [
+    {
+      "type": "replace_mixer",
+      "start_layer": 2,
+      "end_layer": 14,
+      "new_mixer": "gated_deltanet"
+    },
+    {
+      "type": "set_precision",
+      "start_layer": 4,
+      "end_layer": 28,
+      "role": "MlpDown",
+      "format": "BitNet1_58"
+    },
+    {
+      "type": "set_precision",
+      "start_layer": 4,
+      "end_layer": 28,
+      "role": "MlpUp",
+      "format": "INT4"
+    },
+    {
+      "type": "prune_components",
+      "start_layer": 8,
+      "end_layer": 20,
+      "role": "MlpGate",
+      "threshold": 0.05
+    },
+    {
+      "type": "scale_tensors",
+      "layer": 0,
+      "tensor_name_filter": "self_attn.q_proj.weight",
+      "multiplier": 1.02
+    }
+  ]
+}

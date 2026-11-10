@@ -56,9 +56,12 @@ impl KvCacheEstimator {
         context_lengths
             .iter()
             .map(|&s| {
-                let bytes_fp16 = Self::calculate_bytes(num_layers, batch_size, s, num_kv_heads, head_dim, 2.0);
-                let bytes_fp8 = Self::calculate_bytes(num_layers, batch_size, s, num_kv_heads, head_dim, 1.0);
-                let bytes_q4 = Self::calculate_bytes(num_layers, batch_size, s, num_kv_heads, head_dim, 0.5);
+                let bytes_fp16 =
+                    Self::calculate_bytes(num_layers, batch_size, s, num_kv_heads, head_dim, 2.0);
+                let bytes_fp8 =
+                    Self::calculate_bytes(num_layers, batch_size, s, num_kv_heads, head_dim, 1.0);
+                let bytes_q4 =
+                    Self::calculate_bytes(num_layers, batch_size, s, num_kv_heads, head_dim, 0.5);
 
                 KvCacheProjection {
                     context_length: s,

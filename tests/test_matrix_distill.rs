@@ -1,11 +1,11 @@
-use thme::transform::{AutoDecider, MatrixAlgorithm, MatrixMath};
 use thme::gui::TensorInfo;
+use thme::transform::{AutoDecider, MatrixAlgorithm, MatrixMath};
 
 #[test]
 fn test_svd_power_iteration_reconstruction() {
     // 4x4 low-rank synthetic matrix (rank-1 outer product u * v^T)
-    let u = vec![1.0, 2.0, -1.0, 0.5];
-    let v = vec![0.5, -1.0, 2.0, 1.5];
+    let u = [1.0, 2.0, -1.0, 0.5];
+    let v = [0.5, -1.0, 2.0, 1.5];
     let mut matrix = vec![0.0; 16];
     for r in 0..4 {
         for c in 0..4 {
@@ -45,9 +45,7 @@ fn test_hadamard_orthogonality_and_energy() {
 #[test]
 fn test_smoothquant_scaling_bounds() {
     let weights = vec![
-        0.01, 1.50, -0.02, 0.04,
-        0.03, -2.10, 0.01, -0.05,
-        -0.02, 1.80, 0.05, 0.02,
+        0.01, 1.50, -0.02, 0.04, 0.03, -2.10, 0.01, -0.05, -0.02, 1.80, 0.05, 0.02,
     ];
     let scales = MatrixMath::compute_smoothquant_scales(&weights, 4, 0.5);
     assert_eq!(scales.len(), 4);
@@ -58,7 +56,7 @@ fn test_smoothquant_scaling_bounds() {
 #[test]
 fn test_distillation_similarity_bounds() {
     let (cosine_sim, kl) = MatrixMath::simulate_distillation_alignment(4096, 2048, 2.0);
-    assert!(cosine_sim >= 0.85 && cosine_sim <= 1.0);
+    assert!((0.85..=1.0).contains(&cosine_sim));
     assert!(kl > 0.0 && kl < 1.0);
 }
 
@@ -141,11 +139,16 @@ fn test_auto_decider_layer_specialization() {
     assert_eq!(decisions[3].algorithm, MatrixAlgorithm::DenseBaselineFP16);
 
     // Layer 0 AttentionQ boundary must be protected with Truncated SVD
-    assert!(matches!(decisions[0].algorithm, MatrixAlgorithm::TruncatedSVD { .. }));
+    assert!(matches!(
+        decisions[0].algorithm,
+        MatrixAlgorithm::TruncatedSVD { .. }
+    ));
 
     // Layer 6 MlpDown with high outliers (0.006) should use Walsh-Hadamard rotation or SmoothQuant
     assert!(
-        matches!(decisions[2].algorithm, MatrixAlgorithm::HadamardRotation { .. })
-            || matches!(decisions[2].algorithm, MatrixAlgorithm::SmoothQuant { .. })
+        matches!(
+            decisions[2].algorithm,
+            MatrixAlgorithm::HadamardRotation { .. }
+        ) || matches!(decisions[2].algorithm, MatrixAlgorithm::SmoothQuant { .. })
     );
 }

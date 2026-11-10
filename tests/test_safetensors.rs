@@ -40,11 +40,8 @@ fn test_synthetic_safetensors_import() -> anyhow::Result<()> {
         vec![128, 256],
         &tensor2_data,
     )?;
-    let view3 = safetensors::tensor::TensorView::new(
-        safetensors::Dtype::F16,
-        vec![128],
-        &norm_data,
-    )?;
+    let view3 =
+        safetensors::tensor::TensorView::new(safetensors::Dtype::F16, vec![128], &norm_data)?;
 
     data_map.insert("model.layers.0.self_attn.q_proj.weight".to_string(), view1);
     data_map.insert("model.layers.0.mlp.down_proj.weight".to_string(), view2);

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use crate::ir::{ModelIR, TensorFormat, TensorRole};
 use super::precision::{AllocationPlan, LayerAllocation};
+use crate::ir::{ModelIR, TensorFormat, TensorRole};
 
 pub struct ParetoAllocator;
 
@@ -100,11 +100,14 @@ impl ParetoAllocator {
         let mut layer_allocations = Vec::new();
         for (layer_idx, tensors) in model.tensors_by_layer() {
             if let Some(l) = layer_idx {
-                let orig_mb = tensors.iter().map(|t| t.byte_size).sum::<usize>() as f64 / (1024.0 * 1024.0);
+                let orig_mb =
+                    tensors.iter().map(|t| t.byte_size).sum::<usize>() as f64 / (1024.0 * 1024.0);
                 let opt_mb = tensors
                     .iter()
                     .map(|t| {
-                        let fmt = tensor_allocations.get(&t.name).unwrap_or(&TensorFormat::FP16);
+                        let fmt = tensor_allocations
+                            .get(&t.name)
+                            .unwrap_or(&TensorFormat::FP16);
                         ((t.numel as f64 * fmt.bits_per_weight()) / 8.0).ceil() as usize
                     })
                     .sum::<usize>() as f64

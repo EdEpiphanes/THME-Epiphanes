@@ -14,17 +14,19 @@
   <img src="https://img.shields.io/badge/GUI-eframe%20%2F%20egui%20(Native%2060%20FPS)-06b6d4?style=flat-square" alt="GUI eframe" />
   <img src="https://img.shields.io/badge/Formats-SafeTensors%20%2B%20GGUF%20v2%2Fv3-10b981?style=flat-square" alt="Formats" />
   <img src="https://img.shields.io/badge/Memory-Zero--Copy%20MMap-f59e0b?style=flat-square" alt="Zero-Copy" />
+  <a href="https://github.com/EdEpiphanes/THME/actions/workflows/ci.yml"><img src="https://github.com/EdEpiphanes/THME/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <img src="https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square" alt="License" />
-  <img src="https://img.shields.io/badge/Tests-11%20Passed-success?style=flat-square" alt="Tests" />
+  <img src="https://img.shields.io/badge/Tests-20%20Passed-success?style=flat-square" alt="Tests" />
 </p>
 
 <p align="center">
-  <a href="#overview">Overview</a> â€¢
-  <a href="#desktop-studio-showcase">Desktop Studio</a> â€¢
-  <a href="#cli-tools">CLI Tools</a> â€¢
-  <a href="#teacher-llm-surgery">Teacher LLM Surgery</a> â€¢
-  <a href="#mathematical-foundation">Research Paper</a> â€¢
-  <a href="#production-roadmap">Production Roadmap</a> â€¢
+  <a href="#overview">Overview</a> •
+  <a href="#desktop-studio-showcase">Desktop Studio</a> •
+  <a href="#cli-tools">CLI Tools</a> •
+  <a href="#teacher-llm-surgery">Teacher LLM Surgery</a> •
+  <a href="ROADMAP.md">Roadmap</a> •
+  <a href="BACKLOG.md">Backlog</a> •
+  <a href="CHANGELOG.md">Changelog</a> •
   <a href="#quickstart">Quickstart</a>
 </p>
 
@@ -59,7 +61,7 @@ thme-gui
 ```text
 â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
 â”‚  THME v2.0  UNIVERSAL LLM RESTRUCTURER, MATRIX ENGINE & STUDIO                          [ðŸ“ Load Model] â”‚
-â”‚  Llama-3-8B [GGUF â€¢ LLAMA] (32 Layers â€¢ Hidden Dim 4096 â€¢ 8030M Params)                                 â”‚
+â”‚  Llama-3-8B [GGUF • LLAMA] (32 Layers • Hidden Dim 4096 • 8030M Params)                                 â”‚
 â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
 â”‚ [Master Dashboard] [Models] [Layer Tweaker] [Matrix & Distill] [Benchmarks] [History] [Audit] [Export]  â”‚
 â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
@@ -230,34 +232,38 @@ $$s(l) = s_{\mathrm{base}} + 4 \cdot \Delta_{\mathrm{depth}} \cdot \left(\frac{l
 
 ---
 
-## Production Roadmap
+## Production Roadmap (v0.1 to v0.2)
+
+Detailed milestone definitions and exit criteria are specified in [ROADMAP.md](ROADMAP.md). Engineering tickets and completion checklists are actively tracked in [BACKLOG.md](BACKLOG.md).
 
 ```mermaid
 flowchart TD
-    v010["v0.1.0 Baseline: Pure-Rust Engine & Desktop Studio (Completed)"]
-    v011["v0.1.1 Format Matrix: Complete GGUF v2/v3 & Out-of-Core Safety"]
-    v012["v0.1.2 CPU SIMD Engine: AVX-512 & ARM NEON Kernels"]
-    v013["v0.1.3 GPU Backends: Vulkan / WebGPU / Metal / CUDA Acceleration"]
-    v014["v0.1.4 AirLLM Streaming: 70B Models on 8GB VRAM with Async Prefetch"]
-    v015["v0.1.5 Teacher LLM Daemon: Autonomous Agent JSON-RPC Protocol"]
-    v016["v0.1.6 Quant Exporter: BitNet b1.58 & SmoothQuant Serialization"]
-    v017["v0.1.7 Quality Gate Suite: Automated Perplexity & MMLU Benchmarking"]
-    v018["v0.1.8 MoE Specialist: DeepSeek-V2/V3 & Mixtral Router Tweaking"]
-    v019["v0.1.9 Production Release: Automated Cross-Platform CI/CD & Signed Binaries"]
+    v010["v0.1.0 Foundations: Zero-Copy Parsing, Pareto Allocator & Studio GUI (Done)"]
+    v011["v0.1.1 Path Hygiene & CI: 3-OS Matrix, Leak Guard, Surgery Schema (Done)"]
+    v012["v0.1.2 Format Correctness: Full GGUF Quants, Fuzz Testing & Crate Split"]
+    v013["v0.1.3 Real Measurement: AVX2 / NEON Kernels & Criterion Benchmarks"]
+    v014["v0.1.4 Quality Gate: External Perplexity Bridge & Automated Rollback"]
+    v015["v0.1.5 Surgery Daemon: Headless JSON-RPC & REST Server for Teacher LLMs"]
+    v020["v0.2.0 Production Release: Verified Quant Exporter & Small-Model Demo"]
 
-    v010 --> v011 --> v012 --> v013 --> v014 --> v015 --> v016 --> v017 --> v018 --> v019
+    v010 --> v011 --> v012 --> v013 --> v014 --> v015 --> v020
+
+    subgraph Backlog_v03 ["v0.3.0+ Backlog (Deferred)"]
+        v031["GPU Backends (Vulkan / Metal / CUDA)"]
+        v032["70B Out-of-Core NVMe Streaming"]
+        v033["Mixture-of-Experts (MoE) Specialist"]
+    end
+
+    v020 -.-> Backlog_v03
 ```
 
-- **v0.1.0:** Zero-copy SafeTensors and GGUF parser, Pareto precision allocator, directional Quality Gate, Desktop Studio GUI with 6 tabs, live token flow telemetry, and headless surgery CLI.
-- **v0.1.1:** Exhaustive GGML quantization types (`Q2_K`, `Q3_K`, `Q4_K_M`, `Q5_K_M`, `Q6_K`, `IQ2_XXS`), sharded split GGUF, and truncated file recovery.
-- **v0.1.2:** AVX-512, AVX2, and ARM NEON SIMD micro-kernels for real CPU dot-product latency and layer-wise activation SNR measurement.
-- **v0.1.3:** `wgpu` (Vulkan/Metal) and CUDA hardware backends for on-device GPU layer profiling and PCIe transfer measurement.
-- **v0.1.4:** Sequential AirLLM asynchronous double-buffered disk-to-VRAM weight streamer allowing 70B models to run on 8GB VRAM.
-- **v0.1.5:** Headless daemon (`thme daemon --port 8080`) exposing JSON-RPC and REST endpoints for autonomous model surgery agents.
-- **v0.1.6:** Quantization writer exporting serialized `.gguf` and `.safetensors` files packed with BitNet b1.58 ternary and calibrated scales.
-- **v0.1.7:** In-engine Perplexity evaluator on WikiText-2 and zero-shot MMLU benchmarking suite.
-- **v0.1.8:** Sparse Mixture-of-Experts (MoE) support for DeepSeek-V2/V3 and Mixtral 8x22B with expert pruning and routing analysis.
-- **v0.1.9:** Multi-platform packaging (Windows MSI/exe, Linux AppImage, macOS universal DMG), fuzz testing, and verified release binaries.
+- **v0.1.0 (Released):** Zero-copy SafeTensors and GGUF v2/v3 memory-mapped parsing, Pareto allocator, 60 FPS Desktop Studio with 5 themes, matrix distillation engine, token flow simulator, audit logging, and declarative surgery recipes.
+- **v0.1.1 (Released):** Rebranded to THME under Epiphanes, 3-OS GitHub Actions CI matrix, automated path-leak guard, tag-driven release publishing, zero clippy warnings, and surgery recipe JSON schema.
+- **v0.1.2 (Planned):** Full GGUF quantization type decoders (`Q4_K_M`, `Q5_K_S`, `Q8_0`), continuous parser fuzz testing, and crate split into `thme-core`, `thme-cli`, `thme-gui`.
+- **v0.1.3 (Planned):** AVX2, AVX-512, and ARM NEON SIMD kernels for matrix transformations, with criterion micro-benchmarks verified in CI.
+- **v0.1.4 (Planned):** Empirical quality validation bridge against baseline models with automated degradation gating (Delta PPL <= epsilon).
+- **v0.1.5 (Planned):** Headless JSON-RPC and REST daemon allowing remote Teacher LLMs to inspect model IR and dispatch surgery recipes programmatically.
+- **v0.2.0 (Target):** Verified quantization exporter for BitNet b1.58 and calibrated scales, accompanied by an end-to-end reproducible small-model demonstration.
 
 ---
 

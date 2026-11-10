@@ -38,7 +38,8 @@ impl HfConfig {
         if !path.exists() {
             return Ok(Self::default());
         }
-        let file = File::open(&path).with_context(|| format!("Failed to open config file: {:?}", path))?;
+        let file =
+            File::open(&path).with_context(|| format!("Failed to open config file: {:?}", path))?;
         let reader = BufReader::new(file);
         let config: HfConfig = serde_json::from_reader(reader)
             .with_context(|| format!("Failed to parse config.json at: {:?}", path))?;

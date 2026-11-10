@@ -27,7 +27,10 @@ pub struct PlanArgs {
 }
 
 pub fn execute(args: PlanArgs) -> Result<()> {
-    println!("Computing heterogeneous precision Pareto plan for: {:?}", args.path);
+    println!(
+        "Computing heterogeneous precision Pareto plan for: {:?}",
+        args.path
+    );
     let mut model_ir = ModelImporter::import(&args.path)?;
 
     // Profile sensitivity first
@@ -38,7 +41,10 @@ pub fn execute(args: PlanArgs) -> Result<()> {
 
     ReportPrinter::print_allocation_plan(&plan);
     plan.save_to_file(&args.output)?;
-    println!("\nOptimization plan successfully written to: {:?}", args.output);
+    println!(
+        "\nOptimization plan successfully written to: {:?}",
+        args.output
+    );
 
     Ok(())
 }

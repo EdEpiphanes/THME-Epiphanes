@@ -94,7 +94,11 @@ impl<'a> GgufReader<'a> {
 
     pub fn read_bytes(&mut self, n: usize) -> Result<&'a [u8]> {
         if self.cursor + n > self.data.len() {
-            bail!("Unexpected EOF in GGUF file: needed {} bytes at {}", n, self.cursor);
+            bail!(
+                "Unexpected EOF in GGUF file: needed {} bytes at {}",
+                n,
+                self.cursor
+            );
         }
         let slice = &self.data[self.cursor..self.cursor + n];
         self.cursor += n;
@@ -174,11 +178,11 @@ impl<'a> GgufReader<'a> {
                 self.read_bytes(2)?;
                 Ok(())
             }
-            4 | 5 | 6 => {
+            4..=6 => {
                 self.read_bytes(4)?;
                 Ok(())
             }
-            10 | 11 | 12 => {
+            10..=12 => {
                 self.read_bytes(8)?;
                 Ok(())
             }
@@ -309,12 +313,13 @@ impl GgufParser {
         for raw in raw_tensors {
             let dtype = ggml_type_str(raw.ggml_type).to_string();
             let numel: usize = raw.shape.iter().product();
-            let byte_size = (numel as f64 * ggml_type_bytes_per_elem(raw.ggml_type)).ceil() as usize;
+            let byte_size =
+                (numel as f64 * ggml_type_bytes_per_elem(raw.ggml_type)).ceil() as usize;
 
             let mut tensor_ir = TensorIR::new(raw.name, raw.shape, dtype.clone(), byte_size);
 
             // Extract weight profile if data is within bounds
-            let tensor_byte_offset = data_start.checked_add(raw.offset as usize).unwrap_or(usize::MAX);
+            let tensor_byte_offset = data_start.saturating_add(raw.offset as usize);
             if tensor_byte_offset.saturating_add(byte_size) <= data.len() {
                 let slice = &data[tensor_byte_offset..tensor_byte_offset + byte_size];
                 tensor_ir.weight_profile = Some(WeightAnalyzer::profile_tensor(slice, &dtype));

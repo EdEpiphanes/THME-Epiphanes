@@ -1,6 +1,6 @@
 pub mod app;
 
-pub use app::{GuiTheme, LayerNode, TensorInfo, ThemePalette, UniversalModel, THMEApp};
+pub use app::{GuiTheme, LayerNode, THMEApp, TensorInfo, ThemePalette, UniversalModel};
 
 use eframe::egui;
 
@@ -21,4 +21,3 @@ pub fn launch_gui() -> anyhow::Result<()> {
     )
     .map_err(|e| anyhow::anyhow!("Failed to run GUI: {}", e))
 }
-

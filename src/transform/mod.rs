@@ -50,9 +50,7 @@ pub enum MatrixAlgorithm {
         kl_divergence: f32,
     },
     /// Modern FP8 E4M3 hybrid quantization
-    FP8Hybrid {
-        scale_factor: f32,
-    },
+    FP8Hybrid { scale_factor: f32 },
     /// INT4 Activation-aware Weight Quantization preserving salient channels
     INT4AWQ {
         group_size: usize,
@@ -170,7 +168,12 @@ impl MatrixMath {
 
     /// Truncated SVD power-iteration approximation for rank-1 projection:
     /// Returns singular value $\sigma_1$, left singular vector $u$, right singular vector $v$.
-    pub fn power_iteration_svd(matrix: &[f32], rows: usize, cols: usize, max_iter: usize) -> (f32, Vec<f32>, Vec<f32>) {
+    pub fn power_iteration_svd(
+        matrix: &[f32],
+        rows: usize,
+        cols: usize,
+        max_iter: usize,
+    ) -> (f32, Vec<f32>, Vec<f32>) {
         if rows == 0 || cols == 0 || matrix.len() != rows * cols {
             return (0.0, Vec::new(), Vec::new());
         }
@@ -250,10 +253,14 @@ impl MatrixMath {
         let mut sparse = weights.to_vec();
         let mut zero_count = 0;
 
-        for chunk in sparse.chunks_exact_mut(4) {
+        let (chunks, _) = sparse.as_chunks_mut::<4>();
+        for chunk in chunks {
             let mut indices = [0, 1, 2, 3];
             indices.sort_by(|&a, &b| {
-                chunk[b].abs().partial_cmp(&chunk[a].abs()).unwrap_or(std::cmp::Ordering::Equal)
+                chunk[b]
+                    .abs()
+                    .partial_cmp(&chunk[a].abs())
+                    .unwrap_or(std::cmp::Ordering::Equal)
             });
 
             // Zero out indices 2 and 3 (the 2 smallest magnitudes)
@@ -316,6 +323,7 @@ pub struct AutoDecider;
 
 impl AutoDecider {
     /// Evaluates a single tensor and selects the Pareto-optimal transformation algorithm.
+    #[allow(clippy::too_many_arguments)]
     pub fn decide_for_parameter(
         name: &str,
         layer_idx: usize,
@@ -332,10 +340,15 @@ impl AutoDecider {
 
         let depth_frac = layer_idx as f32 / num_layers.max(1) as f32;
         let is_sensitive_boundary = layer_idx == 0 || layer_idx + 1 >= num_layers;
-        let is_attention_proj = role.contains("Attention") || name.contains("self_attn") || name.contains("q_proj") || name.contains("k_proj") || name.contains("v_proj");
+        let is_attention_proj = role.contains("Attention")
+            || name.contains("self_attn")
+            || name.contains("q_proj")
+            || name.contains("k_proj")
+            || name.contains("v_proj");
         let is_mlp_down = role.contains("MlpDown") || name.contains("down_proj");
         let is_mlp_gate_up = role.contains("Mlp") && !is_mlp_down;
-        let is_norm = role.contains("Norm") || name.contains("layernorm") || name.contains("rmsnorm");
+        let is_norm =
+            role.contains("Norm") || name.contains("layernorm") || name.contains("rmsnorm");
 
         // The decision logic:
         let (algorithm, rationale, distortion) = if is_norm {
@@ -407,7 +420,10 @@ impl AutoDecider {
                 format!("Intermediate Attention QKV: Feature distillation aligns student features (cosine sim {:.3}, KL {:.4}) yielding 4.0x compression.", cosine_sim, kl),
                 0.0062,
             )
-        } else if is_mlp_gate_up && (depth_frac > 0.30 && depth_frac < 0.85) && quality_tolerance >= 0.015 {
+        } else if is_mlp_gate_up
+            && (depth_frac > 0.30 && depth_frac < 0.85)
+            && quality_tolerance >= 0.015
+        {
             // Middle deep feed-forward layers have parabolic noise tolerance:
             // BitNet b1.58 Ternary Quantization gives massive 1.58-bit compression
             let gamma = (std_val * 0.798).max(0.01);
@@ -419,7 +435,9 @@ impl AutoDecider {
                 format!("Middle MLP block with standard distribution (sigma={:.3}): BitNet b1.58 ternary quantization with absmean scale gamma={:.4}.", std_val, gamma),
                 0.0125,
             )
-        } else if sparsity > 0.15 || (shape.len() == 2 && shape[0] % 4 == 0 && shape[1] % 4 == 0) {
+        } else if sparsity > 0.15
+            || (shape.len() == 2 && shape[0].is_multiple_of(4) && shape[1].is_multiple_of(4))
+        {
             // Semi-structured 2:4 sparsity for hardware tensor cores
             (
                 MatrixAlgorithm::Structured2to4Pruning {
@@ -444,7 +462,8 @@ impl AutoDecider {
         let effective_bits = algorithm.effective_bits_per_param();
         let compressed_bytes = ((num_elements as f32 * effective_bits) / 8.0).ceil() as usize;
         let compression_ratio = original_bytes as f32 / compressed_bytes.max(1) as f32;
-        let quality_preserved = (1.0 - (distortion / (quality_tolerance.max(0.01) * 2.0))).clamp(0.85, 0.999);
+        let quality_preserved =
+            (1.0 - (distortion / (quality_tolerance.max(0.01) * 2.0))).clamp(0.85, 0.999);
 
         ParameterTransformDecision {
             tensor_name: name.to_string(),
@@ -503,7 +522,9 @@ impl AutoDecider {
                 MatrixAlgorithm::BitNetTernary { .. } => summary.count_bitnet += 1,
                 MatrixAlgorithm::Structured2to4Pruning { .. } => summary.count_2to4 += 1,
                 MatrixAlgorithm::FeatureDistillation { .. } => summary.count_distillation += 1,
-                MatrixAlgorithm::FP8Hybrid { .. } | MatrixAlgorithm::INT4AWQ { .. } => summary.count_fp8_int4 += 1,
+                MatrixAlgorithm::FP8Hybrid { .. } | MatrixAlgorithm::INT4AWQ { .. } => {
+                    summary.count_fp8_int4 += 1
+                }
                 _ => {}
             }
 
@@ -513,7 +534,8 @@ impl AutoDecider {
         let n = decisions.len().max(1) as f32;
         summary.original_storage_mb = total_orig_bytes as f32 / (1024.0 * 1024.0);
         summary.optimized_storage_mb = total_comp_bytes as f32 / (1024.0 * 1024.0);
-        summary.overall_compression_ratio = total_orig_bytes as f32 / total_comp_bytes.max(1) as f32;
+        summary.overall_compression_ratio =
+            total_orig_bytes as f32 / total_comp_bytes.max(1) as f32;
         summary.average_distortion_snr = total_distortion / n;
         summary.mean_quality_score = total_quality / n;
 

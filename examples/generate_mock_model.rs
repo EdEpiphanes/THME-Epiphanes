@@ -28,36 +28,68 @@ fn main() -> anyhow::Result<()> {
     // Embedding
     let embed_idx = buffers.len();
     buffers.push(vec![0u8; 32000 * 256 * 2]);
-    entries.push(("model.embed_tokens.weight".to_string(), vec![32000, 256], embed_idx));
+    entries.push((
+        "model.embed_tokens.weight".to_string(),
+        vec![32000, 256],
+        embed_idx,
+    ));
 
     for l in 0..4 {
         let q_idx = buffers.len();
         buffers.push(vec![0u8; 256 * 256 * 2]);
-        entries.push((format!("model.layers.{}.self_attn.q_proj.weight", l), vec![256, 256], q_idx));
+        entries.push((
+            format!("model.layers.{}.self_attn.q_proj.weight", l),
+            vec![256, 256],
+            q_idx,
+        ));
 
         let k_idx = buffers.len();
         buffers.push(vec![0u8; 256 * 128 * 2]);
-        entries.push((format!("model.layers.{}.self_attn.k_proj.weight", l), vec![256, 128], k_idx));
+        entries.push((
+            format!("model.layers.{}.self_attn.k_proj.weight", l),
+            vec![256, 128],
+            k_idx,
+        ));
 
         let v_idx = buffers.len();
         buffers.push(vec![0u8; 256 * 128 * 2]);
-        entries.push((format!("model.layers.{}.self_attn.v_proj.weight", l), vec![256, 128], v_idx));
+        entries.push((
+            format!("model.layers.{}.self_attn.v_proj.weight", l),
+            vec![256, 128],
+            v_idx,
+        ));
 
         let o_idx = buffers.len();
         buffers.push(vec![0u8; 256 * 256 * 2]);
-        entries.push((format!("model.layers.{}.self_attn.o_proj.weight", l), vec![256, 256], o_idx));
+        entries.push((
+            format!("model.layers.{}.self_attn.o_proj.weight", l),
+            vec![256, 256],
+            o_idx,
+        ));
 
         let gate_idx = buffers.len();
         buffers.push(vec![0u8; 256 * 1024 * 2]);
-        entries.push((format!("model.layers.{}.mlp.gate_proj.weight", l), vec![256, 1024], gate_idx));
+        entries.push((
+            format!("model.layers.{}.mlp.gate_proj.weight", l),
+            vec![256, 1024],
+            gate_idx,
+        ));
 
         let up_idx = buffers.len();
         buffers.push(vec![0u8; 256 * 1024 * 2]);
-        entries.push((format!("model.layers.{}.mlp.up_proj.weight", l), vec![256, 1024], up_idx));
+        entries.push((
+            format!("model.layers.{}.mlp.up_proj.weight", l),
+            vec![256, 1024],
+            up_idx,
+        ));
 
         let down_idx = buffers.len();
         buffers.push(vec![0u8; 1024 * 256 * 2]);
-        entries.push((format!("model.layers.{}.mlp.down_proj.weight", l), vec![1024, 256], down_idx));
+        entries.push((
+            format!("model.layers.{}.mlp.down_proj.weight", l),
+            vec![1024, 256],
+            down_idx,
+        ));
     }
 
     let norm_idx = buffers.len();

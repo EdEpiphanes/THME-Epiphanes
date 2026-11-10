@@ -60,4 +60,3 @@ pub fn run() -> Result<()> {
         Commands::Report(args) => report::execute(args),
     }
 }
-

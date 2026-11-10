@@ -1,0 +1,88 @@
+﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/EdEpiphanes/THME/main/docs/schemas/surgery-recipe-v1.json",
+  "title": "THMESurgeryRecipe",
+  "description": "Declarative JSON specification for automated Teacher LLM architecture modifications, pruning, and heterogeneous precision allocation.",
+  "type": "object",
+  "required": ["name", "description", "author", "operations"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Identifier for the surgery recipe"
+    },
+    "target_architecture": {
+      "type": ["string", "null"],
+      "description": "Target model family (e.g., LLaMA, Qwen, Mistral, Gemma, Phi)"
+    },
+    "description": {
+      "type": "string",
+      "description": "High-level summary of the architectural changes and objective"
+    },
+    "author": {
+      "type": "string",
+      "description": "Author or Teacher LLM agent identifier"
+    },
+    "operations": {
+      "type": "array",
+      "description": "Ordered sequence of surgical operations applied to the model IR",
+      "items": {
+        "type": "object",
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["replace_mixer", "set_precision", "prune_components", "scale_tensors"]
+          },
+          "start_layer": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "end_layer": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "new_mixer": {
+            "type": "string",
+            "description": "Target sequence mixer (e.g. gated_deltanet, phase_recurrence, sliding_window)"
+          },
+          "role": {
+            "type": ["string", "null"],
+            "enum": [
+              "Embedding",
+              "AttentionQ",
+              "AttentionK",
+              "AttentionV",
+              "AttentionO",
+              "MlpGate",
+              "MlpUp",
+              "MlpDown",
+              "LayerNorm",
+              "LmHead",
+              "Unknown",
+              null
+            ]
+          },
+          "format": {
+            "type": "string",
+            "enum": ["FP16", "FP8_E4M3", "FP8_E5M2", "INT8", "INT4", "BitNet1_58", "NF4"]
+          },
+          "threshold": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0
+          },
+          "layer": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "tensor_name_filter": {
+            "type": "string"
+          },
+          "multiplier": {
+            "type": "number"
+          }
+        }
+      }
+    }
+  }
+}

@@ -28,8 +28,8 @@ pub fn execute(args: TweakArgs) -> Result<()> {
     println!("Loading surgery recipe from: {:?}", args.recipe);
     let recipe_str = std::fs::read_to_string(&args.recipe)
         .with_context(|| format!("Failed to read recipe file: {:?}", args.recipe))?;
-    let recipe: TweakRecipe = serde_json::from_str(&recipe_str)
-        .with_context(|| "Failed to parse recipe JSON")?;
+    let recipe: TweakRecipe =
+        serde_json::from_str(&recipe_str).with_context(|| "Failed to parse recipe JSON")?;
 
     let diff = SurgeryEngine::apply_recipe(&mut model_ir, &recipe);
 

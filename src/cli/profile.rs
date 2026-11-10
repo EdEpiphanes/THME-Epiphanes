@@ -17,7 +17,11 @@ pub struct ProfileArgs {
     pub batch_size: usize,
 
     /// Comma-separated list of context lengths to project
-    #[arg(short, long, default_value = "1024,2048,4096,8192,16384,32768,65536,131072")]
+    #[arg(
+        short,
+        long,
+        default_value = "1024,2048,4096,8192,16384,32768,65536,131072"
+    )]
     pub context_lengths: String,
 
     /// Optional output file to write JSON profile
@@ -26,7 +30,10 @@ pub struct ProfileArgs {
 }
 
 pub fn execute(args: ProfileArgs) -> Result<()> {
-    println!("Profiling manifold sensitivity & memory for: {:?}", args.path);
+    println!(
+        "Profiling manifold sensitivity & memory for: {:?}",
+        args.path
+    );
     let mut model_ir = ModelImporter::import(&args.path)?;
 
     // 1. Calculate layer sensitivity

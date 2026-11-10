@@ -119,11 +119,12 @@ impl SurgeryEngine {
                 } => {
                     for tensor in &mut model.tensors {
                         if let Some(l) = tensor.layer_index {
-                            if l >= *start_layer && l <= *end_layer {
-                                if role.map_or(true, |r| r == tensor.role) {
-                                    tensor.selected_format = format.clone();
-                                    modified_count += 1;
-                                }
+                            if l >= *start_layer
+                                && l <= *end_layer
+                                && role.is_none_or(|r| r == tensor.role)
+                            {
+                                tensor.selected_format = format.clone();
+                                modified_count += 1;
                             }
                         }
                     }
@@ -158,10 +159,7 @@ impl SurgeryEngine {
                     ));
                 }
                 TweakOperation::QuantizeKvCache { format } => {
-                    audit_log.push(format!(
-                        "Quantized KV Cache global format to {:?}",
-                        format
-                    ));
+                    audit_log.push(format!("Quantized KV Cache global format to {:?}", format));
                 }
             }
         }

@@ -28,19 +28,35 @@ impl ReportPrinter {
         table.add_row(vec!["Architecture", model.architecture.display_name()]);
         table.add_row(vec![
             "Total Parameters",
-            &format!("{:.2} B ({})", model.num_parameters as f64 / 1e9, model.num_parameters),
+            &format!(
+                "{:.2} B ({})",
+                model.num_parameters as f64 / 1e9,
+                model.num_parameters
+            ),
         ]);
         table.add_row(vec![
             "Raw Weight Size",
-            &format!("{:.2} GB", model.original_byte_size as f64 / (1024.0 * 1024.0 * 1024.0)),
+            &format!(
+                "{:.2} GB",
+                model.original_byte_size as f64 / (1024.0 * 1024.0 * 1024.0)
+            ),
         ]);
         table.add_row(vec!["Hidden Size", &model.hidden_size.to_string()]);
         table.add_row(vec!["Number of Layers", &model.num_layers.to_string()]);
-        table.add_row(vec!["Attention Heads (Q)", &model.num_attention_heads.to_string()]);
-        table.add_row(vec!["Key-Value Heads (KV)", &model.num_key_value_heads.to_string()]);
+        table.add_row(vec![
+            "Attention Heads (Q)",
+            &model.num_attention_heads.to_string(),
+        ]);
+        table.add_row(vec![
+            "Key-Value Heads (KV)",
+            &model.num_key_value_heads.to_string(),
+        ]);
         table.add_row(vec!["Head Dimension", &model.head_dim.to_string()]);
         table.add_row(vec!["Vocabulary Size", &model.vocab_size.to_string()]);
-        table.add_row(vec!["Max Context Length", &model.max_position_embeddings.to_string()]);
+        table.add_row(vec![
+            "Max Context Length",
+            &model.max_position_embeddings.to_string(),
+        ]);
         table.add_row(vec!["Total Tensors", &model.tensors.len().to_string()]);
 
         println!("{table}");
@@ -75,7 +91,10 @@ impl ReportPrinter {
             table.add_row(vec![
                 Cell::new(format!("Layer {:02}", l.layer_index)),
                 Cell::new(format!("{:.2} M", l.total_parameters as f64 / 1e6)),
-                Cell::new(format!("{:.1} MB", l.total_bytes as f64 / (1024.0 * 1024.0))),
+                Cell::new(format!(
+                    "{:.1} MB",
+                    l.total_bytes as f64 / (1024.0 * 1024.0)
+                )),
                 Cell::new(format!("{:.3}", l.average_sensitivity)).fg(sens_color),
                 Cell::new(l.recommended_format.display_name()).fg(Color::Cyan),
             ]);
@@ -129,8 +148,14 @@ impl ReportPrinter {
         ]);
 
         table.add_row(vec!["Target Model", &plan.model_name]);
-        table.add_row(vec!["Original Size", &format!("{:.2} GB", plan.original_size_gb)]);
-        table.add_row(vec!["Planned Compressed Size", &format!("{:.2} GB", plan.planned_size_gb)]);
+        table.add_row(vec![
+            "Original Size",
+            &format!("{:.2} GB", plan.original_size_gb),
+        ]);
+        table.add_row(vec![
+            "Planned Compressed Size",
+            &format!("{:.2} GB", plan.planned_size_gb),
+        ]);
         table.add_row(vec![
             "Compression Ratio",
             &format!("{:.2}x", plan.compression_ratio),
@@ -147,7 +172,9 @@ impl ReportPrinter {
     pub fn print_gate_result(result: &GateResult) {
         println!("\n=== Quality Gate Verification ===");
         let mut table = Table::new();
-        table.load_preset(UTF8_FULL).apply_modifier(UTF8_ROUND_CORNERS);
+        table
+            .load_preset(UTF8_FULL)
+            .apply_modifier(UTF8_ROUND_CORNERS);
 
         let status_cell = match result.decision {
             crate::quality::GateDecision::Accept => Cell::new("ACCEPTED").fg(Color::Green),
@@ -163,10 +190,7 @@ impl ReportPrinter {
             Cell::new("Threshold Tolerance"),
             Cell::new(format!("{:.3} pts", result.max_allowed_degradation)),
         ]);
-        table.add_row(vec![
-            Cell::new("Summary"),
-            Cell::new(&result.summary),
-        ]);
+        table.add_row(vec![Cell::new("Summary"), Cell::new(&result.summary)]);
 
         println!("{table}");
     }

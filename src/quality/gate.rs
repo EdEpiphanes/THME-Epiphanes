@@ -34,7 +34,12 @@ impl QualityGate {
         candidate_score: f64,
         max_allowed_degradation: f64,
     ) -> GateResult {
-        Self::evaluate_candidate_directional(baseline_score, candidate_score, max_allowed_degradation, false)
+        Self::evaluate_candidate_directional(
+            baseline_score,
+            candidate_score,
+            max_allowed_degradation,
+            false,
+        )
     }
 
     /// Evaluates candidate with explicit metric direction (higher-is-better vs lower-is-better)
@@ -111,7 +116,10 @@ impl QualityGate {
         };
 
         let summary = if all_passed {
-            format!("PASSED: All {} benchmark tasks passed their individual quality gates.", scores.len())
+            format!(
+                "PASSED: All {} benchmark tasks passed their individual quality gates.",
+                scores.len()
+            )
         } else {
             let failed_tasks: Vec<&str> = task_evals
                 .iter()

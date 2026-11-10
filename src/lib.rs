@@ -16,4 +16,6 @@ pub use parser::ModelImporter;
 pub use profiling::{KvCacheEstimator, SensitivityProfiler};
 pub use quality::{GateDecision, GateResult, QualityGate};
 pub use surgery::{SurgeryDiff, SurgeryEngine, TweakOperation, TweakRecipe};
-pub use transform::{AutoDecider, MatrixAlgorithm, MatrixMath, ParameterTransformDecision, TransformPlanSummary};
+pub use transform::{
+    AutoDecider, MatrixAlgorithm, MatrixMath, ParameterTransformDecision, TransformPlanSummary,
+};
