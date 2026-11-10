@@ -1,6 +1,6 @@
 pub mod app;
 
-pub use app::THMEApp;
+pub use app::{LayerNode, TensorInfo, UniversalModel, THMEApp};
 
 use eframe::egui;
 

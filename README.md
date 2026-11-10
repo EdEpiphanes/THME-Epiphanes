@@ -36,10 +36,13 @@
 
 Built in pure Rust without external runtime dependencies:
 - **Universal model importer**: Zero-copy memory-mapped parsing of GGUF v2/v3 and SafeTensors files or sharded directories, with fallback architecture deduction when `config.json` is absent.
-- **Weight analysis and numerical slice matrix**: Computes statistical moments ($\mu, \sigma$), sparsity ratio, outlier counts ($>3\sigma$), 32-bin histograms, and an interactive 8x8 numerical matrix slice viewer.
-- **Live token flow benchmarker**: Models token generation across 13 Transformer stages ($\text{Embedding} \to \text{Attention QKV} \to \text{RoPE} \to \text{KV Cache Append} \to \text{Scaled Dot-Product} \to \text{SwiGLU FFN} \to \text{Adaptive Exit Check} \to \text{LM Head}$) with 60 FPS real-time telemetry.
-- **Teacher LLM surgery engine**: Declarative JSON recipe format allowing automated agents (such as Claude, Gemini, or custom scripts) to adjust layer precisions, replace sequence mixers, and prune components.
-- **Standalone native desktop studio**: Compiles to a 5.7 MB zero-dependency executable ([`LLM-Tweaker-Studio.exe`](file:///LLM-Tweaker-Studio.exe)).
+- **Distillation and matrix transformation engine**: Implementations of Truncated SVD, Walsh-Hadamard orthogonal rotation, SmoothQuant per-channel scaling, BitNet b1.58 absmean ternary quantization, and 2:4 semi-structured sparsity.
+- **Automated parameter decision engine**: Analyzes spectral energy, condition number, and outlier kurtosis for each tensor, assigning the mathematically optimal algorithm per parameter.
+- **Layer tweaker and section inspector**: Adjusts layer sequence mixers, precision allocations, scale factors, bias offsets, and pruning thresholds, with interactive 8x8 weight slice matrices and 32-bin histograms.
+- **Live token flow and full benchmark suite**: Simulates token generation across 13 Transformer stages with 60 FPS telemetry, batch scaling analysis ($B=1 \dots 64$), and context window KV cache projections.
+- **History checkpoints and audit trail**: Records immutable snapshots for instant configuration rollback and a searchable, structured compliance audit stream.
+- **Teacher LLM surgery engine**: Declarative JSON recipe format allowing automated agents to adjust layer precisions, replace sequence mixers, and prune components.
+- **Standalone native desktop studio**: Compiles to a 5.8 MB zero-dependency executable ([`LLM-Tweaker-Studio.exe`](file:///LLM-Tweaker-Studio.exe)).
 
 ---
 
@@ -54,26 +57,28 @@ thme-gui
 ```
 
 ```text
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│  THME v2.0  LLM RE-STRUCTURER, OPTIMIZER & TUNER                     [📁 Load Model]  │
-│  Llama-3-8B [GGUF • LLAMA] (32 Layers • Hidden Dim 4096 • 8030M Params)                │
-├────────────────────────────────────────────────────────────────────────────────────────┤
-│ [1. Layer Matrix] [2. Live Flow Bench] [3. Auto-Tuner] [DAG] [Weights] [Export/Surgery]│
-├────────────────────────────────────────────────────────────────────────────────────────┤
-│  THROUGHPUT: 44.2 tok/s  |  BANDWIDTH: 382.4 GB/s  |  KV CACHE: 148.6 MB  |  EXIT: 80% │
-└────────────────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│  THME v2.0  UNIVERSAL LLM RESTRUCTURER, MATRIX ENGINE & STUDIO                          [📁 Load Model] │
+│  Llama-3-8B [GGUF • LLAMA] (32 Layers • Hidden Dim 4096 • 8030M Params)                                 │
+├─────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ [Master Dashboard] [Models] [Layer Tweaker] [Matrix & Distill] [Benchmarks] [History] [Audit] [Export]  │
+├─────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  THROUGHPUT: 44.2 tok/s  |  VRAM STORAGE: 3820 MB  |  TRAFFIC/TOK: 28.4 MB  |  DEPTH: 82%  | EXIT: 80%  │
+└─────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### The 6 Interactive Studio Workspaces
+### The 8 Interactive Studio Workspaces
 
 | Workspace Tab | Focus | Core Capabilities |
 |---|---|---|
-| **Layerwise Distribution Matrix** | Layer precision tuning | Per-layer sliders for $\alpha$ (1-bit XNOR), $\beta$ (BitNet b1.58 ternary), and $\gamma$ (Phase recurrence) enforcing $\alpha + \beta + \gamma = 100\%$. Sequence mixer selector (Gated DeltaNet, Phase Recurrence, Sliding Window, Mamba2, GQA). |
-| **Live Token Flow Benchmarker** | Execution telemetry | Interactive benchmark runner (`▶ Start`, `⏸ Pause`, `⏭ Step`, `⏹ Reset`, $0.5\times \dots 10\times$ speed). Displays real-time token stream, instantaneous throughput (`tok/s`), TTFT, dynamic KV cache allocation, and animated layer flow. |
-| **Sequential Layer Auto-Tuner** | Layer-by-layer optimization | AirLLM-style iterative optimization loop. Evaluates candidate representations against distortion threshold $\epsilon_{\text{tol}}$, locks winning Pareto configurations, and advances sequentially through the model. |
-| **Architecture DAG Visualizer** | Topology graph | Graph displaying layer reach probabilities ($q_l = 1 - p_{\text{exit}}$) and speculative early-exit checkpoint branches. |
-| **Weight and Parameter Studio** | Weight inspection | Search and filter by tensor name and role (`Attention`, `MLP`, `Embedding`). Computes real 32-bin histograms, sparsity, outlier counts ($>3\sigma$), and an 8x8 numerical weight slice matrix. |
-| **Export and Teacher LLM Surgery** | Surgery and export | Exports tuned models to SafeTensors, GGUF, or THME formats. Includes a multiline JSON specification editor and direct execution for Teacher LLM restructuring recipes. |
+| **Master Dashboard** | Unified command cockpit | Consolidates model health cards, live neural token flow animation, layer sensitivity curves, quick optimization actions, and recent history and audit events. |
+| **Models Manager** | Repository & inventory | Multi-model slot manager with GGUF and SafeTensors importers, synthetic model generators, and a sortable tensor inventory registry. |
+| **Layer Tweaker & Sections** | Fine-grained surgery | Drill down into any layer: tweak sequence mixers (GQA, Gated DeltaNet, Phase Recurrence, Sliding Window, Mamba-2), precision mix ($\alpha, \beta, \gamma$), scale, bias, and pruning. Inspect Attention Q/K/V/O, MLP Gate/Up/Down, and Norm sections with 8x8 weight slices and 32-bin histograms. |
+| **Distillation & Matrix Engine** | Linear algebra transformations | Implements Truncated SVD, Walsh-Hadamard rotation, SmoothQuant, BitNet b1.58, 2:4 sparsity, and Knowledge Distillation feature alignment. Includes the **Automated Parameter Decider** that evaluates every parameter tensor and executes global Pareto transformation plans. |
+| **Full Benchmarks** | Multi-dimension profiling | Live 13-stage Transformer flow simulator with animated telemetry, batch size scaling ($B = 1, 4, 8, 16, 32, 64$), context length scaling ($512 \dots 8192$), and layer latency waterfalls. |
+| **History & Checkpoints** | Audit and rollback | Immutable snapshots of tuning sessions, before/after scorecard diffs, one-click state restoration, and JSON history report export. |
+| **Audit Log** | Structured event stream | Filterable chronological event log with severity classification (`OPTIMIZE`, `DISTILL`, `SURGERY`, `BENCHMARK`, `INFO`, `WARN`), query search, and CSV export. |
+| **Export & Surgery** | Model artifacts & JSON recipes | Exports tuned models to SafeTensors, GGUF, or THME bundles. Includes a multiline JSON specification editor and executor for Teacher LLM restructuring recipes. |
 
 ---
 

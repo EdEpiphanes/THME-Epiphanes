@@ -7,6 +7,7 @@ pub mod profiling;
 pub mod quality;
 pub mod report;
 pub mod surgery;
+pub mod transform;
 
 pub use allocator::{AllocationPlan, ParetoAllocator};
 pub use gui::{launch_gui, THMEApp};
@@ -15,3 +16,4 @@ pub use parser::ModelImporter;
 pub use profiling::{KvCacheEstimator, SensitivityProfiler};
 pub use quality::{GateDecision, GateResult, QualityGate};
 pub use surgery::{SurgeryDiff, SurgeryEngine, TweakOperation, TweakRecipe};
+pub use transform::{AutoDecider, MatrixAlgorithm, MatrixMath, ParameterTransformDecision, TransformPlanSummary};
