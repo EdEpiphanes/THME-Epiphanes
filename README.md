@@ -23,11 +23,11 @@
 <p align="center">
   <a href="#overview">Overview</a> •
   <a href="#desktop-studio-showcase">Desktop Studio</a> •
+  <a href="#the-9-interactive-studio-workspaces">Studio Workspaces</a> •
   <a href="#vs-code--github-copilot-extension">IDE Extension & Copilot</a> •
   <a href="#cli-tools">CLI Tools</a> •
   <a href="#teacher-llm-surgery">Teacher LLM Surgery</a> •
   <a href="ROADMAP.md">Roadmap</a> •
-  <a href="BACKLOG.md">Backlog</a> •
   <a href="CHANGELOG.md">Changelog</a> •
   <a href="#quickstart">Quickstart</a>
 </p>
@@ -41,12 +41,15 @@
 Built in pure Rust without external runtime dependencies:
 - **Universal model importer**: Zero-copy memory-mapped parsing of GGUF v2/v3 and SafeTensors files or sharded directories, with fallback architecture deduction when `config.json` is absent.
 - **Distillation and matrix transformation engine**: Implementations of Truncated SVD, Walsh-Hadamard orthogonal rotation, SmoothQuant per-channel scaling, BitNet b1.58 absmean ternary quantization, and 2:4 semi-structured sparsity.
+- **Bring Your Own Algorithm (BYOA)**: Pluggable algorithm registry supporting custom mathematical transformations with JSON import/export and runtime registration.
 - **Automated parameter decision engine**: Analyzes spectral energy, condition number, and outlier kurtosis for each tensor, assigning the mathematically optimal algorithm per parameter.
-- **Layer tweaker and section inspector**: Adjusts layer sequence mixers, precision allocations, scale factors, bias offsets, and pruning thresholds, with interactive 8x8 weight slice matrices and 32-bin histograms.
-- **Live token flow and full benchmark suite**: Simulates token generation across 13 Transformer stages with 60 FPS telemetry, batch scaling analysis ($B=1 \dots 64$), and context window KV cache projections.
-- **History checkpoints and audit trail**: Records immutable snapshots for instant configuration rollback and a searchable, structured compliance audit stream.
-- **Teacher LLM surgery engine**: Declarative JSON recipe format allowing automated agents to adjust layer precisions, replace sequence mixers, and prune components.
-- **Standalone native desktop studio**: Compiles to a 5.8 MB zero-dependency executable ([`THME-Studio.exe`](file:///THME-Studio.exe)).
+- **Layer anatomy deconstruction**: Disassembles layers into constituent functional components (Attention Q/K/V/O, MLP Gate/Up/Down, RMSNorm, Residuals) with 8x8 weight slice matrix inspectors and 32-bin histograms.
+- **REA-LLM & EWHA energy accounting**: Models layer reach probabilities $q_l$, computational depth fraction $\bar{f}$, dynamic memory traffic, and energy consumption (Joules/token).
+- **Non-conventional experimentation laboratory**: Research suite for stochastic noise injection, spectral energy reshaping ($\sigma_i^\gamma$), complex phase modulation, continuous activation warping, and stochastic DropBlock.
+- **On-device micro-trainer**: Fine-tunes and calibrates parameters using AdamW, SignSGD (for ternary 1-bit weights), or SGD with EWHA energy-regularized loss across arbitrary datasets (text, JSONL, Alpaca, ShareGPT, CSV).
+- **Empirical quality gate & perplexity verification**: Automated benchmarking against WikiText-2, C4, and PTB with strict rollback gating ($\Delta PPL \le \epsilon$).
+- **IDE extension & headless MCP server**: Native VS Code extension (`thme-vscode-0.1.5.vsix`), GitHub Copilot Language Model Tools, and standard JSON-RPC MCP server (`thme mcp`).
+- **Standalone native desktop studio**: Compiles to a 5.8 MB zero-dependency executable (`thme-gui` / `THME-Studio.exe`).
 
 ---
 
@@ -60,6 +63,31 @@ thme-gui
 ./THME-Studio.exe
 ```
 
+```text
++-------------------------------------------------------------------------------------------------------------------------------+
+| [●][●][●] [THME]  THME STUDIO v0.1.5 // EPIPHANES TOPOLOGICAL HETEROGENEOUS MANIFOLD ENGINE          [Obsidian Cyan] [60 FPS] |
+| Model: Llama-3-8B [GGUF • LLaMA-Family] (32 Layers • Hidden Dim 4096 • 8030M Params • Baseline FP16)                          |
++-------------------------------------------------------------------------------------------------------------------------------+
+| [🎛 Dashboard] [📦 Models] [🔬 Layer Tweaker] [⚡ Matrix Engine] [📊 Benchmarks] [🕒 History] [📋 Audit Log] [💾 Surgery] [🧪 Dev Lab] |
++-------------------------------------------------------------------------------------------------------------------------------+
+|  THROUGHPUT: 44.2 tok/s  |  VRAM STORAGE: 4.2 GB  |  PARETO RETENTION: 98.92%  |  EWHA ENERGY: 1.42 mJ/tok [STATUS: 13-STAGE LIVE] |
++-------------------------------------------------------------------------------------------------------------------------------+
+```
+
+### The 9 Interactive Studio Workspaces
+
+| Workspace Tab | Focus | Core Capabilities |
+|---|---|---|
+| **0. Master Dashboard** | Unified command cockpit | Consolidates model health cards, live 60 FPS neural token flow animation, layer sensitivity curves, quick optimization actions, and recent history and audit events. |
+| **1. Models Manager** | Repository & inventory | Multi-model slot manager with GGUF and SafeTensors zero-copy importers, sharded directory loader, synthetic model generators, and sortable tensor inventory registry. |
+| **2. Layer Tweaker & Sections** | Anatomy deconstruction & fine-grained surgery | Drill down into any layer: tweak sequence mixers (GQA, Gated DeltaNet, Phase Recurrence, Sliding Window, Mamba-2), precision mix ($\alpha, \beta, \gamma$), scale, bias, and pruning. Inspect Attention Q/K/V/O, MLP Gate/Up/Down, and Norm sections with interactive 8x8 weight slices and 32-bin histograms. |
+| **3. Distillation & Matrix Engine** | Linear algebra & BYOA registry | Implements Truncated SVD, Walsh-Hadamard rotation, SmoothQuant, BitNet b1.58, 2:4 sparsity, and custom BYOA algorithms. Includes the **Automated Parameter Decider** that evaluates every parameter tensor and executes global Pareto transformation plans. |
+| **4. Full Benchmarks** | Multi-dimension profiling & REA-LLM | Live 13-stage Transformer flow simulator with animated telemetry, batch size scaling ($B = 1, 4, 8, 16, 32, 64$), context length scaling ($512 \dots 131\text{k}$), EWHA memory traffic and energy accounting (Joules/token). |
+| **5. History & Checkpoints** | Audit and rollback | Immutable snapshots of tuning sessions, before/after scorecard diffs, one-click state restoration, and JSON history report export. |
+| **6. Audit Log** | Structured event stream | Filterable chronological event log with severity classification (`OPTIMIZE`, `DISTILL`, `SURGERY`, `BENCHMARK`, `INFO`, `WARN`), query search, and CSV export. |
+| **7. Export & Surgery** | Model artifacts & JSON recipes | Exports tuned models to SafeTensors, GGUF, or THME bundles. Includes a multiline JSON specification editor and executor for Teacher LLM restructuring recipes. |
+| **8. Dev Lab & Training Studio** | Non-conventional math & micro-training | Ingests arbitrary datasets (raw text, JSONL, Alpaca, ShareGPT, CSV); applies experimental weight warps (stochastic noise, complex phase modulation, spectral reshaping, continuous activation warping, stochastic DropBlock); on-device parameter micro-trainer with AdamW, SignSGD, and EWHA energy-regularized loss. |
+
 ---
 
 ## VS Code & GitHub Copilot Extension
@@ -69,72 +97,102 @@ THME provides native IDE integration via a packaged Visual Studio Code extension
 <p align="center">
   <img src="https://img.shields.io/badge/MCP-JSON--RPC%202024--11--05-brightgreen?style=flat-square" alt="MCP Server" />
   <img src="https://img.shields.io/badge/Copilot-Language%20Model%20Tools-8957e5?style=flat-square" alt="Copilot Tools" />
-  <img src="https://img.shields.io/badge/Package-thme--vscode--0.1.4.vsix-informational?style=flat-square" alt="VSIX Extension" />
+  <img src="https://img.shields.io/badge/Package-thme--vscode--0.1.5.vsix-informational?style=flat-square" alt="VSIX Extension" />
 </p>
 
-### 1. Live AI Debugging & Surgery via GitHub Copilot
-In VS Code, open GitHub Copilot Chat (`@copilot`) to inspect, analyze, and perform surgery directly in conversational sessions:
-- `@copilot /thme_copilot_inspect`: Inspect active model layer topology, memory footprints, and quantization bottlenecks.
-- `@copilot /thme_copilot_surgery`: Generate and execute surgical recipes directly against memory-mapped model weights.
-- `@copilot /thme_copilot_validate`: Benchmark baseline vs. candidate perplexity against WikiText-2 and C4.
+### Step-by-Step: Adding THME to Visual Studio Code
 
-### 2. Activity Bar Sidebar & Telemetry Tree
-- **Active Model & Layer Anatomy**: Real-time layer deconstruction, component role detection (Q/K/V/O, MLP Gate/Up/Down), and sparsity metrics.
-- **Pareto Precision Plan**: Live parameter precision allocations (FP16, INT8, INT4, Ternary/BitNet b1.58, 2:4 Sparse).
-- **REA-LLM & EWHA Telemetry**: Memory traffic calculations, bandwidth reduction factors, and energy consumption accounting (Joules/token).
-- **Copilot Live Tools**: One-click actions to launch the 60 FPS Native Studio GUI, run AutoDecider, and test quality gates.
+You can install THME into VS Code using either the terminal or the graphical user interface:
 
-### 3. Universal MCP Server (`thme mcp`)
-For Claude Desktop, Cursor, Antigravity, or other AI agents, THME provides a zero-dependency standard MCP server:
+#### Method 1: One-Click Terminal Installation (Fastest)
+
+1. Open your terminal in the repository root and package the extension:
+   ```bash
+   cd editors/vscode
+   npm run package
+   ```
+2. Install the generated `.vsix` file into VS Code:
+   ```bash
+   code --install-extension thme-vscode-0.1.5.vsix
+   ```
+   *(If you are using VS Code Insiders, replace `code` with `code-insiders`)*.
+
+#### Method 2: Graphical User Interface (Install from VSIX)
+
+1. **Open VS Code**.
+2. Open the **Extensions view** by pressing `Ctrl+Shift+X` (Windows/Linux) or `Cmd+Shift+X` (macOS), or by clicking the Extensions icon on the left Activity Bar.
+3. In the top right corner of the Extensions pane, click the **`...` (Views and More Actions)** menu.
+4. Select **"Install from VSIX..."** from the dropdown menu.
+5. In the file picker dialog, navigate to your workspace folder:  
+   `editors/vscode/thme-vscode-0.1.5.vsix`
+6. Click **Install**.
+7. VS Code will display a confirmation banner:  
+   *`Completed installing THME - Topological Heterogeneous Manifold Engine extension from VSIX.`*
+8. The **THME Engine** circuit-board icon will now appear in your Activity Bar.
+
+#### Method 3: Live MCP Server for GitHub Copilot, Claude & Cursor
+
+THME automatically bundles workspace auto-discovery via `.vscode/mcp.json`. You can also start the standard JSON-RPC MCP server manually:
 ```bash
-# Start the JSON-RPC stdio server:
+# Launch MCP server over stdin/stdout:
 thme mcp
 # Or via alias:
 llm-tweaker daemon
 ```
 
-Wire into any agent's `mcp.json`:
+To configure in VS Code Copilot, Cursor, or Claude Desktop, add to `mcp.json`:
 ```json
 {
-  "mcpServers": {
-    "thme": {
+  "servers": {
+    "thme-mcp": {
       "command": "thme",
-      "args": ["mcp"]
+      "args": ["mcp"],
+      "env": {}
     }
   }
 }
 ```
 
-### 4. Installing the VSIX Extension
-```bash
-cd editors/vscode
-npm run package
-code --install-extension thme-vscode-0.1.4.vsix
-```
+#### Method 4: Extension Contributor Development Mode (F5)
+
+If you are developing or modifying the extension TypeScript source:
+1. Open the `editors/vscode` directory in VS Code: `code editors/vscode`.
+2. Run `npm install` to install dependencies.
+3. Press `F5` (or click *Run -> Start Debugging*) to launch an **Extension Development Host** window with live reload and debugging.
+
+---
+
+### Live AI Debugging & Surgery via GitHub Copilot
+
+With the extension installed, GitHub Copilot Chat (`@copilot`) has native access to THME's Language Model Tools (`vscode.lm.registerTool`). You can ask Copilot in chat:
 
 ```text
-+---------------------------------------------------------------------------------------------------------+
-| [●][●][●] [THME]  THME STUDIO v0.1.2 // EPIPHANES TOPOLOGICAL MANIFOLD ENGINE      [Obsidian Cyan] [60 FPS] |
-| Llama-3-8B [GGUF • LLAMA] (32 Layers • Hidden Dim 4096 • 8030M Params)                                  |
-+---------------------------------------------------------------------------------------------------------+
-| [Master Dashboard] [Models] [Layer Tweaker] [Matrix Engine] [Benchmarks] [History] [Audit Log] [Surgery] |
-+---------------------------------------------------------------------------------------------------------+
-|  THROUGHPUT: 44.2 tok/s  |  VRAM STORAGE: 4.2 GB  |  PARETO RETENTION: 98.92%  |  STATUS: 13-STAGE LIVE |
-+---------------------------------------------------------------------------------------------------------+
+User: @copilot /thme_copilot_inspect
+Copilot: [Invokes thme_copilot_inspect]
+Analyzed active model: Llama-3-8B (8.03 B parameters across 32 layers).
+- Attention: 32 Q heads, 8 KV heads (Grouped-Query Attention).
+- MLP Gate/Up: Dim 14336. Current memory footprint: 14.96 GB (FP16).
+- Bottleneck: MLP projection layers 4..28 account for 68% of total memory traffic.
+
+User: @copilot /thme_copilot_surgery
+Copilot: [Invokes thme_copilot_surgery with BitNet b1.58 recipe]
+Applied surgery recipe 'THME-Optimal-Heterogeneous-Recipe':
+- Converted MLP Gate weights across layers 2..28 to BitNet b1.58 Ternary.
+- Replaced Layer 1 sequence mixer with Gated DeltaNet.
+- Memory saved: 4,120 MB (64.2% reduction). Estimated speedup: 2.18x.
+
+User: @copilot /thme_copilot_validate
+Copilot: [Invokes thme_copilot_validate baselinePpl=5.84 candidatePpl=5.91 maxPplDelta=0.10]
+Quality Gate Result: ACCEPTED (Delta PPL: +0.07 <= tolerance 0.10).
+The candidate model preserves representation fidelity while saving 4.12 GB of VRAM.
 ```
 
-### The 8 Interactive Studio Workspaces
+### The 4 Activity Bar Sidebar Views
 
-| Workspace Tab | Focus | Core Capabilities |
-|---|---|---|
-| **Master Dashboard** | Unified command cockpit | Consolidates model health cards, live neural token flow animation, layer sensitivity curves, quick optimization actions, and recent history and audit events. |
-| **Models Manager** | Repository & inventory | Multi-model slot manager with GGUF and SafeTensors importers, synthetic model generators, and a sortable tensor inventory registry. |
-| **Layer Tweaker & Sections** | Fine-grained surgery | Drill down into any layer: tweak sequence mixers (GQA, Gated DeltaNet, Phase Recurrence, Sliding Window, Mamba-2), precision mix ($\alpha, \beta, \gamma$), scale, bias, and pruning. Inspect Attention Q/K/V/O, MLP Gate/Up/Down, and Norm sections with 8x8 weight slices and 32-bin histograms. |
-| **Distillation & Matrix Engine** | Linear algebra transformations | Implements Truncated SVD, Walsh-Hadamard rotation, SmoothQuant, BitNet b1.58, 2:4 sparsity, and Knowledge Distillation feature alignment. Includes the **Automated Parameter Decider** that evaluates every parameter tensor and executes global Pareto transformation plans. |
-| **Full Benchmarks** | Multi-dimension profiling | Live 13-stage Transformer flow simulator with animated telemetry, batch size scaling ($B = 1, 4, 8, 16, 32, 64$), context length scaling ($512 \dots 8192$), and layer latency waterfalls. |
-| **History & Checkpoints** | Audit and rollback | Immutable snapshots of tuning sessions, before/after scorecard diffs, one-click state restoration, and JSON history report export. |
-| **Audit Log** | Structured event stream | Filterable chronological event log with severity classification (`OPTIMIZE`, `DISTILL`, `SURGERY`, `BENCHMARK`, `INFO`, `WARN`), query search, and CSV export. |
-| **Export & Surgery** | Model artifacts & JSON recipes | Exports tuned models to SafeTensors, GGUF, or THME bundles. Includes a multiline JSON specification editor and executor for Teacher LLM restructuring recipes. |
+- **Active Model & Layer Anatomy**: Live tree breakdown of all layers, functional roles (Q/K/V/O, MLP Gate/Up/Down, RMSNorm), parameter counts, and sparsity percentages.
+- **Pareto Precision Plan**: Visual indicators of assigned precision formats (FP16, INT8, INT4, Ternary/BitNet b1.58, 2:4 Sparse) and compression ratios.
+- **REA-LLM & EWHA Telemetry**: Dynamic layer reach probabilities $q_l$, computational depth fraction $\bar{f}$, memory traffic, and energy consumption projections (Joules/token).
+- **GitHub Copilot Live Tools**: Quick status indicators of registered AI tools and 1-click buttons to launch the 60 FPS Native Studio GUI.
 
 ---
 
@@ -149,7 +207,7 @@ thme inspect models/llama-3-8b.gguf
 thme inspect /path/to/huggingface-dir --json
 ```
 
-`	ext
+```text
 === THME Model Inspection Summary ===
 +-----------------------+-----------------------------+
 | Property              | Value                       |
@@ -167,7 +225,7 @@ thme inspect /path/to/huggingface-dir --json
 | Max Context Length    | 8192                        |
 | Total Tensors         | 291                         |
 +-----------------------+-----------------------------+
-`
+```
 
 ### Profile layer sensitivity and KV cache
 Project memory scaling across context windows from 1k to 128k+ tokens:
@@ -187,12 +245,36 @@ Execute transformation recipes created by automated Teacher LLMs:
 thme tweak --model models/llama-3-8b.gguf --recipe recipes/deltanet_hybrid.json --output models/restructured.json
 ```
 
-### Evaluate quality gates
-Validate candidate scores against baseline benchmarks with directional checking (lower-is-better for Perplexity; higher-is-better for Accuracy):
+### Evaluate empirical quality gates (WikiText-2 / C4)
+Validate candidate models against baseline benchmarks with automated rollback gating ($\Delta PPL \le \epsilon$):
 ```bash
-thme validate --baseline 85.0 --candidate 84.4 --max-degradation 1.0
-thme validate --suite-file configs/quality_gates.yaml
+# Verify perplexity degradation on standard corpora:
+thme validate --corpus wikitext-2 --baseline-ppl 5.84 --candidate-ppl 5.92 --max-ppl-delta 0.10
+
+# Machine-readable output for automated Teacher LLM pipelines:
+thme validate --corpus c4 --baseline-ppl 7.12 --candidate-ppl 7.35 --max-ppl-delta 0.15 --json
 ```
+
+---
+
+## Bring Your Own Algorithm (BYOA) & Rebuilder
+
+THME's BYOA subsystem (`src/transform/byoa.rs`) allows researchers and contributors to plug arbitrary compression, quantization, and projection algorithms directly into the manifold engine:
+
+- **Built-in Algorithm Registry**: Fast Walsh-Hadamard Transform (FWHT), BitNet b1.58 Ternary Quantization, SmoothQuant Per-Channel Scaling, 2:4 Semi-Structured Sparsity, and SVD Power Iteration Rank Truncation.
+- **Custom Algorithm Definitions**: Import and export algorithms via JSON payloads specifying scaling modes (`PerTensor`, `PerChannel`, `PerBlock`), block dimensions, and execution parameters.
+- **Architecture Scaffolding**: Rebuild complete model scaffolds from scratch (`src/ir/rebuilder.rs`) from declarative blueprints, or remap heterogeneous open weights across different architectures.
+
+---
+
+## REA-LLM & EWHA Energy Telemetry
+
+Based on the Energy-Wait-Hop-Activate (EWHA) paradigm, THME computes true physical runtime costs:
+- **Layer Reach Probability**:
+  $$q_l = \begin{cases} 1.0 & \text{if } l \le L_{\mathrm{checkpoint}} \\ 1.0 - p_{\mathrm{exit}} & \text{if } l > L_{\mathrm{checkpoint}} \end{cases}$$
+- **Mean Computational Depth**: $\bar{f} = \frac{1}{N} \sum_{l=0}^{N-1} q_l$
+- **Total Dynamic Memory Traffic**: $T_{\mathrm{mem}} = \sum_{l=0}^{N-1} q_l \cdot \text{Bytes}(l)$
+- **Energy Accounting**: Real-time energy telemetry estimating Joules consumed per token based on DRAM I/O ($E_{\mathrm{DRAM}} \approx 20\,\mathrm{pJ/bit}$) and ALU operations ($E_{\mathrm{ALU}} \approx 1\,\mathrm{pJ/FLOP}$).
 
 ---
 

@@ -2,7 +2,7 @@
   "name": "thme-vscode",
   "displayName": "THME - Topological Heterogeneous Manifold Engine",
   "description": "Live LLM memory profiling, layer sensitivity analysis, Pareto precision optimization, and Teacher LLM surgery for VS Code & GitHub Copilot.",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "publisher": "epiphanes",
   "license": "Apache-2.0",
   "repository": {
