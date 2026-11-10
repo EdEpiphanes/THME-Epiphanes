@@ -1,0 +1,205 @@
+{
+  "name": "thme-vscode",
+  "displayName": "THME - Topological Heterogeneous Manifold Engine",
+  "description": "Live LLM memory profiling, layer sensitivity analysis, Pareto precision optimization, and Teacher LLM surgery for VS Code & GitHub Copilot.",
+  "version": "0.1.4",
+  "publisher": "epiphanes",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EdEpiphanes/THME-Epiphanes.git"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Machine Learning",
+    "Programming Languages",
+    "Linters",
+    "Other"
+  ],
+  "keywords": [
+    "llm",
+    "quantization",
+    "copilot",
+    "mcp",
+    "transformer",
+    "bitnet",
+    "surgery",
+    "pareto"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "thme-explorer",
+          "title": "THME Engine",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "thme-explorer": [
+        {
+          "id": "thme-models",
+          "name": "Active Model & Layer Anatomy"
+        },
+        {
+          "id": "thme-decisions",
+          "name": "Pareto Precision Plan"
+        },
+        {
+          "id": "thme-telemetry",
+          "name": "REA-LLM & EWHA Telemetry"
+        },
+        {
+          "id": "thme-copilot",
+          "name": "GitHub Copilot Live Tools"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "thme.launchStudio",
+        "title": "THME: Launch 60 FPS Native Studio GUI",
+        "category": "THME",
+        "icon": "$(play)"
+      },
+      {
+        "command": "thme.inspectModel",
+        "title": "THME: Inspect Model File Zero-Copy",
+        "category": "THME",
+        "icon": "$(search)"
+      },
+      {
+        "command": "thme.autoDecide",
+        "title": "THME: Run Pareto Precision AutoDecider",
+        "category": "THME",
+        "icon": "$(circuit-board)"
+      },
+      {
+        "command": "thme.validateQuality",
+        "title": "THME: Validate Perplexity Quality Gate (WikiText-2/C4)",
+        "category": "THME",
+        "icon": "$(pass)"
+      },
+      {
+        "command": "thme.applySurgery",
+        "title": "THME: Apply Surgery Recipe JSON",
+        "category": "THME",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "thme.startMcpServer",
+        "title": "THME: Start Live MCP Server for GitHub Copilot",
+        "category": "THME",
+        "icon": "$(server)"
+      }
+    ],
+    "languageModelTools": [
+      {
+        "name": "thme_copilot_inspect",
+        "displayName": "THME Inspect Model",
+        "modelDescription": "Inspects LLM model architecture, layer counts, tensor shapes, and memory footprint zero-copy.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "modelPath": {
+              "type": "string",
+              "description": "Path to the model file (.safetensors or .gguf). Omit for current active model."
+            }
+          }
+        }
+      },
+      {
+        "name": "thme_copilot_surgery",
+        "displayName": "THME Apply Surgery",
+        "modelDescription": "Applies a declarative Teacher LLM surgery recipe in real time to mutate or optimize model representations.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "recipeJson": {
+              "type": "string",
+              "description": "JSON string conforming to THME Surgery Recipe v1 schema."
+            }
+          },
+          "required": [
+            "recipeJson"
+          ]
+        }
+      },
+      {
+        "name": "thme_copilot_validate",
+        "displayName": "THME Validate Perplexity",
+        "modelDescription": "Evaluates candidate model perplexity degradation against WikiText-2, C4, or PTB, asserting Delta PPL <= epsilon.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "baselinePpl": {
+              "type": "number",
+              "description": "Baseline model perplexity."
+            },
+            "candidatePpl": {
+              "type": "number",
+              "description": "Candidate model perplexity."
+            },
+            "maxDeltaPpl": {
+              "type": "number",
+              "description": "Maximum allowable degradation threshold (default 0.25)."
+            }
+          },
+          "required": [
+            "baselinePpl",
+            "candidatePpl"
+          ]
+        }
+      }
+    ],
+    "jsonValidation": [
+      {
+        "fileMatch": [
+          "*surgery*.json",
+          "*recipe*.json",
+          "*.thme.json"
+        ],
+        "url": "./docs/schemas/surgery-recipe-v1.json"
+      }
+    ],
+    "configuration": {
+      "title": "THME Engine",
+      "properties": {
+        "thme.executablePath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the thme or llm-tweaker executable binary. Defaults to automatic workspace target resolution."
+        },
+        "thme.qualityTolerance": {
+          "type": "number",
+          "default": 0.025,
+          "description": "Default quality tolerance epsilon for Pareto precision allocation."
+        },
+        "thme.autoStartMcp": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically initialize THME MCP server for GitHub Copilot upon workspace launch."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^2.26.0",
+    "typescript": "^5.9.3"
+  }
+}

@@ -34,3 +34,8 @@ local_deferred_audit.md
 **/*.rs.bk
 .DS_Store
 Thumbs.db
+
+# VS Code extension build artifacts
+editors/vscode/node_modules/
+editors/vscode/out/
+*.vsix

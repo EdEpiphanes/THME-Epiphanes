@@ -85,8 +85,8 @@ cargo test
 | **v0.1.1** | Path Hygiene & CI | Rebranded to THME under Epiphanes, 3-OS GitHub Actions CI matrix, automated path-leak guard, release automation, zero linter warnings, surgery JSON schema. | Completed |
 | **v0.1.2** | Format Correctness | Full GGUF v2/v3 quant matrix (K-quants, I-quants), zero-allocation block decoders, truncated stream recovery, and infallible parser fuzz suite. | Completed |
 | **v0.1.3** | BYOA & REA-LLM Engine | Bring Your Own Algorithm registry with JSON import/export, architecture rebuilder from scratch, open weights remapping, REA-LLM EWHA routing & energy telemetry, layer anatomy deconstruction, dataset ingestion, and micro-trainer. | Completed |
-| **v0.1.4** | Empirical Quality Gate | External perplexity evaluation bridge (WikiText-2, C4) with automated rollback gating (Delta PPL <= epsilon) and CLI validate enhancements. | In Progress |
-| **v0.1.5** | Surgery Daemon & API | Headless JSON-RPC & REST server allowing remote Teacher LLMs to query model IR and dispatch surgery recipes programmatically with HMAC signing. | Planned |
+| **v0.1.4** | Empirical Quality Gate | External perplexity evaluation bridge (WikiText-2, C4) with automated rollback gating (Delta PPL <= epsilon) and CLI validate enhancements. | Completed |
+| **v0.1.5** | Surgery Daemon & IDE Integration | Headless JSON-RPC MCP server (`thme mcp`), VS Code extension packaging (`.vsix`), and GitHub Copilot Language Model Tools. | Completed |
 | **v0.1.6** | Speculative Decoding Synthesizer | Draft model manifold extraction from early-exit checkpoints and multi-token tree speculation verification engine. | Planned |
 | **v0.1.7** | Roofline & Kernel Profiler | Hardware-calibrated Arithmetic Intensity vs Memory Bandwidth roofline model with L1/L2/L3/HBM cache hierarchy simulation. | Planned |
 | **v0.1.8** | Binary Quantization Exporter | Direct serialization to deployable GGUF and SafeTensors files with BitNet b1.58 ternary packed weights and calibrated per-channel scale factors. | Planned |

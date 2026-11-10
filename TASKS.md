@@ -18,7 +18,7 @@ cargo fmt --check
 # 2. Strict linter (zero warnings tolerated)
 cargo clippy --all-targets -- -D warnings
 
-# 3. Full test suite execution (all 57 integration & unit tests)
+# 3. Full test suite execution (all 63 integration & unit tests)
 cargo test
 
 # 4. Subsystem-specific test runs:
@@ -222,24 +222,19 @@ git grep -inE "(C:\\\\Users\\\\[a-zA-Z0-9_-]+|/home/[a-zA-Z0-9_-]+)"
     - Returns non-zero exit code on quality violations to protect automated CI/Teacher LLM pipelines.
   - **Status**: Verified Complete.
 
+### ✅ v0.1.5 — Surgery Daemon, IDE Extension & GitHub Copilot Integration
+- [x] **Universal Model Context Protocol (MCP) Server (`thme mcp`)**
+  - **Source**: `src/cli/mcp.rs`, `src/cli/mod.rs`
+  - **Verification**: `cargo test --test test_mcp`
+  - **Status**: Verified Complete. Standard 2024-11-05 JSON-RPC MCP server over stdin/stdout exposing 7 tools (`thme_inspect_model`, `thme_auto_decide`, `thme_apply_surgery`, `thme_validate_quality`, `thme_simulate_token_flow`, `thme_run_experiment`, `thme_micro_train`).
+- [x] **VS Code & GitHub Copilot Extension Package (`editors/vscode/`)**
+  - **Source**: `editors/vscode/package.json`, `editors/vscode/src/extension.ts`, `.vscode/mcp.json`
+  - **Verification**: `npx @vscode/vsce package --no-dependencies` (zero warnings, generates `thme-vscode-0.1.4.vsix`)
+  - **Status**: Verified Complete. 4 Explorer sidebar views, Copilot Language Model Tools (`thme_copilot_inspect`, `thme_copilot_surgery`, `thme_copilot_validate`), and auto-wired MCP workspace config.
+
 ---
 
-## 3. Upcoming Roadmap & Sprints (v0.1.5 to v0.2.0)
-
-### ⏳ Milestone v0.1.5: Surgery Daemon & Remote Programmatic API
-*Goal: Enable remote Teacher LLMs and automated AI agents to inspect model IR and execute surgeries programmatically over the network.*
-
-- [ ] **[THME-501] Headless Surgery Daemon (`thme daemon`)**
-  - **Target**: `src/daemon/mod.rs`, `src/daemon/server.rs`
-  - **Deliverable**: Lightweight async HTTP/JSON-RPC server using pure Rust (`tiny_http` / `hyper`).
-  - **Endpoints**:
-    - `GET /v1/model/ir`: Returns full model IR, tensor shapes, and layer topological classifications.
-    - `POST /v1/surgery/recipe`: Submits and executes declarative surgery recipes with atomic rollback.
-    - `POST /v1/byoa/register`: Dynamically uploads and registers custom BYOA algorithms.
-    - `GET /v1/telemetry/ewha`: Streams live EWHA reach probabilities, memory traffic, and energy metrics.
-- [ ] **[THME-502] Cryptographic Recipe Signing & Audit Integrity**
-  - **Target**: `src/surgery/recipe.rs`
-  - **Deliverable**: HMAC-SHA256 signature verification on surgery payloads dispatched by remote Teacher LLMs.
+## 3. Upcoming Roadmap & Sprints (v0.1.6 to v0.2.0)
 
 ---
 

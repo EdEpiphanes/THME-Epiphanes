@@ -16,12 +16,14 @@
   <img src="https://img.shields.io/badge/Memory-Zero--Copy%20MMap-f59e0b?style=flat-square" alt="Zero-Copy" />
   <a href="https://github.com/EdEpiphanes/THME-Epiphanes/actions/workflows/ci.yml"><img src="https://github.com/EdEpiphanes/THME-Epiphanes/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <img src="https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square" alt="License" />
-  <img src="https://img.shields.io/badge/Tests-30%20Passed-success?style=flat-square" alt="Tests" />
+  <img src="https://img.shields.io/badge/Tests-63%20Passed-success?style=flat-square" alt="Tests" />
+  <img src="https://img.shields.io/badge/IDE-VS%20Code%20%2B%20Copilot-blueviolet?style=flat-square" alt="VS Code Extension" />
 </p>
 
 <p align="center">
   <a href="#overview">Overview</a> •
   <a href="#desktop-studio-showcase">Desktop Studio</a> •
+  <a href="#vs-code--github-copilot-extension">IDE Extension & Copilot</a> •
   <a href="#cli-tools">CLI Tools</a> •
   <a href="#teacher-llm-surgery">Teacher LLM Surgery</a> •
   <a href="ROADMAP.md">Roadmap</a> •
@@ -56,6 +58,58 @@ thme gui
 # Or run the dedicated binaries:
 thme-gui
 ./THME-Studio.exe
+```
+
+---
+
+## VS Code & GitHub Copilot Extension
+
+THME provides native IDE integration via a packaged Visual Studio Code extension (`editors/vscode/`) and a Model Context Protocol (MCP) server:
+
+<p align="center">
+  <img src="https://img.shields.io/badge/MCP-JSON--RPC%202024--11--05-brightgreen?style=flat-square" alt="MCP Server" />
+  <img src="https://img.shields.io/badge/Copilot-Language%20Model%20Tools-8957e5?style=flat-square" alt="Copilot Tools" />
+  <img src="https://img.shields.io/badge/Package-thme--vscode--0.1.4.vsix-informational?style=flat-square" alt="VSIX Extension" />
+</p>
+
+### 1. Live AI Debugging & Surgery via GitHub Copilot
+In VS Code, open GitHub Copilot Chat (`@copilot`) to inspect, analyze, and perform surgery directly in conversational sessions:
+- `@copilot /thme_copilot_inspect`: Inspect active model layer topology, memory footprints, and quantization bottlenecks.
+- `@copilot /thme_copilot_surgery`: Generate and execute surgical recipes directly against memory-mapped model weights.
+- `@copilot /thme_copilot_validate`: Benchmark baseline vs. candidate perplexity against WikiText-2 and C4.
+
+### 2. Activity Bar Sidebar & Telemetry Tree
+- **Active Model & Layer Anatomy**: Real-time layer deconstruction, component role detection (Q/K/V/O, MLP Gate/Up/Down), and sparsity metrics.
+- **Pareto Precision Plan**: Live parameter precision allocations (FP16, INT8, INT4, Ternary/BitNet b1.58, 2:4 Sparse).
+- **REA-LLM & EWHA Telemetry**: Memory traffic calculations, bandwidth reduction factors, and energy consumption accounting (Joules/token).
+- **Copilot Live Tools**: One-click actions to launch the 60 FPS Native Studio GUI, run AutoDecider, and test quality gates.
+
+### 3. Universal MCP Server (`thme mcp`)
+For Claude Desktop, Cursor, Antigravity, or other AI agents, THME provides a zero-dependency standard MCP server:
+```bash
+# Start the JSON-RPC stdio server:
+thme mcp
+# Or via alias:
+llm-tweaker daemon
+```
+
+Wire into any agent's `mcp.json`:
+```json
+{
+  "mcpServers": {
+    "thme": {
+      "command": "thme",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+### 4. Installing the VSIX Extension
+```bash
+cd editors/vscode
+npm run package
+code --install-extension thme-vscode-0.1.4.vsix
 ```
 
 ```text
@@ -241,12 +295,16 @@ flowchart TD
     v010["v0.1.0 Foundations: Zero-Copy Parsing, Pareto Allocator & Studio GUI (Done)"]
     v011["v0.1.1 Path Hygiene & CI: 3-OS Matrix, Leak Guard, Surgery Schema (Done)"]
     v012["v0.1.2 Format Correctness: Full GGUF Quants, Resilient Recovery & Fuzzing (Done)"]
-    v013["v0.1.3 Real Measurement: AVX2 / NEON Kernels & Criterion Benchmarks (In Progress)"]
-    v014["v0.1.4 Quality Gate: External Perplexity Bridge & Automated Rollback"]
-    v015["v0.1.5 Surgery Daemon: Headless JSON-RPC & REST Server for Teacher LLMs"]
-    v020["v0.2.0 Production Release: Verified Quant Exporter & Small-Model Demo"]
+    v013["v0.1.3 BYOA & REA-LLM: Algorithm Registry, Open Weights Rebuilder & Micro-Trainer (Done)"]
+    v014["v0.1.4 Quality Gate: External Perplexity Bridge & Automated Rollback (Done)"]
+    v015["v0.1.5 Surgery Daemon & IDE: MCP Server, Copilot LM Tools & VS Code Extension (Done)"]
+    v016["v0.1.6 Speculative Decoding: Draft Model Synthesizer & Verification Engine"]
+    v017["v0.1.7 Roofline Profiler: FLOP/byte Arithmetic Intensity & Cache Hierarchy"]
+    v018["v0.1.8 Quant Exporter: Direct GGUF / SafeTensors Serialization & BitNet b1.58"]
+    v019["v0.1.9 Co-Surgery: Autonomous Teacher-Student Closed-Loop Optimization"]
+    v020["v0.2.0 Production Release: Verified Small-Model Open-Weights Demo"]
 
-    v010 --> v011 --> v012 --> v013 --> v014 --> v015 --> v020
+    v010 --> v011 --> v012 --> v013 --> v014 --> v015 --> v016 --> v017 --> v018 --> v019 --> v020
 
     subgraph Backlog_v03 ["v0.3.0+ Backlog (Deferred)"]
         v031["GPU Backends (Vulkan / Metal / CUDA)"]
@@ -260,10 +318,14 @@ flowchart TD
 - **v0.1.0 (Released):** Zero-copy SafeTensors and GGUF v2/v3 memory-mapped parsing, Pareto allocator, 60 FPS Desktop Studio with 5 themes, matrix distillation engine, token flow simulator, audit logging, and declarative surgery recipes.
 - **v0.1.1 (Released):** Rebranded to THME under Epiphanes, 3-OS GitHub Actions CI matrix, automated path-leak guard, tag-driven release publishing, zero clippy warnings, and surgery recipe JSON schema.
 - **v0.1.2 (Completed):** Full GGUF v2/v3 quantization matrix (28 GGML types including K-quants and I-quants), zero-allocation block decoders (`Q4_0`, `Q4_1`, `Q5_0`, `Q8_0`), truncated stream recovery, and infallible 1,000-iteration parser fuzz testing suite.
-- **v0.1.3 (In Progress):** AVX2, AVX-512, and ARM NEON SIMD kernels for matrix transformations, with criterion micro-benchmarks verified in CI.
-- **v0.1.4 (Planned):** Empirical quality validation bridge against baseline models with automated degradation gating (Delta PPL <= epsilon).
-- **v0.1.5 (Planned):** Headless JSON-RPC and REST daemon allowing remote Teacher LLMs to inspect model IR and dispatch surgery recipes programmatically.
-- **v0.2.0 (Target):** Verified quantization exporter for BitNet b1.58 and calibrated scales, accompanied by an end-to-end reproducible small-model demonstration.
+- **v0.1.3 (Completed):** Bring Your Own Algorithm (BYOA) registry with JSON import/export, architecture rebuilder from scratch, open weights remapping, REA-LLM EWHA routing & energy telemetry, layer anatomy deconstruction, multi-format dataset ingestion, non-conventional experimentation lab, and on-device micro-trainer.
+- **v0.1.4 (Completed):** Empirical Quality Gate & Perplexity Verification Bridge (WikiText-2, C4, PTB) with automated rollback gating ($\Delta PPL \le \epsilon$), and enhanced CLI `validate` reporting.
+- **v0.1.5 (Completed):** Headless JSON-RPC Model Context Protocol (MCP) server (`thme mcp`), VS Code extension packaging (`thme-vscode-0.1.4.vsix`), Language Model Tools for GitHub Copilot (`thme_copilot_inspect`, `thme_copilot_surgery`, `thme_copilot_validate`), and real-time AI debugging.
+- **v0.1.6 (Planned):** Speculative Decoding Synthesizer: draft model manifold extraction from early-exit checkpoints and multi-token tree verification simulation.
+- **v0.1.7 (Planned):** Roofline & Kernel Profiler: hardware-calibrated Arithmetic Intensity vs. Memory Bandwidth roofline model with L1/L2/L3/HBM cache hierarchy simulation.
+- **v0.1.8 (Planned):** Direct binary serialization to deployable GGUF and SafeTensors files with BitNet b1.58 ternary packed weights and calibrated per-channel scales.
+- **v0.1.9 (Planned):** Closed-Loop Teacher Surgery: autonomous Teacher-Student co-surgery optimization daemon with iterative recipe generation and delta-PPL verification.
+- **v0.2.0 (Target):** Verified production deployment on real open weights (SmolLM-135M / LLaMA-3.2-1B) with reproducible before-and-after benchmarks and signed release binaries.
 
 ---
 

@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "thme-mcp": {
+      "command": "cargo",
+      "args": ["run", "--bin", "thme", "--", "mcp"],
+      "env": {}
+    }
+  }
+}

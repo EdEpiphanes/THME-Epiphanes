@@ -1,4 +1,5 @@
 pub mod inspect;
+pub mod mcp;
 pub mod plan;
 pub mod profile;
 pub mod report;
@@ -46,6 +47,10 @@ pub enum Commands {
 
     /// View or export optimization plan reports
     Report(report::ReportArgs),
+
+    /// Run Model Context Protocol (MCP) server for VS Code, Copilot & AI agents
+    #[command(alias = "daemon")]
+    Mcp(mcp::McpArgs),
 }
 
 pub fn run() -> Result<()> {
@@ -58,5 +63,6 @@ pub fn run() -> Result<()> {
         Commands::Validate(args) => validate::execute(args),
         Commands::Tweak(args) => tweak::execute(args),
         Commands::Report(args) => report::execute(args),
+        Commands::Mcp(args) => mcp::execute(args),
     }
 }

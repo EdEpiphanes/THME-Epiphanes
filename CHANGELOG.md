@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.5] - 2026-11-10
+
+### Added
+- **Universal Model Context Protocol (MCP) Server (`thme mcp`, `src/cli/mcp.rs`)**:
+  - Implements standard 2024-11-05 JSON-RPC protocol over stdin/stdout, allowing AI coding agents (VS Code Copilot, Claude Desktop, Cursor, Antigravity) to inspect and optimize models programmatically.
+  - Exposes 7 tools: `thme_inspect_model`, `thme_auto_decide`, `thme_apply_surgery`, `thme_validate_quality`, `thme_simulate_token_flow`, `thme_run_experiment`, `thme_micro_train`.
+- **VS Code & GitHub Copilot Extension (`editors/vscode/`)**:
+  - Packaged extension (`thme-vscode-0.1.4.vsix`) with Activity Bar sidebar views for Active Model & Layers, Pareto Precision Plan, REA-LLM & EWHA Telemetry, and Copilot Live Tools.
+  - Native Language Model Tools integration via `vscode.lm.registerTool`: `thme_copilot_inspect`, `thme_copilot_surgery`, and `thme_copilot_validate` enabling conversational Copilot debugging and surgery.
+  - Auto-discovery workspace configuration `.vscode/mcp.json`.
+- **MCP Test Suite (`tests/test_mcp.rs`)**:
+  - Integration testing for MCP `initialize`, `ping`, `tools/list`, and `tools/call`.
+
+---
+
 ## [0.1.4] - 2026-11-10
 
 ### Added
