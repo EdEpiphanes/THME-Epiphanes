@@ -192,7 +192,7 @@ def render_benchmark_animation():
         draw_rect(canvas, 0, 0, W, 48, 1) # Card BG
         draw_rect(canvas, 14, 12, 80, 24, 6) # Cyan Badge
         draw_text(canvas, "THME V2", 24, 20, 0, scale=1)
-        draw_text(canvas, "LLM-TWEAKER STUDIO -- LIVE NEURAL BENCHMARK & TOKEN FLOW", 108, 16, 4, scale=1)
+        draw_text(canvas, "THME STUDIO -- EPIPHANES LIVE NEURAL BENCHMARK & TOKEN FLOW", 108, 16, 4, scale=1)
         draw_text(canvas, "LLAMA-3-8B [GGUF/SAFETENSORS] -- 32 LAYERS -- 8192 CONTEXT -- FP16/INT4 HYBRID", 108, 30, 5, scale=1)
 
         # 2. Stats Ribbon
@@ -325,3 +325,4 @@ def render_benchmark_animation():
 
 if __name__ == "__main__":
     render_benchmark_animation()
+

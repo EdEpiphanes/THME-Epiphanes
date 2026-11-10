@@ -1,11 +1,12 @@
 [package]
-name = "llm-tweaker"
+name = "thme"
 version = "0.1.0"
 edition = "2021"
-authors = ["Ed Epiphanes", "LLM-Tweaker Contributors"]
-description = "Topological Heterogeneous Manifold Engine (THME) - Open-source framework for LLM memory, sensitivity profiling, and heterogeneous precision optimization."
+authors = ["Epiphanes <https://github.com/EdEpiphanes>"]
+description = "THME: Topological Heterogeneous Manifold Engine by Epiphanes - Open-source framework for LLM memory profiling, weight sensitivity analysis, and Pareto precision optimization."
 license = "Apache-2.0"
-repository = "https://github.com/TechTroniX/LLM-Tweaker"
+repository = "https://github.com/EdEpiphanes/THME"
+homepage = "https://github.com/EdEpiphanes/THME"
 readme = "README.md"
 keywords = ["llm", "quantization", "optimization", "transformer", "kv-cache"]
 categories = ["command-line-utilities", "science"]
@@ -47,3 +48,10 @@ rfd = "0.15"
 
 [dev-dependencies]
 tempfile = "3.17"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "symbols"

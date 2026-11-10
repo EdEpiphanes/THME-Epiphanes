@@ -11,10 +11,10 @@ use clap::{Parser, Subcommand};
 #[derive(Parser, Debug)]
 #[command(
     name = "thme",
-    author = "Ed Epiphanes, LLM-Tweaker Contributors",
+    author = "Epiphanes <https://github.com/EdEpiphanes>",
     version,
-    about = "Topological Heterogeneous Manifold Engine (THME) - Open-source LLM optimization & profiling framework",
-    long_about = "THME / LLM-Tweaker provides zero-copy model inspection, topological layer sensitivity analysis, KV-cache projection, Pareto precision planning, and quality gate verification."
+    about = "Topological Heterogeneous Manifold Engine (THME) by Epiphanes - Open-source LLM optimization & profiling framework",
+    long_about = "THME provides zero-copy model inspection, topological layer sensitivity analysis, KV-cache projection, Pareto precision planning, and quality gate verification."
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -60,3 +60,4 @@ pub fn run() -> Result<()> {
         Commands::Report(args) => report::execute(args),
     }
 }
+

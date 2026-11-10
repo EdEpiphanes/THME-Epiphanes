@@ -1,11 +1,11 @@
-# LLM-Tweaker / THME
+# THME: Topological Heterogeneous Manifold Engine
 
 <p align="center">
   <img src="assets/live_neural_benchmark.gif" alt="THME Desktop Studio - Live Neural Network Token Flow and Telemetry Benchmarker" width="840" />
 </p>
 
 <p align="center">
-  <strong>Topological Heterogeneous Manifold Engine (THME) and LLM-Tweaker Studio</strong><br>
+  <strong>Topological Heterogeneous Manifold Engine (THME) by Epiphanes</strong><br>
   <em>Open-source framework for Large Language Model memory profiling, zero-copy weight analysis, live token flow telemetry, and automated Teacher LLM architecture surgery.</em>
 </p>
 
@@ -19,12 +19,12 @@
 </p>
 
 <p align="center">
-  <a href="#overview">Overview</a> •
-  <a href="#desktop-studio-showcase">Desktop Studio</a> •
-  <a href="#cli-tools">CLI Tools</a> •
-  <a href="#teacher-llm-surgery">Teacher LLM Surgery</a> •
-  <a href="#mathematical-foundation">Research Paper</a> •
-  <a href="#production-roadmap">Production Roadmap</a> •
+  <a href="#overview">Overview</a> â€¢
+  <a href="#desktop-studio-showcase">Desktop Studio</a> â€¢
+  <a href="#cli-tools">CLI Tools</a> â€¢
+  <a href="#teacher-llm-surgery">Teacher LLM Surgery</a> â€¢
+  <a href="#mathematical-foundation">Research Paper</a> â€¢
+  <a href="#production-roadmap">Production Roadmap</a> â€¢
   <a href="#quickstart">Quickstart</a>
 </p>
 
@@ -32,7 +32,7 @@
 
 ## Overview
 
-**LLM-Tweaker (THME)** profiles and optimizes Large Language Models using heterogeneous precision allocation and sequential execution. Rather than applying a single uniform bit-width across an entire model, THME measures the topological sensitivity of each attention projection and feed-forward block, building a Pareto-optimal precision plan constrained by quality gates ($Q_{\text{candidate}} \ge Q_{\text{baseline}} - \epsilon$).
+**THME (Topological Heterogeneous Manifold Engine)** by **Epiphanes** profiles and optimizes Large Language Models using heterogeneous precision allocation and sequential execution. Rather than applying a single uniform bit-width across an entire model, THME measures the topological sensitivity of each attention projection and feed-forward block, building a Pareto-optimal precision plan constrained by quality gates ($Q_{\text{candidate}} \ge Q_{\text{baseline}} - \epsilon$).
 
 Built in pure Rust without external runtime dependencies:
 - **Universal model importer**: Zero-copy memory-mapped parsing of GGUF v2/v3 and SafeTensors files or sharded directories, with fallback architecture deduction when `config.json` is absent.
@@ -42,7 +42,7 @@ Built in pure Rust without external runtime dependencies:
 - **Live token flow and full benchmark suite**: Simulates token generation across 13 Transformer stages with 60 FPS telemetry, batch scaling analysis ($B=1 \dots 64$), and context window KV cache projections.
 - **History checkpoints and audit trail**: Records immutable snapshots for instant configuration rollback and a searchable, structured compliance audit stream.
 - **Teacher LLM surgery engine**: Declarative JSON recipe format allowing automated agents to adjust layer precisions, replace sequence mixers, and prune components.
-- **Standalone native desktop studio**: Compiles to a 5.8 MB zero-dependency executable ([`LLM-Tweaker-Studio.exe`](file:///LLM-Tweaker-Studio.exe)).
+- **Standalone native desktop studio**: Compiles to a 5.8 MB zero-dependency executable ([`THME-Studio.exe`](file:///THME-Studio.exe)).
 
 ---
 
@@ -53,18 +53,18 @@ Launch the native desktop application on Windows, macOS, or Linux:
 thme gui
 # Or run the dedicated binaries:
 thme-gui
-./LLM-Tweaker-Studio.exe
+./THME-Studio.exe
 ```
 
 ```text
-┌─────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│  THME v2.0  UNIVERSAL LLM RESTRUCTURER, MATRIX ENGINE & STUDIO                          [📁 Load Model] │
-│  Llama-3-8B [GGUF • LLAMA] (32 Layers • Hidden Dim 4096 • 8030M Params)                                 │
-├─────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ [Master Dashboard] [Models] [Layer Tweaker] [Matrix & Distill] [Benchmarks] [History] [Audit] [Export]  │
-├─────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│  THROUGHPUT: 44.2 tok/s  |  VRAM STORAGE: 3820 MB  |  TRAFFIC/TOK: 28.4 MB  |  DEPTH: 82%  | EXIT: 80%  │
-└─────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚  THME v2.0  UNIVERSAL LLM RESTRUCTURER, MATRIX ENGINE & STUDIO                          [ðŸ“ Load Model] â”‚
+â”‚  Llama-3-8B [GGUF â€¢ LLAMA] (32 Layers â€¢ Hidden Dim 4096 â€¢ 8030M Params)                                 â”‚
+â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+â”‚ [Master Dashboard] [Models] [Layer Tweaker] [Matrix & Distill] [Benchmarks] [History] [Audit] [Export]  â”‚
+â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+â”‚  THROUGHPUT: 44.2 tok/s  |  VRAM STORAGE: 3820 MB  |  TRAFFIC/TOK: 28.4 MB  |  DEPTH: 82%  | EXIT: 80%  â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 ### The 8 Interactive Studio Workspaces
@@ -84,7 +84,7 @@ thme-gui
 
 ## CLI Tools
 
-LLM-Tweaker provides dual-binary CLI support (`thme` or `llm-tweaker`):
+THME provides dual-binary CLI support (`thme` or legacy alias `llm-tweaker`):
 
 ### Inspect model weights
 Scan local GGUF or SafeTensors files zero-copy:
@@ -95,22 +95,22 @@ thme inspect /path/to/huggingface-dir --json
 
 ```text
 === THME Model Inspection Summary ===
-┌───────────────────────┬──────────────────────────┐
-│ Property              │ Value                    │
-├───────────────────────┼──────────────────────────┤
-│ Model Name            │ llama-3-8b               │
-│ Architecture          │ Llama-family             │
-│ Total Parameters      │ 8.03 B (8030261248)      │
-│ Raw Weight Size       │ 14.96 GB                 │
-│ Hidden Size           │ 4096                     │
-│ Number of Layers      │ 32                       │
-│ Attention Heads (Q)   │ 32                       │
-│ Key-Value Heads (KV)  │ 8 (Grouped-Query GQA)    │
-│ Head Dimension        │ 128                      │
-│ Vocabulary Size       │ 128256                   │
-│ Max Context Length    │ 8192                     │
-│ Total Tensors         │ 291                      │
-└───────────────────────┴──────────────────────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚ Property              â”‚ Value                    â”‚
+â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+â”‚ Model Name            â”‚ llama-3-8b               â”‚
+â”‚ Architecture          â”‚ Llama-family             â”‚
+â”‚ Total Parameters      â”‚ 8.03 B (8030261248)      â”‚
+â”‚ Raw Weight Size       â”‚ 14.96 GB                 â”‚
+â”‚ Hidden Size           â”‚ 4096                     â”‚
+â”‚ Number of Layers      â”‚ 32                       â”‚
+â”‚ Attention Heads (Q)   â”‚ 32                       â”‚
+â”‚ Key-Value Heads (KV)  â”‚ 8 (Grouped-Query GQA)    â”‚
+â”‚ Head Dimension        â”‚ 128                      â”‚
+â”‚ Vocabulary Size       â”‚ 128256                   â”‚
+â”‚ Max Context Length    â”‚ 8192                     â”‚
+â”‚ Total Tensors         â”‚ 291                      â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 ### Profile layer sensitivity and KV cache
@@ -268,8 +268,8 @@ flowchart TD
 
 ### Installation
 ```bash
-git clone https://github.com/TechTroniX/LLM-Tweaker.git
-cd LLM-Tweaker
+git clone https://github.com/EdEpiphanes/THME.git
+cd THME
 cargo build --release
 ```
 
@@ -277,7 +277,7 @@ The compiled binaries will be available in:
 - `target/release/thme` (Primary CLI)
 - `target/release/llm-tweaker` (Alias binary)
 - `target/release/thme-gui` (Standalone Native Desktop Studio)
-- [`LLM-Tweaker-Studio.exe`](file:///LLM-Tweaker-Studio.exe) (Root standalone executable)
+- [`THME-Studio.exe`](file:///THME-Studio.exe) (Root standalone executable)
 
 ### Run Tests
 ```bash
@@ -288,7 +288,7 @@ cargo test
 
 ## Contributing & Community
 
-LLM-Tweaker is an open-source project. We welcome contributions, RFCs, bug reports, and research extensions:
+THME is an open-source project by Epiphanes. We welcome contributions, RFCs, bug reports, and research extensions:
 - Review [CONTRIBUTING.md](CONTRIBUTING.md) for architecture guidelines and coding standards.
 - Read [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 - Security policy is documented in [SECURITY.md](SECURITY.md).
@@ -298,3 +298,4 @@ LLM-Tweaker is an open-source project. We welcome contributions, RFCs, bug repor
 ## License
 
 Licensed under the [Apache License, Version 2.0](LICENSE).
+

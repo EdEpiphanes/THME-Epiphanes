@@ -9,7 +9,7 @@
                 "args": [
                     "build",
                     "--bin=thme-gui",
-                    "--package=llm-tweaker"
+                    "--package=thme"
                 ],
                 "filter": {
                     "name": "thme-gui",
@@ -27,7 +27,7 @@
                 "args": [
                     "build",
                     "--bin=thme",
-                    "--package=llm-tweaker"
+                    "--package=thme"
                 ],
                 "filter": {
                     "name": "thme",
@@ -45,7 +45,7 @@
                 "args": [
                     "build",
                     "--bin=thme",
-                    "--package=llm-tweaker"
+                    "--package=thme"
                 ],
                 "filter": {
                     "name": "thme",
@@ -63,7 +63,7 @@
                 "args": [
                     "build",
                     "--bin=thme",
-                    "--package=llm-tweaker"
+                    "--package=thme"
                 ],
                 "filter": {
                     "name": "thme",
@@ -82,7 +82,7 @@
                     "test",
                     "--no-run",
                     "--test=test_ir",
-                    "--package=llm-tweaker"
+                    "--package=thme"
                 ],
                 "filter": {
                     "name": "test_ir",
@@ -94,3 +94,4 @@
         }
     ]
 }
+

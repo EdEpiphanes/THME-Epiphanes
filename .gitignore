@@ -1,7 +1,30 @@
+# Rust build artifacts
 /target
+
+# Compiled binaries and debug symbols
+*.exe
+*.dll
+*.so
+*.dylib
+*.pdb
+
+# Model weight files and binary formats
+*.gguf
+*.safetensors
+*.bin
+*.pt
+*.onnx
+*.thme
+
+# Transient outputs and generated reports
 optimization_plan.json
+history_report.json
+audit_log.csv
 examples/mock_llama/
 examples/report.md
-LLM-Tweaker-Studio.exe
-*.exe
+*.log
+
+# Editor and backup files
 **/*.rs.bk
+.DS_Store
+Thumbs.db

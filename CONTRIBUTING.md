@@ -1,6 +1,6 @@
-# Contributing to LLM-Tweaker / THME
+# Contributing to THME
 
-Thank you for your interest in contributing to **LLM-Tweaker (THME)**! This project is an open-source initiative dedicated to advancing modular, reproducible, and verifiable optimization for large language models.
+Thank you for your interest in contributing to **THME (Topological Heterogeneous Manifold Engine)** by **Epiphanes**! This project is an open-source initiative dedicated to advancing modular, reproducible, and verifiable optimization for large language models.
 
 ---
 
@@ -13,8 +13,9 @@ All contributors and maintainers are expected to follow our [Code of Conduct](CO
 ## Research & Engineering Principles
 
 1. **Verify Before Claiming**: Do not publish claims of universal superiority based on one model or synthetic benchmark. Distinguish verified experimental results from hypotheses.
-2. **Deterministic & Reproducible**: All benchmarks, sensitivity measurements, and allocation plans should include exact environment parameters, seeds, and hardware metadata.
-3. **Strict Quality Gating**: Any proposed optimization strategy must provide an associated anti-degradation quality metric.
+2. **Deterministic & Reproducible**: All benchmarks, sensitivity measurements, and allocation plans must include exact environment parameters, seeds, and hardware metadata.
+3. **Strict Quality Gating**: Any proposed optimization strategy must provide an associated anti-degradation quality metric ($Q_{\text{candidate}} \ge Q_{\text{baseline}} - \epsilon$).
+4. **Clean Git Hygiene**: Never commit absolute local file paths, personal usernames, binary model weights (`.safetensors`, `.gguf`), or compiled binaries (`.exe`, `.dll`, `.so`).
 
 ---
 
@@ -26,8 +27,8 @@ All contributors and maintainers are expected to follow our [Code of Conduct](CO
    ```
 2. Clone the repository:
    ```bash
-   git clone https://github.com/TechTroniX/LLM-Tweaker.git
-   cd LLM-Tweaker
+   git clone https://github.com/EdEpiphanes/THME.git
+   cd THME
    ```
 3. Run test suite:
    ```bash
@@ -46,4 +47,4 @@ All contributors and maintainers are expected to follow our [Code of Conduct](CO
 1. **Topic Branch**: Create a feature branch with a descriptive name (`git checkout -b feature/qwen-parser`).
 2. **Testing**: Add unit and integration tests covering your additions under `tests/`.
 3. **Documentation**: Update the README or module-level rustdocs if you introduce new CLI flags or public APIs.
-4. **Commits**: Write clear, descriptive commit messages.
+4. **Commits**: Write clear, conventional commit messages (`feat:`, `fix:`, `perf:`, `docs:`, `chore:`).
