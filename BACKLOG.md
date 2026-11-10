@@ -1,6 +1,6 @@
 # THME Engineering Backlog (v0.1.2 -> v0.2.0)
 
-> **Epiphanes Engineering Backlog**  
+> **Epiphanes Engineering Backlog**
 > Actionable ticket ledger tracking engineering issues, acceptance criteria, and completion conditions through v0.2.0.
 
 ---
