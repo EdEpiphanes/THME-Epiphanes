@@ -9,13 +9,15 @@
 
 The mission of THME is to provide a mathematically principled, verifiable framework for Large Language Model memory profiling, layer sensitivity estimation, Pareto precision allocation, automated Teacher LLM architecture surgery, and high-performance heterogeneous hardware execution.
 
-The progression spans six deliberate phases:
-1. **Foundations & Standards (v0.1.0 – v0.1.1):** Zero-copy parsers, topology estimators, Pareto precision allocators, CI path-leak guards, and cross-platform automation.
-2. **Format Correctness & Telemetry (v0.1.2 – v0.1.3):** Full GGUF v2/v3 quant matrix, BYOA algorithm registry, REA-LLM EWHA energy routing, and architecture rebuilder.
-3. **Quality Gates & Interoperability (v0.1.4 – v0.1.6):** Empirical perplexity evaluation bridges, Model Context Protocol (MCP) server, VS Code extension, PyTorch/CUDA LoRA interop, Universal 8 AI Models Converter, and Speculative Decoding Synthesizer.
-4. **Hardware Profiling & Closed-Loop Surgery (v0.1.7 – v0.1.9):** Hardware-calibrated Roofline models, BitNet b1.58 binary serialization, and autonomous Teacher-Student co-surgery loops.
-5. **Production Core Release (v0.2.0):** End-to-end verified small-model open-weights demonstrations, reproducible benchmarks, and signed release binaries.
-6. **Tiered Hardware Execution & Agentic Connectivity (v0.2.1 – v0.2.4):** Direct GPU driver execution (Vulkan/Metal/CUDA), out-of-core NVMe SSD streaming, multi-node clustering, and the Universal Agentic AI Gateway daemon.
+### The 4-Level Sub-Milestone Execution Architecture
+To guarantee modularity, continuous integration, and rapid delivery, every major release milestone $v0.1.x$ is structured as a baseline milestone contract $v0.1.x.0$ branching into **exactly 9 parallel, interdependent sub-functions** ($v0.1.x.1$ through $v0.1.x.9$):
+
+$$v0.1.x.0 \longrightarrow \left[ v0.1.x.1, v0.1.x.2, v0.1.x.3, v0.1.x.4, v0.1.x.5, v0.1.x.6, v0.1.x.7, v0.1.x.8, v0.1.x.9 \right] \longrightarrow v0.1.(x+1).0$$
+
+1. **Parallel Execution with Interdependent Delivery**: Sub-functions within the $[v0.1.x.1 \dots v0.1.x.9]$ block execute concurrently across modular components (parsers, kernels, CLI commands, telemetry modules, and GUI decks). They share type contracts and IR data structures defined at $v0.1.x.0$.
+2. **Production Pipeline & CI/CD Impact**: Every sub-function integrates into the automated testing and delivery pipeline. Modifications trigger targeted unit tests, property fuzz suites, Criterion benchmark regressions, and release bundle gates before converging into $v0.1.(x+1).0$.
+3. **Active Parallel Progression Block**: The current release transition is explicitly modeled as:
+   $$v0.1.7.0 \longrightarrow \left[ v0.1.7.1, v0.1.7.2, v0.1.7.3, v0.1.7.4, v0.1.7.5, v0.1.7.6, v0.1.7.7, v0.1.7.8, v0.1.7.9 \right] \longrightarrow v0.1.8.0 \longrightarrow \left[ v0.1.8.1 \dots v0.1.8.9 \right]$$
 
 ---
 
@@ -23,23 +25,75 @@ The progression spans six deliberate phases:
 
 ```
 +--------------------------------------------------------------------------------------------------------------------+
-|                                              THME ROADMAP PROGRESSION                                              |
+|                                           THME 4-LEVEL SUB-MILESTONE LEDGER                                        |
 +--------------------------------------------------------------------------------------------------------------------+
-| [x] v0.1.0  Core Foundations (Zero-copy parsing, SVD decay, Pareto allocator, 60 FPS studio GUI)                  |
-| [x] v0.1.1  Standards & Hygiene (Rebrand, 3-OS CI matrix, path-leak guard, zero warnings, recipe schema)          |
-| [x] v0.1.2  Format Correctness (Full GGUF quant matrix, resilient stream recovery, parser fuzzing)                 |
-| [x] v0.1.3  BYOA & REA-LLM (Algorithm registry, open weights rebuilder, EWHA energy telemetry, micro-trainer)     |
-| [x] v0.1.4  Quality Gate (External perplexity bridge, WikiText-2 / C4 scoring, automated rollback gating)         |
-| [x] v0.1.5  Surgery Daemon & 8 AI Models (MCP server, VS Code extension, Copilot tools, PyTorch bridge, 8 Models)|
-| [x] v0.1.6  Speculative Decoding (Draft manifold extraction, multi-token tree verification, Leviathan speedup)    |
-| [ ] v0.1.7  Roofline Profiler (Arithmetic intensity, hardware ceilings, 4-tier cache hierarchy simulation) ACTIVE |
-| [ ] v0.1.8  Quant Exporter (Direct binary GGUF v3 & SafeTensors writer, BitNet b1.58 2-bit packing)        PLAN   |
-| [ ] v0.1.9  Closed-Loop Surgery (Teacher-Student co-surgery daemon, multi-objective Pareto, self-healing)  PLAN   |
-| [ ] v0.2.0  Production Release (SmolLM-135M / LLaMA-3.2-1B open-weights demo, signed release binaries)    TARGET |
-| [ ] v0.2.1  Direct GPU Drivers (Vulkan 1.3 SPIR-V, Metal 3, CUDA Driver API via pure Rust cudarc)           SCHED  |
-| [ ] v0.2.2  Out-of-Core NVMe Streaming (3-tier VRAM/RAM/SSD hierarchy, io_uring, 70B inference in 8 GB)     SCHED  |
-| [ ] v0.2.3  Multi-Node Clustering (Intra-node TP, inter-node PP, async TCP/RDMA ring all-reduce)              SCHED  |
-| [ ] v0.2.4  Universal Agentic Gateway (JSON-RPC/WebSocket daemon, HMAC-SHA256 attestation, adapter matrix) SCHED  |
+| [x] v0.1.0.0 Core Foundations Baseline (Done)                                                                      |
+|     |-> [v0.1.0.1 - v0.1.0.9] SafeTensors, GGUF, SVD, Condition, Fisher, Pareto, GUI, Simulator, Recipe Engine     |
+| [x] v0.1.1.0 Path Hygiene & CI Governance Baseline (Done)                                                          |
+|     |-> [v0.1.1.1 - v0.1.1.9] Rebrand, AGENTS.md, 3-OS CI, Path Leak Guard, Release CI, Clippy, Schema, Alias, LTO |
+| [x] v0.1.2.0 Format Correctness & Fuzzing Baseline (Done)                                                          |
+|     |-> [v0.1.2.1 - v0.1.2.9] 28 GGML Types, Block Decoders, Recovery, Workspace, Fuzz, Property, Crates.io, Errors|
+| [x] v0.1.3.0 BYOA & REA-LLM Telemetry Baseline (Done)                                                              |
+|     |-> [v0.1.3.1 - v0.1.3.9] Registry, JSON, Rebuilder, Remapping, EWHA Reach, Memory Traffic, Energy, Anatomy, SIMD|
+| [x] v0.1.4.0 Empirical Quality Gate Baseline (Done)                                                                |
+|     |-> [v0.1.4.1 - v0.1.4.9] PPL Bridge, WikiText-2, C4/PTB, Delta-PPL, Rollback, Pareto Loss, CLI, Audit, GUI   |
+| [x] v0.1.5.0 Surgery Daemon & 8 Models Matrix Baseline (Done)                                                      |
+|     |-> [v0.1.5.1 - v0.1.5.9] MCP Server, VS Code VSIX, Copilot, train_cuda.py, HF Config, LoRA Merge, 8 Paradigms  |
+| [x] v0.1.6.0 Speculative Decoding Synthesizer Baseline (Done)                                                      |
+|     |-> [v0.1.6.1 - v0.1.6.9] Prefix Manifold, Strided, BitNet Draft, Rejection Sampling, Speedup Math, Tree Mask   |
+|                                                                                                                    |
+| [ ] v0.1.7.0 Hardware Roofline & Micro-Kernel Profiler Baseline (ACTIVE)                                           |
+|     |-> [v0.1.7.1] Hardware Target Specifications & Machine Balance DB                                     [ACTIVE] |
+|     |-> [v0.1.7.2] Linear Projection & Attention Arithmetic Intensity Math                                 [ACTIVE] |
+|     |-> [v0.1.7.3] SwiGLU FFN & FlashAttention-2 Arithmetic Intensity Models                               [ACTIVE] |
+|     |-> [v0.1.7.4] 4-Tier Memory Hierarchy Cache Simulator (L1/L2/L3/DRAM)                                 [ACTIVE] |
+|     |-> [v0.1.7.5] Working Set Size & Cache Eviction Latency Degradation Model                             [ACTIVE] |
+|     |-> [v0.1.7.6] Empirical Roofline Boundary Curve & Memory/Compute Classifier                           [ACTIVE] |
+|     |-> [v0.1.7.7] Dynamic TDP Power & Thermal Throttling Projection Engine                                [ACTIVE] |
+|     |-> [v0.1.7.8] CLI Subcommand thme roofline & MCP Tool thme_profile_roofline                           [ACTIVE] |
+|     |-> [v0.1.7.9] Desktop Studio Tab 4 Interactive SVG/egui Roofline Deck                                 [ACTIVE] |
+|                                                                                                                    |
+| [ ] v0.1.8.0 Binary Quantization Exporter Baseline (PLANNED)                                                       |
+|     |-> [v0.1.8.1] Vectorized BitNet b1.58 Ternary Bitstream Packer (4 weights/byte)                       [PLAN]   |
+|     |-> [v0.1.8.2] Vectorized Ternary Bitstream Unpacker with FP16 Scale Product                           [PLAN]   |
+|     |-> [v0.1.8.3] Direct Pure Rust GGUF v3 Binary Writer & 32-Byte Alignment                              [PLAN]   |
+|     |-> [v0.1.8.4] GGUF Metadata Key-Value Reconstitution & Synchronization Engine                         [PLAN]   |
+|     |-> [v0.1.8.5] Direct Pure Rust SafeTensors Binary Serializer & 8-Byte Prefix                          [PLAN]   |
+|     |-> [v0.1.8.6] Low-Memory Streaming Chunked File Writer Engine                                         [PLAN]   |
+|     |-> [v0.1.8.7] Calibrated Per-Channel & Per-Group MSE-Optimal Scale Search                             [PLAN]   |
+|     |-> [v0.1.8.8] CLI Subcommand thme export & Desktop Studio Tab 1 Exporter Wizard                       [PLAN]   |
+|     |-> [v0.1.8.9] Downstream Runtime Compatibility Testbed (llama.cpp / Ollama)                            [PLAN]   |
+|                                                                                                                    |
+| [ ] v0.1.9.0 Closed-Loop Teacher-Student Co-Surgery Baseline (PLANNED)                                             |
+|     |-> [v0.1.9.1] Co-Surgery Closed-Loop State Machine & Controller                                       [PLAN]   |
+|     |-> [v0.1.9.2] Teacher LLM Topology Analysis Prompt Synthesizer                                        [PLAN]   |
+|     |-> [v0.1.9.3] Headless JSON-RPC & Subprocess Teacher Agent Communication Bridge                       [PLAN]   |
+|     |-> [v0.1.9.4] Multi-Objective 3D Pareto Optimizer (Delta PPL, Bytes/token, Energy)                    [PLAN]   |
+|     |-> [v0.1.9.5] Pareto Hypervolume Indicator Convergence Metric                                         [PLAN]   |
+|     |-> [v0.1.9.6] Automated Self-Healing Parameter Relaxation Heuristic                                   [PLAN]   |
+|     |-> [v0.1.9.7] Anti-Degradation Quality Gate Watchdog & Immediate Rollback Engine                      [PLAN]   |
+|     |-> [v0.1.9.8] CLI Subcommand thme co-surgery & Progress Telemetry Stream                              [PLAN]   |
+|     |-> [v0.1.9.9] Desktop Studio Tab 2 Closed-Loop Co-Surgery Interactive Dashboard                       [PLAN]   |
+|                                                                                                                    |
+| [ ] v0.2.0.0 Production Core Release Baseline (TARGET)                                                             |
+|     |-> [v0.2.0.1] SmolLM-135M Open-Weights End-to-End Verification Pipeline                               [TARGET] |
+|     |-> [v0.2.0.2] LLaMA-3.2-1B Open-Weights End-to-End Verification Pipeline                             [TARGET] |
+|     |-> [v0.2.0.3] Automated Reproducible Benchmark Script Suite                                            [TARGET] |
+|     |-> [v0.2.0.4] Published Benchmark Dossier Generator (Markdown & CSV)                                  [TARGET] |
+|     |-> [v0.2.0.5] Multi-Platform LTO Stripped Binary Release Packaging                                     [TARGET] |
+|     |-> [v0.2.0.6] Minisign & GPG Cryptographic Artifact Signing Pipeline                                  [TARGET] |
+|     |-> [v0.2.0.7] SHA-256 Checksum Manifest Generation (SHA256SUMS.txt)                                   [TARGET] |
+|     |-> [v0.2.0.8] Comprehensive Architecture Playbook, User Manual & Man Pages                            [TARGET] |
+|     |-> [v0.2.0.9] End-to-End Clean-Machine Verification Test Harness                                      [TARGET] |
+|                                                                                                                    |
+| [ ] v0.2.1.0 Direct GPU Driver Execution Engine Baseline (SCHEDULED)                                               |
+|     |-> [v0.2.1.1 - v0.2.1.9] HAL Traits, cudarc CUDA Driver, Vulkan SPIR-V, Metal 3, Fused Kernels, CLI run   |
+| [ ] v0.2.2.0 Tiered Out-of-Core NVMe SSD Streaming Baseline (SCHEDULED)                                            |
+|     |-> [v0.2.2.1 - v0.2.2.9] io_uring, Overlapped I/O, Prefetch Pipeline, Pinned Staging, 70B in 8GB VRAM        |
+| [ ] v0.2.3.0 Heterogeneous Multi-Node Clustering Baseline (SCHEDULED)                                              |
+|     |-> [v0.2.3.1 - v0.2.3.9] Intra TP, Inter PP, Async TCP Ring All-Reduce, RDMA Fallback, Watchdog Failover       |
+| [ ] v0.2.4.0 Universal Agentic AI Connectivity Gateway Baseline (SCHEDULED)                                        |
+|     |-> [v0.2.4.1 - v0.2.4.9] WebSocket Daemon, JSON-RPC Router, HMAC Attestation, CLI/CI/GUI/IDE Adapters        |
 +--------------------------------------------------------------------------------------------------------------------+
 ```
 
@@ -49,400 +103,329 @@ The progression spans six deliberate phases:
 
 ### Phase 1: Foundations & Release Engineering
 
-#### [x] v0.1.0 — Core Foundations (Completed)
-- [x] Zero-copy SafeTensors and GGUF v2/v3 memory-mapped parsing via `memmap2`.
-- [x] Layer topological sensitivity estimation: SVD spectral energy decay ($\sigma_i / \sigma_0$), condition number ($\kappa = \sigma_{\max} / \sigma_{\min}$), and Fisher information proxy.
-- [x] Dynamic programming Pareto precision allocator under strict quality degradation bounds ($Q \ge Q_0 - \epsilon$).
-- [x] Native 60 FPS Desktop Studio GUI (`egui`/`eframe`) with 5 visual color palettes.
-- [x] Matrix distillation engine: Truncated SVD, Walsh-Hadamard rotation, SmoothQuant, BitNet b1.58, 2:4 structured sparsity.
-- [x] Parameter AutoDecider based on layer kurtosis, spectral decay, and depth.
-- [x] Live 13-stage Transformer forward token flow simulator.
-- [x] Checkpoint history rollback engine and immutable audit ledger.
-- [x] Teacher LLM surgery engine via declarative JSON recipes.
+#### [x] v0.1.0.0 — Core Foundations Baseline (Completed)
+- [x] **v0.1.0.1**: Zero-copy SafeTensors memory-mapped parsing via `memmap2`.
+- [x] **v0.1.0.2**: GGUF v2/v3 memory-mapped header reader and tensor metadata indexing.
+- [x] **v0.1.0.3**: Layer topological sensitivity estimation via SVD spectral energy decay ($\sigma_i / \sigma_0$).
+- [x] **v0.1.0.4**: Condition number estimation ($\kappa = \sigma_{\max} / \sigma_{\min}$) across projection matrices.
+- [x] **v0.1.0.5**: Fisher information matrix diagonal proxy estimation.
+- [x] **v0.1.0.6**: Dynamic programming Pareto precision allocator under quality degradation bounds ($Q \ge Q_0 - \epsilon$).
+- [x] **v0.1.0.7**: Native 60 FPS Desktop Studio GUI (`egui`/`eframe`) with 5 color themes.
+- [x] **v0.1.0.8**: Live 13-stage Transformer forward token telemetry simulator.
+- [x] **v0.1.0.9**: Checkpoint rollback engine, audit logging, and declarative JSON surgery recipes.
+*Production Pipeline Impact*: Established core `ModelIR` data structures, verified by 15 foundational unit tests.
 
-#### [x] v0.1.1 — Path Hygiene, CI & Standards (Completed)
-- [x] Rebranding to **THME** under **Epiphanes** with `llm-tweaker` backwards-compatible CLI alias.
-- [x] Enforcement of the Engineering Playbook (`AGENTS.md`) and non-negotiable guidelines.
-- [x] Multi-platform GitHub Actions CI matrix (`ubuntu-latest`, `windows-latest`, `macos-latest`).
-- [x] Automated CI Path-Leak Guard rejecting machine paths and developer usernames.
-- [x] Release packaging workflow on `v*` tags with stripped binaries (`strip = "symbols"`).
-- [x] Zero-warning linter pass (`cargo clippy --all-targets -- -D warnings`).
-- [x] JSON schema specification for surgery recipes (`docs/schemas/surgery-recipe-v1.json`).
+#### [x] v0.1.1.0 — Path Hygiene & CI Governance Baseline (Completed)
+- [x] **v0.1.1.1**: Rebranding to **THME** under **Epiphanes** with backwards-compatible alias `llm-tweaker`.
+- [x] **v0.1.1.2**: Architecture playbook and non-negotiable governance guidelines (`AGENTS.md`).
+- [x] **v0.1.1.3**: 3-OS GitHub Actions CI matrix (`ubuntu-latest`, `windows-latest`, `macos-latest`).
+- [x] **v0.1.1.4**: Automated CI Path-Leak Guard rejecting machine paths and developer usernames.
+- [x] **v0.1.1.5**: Tag-driven release publishing pipeline with symbol-stripped release artifacts (`strip = "symbols"`).
+- [x] **v0.1.1.6**: Zero-warning linter enforcement (`cargo clippy --all-targets -- -D warnings`).
+- [x] **v0.1.1.7**: JSON schema specification for surgery recipes (`docs/schemas/surgery-recipe-v1.json`).
+- [x] **v0.1.1.8**: Backwards-compatible CLI executable generation (`src/bin/llm_tweaker.rs`).
+- [x] **v0.1.1.9**: Binary size optimization with release profile LTO and single codegen unit settings.
+*Production Pipeline Impact*: Prevents machine credential leaks and guarantees clean builds across 3 operating systems.
 
 ---
 
 ### Phase 2: Format Correctness & Telemetry Hardening
 
-#### [x] v0.1.2 — Format Correctness & Fuzz Testing (Completed)
-- [x] Parsing for full GGUF v2/v3 quantization matrix (28 GGML types including `Q4_K_M`, `Q5_K_S`, `Q8_0`, `IQ4_XS`, `IQ3_XXS`).
-- [x] Zero-allocation block decoders extracting per-block scales and minimums during weight reading.
-- [x] Graceful recovery and diagnostic error reporting on truncated or corrupt model headers (`THMEError::CorruptedHeader`).
-- [x] Modular workspace structure decoupling pure IR and algorithms from GUI dependencies.
-- [x] 1,000-iteration infallible parser fuzz test suite ensuring zero panics on arbitrary malformed inputs.
+#### [x] v0.1.2.0 — Format Correctness & Fuzz Testing Baseline (Completed)
+- [x] **v0.1.2.1**: Complete 28 GGML quantization types parser (`Q4_0`, `Q4_1`, `Q5_0`, `Q5_1`, `Q8_0`, `Q4_K_M`, `Q5_K_S`, `IQ4_XS`, `IQ3_XXS`).
+- [x] **v0.1.2.2**: Zero-allocation block decoders extracting scales, mins, and unpacked weights on-the-fly.
+- [x] **v0.1.2.3**: Truncated stream and corrupted header recovery with byte-offset diagnostics.
+- [x] **v0.1.2.4**: Modular workspace crate structure decoupling algorithms from GUI dependencies.
+- [x] **v0.1.2.5**: 1,000-iteration infallible parser fuzz test suite (`tests/test_fuzz_parsers.rs`).
+- [x] **v0.1.2.6**: SafeTensors property-based mutation fuzzing ensuring zero panics on malformed slices.
+- [x] **v0.1.2.7**: Standalone `thme-core` crate packaging and metadata configuration.
+- [x] **v0.1.2.8**: Structured diagnostic error enumeration (`THMEError::CorruptedHeader`).
+- [x] **v0.1.2.9**: Infallible parser guarantee returning typed results without panic unwraps.
+*Production Pipeline Impact*: Guarantees zero crashes when ingesting corrupted or arbitrary external model files.
 
-#### [x] v0.1.3 — Bring Your Own Algorithm (BYOA), Open Weights Rebuilder & REA-LLM Engine (Completed)
-- [x] Bring Your Own Algorithm (`AlgorithmRegistry`) with custom transformation registration and JSON import/export.
-- [x] Architecture scaffold synthesizer (`ModelRebuilder`) supporting dimensional remapping (`LowRankProject`, `ZeroPad`).
-- [x] REA-LLM & EWHA framework: $80/20$ reach profile $q_l$, per-token memory traffic $W_{\text{bytes/token}}$, and per-token energy consumption $E_{\text{token}}$.
-- [x] Layer anatomy deconstruction isolating Attention ($Q, K, V, O$) and MLP ($W_{\text{gate}}, W_{\text{up}}, W_{\text{down}}$) blocks.
-- [x] Multi-format dataset ingestion supporting JSONL, raw text, and tokenized arrays.
-- [x] Desktop Studio GUI integrations: Tab 0 unified EWHA cockpit, Tab 1 Rebuilder wizard, Tab 3 BYOA registry with live 8x8 slice tester, Tab 4 EWHA telemetry grid.
+#### [x] v0.1.3.0 — Bring Your Own Algorithm (BYOA) & REA-LLM Engine Baseline (Completed)
+- [x] **v0.1.3.1**: Bring Your Own Algorithm registry (`AlgorithmRegistry`) with custom transformation callbacks.
+- [x] **v0.1.3.2**: JSON algorithm specification import and export engine.
+- [x] **v0.1.3.3**: Architecture scaffold synthesizer (`ModelRebuilder`) supporting scratch-built layer topologies.
+- [x] **v0.1.3.4**: Open-weights dimensional remapping (`LowRankProject`, `ZeroPad`).
+- [x] **v0.1.3.5**: REA-LLM EWHA 80/20 reach profile calculation ($q_l = 1.0 \to 0.20$).
+- [x] **v0.1.3.6**: Per-token memory traffic formulation ($W_{\text{bytes/token}} = \sum q_l \cdot \text{size}(W_l)$).
+- [x] **v0.1.3.7**: Per-token energy consumption modeling ($E_{\text{token}} = W_{\text{bytes/token}} \times E_{\text{DRAM}}$).
+- [x] **v0.1.3.8**: Layer anatomy deconstruction isolating Attention and MLP block matrices.
+- [x] **v0.1.3.9**: Criterion micro-benchmark suite and portable SIMD Walsh-Hadamard transform kernels.
+*Production Pipeline Impact*: Integrates real memory and energy telemetry into model evaluation and testing workflows.
 
 ---
 
 ### Phase 3: Empirical Quality Verification & Universal Integration
 
-#### [x] v0.1.4 — Empirical Quality Gate Evaluation & Perplexity Verification Bridge (Completed)
-- [x] External perplexity evaluation bridge supporting standard test sets (WikiText-2, C4, PTB) and local token scoring harnesses.
-- [x] Perplexity degradation calculation: $\Delta PPL = PPL_{\text{candidate}} - PPL_{\text{baseline}}$ with automated quality gate decision ($\Delta PPL \le \epsilon$).
-- [x] Automated rollback trigger: immediate checkpoint restoration when degradation exceeds tolerance, emitting structured audit diagnostics.
-- [x] CLI `thme validate` command with `--corpus`, `--max-ppl-delta`, and JSON output flags.
+#### [x] v0.1.4.0 — Empirical Quality Gate Evaluation Baseline (Completed)
+- [x] **v0.1.4.1**: External perplexity evaluation bridge supporting subprocess and analytical scoring.
+- [x] **v0.1.4.2**: WikiText-2 standard benchmark harness and token loss parser.
+- [x] **v0.1.4.3**: C4 and Penn Treebank (PTB) corpora evaluation support.
+- [x] **v0.1.4.4**: Empirical degradation computation: $\Delta PPL = PPL_{\text{candidate}} - PPL_{\text{baseline}}$.
+- [x] **v0.1.4.5**: Automated anti-degradation rollback trigger enforcing $\Delta PPL \le \epsilon$.
+- [x] **v0.1.4.6**: Pareto degradation curve plotting storage reduction against perplexity impact.
+- [x] **v0.1.4.7**: CLI `thme validate` command with `--corpus` and `--max-ppl-delta` flags.
+- [x] **v0.1.4.8**: Structured JSON audit diagnostics emitted upon quality gate rejection.
+- [x] **v0.1.4.9**: Studio GUI Quality tab real-time token loss and perplexity streaming.
+*Production Pipeline Impact*: Gates automated model transformations; rejects degradations exceeding tolerance.
 
-#### [x] v0.1.5 — Surgery Daemon, IDE Extensions, PyTorch Bridge & 8 AI Models Matrix (Completed)
-- [x] Headless Model Context Protocol (MCP) server (`thme mcp`) exposing 8 specialized LLM surgical tools.
-- [x] Packaged Visual Studio Code extension (`editors/vscode/thme-vscode-0.1.5.vsix`) with 4 Explorer sidebar panels.
-- [x] GitHub Copilot Language Model Tools integration (`thme_copilot_inspect`, `thme_copilot_surgery`, `thme_copilot_validate`).
-- [x] PyTorch & CUDA fine-tuning interoperability bridge (`src/interop/`):
-  - Pure Rust generator for `train_cuda.py` supporting LoRA, QLoRA (BitsAndBytes 4-bit), Unsloth Fast, and DeepSpeed ZeRO-2/3.
-  - Hugging Face `config.json` generator for LLaMA, Mistral, Gemma, Qwen, and DeepSeek model families.
-  - PEFT LoRA adapter checkpoint parser and zero-copy weight merger ($W = W_0 + \frac{\alpha}{r} B \times A$).
-  - CLI `thme export` / `thme interop` command.
-- [x] Universal 8 Specialized AI Model Paradigm Converter (`src/ir/paradigm.rs`):
-  - Detection, ingestion, and cross-conversion matrix across 8 paradigms: LLM, LCM, LAM, MoE, VLM, SLM, MLM, SAM.
-  - Sparse upcycling engine partitioning dense MLPs into parallel expert matrices and synthesized router gating tensors.
-  - BitNet b1.58 ternary discretization delivering up to 85.3% footprint reduction for mobile and edge deployments.
-  - CLI `thme convert` command with full parameter customization.
-  - Declarative surgery recipe support (`TweakOperation::ConvertParadigm`) and Studio GUI converter in Tab 1.
+#### [x] v0.1.5.0 — Surgery Daemon, IDE Extensions & 8 Models Matrix Baseline (Completed)
+- [x] **v0.1.5.1**: Headless Model Context Protocol (MCP) JSON-RPC server (`thme mcp`) exposing 8 surgical tools.
+- [x] **v0.1.5.2**: Visual Studio Code extension package (`editors/vscode/thme-vscode-0.1.5.vsix`).
+- [x] **v0.1.5.3**: GitHub Copilot Language Model Tools (`thme_copilot_inspect`, `thme_copilot_surgery`, `thme_copilot_validate`).
+- [x] **v0.1.5.4**: Pure Rust `train_cuda.py` generator supporting LoRA, QLoRA (BitsAndBytes 4-bit), Unsloth Fast, and DeepSpeed ZeRO-2/3.
+- [x] **v0.1.5.5**: Hugging Face `config.json` generator for LLaMA, Mistral, Gemma, Qwen, and DeepSeek model families.
+- [x] **v0.1.5.6**: PEFT LoRA adapter checkpoint parser and zero-copy weight merger ($W = W_0 + \frac{\alpha}{r} B \times A$).
+- [x] **v0.1.5.7**: Universal 8 Specialized AI Model Paradigm Converter (LLM, LCM, LAM, MoE, VLM, SLM, MLM, SAM).
+- [x] **v0.1.5.8**: Sparse upcycling engine partitioning dense MLPs into parallel expert matrices with router gating tensors.
+- [x] **v0.1.5.9**: BitNet b1.58 ternary discretization delivering up to 85.3% footprint reduction for SLM edge deployments.
+*Production Pipeline Impact*: Enables external AI agents, IDEs, and PyTorch pipelines to automate model surgery.
 
-#### [x] v0.1.6 — Speculative Decoding & Draft Model Synthesizer (Completed)
-- [x] Draft model manifold synthesizer (`src/speculative/synthesizer.rs`):
-  - Sub-model manifold extraction via prefix layers ($0..K$), strided layer sampling, low-rank projection, or BitNet b1.58 ternary discretization.
-  - Automatic head re-anchoring, vocabulary mapping, and dimensional scaling.
-  - Parameter reduction calculation (e.g. 76.8% memory savings) and latency cost ratio computation $r = \frac{T_{\text{draft}}}{T_{\text{target}}}$.
-- [x] Multi-token speculative rejection sampling verification engine (`src/speculative/engine.rs`):
-  - Speculative candidate verification under temperature-calibrated rejection sampling: $u \le \min\left(1, \frac{p(x)}{q(x)}\right)$.
-  - Verification telemetry: mean acceptance rate $\alpha_{\text{spec}}$, emitted tokens per step $\mathbb{E}[k] + 1$, and Leviathan effective wall-clock speedup:
-    $$S = \frac{\mathbb{E}[k] + 1}{1 + \gamma \cdot r}$$
-  - Dynamic horizon search identifying optimal draft token budget $\gamma^* = \arg\max_\gamma S(\gamma)$.
-- [x] Tree-based speculation topology (`src/speculative/tree.rs`):
-  - Multi-candidate branching topology (Medusa/Eagle style speculative trees).
-  - 2D causal tree attention mask synthesis enforcing strict causal masking across tree paths.
-- [x] CLI `thme speculate` subcommand with full telemetry output, tree options, and draft model export.
-- [x] IDE & Agent MCP tool `thme_simulate_speculative_decoding`.
-- [x] Studio GUI Benchmarks (Tab 4) live speculative simulation deck with acceptance curve and speedup multiplier gauges.
-- [x] Declarative surgery recipe support (`TweakOperation::ExtractDraftModel`).
+#### [x] v0.1.6.0 — Speculative Decoding & Draft Model Synthesizer Baseline (Completed)
+- [x] **v0.1.6.1**: Sub-model manifold extraction via prefix layers ($0..K$) with automatic head re-anchoring.
+- [x] **v0.1.6.2**: Strided layer sampling synthesizer extracting distributed sub-networks.
+- [x] **v0.1.6.3**: BitNet b1.58 ternary draft model synthesizer yielding 76.8% memory reduction and latency ratio $r = 0.108$.
+- [x] **v0.1.6.4**: Speculative candidate rejection sampling verification engine: $u \le \min\left(1, \frac{p(x)}{q(x)}\right)$.
+- [x] **v0.1.6.5**: Verification telemetry calculating acceptance rate $\alpha_{\text{spec}}$, expected accepted tokens $\mathbb{E}[k]$, and Leviathan speedup:
+  $$S = \frac{\mathbb{E}[k] + 1}{1 + \gamma \cdot r} \ge 1.53\times$$
+- [x] **v0.1.6.6**: Dynamic horizon search identifying optimal draft token budget $\gamma^* = \arg\max_\gamma S(\gamma)$.
+- [x] **v0.1.6.7**: Tree-based multi-candidate branching topology (Medusa/Eagle style speculative trees).
+- [x] **v0.1.6.8**: 2D causal tree attention mask synthesis enforcing strict causal masking across tree paths.
+- [x] **v0.1.6.9**: CLI `thme speculate` subcommand, MCP tool `thme_simulate_speculative_decoding`, and Desktop Studio Tab 4 benchmark deck.
+*Production Pipeline Impact*: Guarantees verified $>1.5\times$ speedup modeling verified by 5 unit/integration tests.
 
 ---
 
 ### Phase 4: Hardware Profiling, Serialization & Closed-Loop Surgery
 
-#### [ ] v0.1.7 — Hardware-Calibrated Roofline & Micro-Kernel Profiler (Active)
-Provides an empirical, hardware-calibrated operational Roofline model and multi-tier memory hierarchy cache simulator. Diagnoses whether Transformer layers are memory-bandwidth bound or compute-bound under varying hardware targets, batch sizes, and sequence lengths.
+#### [ ] v0.1.7.0 — Hardware-Calibrated Roofline & Micro-Kernel Profiler Baseline (ACTIVE)
+Establishes empirical hardware-calibrated operational Roofline ceilings and multi-tier memory hierarchy cache simulation to pinpoint memory bandwidth vs compute bottlenecks across diverse target hardware.
 
-- **Mathematical Foundations**:
+- **Mathematical Formulations**:
   - Operational Arithmetic Intensity:
-    $$I = \frac{\text{Total Floating Point Operations (FLOPs)}}{\text{Total Memory Traffic (Bytes)}} \quad \left[\frac{\text{FLOPs}}{\text{byte}}\right]$$
-  - Layer Arithmetic Intensity Formulas:
-    - Linear Projection ($X W$ with $X \in \mathbb{R}^{B \times D_{\text{in}}}$, $W \in \mathbb{R}^{D_{\text{in}} \times D_{\text{out}}}$):
-      $$I_{\text{linear}} = \frac{2 B D_{\text{in}} D_{\text{out}}}{B D_{\text{in}} b_x + D_{\text{in}} D_{\text{out}} b_w + B D_{\text{out}} b_y}$$
-      At batch size $B=1$ (autoregressive generation), $I_{\text{linear}} \approx \frac{2}{b_w} \approx 1.0 \text{ FLOPs/byte}$ for FP16, rendering linear layers strictly memory-bound.
-    - Standard Scaled Dot-Product Attention (Sequence length $S$, Head dimension $d$):
-      $$\text{FLOPs}_{\text{attn}} = 4 B H S^2 d, \quad \text{Bytes}_{\text{attn}} = 2 B H S^2 b_{\text{score}} + 4 B H S d b_{\text{kv}}$$
-    - FlashAttention-2 Tiled Attention (SRAM tile size $M$):
-      $$\text{Bytes}_{\text{flash}} = \mathcal{O}\left(B H S d \cdot \frac{S d}{M}\right) \implies I_{\text{flash}} \gg I_{\text{standard}}$$
-    - SwiGLU FFN Block ($W_{\text{gate}}, W_{\text{up}}, W_{\text{down}}$ with intermediate size $D_{\text{ffn}} = \frac{8}{3} D$):
-      $$\text{FLOPs}_{\text{ffn}} = 6 B D D_{\text{ffn}}, \quad \text{Bytes}_{\text{ffn}} = 3 D D_{\text{ffn}} b_w + B (2 D + 2 D_{\text{ffn}}) b_{\text{act}}$$
-  - Hardware Operational Ceiling Knee:
+    $$I = \frac{\text{Total Operations (FLOPs)}}{\text{Total Memory Traffic (Bytes)}} \quad \left[\frac{\text{FLOPs}}{\text{byte}}\right]$$
+  - Machine Balance Knee:
     $$I^* = \frac{\text{Peak Compute Performance (TFLOP/s)}}{\text{Peak Memory Bandwidth (GB/s)}} \quad \left[\frac{\text{FLOPs}}{\text{byte}}\right]$$
-  - Attainable Performance Boundary:
+  - Attainable Performance Ceiling:
     $$P(I) = \min\left(P_{\text{peak}}, I \times B_{\text{peak}}\right) \quad \left[\text{TFLOP/s}\right]$$
-  - Multi-Tier Memory Latency & Bandwidth Degradation:
+  - Multi-Tier Cache Latency Model:
     $$T_{\text{layer}} = \sum_{k \in \{\text{L1}, \text{L2}, \text{L3}, \text{DRAM}\}} \left( M_k \cdot \text{Latency}_k + \frac{\text{Volume}_k}{\text{Bandwidth}_k} \right)$$
-    where $M_k$ is the cache miss count at tier $k$.
 
-- **To-Do List**:
-  - [ ] **Hardware Target Database (`src/profiling/hardware.rs`)**:
-    - Predefined hardware specifications: NVIDIA H100 SXM5 (1,979 TFLOP/s FP16 Tensor, 3,350 GB/s HBM3), NVIDIA RTX 4090 (330 TFLOP/s FP16 Tensor, 1,008 GB/s GDDR6X), Apple M3 Max (38 TFLOP/s FP16, 400 GB/s Unified), Apple M2 Ultra (54 TFLOP/s FP16, 800 GB/s Unified), AMD Instinct MI300X (2,610 TFLOP/s FP16, 5,300 GB/s HBM3), Intel Xeon Platinum 8490H (AVX-512, 10 TFLOP/s, 307 GB/s DDR5).
-    - User-definable custom hardware specs via JSON config (`--hardware-config <path>`).
-  - [ ] **Layer-by-Layer Operational Intensity Profiler (`src/profiling/intensity.rs`)**:
-    - Compute exact FLOP counts and memory transfer volumes for each layer type (Linear, RMSNorm, Multi-Head Attention, SwiGLU, Rotary Embeddings).
-    - Support variable batch size $B \in [1, 512]$ and sequence length $S \in [1, 32768]$.
-    - Account for KV-cache read/write traffic during decode phase vs prefill phase.
-  - [ ] **4-Tier Memory Hierarchy Cache Simulator (`src/profiling/cache_sim.rs`)**:
-    - Simulation tiers: L1 Data (128 KB, 1 cycle), L2 Cache (4-16 MB, 15 cycles), L3/SLC (32-96 MB, 50 cycles), Main Memory (HBM3/GDDR6/DDR5, 200 cycles).
-    - Calculate working set size for each operation and predict cache line eviction rates.
-    - Estimate effective memory latency penalty based on cache miss rates.
-  - [ ] **Empirical Roofline Model Engine (`src/profiling/roofline.rs`)**:
-    - Generate log-log Roofline plot coordinates: peak compute ceiling, memory bandwidth slope, operational boundary knee $I^*$.
-    - Map each model layer as a coordinate $(I_l, P_l)$ on the Roofline chart.
-    - Categorize layers into `MemoryBound` (below knee $I < I^*$) vs `ComputeBound` (at or above knee $I \ge I^*$).
-    - Output optimization suggestions (e.g. "Layer 12 MLP is memory-bound; apply BitNet b1.58 or 2:4 sparsity to halve memory traffic").
-  - [ ] **Thermal & Power Scaling Projection (`src/profiling/thermal.rs`)**:
-    - Model TDP dissipation: dynamic power $P_{\text{dyn}} = C V^2 f \alpha_{\text{activity}}$ plus static leakage power.
-    - Predict thermal throttling onset under continuous sustained token generation vs burst prefill.
-  - [ ] **CLI Subcommand `thme roofline` (`src/cli/roofline.rs`)**:
-    - Flags: `--model <path>`, `--hardware <id>`, `--batch <N>`, `--seq-len <S>`, `--phase <prefill|decode>`, `--json`.
-    - Print ASCII Roofline diagram with plotted layer operational points.
-  - [ ] **Headless MCP Tool `thme_profile_roofline` (`src/cli/mcp.rs`)**:
-    - Expose Roofline profiling and bottleneck diagnosis to IDEs and AI coding agents.
-  - [ ] **Desktop Studio GUI Roofline Deck (Tab 4)**:
-    - Interactive log-log Roofline plot using `egui_plot` with hover tooltips displaying layer names, intensity, and efficiency percentage.
-    - Interactive sliders for batch size, sequence length, and hardware target selection.
-  - [ ] **Comprehensive Test Suite (`tests/test_roofline_profiler.rs`)**:
-    - Unit tests validating intensity math, cache hit estimation, and Roofline categorization.
+- **Parallel Sub-Milestone Breakdown [v0.1.7.1 - v0.1.7.9]**:
+  - [ ] **v0.1.7.1**: Hardware Target Specifications & Machine Balance Database (`src/profiling/hardware.rs`):
+    - Profiles for NVIDIA H100 SXM5, RTX 4090, Apple M3 Max, Apple M2 Ultra, AMD MI300X, Intel Xeon Platinum 8490H (AVX-512).
+    - Custom hardware JSON configuration loader (`--hardware-config <path>`).
+    - *Pipeline Impact*: Provides reference ceilings for CI regression benchmarks.
+  - [ ] **v0.1.7.2**: Linear Projection & Attention Operational Arithmetic Intensity Profiler (`src/profiling/intensity.rs`):
+    - Exact FLOP counts and memory transfer bytes for Linear ($Q, K, V, O$) and Scaled Dot-Product Attention.
+    - Autoregressive decode ($B=1$, memory-bound $I \approx 1.0$) vs prefill ($B \ge 64$, compute-bound $I \gg I^*$).
+    - *Pipeline Impact*: Feeds automated layer bottleneck classification.
+  - [ ] **v0.1.7.3**: SwiGLU FFN & FlashAttention-2 Arithmetic Intensity Mathematical Models (`src/profiling/intensity.rs`):
+    - SwiGLU FFN FLOPs ($6 B D D_{\text{ffn}}$) and memory traffic ($3 D D_{\text{ffn}} b_w + B(2D + 2D_{\text{ffn}}) b_{\text{act}}$).
+    - FlashAttention-2 SRAM tiling memory traffic reduction model ($\mathcal{O}(BH S^2 d^2 / M)$).
+    - *Pipeline Impact*: Informs precision pruning suggestions for feed-forward blocks.
+  - [ ] **v0.1.7.4**: 4-Tier Memory Hierarchy Cache Simulator (`src/profiling/cache_sim.rs`):
+    - Models L1 Data (128 KB, 1 cycle), L2 Cache (4-16 MB, 15 cycles), L3/SLC (32-96 MB, 50 cycles), and Main Memory (HBM3/GDDR6/DDR5, 200 cycles).
+    - *Pipeline Impact*: Simulates hardware latency penalties without requiring physical host access.
+  - [ ] **v0.1.7.5**: Working Set Size & Cache Eviction Latency Degradation Model:
+    - Calculates active tensor working set size per layer and estimates cache line eviction rates.
+    - *Pipeline Impact*: Detects layers that spill out of on-chip SRAM into high-latency memory.
+  - [ ] **v0.1.7.6**: Empirical Roofline Boundary Curve & Memory/Compute Classifier (`src/profiling/roofline.rs`):
+    - Generates log-log Roofline plot coordinates and assigns `MemoryBound` vs `ComputeBound` labels per layer.
+    - *Pipeline Impact*: Generates automated optimization advisories for surgery recipes.
+  - [ ] **v0.1.7.7**: Dynamic TDP Power & Thermal Throttling Projection Engine (`src/profiling/thermal.rs`):
+    - Models dynamic power dissipation ($P_{\text{dyn}} = C V^2 f \alpha$) and predicts sustained vs burst token throttling.
+    - *Pipeline Impact*: Evaluates energy efficiency in edge and mobile deployment scenarios.
+  - [ ] **v0.1.7.8**: CLI Subcommand `thme roofline` & MCP Tool `thme_profile_roofline` (`src/cli/roofline.rs`):
+    - CLI command rendering ASCII Roofline charts and structured JSON outputs for agent integration.
+    - *Pipeline Impact*: Exposes profiling directly to CI terminal runners and MCP agents.
+  - [ ] **v0.1.7.9**: Desktop Studio Tab 4 Interactive SVG/egui Roofline Deck (`src/gui/app.rs`):
+    - Interactive log-log Roofline plot with hover diagnostics, hardware selector, and batch size sliders.
+    - *Pipeline Impact*: Interactive visualization for desktop developers and researchers.
 
 ---
 
-#### [ ] v0.1.8 — BitNet b1.58 Calibrated Scale Quantization Exporter (Planned)
-Enables direct binary disk serialization of optimized models into deployable GGUF v3 and SafeTensors files, featuring BitNet b1.58 ternary packed weight serialization (2 bits per weight: $-1, 0, +1$ packed 4 weights per byte) with calibrated per-channel scale factors.
+#### [ ] v0.1.8.0 — Binary Quantization Exporter Baseline (PLANNED)
+Enables direct binary disk serialization of modified and distilled models into deployable GGUF v3 and SafeTensors files with BitNet b1.58 ternary packed bitstreams and calibrated scale factors.
 
-- **Mathematical Foundations**:
-  - Weight Discretization:
+- **Mathematical Formulations**:
+  - Ternary Discretization:
     $$\alpha = \frac{1}{n m} \sum_{i=1}^n \sum_{j=1}^m |W_{ij}|, \quad \tilde{W}_{ij} = \text{Round}\left(\text{Clip}\left(\frac{W_{ij}}{\alpha}, -1, 1\right)\right) \in \{-1, 0, +1\}$$
-  - 2-Bit Packing Format (4 ternary values per `u8` byte):
-    $$\text{byte} = \sum_{k=0}^3 \text{code}(\tilde{W}_k) \ll (2k)$$
-    Encoding mapping: $\text{code}(-1) = \text{0b00}$, $\text{code}(0) = \text{0b01}$, $\text{code}(+1) = \text{0b10}$, $\text{0b11}$ reserved.
-  - Scale Factor Calibration:
-    Per-channel MSE-optimal scale search:
+  - 2-Bit Packing Format (4 ternary values per byte):
+    $$\text{byte} = \sum_{k=0}^3 \text{code}(\tilde{W}_k) \ll (2k) \quad \text{with } \text{code}(-1)=00_2, \text{code}(0)=01_2, \text{code}(+1)=10_2$$
+  - Per-Channel MSE-Optimal Scale Search:
     $$\alpha_i^* = \arg\min_{\alpha} \sum_{j=1}^m \left( W_{ij} - \alpha \cdot \text{Round}\left(\text{Clip}\left(\frac{W_{ij}}{\alpha}, -1, 1\right)\right) \right)^2$$
-  - Memory Footprint Reduction:
-    $$\text{Compression Ratio} = \frac{16 \text{ bits/weight}}{2 \text{ bits/weight}} = 8.0\times \quad (\approx 87.5\% \text{ reduction})$$
 
-- **To-Do List**:
-  - [ ] **BitNet b1.58 Vectorized Bitstream Packer (`src/exporter/bitnet_pack.rs`)**:
-    - SIMD-accelerated packing converting slices of `i8` values $\in \{-1, 0, +1\}$ into packed `u8` buffers.
-    - Vectorized unpacker reconstructing de-quantized floating point values with scale multiplication.
-  - [ ] **Scale Factor Calibration Engine (`src/exporter/calibration.rs`)**:
-    - Support per-tensor, per-channel (row-wise), and per-block (group size 64/128) scale calculation.
-    - Implement MSE-optimal scale refinement via 1D grid search.
-  - [ ] **Direct Pure Rust GGUF v3 Binary Writer (`src/exporter/gguf_writer.rs`)**:
-    - Serialize GGUF v3 binary specification from pure Rust without external C/C++ dependencies:
-      - Magic header `GGUF` (`0x46554747`).
-      - Version integer (`3`).
-      - Tensor count and key-value metadata count.
-      - Standard metadata key-values: `general.architecture`, `general.name`, `llama.block_count`, `llama.context_length`, `llama.embedding_length`, `llama.feed_forward_length`, `llama.attention.head_count`.
-      - Tensor info array: name string, dimension array, type ID (`GGML_TYPE_Q8_0`, custom BitNet type), offset byte.
-      - 32-byte memory alignment padding.
-      - Continuous raw weight payload buffer.
-  - [ ] **Direct Pure Rust SafeTensors Binary Writer (`src/exporter/safetensors_writer.rs`)**:
-    - Write SafeTensors format:
-      - 8-byte unsigned little-endian JSON header length $N$.
-      - UTF-8 JSON header string with tensor metadata (`dtype`, `shape`, `data_offsets`).
-      - Memory-aligned binary tensor data payload.
-  - [ ] **Surgery Pipeline Exporter Integration (`src/exporter/mod.rs`)**:
-    - Direct export from in-memory `ModelIR` following any sequence of surgery operations (pruning, SVD, BitNet, LoRA merge).
-    - Streaming writer for large models avoiding full-model duplicate RAM allocation.
-  - [ ] **Downstream Runtime Compatibility Verification (`tests/test_exporter_compatibility.rs`)**:
-    - Automated test writing a synthetic GGUF model and loading it via `llama.cpp` / `ollama` test fixtures.
-    - Checksum and bitwise equivalence validation on round-trip serialization.
-  - [ ] **CLI Subcommand `thme export` (`src/cli/export.rs`)**:
-    - Flags: `--input <model_path>`, `--format <gguf|safetensors>`, `--quant <bitnet-b1.58|q8_0|fp16>`, `--output <path>`, `--verify`.
-  - [ ] **Studio GUI Exporter Wizard (Tab 1 Models Manager)**:
-    - Export dialog with format selection, target bit-width, destination path picker, live progress bar, and SHA-256 verification badge.
+- **Parallel Sub-Milestone Breakdown [v0.1.8.1 - v0.1.8.9]**:
+  - [ ] **v0.1.8.1**: Vectorized BitNet b1.58 Ternary Bitstream Packer (`src/exporter/bitnet_pack.rs`):
+    - SIMD-accelerated packing converting slices of ternary values into packed `u8` buffers (4 weights per byte).
+    - *Pipeline Impact*: Delivers $8.0\times$ weight compression directly in pure Rust.
+  - [ ] **v0.1.8.2**: Vectorized Ternary Bitstream Unpacker with FP16 Scale Product:
+    - Zero-allocation unpacker de-quantizing 2-bit representations into floating point registers with scale multiplication.
+    - *Pipeline Impact*: Supports rapid validation of exported ternary matrices.
+  - [ ] **v0.1.8.3**: Direct Pure Rust GGUF v3 Binary Writer & 32-Byte Alignment (`src/exporter/gguf_writer.rs`):
+    - Writes GGUF magic header (`0x46554747`), version 3, tensor metadata, and 32-byte memory-aligned payloads.
+    - *Pipeline Impact*: Produces native GGUF files loadable by `llama.cpp` without Python runtimes.
+  - [ ] **v0.1.8.4**: GGUF Metadata Key-Value Reconstitution & Synchronization Engine:
+    - Reconstitutes architecture key-values (`general.architecture`, `llama.block_count`, `llama.context_length`, etc.).
+    - *Pipeline Impact*: Prevents model metadata corruption during format conversion.
+  - [ ] **v0.1.8.5**: Direct Pure Rust SafeTensors Binary Serializer & 8-Byte Prefix (`src/exporter/safetensors_writer.rs`):
+    - Writes standard SafeTensors files with 8-byte length prefix and formatted JSON metadata header.
+    - *Pipeline Impact*: Enables direct export to Hugging Face, vLLM, and PyTorch tooling.
+  - [ ] **v0.1.8.6**: Low-Memory Streaming Chunked File Writer Engine:
+    - Streams tensor payloads directly to disk, maintaining constant RAM usage during multi-gigabyte exports.
+    - *Pipeline Impact*: Prevents out-of-memory aborts on consumer hardware during large model export.
+  - [ ] **v0.1.8.7**: Calibrated Per-Channel & Per-Group MSE-Optimal Scale Search (`src/exporter/calibration.rs`):
+    - Computes row-wise and group-wise scale vectors minimizing L2 reconstruction error.
+    - *Pipeline Impact*: Maximizes representation fidelity of exported 1.58-bit models.
+  - [ ] **v0.1.8.8**: CLI Subcommand `thme export` & Desktop Studio Tab 1 Exporter Wizard (`src/cli/export.rs`):
+    - Command-line flags `--format <gguf|safetensors>`, `--quant <bitnet-b1.58|q8_0>`, and GUI export modal with SHA-256 digests.
+    - *Pipeline Impact*: Standardized interface for downstream CI deployment scripts.
+  - [ ] **v0.1.8.9**: Downstream Runtime Compatibility Testbed (`tests/test_exporter_compatibility.rs`):
+    - Automated test verifying exported GGUF files execute in `llama.cpp` and `ollama` test harnesses.
+    - *Pipeline Impact*: End-to-end acceptance gate for export pipeline releases.
 
 ---
 
-#### [ ] v0.1.9 — Automated Teacher-Student Co-Surgery & Distillation Pipeline (Planned)
+#### [ ] v0.1.9.0 — Closed-Loop Teacher-Student Co-Surgery Baseline (PLANNED)
 Autonomous closed-loop optimization daemon: an external or local Teacher LLM analyzes layer sensitivity, generates declarative surgery recipes, THME applies them, verifies quality via the perplexity bridge, and iteratively tunes the Pareto frontier.
 
-- **Mathematical Foundations**:
-  - Multi-Objective Loss Function:
+- **Mathematical Formulations**:
+  - Multi-Objective Cost Function:
     $$\min_{\theta} \mathcal{J}(\theta) = \lambda_{\text{ppl}} \Delta PPL(\theta) + \lambda_{\text{mem}} W_{\text{token}}(\theta) + \lambda_{\text{energy}} E_{\text{token}}(\theta) - \lambda_{\text{speed}} S_{\text{speedup}}(\theta)$$
-    subject to:
-    $$\Delta PPL(\theta) \le \epsilon_{\max}, \quad \text{Memory}(\theta) \le M_{\text{budget}}$$
   - Pareto Hypervolume Maximization:
-    Iterative sampling of candidate configurations $\theta = (r_1..r_L, b_1..b_L, p_1..p_L)$ maximizing the non-dominated Pareto frontier volume:
     $$\mathcal{S}^* = \left\{ \theta \in \Theta \mid \nexists \theta' \text{ such that } \theta' \succ \theta \right\}$$
-  - Self-Healing Step Function:
-    If validation rejects candidate $\theta^{(k)}$ due to $\Delta PPL > \epsilon_{\max}$:
-    $$\theta^{(k+1)} = \text{Relax}(\theta^{(k)}, \nabla_{\theta} \text{Sensitivity})$$
-    where high-sensitivity layers revert to higher precision while low-sensitivity layers absorb additional compression.
+  - Self-Healing Step Relaxation:
+    $$\theta^{(k+1)} = \text{Relax}\left(\theta^{(k)}, \nabla_{\theta} \text{Sensitivity}\right)$$
 
-- **To-Do List**:
-  - [ ] **Co-Surgery Optimization State Machine (`src/surgery/closed_loop.rs`)**:
-    - Multi-stage loop: Inspect Topology $\to$ Synthesize Recipe $\to$ Apply Surgery $\to$ Evaluate $\Delta PPL \to$ Pareto Update $\to$ Accept/Rollback.
-    - Configurable termination criteria: target parameter budget achieved, max iterations reached, or Pareto frontier convergence.
-  - [ ] **Multi-Objective Pareto Solver (`src/optimization/pareto_solver.rs`)**:
-    - 3D Pareto frontier tracker: Storage/Memory reduction vs Perplexity degradation vs Telemetry speedup.
-    - Dominated solution pruning and Pareto hypervolume metric tracking.
-  - [ ] **Teacher LLM Prompt Synthesizer & Adapter (`src/surgery/teacher_agent.rs`)**:
-    - Synthesizes compact, structured prompt context describing top-K sensitive layers, spectral decay slopes, and EWHA reach profiles.
-    - Accepts structured JSON surgery recipes from Teacher models (via CLI stdin, MCP tool, or HTTP API).
-  - [ ] **Automated Self-Healing Rollback & Parameter Relaxation**:
-    - Automatic fallback logic restoring last known good checkpoint when quality gates trip.
-    - Parameter relaxation heuristic backing off pruning or quantization on the single most sensitive layer identified by audit diagnostics.
-  - [ ] **CLI Subcommand `thme co-surgery` (`src/cli/co_surgery.rs`)**:
-    - Flags: `--model <path>`, `--target-reduction <%>`, `--max-ppl-delta <float>`, `--max-iterations <N>`, `--teacher <command|api>`, `--auto-accept`.
-  - [ ] **Desktop Studio GUI Closed-Loop Dashboard (Tab 2 Surgery)**:
-    - Live iteration timeline showing candidate proposals, real-time $\Delta PPL$ bars, EWHA energy reduction gauges, and accepted/rejected badges.
-  - [ ] **Integration Test Suite (`tests/test_co_surgery.rs`)**:
-    - Simulated Teacher agent driving 5 iterations of automated surgery with verified convergence.
+- **Parallel Sub-Milestone Breakdown [v0.1.9.1 - v0.1.9.9]**:
+  - [ ] **v0.1.9.1**: Co-Surgery Closed-Loop State Machine & Controller (`src/surgery/closed_loop.rs`):
+    - Coordinates iterative optimization loop: Inspect $\to$ Propose $\to$ Apply $\to$ Validate $\to$ Update Pareto $\to$ Commit/Rollback.
+    - *Pipeline Impact*: Automates continuous unattended model optimization.
+  - [ ] **v0.1.9.2**: Teacher LLM Topology Analysis Prompt Synthesizer (`src/surgery/teacher_agent.rs`):
+    - Formats top-K layer sensitivity, SVD decay rates, and EWHA reach profiles into structured context for Teacher models.
+    - *Pipeline Impact*: Standardizes agentic prompt payloads across LLM backends.
+  - [ ] **v0.1.9.3**: Headless JSON-RPC & Subprocess Teacher Agent Communication Bridge:
+    - Connects external Teacher LLMs (Claude Code, Gemini CLI, local models) to the surgery engine via stdin/stdout or IPC.
+    - *Pipeline Impact*: Decouples optimization intelligence from execution engine.
+  - [ ] **v0.1.9.4**: Multi-Objective 3D Pareto Optimizer (`src/optimization/pareto_solver.rs`):
+    - Tracks non-dominated frontier across $\Delta PPL$, memory traffic $W_{\text{token}}$, and speedup multiplier $S$.
+    - *Pipeline Impact*: Automatically identifies optimal compression trade-offs.
+  - [ ] **v0.1.9.5**: Pareto Hypervolume Indicator Convergence Metric:
+    - Calculates hypervolume coverage metric to determine convergence and terminate optimization loops.
+    - *Pipeline Impact*: Provides quantitative stopping criteria for automated CI runs.
+  - [ ] **v0.1.9.6**: Automated Self-Healing Parameter Relaxation Heuristic:
+    - Backs off compression on the highest-sensitivity layer when quality degradation breaches tolerance.
+    - *Pipeline Impact*: Prevents catastrophic model failure during aggressive automated tuning.
+  - [ ] **v0.1.9.7**: Anti-Degradation Quality Gate Watchdog & Immediate Rollback Engine:
+    - Automatically restores previous baseline checkpoint upon gate failure, logging diagnostic audit trails.
+    - *Pipeline Impact*: Protects model integrity against unrecoverable transformations.
+  - [ ] **v0.1.9.8**: CLI Subcommand `thme co-surgery` & Progress Telemetry Stream (`src/cli/co_surgery.rs`):
+    - Interactive CLI driving automated runs with `--target-reduction <%>` and `--max-ppl-delta <float>`.
+    - *Pipeline Impact*: Enables headless invocation from cron jobs and CI harnesses.
+  - [ ] **v0.1.9.9**: Desktop Studio Tab 2 Closed-Loop Co-Surgery Interactive Dashboard (`src/gui/app.rs`):
+    - Real-time iteration timeline, loss curve monitors, and interactive Pareto scatter plot.
+    - *Pipeline Impact*: Visual studio interface for monitoring autonomous optimization.
 
 ---
 
 ### Phase 5: Production Core Release
 
-#### [ ] v0.2.0 — Production-Ready Verified Release (Target)
-The verified production milestone demonstrating end-to-end profiling, optimization, export, and verification on real open-weights models (SmolLM-135M / LLaMA-3.2-1B) with published reproducible results.
+#### [ ] v0.2.0.0 — Production Core Release Baseline (TARGET)
+Demonstrates end-to-end verified profiling, optimization, export, and verification on real open-weights models (SmolLM-135M / LLaMA-3.2-1B) with published reproducible results and signed binaries.
 
-- **To-Do List**:
-  - [ ] **Production Model Verification Suite (`examples/production_verification.rs`)**:
-    - Automated test fixture ingesting genuine open-weights checkpoints (SmolLM-135M and LLaMA-3.2-1B).
-    - Complete end-to-end pipeline: SafeTensors ingest $\to$ layer sensitivity profiling $\to$ Pareto BitNet/SVD allocation $\to$ GGUF export $\to$ WikiText-2 perplexity evaluation.
-  - [ ] **Reproducible Benchmark Script & Dossier Generator (`scripts/benchmark_suite.py` / `.sh`)**:
-    - Generates markdown and CSV report containing: baseline vs optimized parameter count, VRAM consumption, decode tokens/sec, WikiText-2 PPL ($\Delta PPL \le 0.45$), and energy per token.
-  - [ ] **Multi-Platform Release Packaging**:
-    - Strip symbols, LTO optimization (`lto = "fat"`, `codegen-units = 1`).
-    - Pre-compiled binaries for:
-      - Linux: `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`
-      - Windows: `x86_64-pc-windows-msvc`
-      - macOS: `x86_64-apple-darwin`, `aarch64-apple-darwin` (Apple Silicon)
-  - [ ] **Cryptographic Binary Signing & Integrity**:
-    - Minisign / GPG signatures on all release binaries.
-    - SHA-256 checksum manifest (`SHA256SUMS.txt`).
-  - [ ] **Official Documentation, Man Pages & Walkthrough**:
-    - Comprehensive User Manual (`docs/manual.md`).
-    - Unix man pages (`docs/man/thme.1`).
-    - High-resolution architectural diagrams and showcase walkthroughs.
+- **Parallel Sub-Milestone Breakdown [v0.2.0.1 - v0.2.0.9]**:
+  - [ ] **v0.2.0.1**: SmolLM-135M Open-Weights End-to-End Verification Pipeline (`examples/production_verification.rs`):
+    - Ingests genuine SmolLM-135M checkpoint, applies Pareto BitNet/SVD surgery, exports GGUF, and evaluates perplexity.
+    - *Pipeline Impact*: Primary proof-of-correctness gate for release verification.
+  - [ ] **v0.2.0.2**: LLaMA-3.2-1B Open-Weights End-to-End Verification Pipeline:
+    - Validates pipeline on 1B parameter scale model under real hardware memory limits.
+    - *Pipeline Impact*: Validates scaling behavior on multi-billion parameter architectures.
+  - [ ] **v0.2.0.3**: Automated Reproducible Benchmark Script Suite (`scripts/benchmark_suite.py` / `.sh`):
+    - One-command execution generating full benchmark metrics on clean developer machines.
+    - *Pipeline Impact*: Enables third-party reproducibility of all published performance numbers.
+  - [ ] **v0.2.0.4**: Published Benchmark Dossier Generator (`docs/benchmark_dossier.md`):
+    - Synthesizes markdown and CSV performance comparison tables with verified hardware attribution.
+    - *Pipeline Impact*: Serves as official empirical performance documentation.
+  - [ ] **v0.2.0.5**: Multi-Platform LTO Stripped Binary Release Packaging:
+    - Automated packaging of optimized, stripped release binaries for Linux (x86_64, aarch64), Windows (x64), and macOS (ARM/Intel).
+    - *Pipeline Impact*: Delivers production binary assets on GitHub Releases.
+  - [ ] **v0.2.0.6**: Minisign & GPG Cryptographic Artifact Signing Pipeline:
+    - Signs all release binaries and tarballs with cryptographic provenance signatures.
+    - *Pipeline Impact*: Prevents binary tampering and ensures software supply chain security.
+  - [ ] **v0.2.0.7**: SHA-256 Checksum Manifest Generation (`SHA256SUMS.txt`):
+    - Automated generation and verification of SHA-256 digest manifests.
+    - *Pipeline Impact*: Standard release integrity verification for package managers.
+  - [ ] **v0.2.0.8**: Comprehensive Architecture Playbook, User Manual & Man Pages:
+    - Finalized User Manual (`docs/manual.md`), Unix man pages (`docs/man/thme.1`), and architectural documentation.
+    - *Pipeline Impact*: Complete documentation set for enterprise and open-source users.
+  - [ ] **v0.2.0.9**: End-to-End Clean-Machine Verification Test Harness:
+    - CI job spinning up a clean VM to test installation, execution, and export without pre-existing dependencies.
+    - *Pipeline Impact*: Final pre-release acceptance gate.
 
 ---
 
 ### Phase 6: Tiered Hardware Execution & Universal Agentic Connectivity
 
-#### [ ] v0.2.1 — Direct GPU Driver Execution Engine (Vulkan / Metal / CUDA Driver API) (Scheduled)
-Direct pure Rust GPU driver execution engine bypassing external Python runtimes, C++ frameworks, or PyTorch wheels. Communicates directly with hardware drivers via pure Rust bindings.
+#### [ ] v0.2.1.0 — Direct GPU Driver Execution Engine Baseline (SCHEDULED)
+Pure Rust GPU driver execution bypassing external Python runtimes, C++ frameworks, or PyTorch wheels.
+- [ ] **v0.2.1.1**: Hardware Abstraction Layer (HAL) core traits (`HardwareDevice`, `DeviceMemoryBuffer`, `CommandQueue`, `KernelLaunchConfig`).
+- [ ] **v0.2.1.2**: NVIDIA CUDA Driver API backend via pure Rust `cudarc` (direct `libcuda.so` / `nvcuda.dll` calls).
+- [ ] **v0.2.1.3**: Vulkan 1.3 SPIR-V compute pipeline backend via `ash` for cross-platform execution on Linux and Windows.
+- [ ] **v0.2.1.4**: Apple Metal 3 Performance Shaders backend via `metal-rs` leveraging Apple Silicon unified memory.
+- [ ] **v0.2.1.5**: Fused BitNet b1.58 GEMV / GEMM kernel with register-level 2-bit weight unpacking.
+- [ ] **v0.2.1.6**: Fused RMSNorm kernel computing variance and scaling in a single thread block pass.
+- [ ] **v0.2.1.7**: Fused SwiGLU activation kernel combining gate and up projections.
+- [ ] **v0.2.1.8**: Fused Rotary Position Embedding (RoPE) kernel.
+- [ ] **v0.2.1.9**: CLI subcommand `thme run --model <path> --backend <cuda|vulkan|metal|cpu>` for direct inference.
+*Production Pipeline Impact*: Replaces external Python runtime dependencies with pure Rust hardware execution.
 
-- **Architectural Specifications**:
-  - NVIDIA CUDA Driver API via pure Rust `cudarc`:
-    - Direct calls to `libcuda.so` / `nvcuda.dll` bypassing CUDA runtime (`libcudart`) and Python.
-    - JIT compilation of embedded PTX kernels or pre-compiled CUBIN binaries.
-    - Asynchronous CUDA streams and event synchronization.
-  - Vulkan 1.3 Compute Shaders via `ash`:
-    - Cross-platform GPU execution across Linux, Windows, and Android.
-    - Pre-compiled SPIR-V compute shaders for low-bit matrix multiplication and activation layers.
-    - Vulkan pipeline barriers and memory descriptors.
-  - Apple Metal 3 via `metal-rs`:
-    - Native execution on macOS and iOS Apple Silicon unified memory architectures.
-    - Metal Performance Shaders (MPS) graph integration and custom MSL compute shaders.
-  - Fused Low-Bit Execution Kernels:
-    - Fused BitNet b1.58 GEMM ($Y = \tilde{W} X$ with 2-bit unpacked on-the-fly into tensor registers).
-    - Fused RMSNorm: $\text{RMSNorm}(x) = \frac{x}{\sqrt{\frac{1}{d}\sum x_i^2 + \epsilon}} \odot \gamma$ in a single thread block pass.
-    - Fused SwiGLU: $\text{SwiGLU}(x) = (x W_{\text{gate}} \cdot \text{sigmoid}(x W_{\text{gate}})) \odot (x W_{\text{up}})$.
+#### [ ] v0.2.2.0 — Tiered Out-of-Core NVMe SSD Streaming Baseline (SCHEDULED)
+Three-tier memory hierarchy (GPU VRAM $\leftrightarrow$ Host RAM $\leftrightarrow$ NVMe SSD direct asynchronous I/O) enabling 70B parameter inference and surgery in 8 GB VRAM.
+- [ ] **v0.2.2.1**: Linux `io_uring` direct disk block access engine bypassing OS page cache buffer copies.
+- [ ] **v0.2.2.2**: Windows Overlapped I/O with `FILE_FLAG_NO_BUFFERING` via Win32 completion ports (`IOCP`).
+- [ ] **v0.2.2.3**: Sequential layer streaming pipeline (AirLLM-style) loading and evicting layers on-the-fly.
+- [ ] **v0.2.2.4**: Double-buffered prefetch queue streaming layer $k+1$ from SSD while GPU computes layer $k$.
+- [ ] **v0.2.2.5**: Pinned memory staging buffers (`mlock` / `VirtualLock`) for direct GPU DMA transfers.
+- [ ] **v0.2.2.6**: REA-LLM tiered allocation policy: hot layers in VRAM, warm layers in Host RAM, deep layers on NVMe.
+- [ ] **v0.2.2.7**: Dynamic VRAM memory accountant enforcing strict consumer hardware memory ceilings.
+- [ ] **v0.2.2.8**: 70B parameter model forward pass benchmark executing inside an 8 GB memory constraint.
+- [ ] **v0.2.2.9**: Real-time PCIe bandwidth saturation and disk I/O throughput telemetry monitor.
+*Production Pipeline Impact*: Enables massive model inference on low-cost consumer hardware.
 
-- **To-Do List**:
-  - [ ] **Hardware Abstraction Layer (HAL) Traits (`src/hardware/hal.rs`)**:
-    - Define traits: `HardwareDevice`, `DeviceMemoryBuffer`, `CommandQueue`, `KernelLaunchConfig`.
-  - [ ] **CUDA Driver Backend (`src/hardware/cuda.rs`)**:
-    - Context initialization, unified memory allocation (`cuMemAllocManaged`), async stream dispatch.
-  - [ ] **Vulkan 1.3 Compute Backend (`src/hardware/vulkan.rs`)**:
-    - Instance/device creation, physical device queue enumeration, SPIR-V pipeline loader.
-  - [ ] **Apple Metal 3 Backend (`src/hardware/metal.rs`)**:
-    - Metal device creation, command buffer queue, shared memory buffer allocation without memory copies.
-  - [ ] **Micro-Kernel Library (`src/hardware/kernels/`)**:
-    - Fused BitNet b1.58 GEMV / GEMM kernel.
-    - Fused RMSNorm kernel.
-    - Fused SwiGLU activation kernel.
-    - Rotary Position Embedding (RoPE) kernel.
-  - [ ] **CLI Subcommand `thme run` (`src/cli/run.rs`)**:
-    - Execute model inference directly via selected GPU backend: `thme run --model <path> --backend <cuda|vulkan|metal|cpu> --prompt "..."`.
+#### [ ] v0.2.3.0 — Distributed Heterogeneous Multi-Node Clustering Baseline (SCHEDULED)
+Distributed execution across heterogeneous nodes with pure Rust asynchronous TCP/RDMA ring all-reduce communication.
+- [ ] **v0.2.3.1**: Intra-node Tensor Parallelism (TP) splitting matrix projections across local accelerators.
+- [ ] **v0.2.3.2**: Inter-node Pipeline Parallelism (PP) distributing sequential layer partitions across networked nodes.
+- [ ] **v0.2.3.3**: 1F1B (One-Forward-One-Backward) schedule minimizing activation pipeline bubbles.
+- [ ] **v0.2.3.4**: Pure Rust asynchronous Ring All-Reduce over non-blocking TCP socket streams.
+- [ ] **v0.2.3.5**: Hardware RDMA / RoCE fallback when InfiniBand network hardware is detected.
+- [ ] **v0.2.3.6**: Multicast / mDNS cluster node discovery and capability exchange.
+- [ ] **v0.2.3.7**: Continuous 100 ms heartbeat monitor and dead-node detection watchdog.
+- [ ] **v0.2.3.8**: Automated dynamic layer re-sharding failover upon node disconnection.
+- [ ] **v0.2.3.9**: CLI subcommand `thme cluster <init|join|status>` for ad-hoc cluster formation.
+*Production Pipeline Impact*: Scales THME across ad-hoc mixed hardware clusters without MPI or NCCL.
 
----
-
-#### [ ] v0.2.2 — Tiered Heterogeneous Memory & Out-of-Core NVMe SSD Streaming (Scheduled)
-Three-tier hierarchical memory pipeline (GPU VRAM $\leftrightarrow$ Host RAM $\leftrightarrow$ NVMe SSD direct asynchronous I/O) enabling 70B parameter model inference and architecture surgery on consumer systems with 8 GB VRAM.
-
-- **Architectural Specifications**:
-  - Asynchronous Direct I/O Engine:
-    - Linux: `io_uring` direct disk block access bypassing OS page cache buffer copies.
-    - Windows: Overlapped I/O with `FILE_FLAG_NO_BUFFERING` via Windows Win32 API.
-    - PCIe 4.0/5.0 NVMe streaming achieving $6,000 - 12,000 \text{ MB/s}$ sustained sequential read throughput.
-  - Layer-by-Layer Sequential Execution (AirLLM-Style):
-    - Load layer $k$ weights from NVMe into pinned host memory $\to$ DMA transfer to GPU VRAM $\to$ execute layer forward pass $\to$ reuse VRAM buffer for layer $k+1$.
-  - Double-Buffering Asynchronous Prefetch Pipeline:
-    - Stream layer $k+1$ from NVMe into staging buffer in parallel while GPU compute core processes layer $k$.
-  - REA-LLM Tier Placement:
-    - Hot layers ($q_l = 1.0$, early attention) permanently pinned in GPU VRAM.
-    - Warm layers ($q_l \ge 0.50$, middle layers) cached in Host RAM.
-    - Deep layers ($q_l \le 0.20$) streamed on-demand from NVMe SSD.
-
-- **To-Do List**:
-  - [ ] **Direct I/O Storage Engine (`src/storage/direct_io.rs`)**:
-    - Linux `io_uring` backend with submission/completion ring management.
-    - Windows Overlapped I/O backend with completion ports (`IOCP`).
-  - [ ] **Layer Streaming Prefetch Queue (`src/storage/layer_streamer.rs`)**:
-    - Double-buffered prefetch pipeline with async futures.
-    - Pin memory pages (`mlock` on Unix, `VirtualLock` on Windows) for direct GPU DMA.
-  - [ ] **Tiered Memory Accountant (`src/memory/tiered_allocator.rs`)**:
-    - Real-time VRAM/RAM/NVMe capacity budgeting and layer placement policy.
-    - Automated eviction of inactive layer activations.
-  - [ ] **70B Model Inference Benchmark (`tests/test_out_of_core_streaming.rs`)**:
-    - Synthetic 70B model streaming forward pass completing inside an 8 GB memory constraint.
-
----
-
-#### [ ] v0.2.3 — Distributed Heterogeneous Multi-Node Clustering (Pipeline & Tensor Parallelism) (Scheduled)
-Distributed execution across heterogeneous nodes (e.g. Mac Studio M2 Ultra + Linux workstation with RTX 4090 + Windows laptop) with pure Rust asynchronous TCP/RDMA ring all-reduce communication.
-
-- **Architectural Specifications**:
-  - Intra-Node Tensor Parallelism (TP):
-    - Split column-parallel Linear ($W_{\text{gate}}, W_{\text{up}}, W_Q, W_K, W_V$) and row-parallel Linear ($W_{\text{down}}, W_O$) across local GPUs.
-  - Inter-Node Pipeline Parallelism (PP):
-    - Partition model layers $[0..L-1]$ into $P$ sequential stages assigned to distributed cluster nodes over standard network links.
-    - 1F1B (One-Forward-One-Backward) schedule minimizing activation pipeline bubbles.
-  - Pure Rust Ring All-Reduce (`src/cluster/comm.rs`):
-    - Asynchronous peer-to-peer ring topology over non-blocking TCP sockets.
-    - Fallback to RDMA / RoCE (InfiniBand verbs) where high-speed interconnect hardware is detected.
-  - Fault Tolerance & Dynamic Re-Sharding:
-    - Heartbeat pings (100 ms interval); automatic re-sharding of remaining layers upon node disconnection.
-
-- **To-Do List**:
-  - [ ] **Cluster Node Discovery & Handshake (`src/cluster/discovery.rs`)**:
-    - Multicast / mDNS node discovery and capability exchange (VRAM size, compute TFLOPs).
-  - [ ] **Ring All-Reduce Implementation (`src/cluster/ring.rs`)**:
-    - Pure Rust Scatter-Reduce and All-Gather stages over async streams.
-  - [ ] **Pipeline Parallelism Scheduler (`src/cluster/pipeline.rs`)**:
-    - Activation token buffer routing between sequential node stages.
-  - [ ] **Fault Tolerance Monitor (`src/cluster/watchdog.rs`)**:
-    - Heartbeat detection, dead-node failover, and layer reallocation.
-  - [ ] **CLI Subcommand `thme cluster` (`src/cli/cluster.rs`)**:
-    - Commands: `thme cluster init`, `thme cluster join <master_ip>`, `thme cluster status`.
-
----
-
-#### [ ] v0.2.4 — Universal Agentic AI Connectivity Gateway (CLI, Harness, Desktop, IDE) (Scheduled)
+#### [ ] v0.2.4.0 — Universal Agentic AI Connectivity Gateway Baseline (SCHEDULED)
 High-performance headless JSON-RPC 2.0 daemon and bidirectional WebSocket event streaming gateway connecting autonomous AI agents, CI/CD harnesses, desktop apps, and IDE copilots.
-
-- **Architectural Specifications**:
-  - Headless JSON-RPC 2.0 / WebSocket Daemon:
-    - High-throughput asynchronous server (`thme daemon --port 9090`) handling concurrent agent requests.
-    - Bi-directional event stream publishing: per-token throughput, layer execution progress, thermal throttling, memory pressure.
-  - Universal Agent Adapter Matrix:
-    - **Autonomous CLI Agents**: Standard MCP tool schemas and CLI subprocess bridge for Claude Code, Gemini CLI, Aider, OpenHands.
-    - **CI/CD & Orchestration Harnesses**: Automated validation, delta-PPL quality gating, and deployment gates for Harness CI/CD, GitHub Actions, GitLab CI.
-    - **Desktop Studio Application**: Native WebSockets connection between `thme-gui` and background daemons running on remote GPU servers.
-    - **IDEs & AI Copilots**: Enhanced extension backends for VS Code, Cursor, Windsurf, and GitHub Copilot Language Model Tools.
-  - Cryptographic Recipe Attestation:
-    - HMAC-SHA256 digital signatures on all executed surgery recipes ensuring verified provenance and zero unauthorized weight tampering.
-
-- **To-Do List**:
-  - [ ] **WebSocket Streaming Gateway Daemon (`src/daemon/server.rs`)**:
-    - Async WebSocket event bus broadcasting real-time model telemetry and forward execution stats.
-  - [ ] **JSON-RPC 2.0 Method Router (`src/daemon/rpc.rs`)**:
-    - Remote procedure execution for all THME capabilities: inspect, autodecide, surgery, validate, speculate, roofline, export.
-  - [ ] **HMAC-SHA256 Recipe Attestation (`src/daemon/attestation.rs`)**:
-    - Cryptographic signing and validation of surgery recipe JSON payloads.
-  - [ ] **Agent Adapter Connectors (`src/daemon/adapters/`)**:
-    - Adapters for Harness pipelines, GitHub Actions workflows, CLI agent protocols.
-  - [ ] **CLI Subcommand `thme daemon` (`src/cli/daemon.rs`)**:
-    - Flags: `--port <N>`, `--bind <ip>`, `--auth-token <secret>`, `--allow-remote-surgery`.
-  - [ ] **Integration Test Suite (`tests/test_agentic_gateway.rs`)**:
-    - Concurrent WebSocket client connections executing surgery, receiving streaming telemetry, and validating attestation signatures.
+- [ ] **v0.2.4.1**: High-throughput asynchronous WebSocket event streaming server (`thme daemon --port 9090`).
+- [ ] **v0.2.4.2**: JSON-RPC 2.0 method router exposing all THME capabilities (inspect, surgery, validate, export).
+- [ ] **v0.2.4.3**: Cryptographic HMAC-SHA256 surgery recipe signing and provenance verification engine.
+- [ ] **v0.2.4.4**: Autonomous CLI Agent adapter (Claude Code, Gemini CLI, Aider, OpenHands).
+- [ ] **v0.2.4.5**: CI/CD Orchestration Harness adapter (Harness CI/CD, GitHub Actions, GitLab CI).
+- [ ] **v0.2.4.6**: Desktop Studio remote connection bridge connecting `thme-gui` to remote GPU daemons.
+- [ ] **v0.2.4.7**: IDE & Copilot extension bridge (VS Code, Cursor, Windsurf, Copilot LM Tools).
+- [ ] **v0.2.4.8**: Real-time event broadcasting: per-token throughput, layer execution, thermal, and memory pressure.
+- [ ] **v0.2.4.9**: CLI subcommand `thme daemon` with full authentication and remote access control flags.
+*Production Pipeline Impact*: Provides a universal control plane connecting any AI agent or IDE to THME.
 
 ---
 
 ## Long-Term Research Initiatives (Deferred to v0.3.0+)
 
-These advanced algorithmic directions are tracked in the architecture backlog and intentionally deferred to subsequent major milestones:
+These advanced algorithmic initiatives are documented in the backlog and intentionally deferred to subsequent major milestones:
 - **Topological Hyper-Graph Neural Architecture Search**: Automated micro-circuit rewiring using topological data analysis (TDA) persistent homology to detect and prune redundant manifold loops.
 - **Continuous Online RL Adaptation**: Real-time layer manifold adjustment guided by continuous reinforcement learning feedback loops during live conversational inference.
 - **Dynamic Mixture-of-Experts Sub-Manifold Synthesis**: Real-time conditional routing dynamically spawning expert sub-networks based on input token semantic entropy.

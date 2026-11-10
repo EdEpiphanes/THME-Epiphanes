@@ -600,8 +600,58 @@ flowchart TD
     v014["v0.1.4 Quality Gate: External Perplexity Bridge & Automated Rollback (Done)"]
     v015["v0.1.5 Surgery Daemon & 8 AI Models: MCP, Copilot, PyTorch & Paradigm Matrix (Done)"]
     v016["v0.1.6 Speculative Decoding: Draft Model Synthesizer & Tree Engine (Done)"]
-    v017["v0.1.7 Roofline Profiler: FLOP/byte Arithmetic Intensity & Cache Hierarchy (Active)"]
-    v018["v0.1.8 Quant Exporter: Direct GGUF / SafeTensors Serialization & BitNet b1.58"]
+
+    v010 --> v011 --> v012 --> v013 --> v014 --> v015 --> v016 --> v017_0
+
+    subgraph Milestone_v017 ["Active Milestone: v0.1.7 Roofline & Micro-Kernel Profiler"]
+        v017_0["v0.1.7.0 Baseline Contract"]
+        v017_1["v0.1.7.1 Hardware DB & Knee"]
+        v017_2["v0.1.7.2 Linear & Attention Intensity"]
+        v017_3["v0.1.7.3 SwiGLU & FlashAttn-2 Models"]
+        v017_4["v0.1.7.4 4-Tier Memory Cache Sim"]
+        v017_5["v0.1.7.5 Working Set Eviction Model"]
+        v017_6["v0.1.7.6 Roofline Boundary Classifier"]
+        v017_7["v0.1.7.7 Dynamic TDP & Thermal Model"]
+        v017_8["v0.1.7.8 CLI roofline & MCP Tool"]
+        v017_9["v0.1.7.9 Desktop Studio Tab 4 Deck"]
+
+        v017_0 --> v017_1
+        v017_0 --> v017_2
+        v017_0 --> v017_3
+        v017_0 --> v017_4
+        v017_0 --> v017_5
+        v017_0 --> v017_6
+        v017_0 --> v017_7
+        v017_0 --> v017_8
+        v017_0 --> v017_9
+    end
+
+    subgraph Milestone_v018 ["Planned Milestone: v0.1.8 Binary Quantization Exporter"]
+        v018_0["v0.1.8.0 Baseline Contract"]
+        v018_1["v0.1.8.1 Vectorized BitNet Packer"]
+        v018_2["v0.1.8.2 Ternary Unpacker & Scale"]
+        v018_3["v0.1.8.3 Pure Rust GGUF v3 Writer"]
+        v018_4["v0.1.8.4 GGUF Metadata Sync Engine"]
+        v018_5["v0.1.8.5 Pure Rust SafeTensors Writer"]
+        v018_6["v0.1.8.6 Streaming Chunked Writer"]
+        v018_7["v0.1.8.7 MSE-Optimal Scale Search"]
+        v018_8["v0.1.8.8 CLI export & Tab 1 Wizard"]
+        v018_9["v0.1.8.9 Downstream Runtime Testbed"]
+
+        v018_0 --> v018_1
+        v018_0 --> v018_2
+        v018_0 --> v018_3
+        v018_0 --> v018_4
+        v018_0 --> v018_5
+        v018_0 --> v018_6
+        v018_0 --> v018_7
+        v018_0 --> v018_8
+        v018_0 --> v018_9
+    end
+
+    v017_1 & v017_2 & v017_3 & v017_4 & v017_5 & v017_6 & v017_7 & v017_8 & v017_9 --> v018_0
+    v018_1 & v018_2 & v018_3 & v018_4 & v018_5 & v018_6 & v018_7 & v018_8 & v018_9 --> v019
+
     v019["v0.1.9 Co-Surgery: Autonomous Teacher-Student Closed-Loop Optimization"]
     v020["v0.2.0 Production Core Release: Verified Small-Model Open-Weights Demo"]
     v021["v0.2.1 GPU Drivers: Vulkan Compute, Metal 3 & CUDA Driver API"]
@@ -609,7 +659,7 @@ flowchart TD
     v023["v0.2.3 Clustering: Heterogeneous Pipeline & Tensor Parallelism Ring All-Reduce"]
     v024["v0.2.4 Agent Gateway: Universal Daemon for CLI, Harnesses, Desktop & IDEs"]
 
-    v010 --> v011 --> v012 --> v013 --> v014 --> v015 --> v016 --> v017 --> v018 --> v019 --> v020 --> v021 --> v022 --> v023 --> v024
+    v019 --> v020 --> v021 --> v022 --> v023 --> v024
 
     subgraph Backlog_v03 ["v0.3.0+ Backlog (Deferred)"]
         v031["Topological Hyper-Graph Neural Architecture Search"]
@@ -626,9 +676,9 @@ flowchart TD
 - **v0.1.4 (Completed):** Empirical Quality Gate & Perplexity Verification Bridge (WikiText-2, C4, PTB) with automated rollback gating ($\Delta PPL \le \epsilon$), and enhanced CLI `validate` reporting.
 - **v0.1.5 (Completed):** Headless JSON-RPC Model Context Protocol (MCP) server (`thme mcp`), VS Code extension packaging (`thme-vscode-0.1.5.vsix`), Language Model Tools for GitHub Copilot (`thme_copilot_inspect`, `thme_copilot_surgery`, `thme_copilot_validate`), PyTorch & CUDA fine-tuning interop bridge with PEFT LoRA adapter merge math ($W = W_0 + \frac{\alpha}{r} B \times A$), and Universal 8 Specialized AI Model Paradigm Converter (LLM, LCM, LAM, MoE, VLM, SLM, MLM, SAM) with sparse upcycling and BitNet b1.58 edge compaction.
 - **v0.1.6 (Completed):** Speculative Decoding Synthesizer: draft model manifold extraction (prefix layers, strided layers, low-rank projection, BitNet b1.58 ternary draft with 76.8% memory reduction), multi-token speculative rejection sampling verification ($S = \frac{\mathbb{E}[k]+1}{1+\gamma \cdot r} \ge 1.53\times$), Medusa/Eagle multi-branch tree speculation topology with 2D causal tree attention mask synthesis, CLI `thme speculate`, MCP tool `thme_simulate_speculative_decoding`, and Desktop Studio Tab 4 benchmark deck.
-- **v0.1.7 (Active):** Roofline & Kernel Profiler: hardware-calibrated Arithmetic Intensity ($\text{FLOPs/byte}$) vs. Memory Bandwidth saturation roofline models across target architectures (NVIDIA Ada/Blackwell, Apple Silicon M-series, AMD CDNA/RDNA, Intel/AMD AVX-512), multi-level memory hierarchy cache simulation (L1, L2, L3, HBM3/DDR5) predicting cache miss latency penalties, and power/thermal throttling projection curves.
-- **v0.1.8 (Planned):** Binary Quantization Exporter: direct serialization to deployable GGUF v3 and SafeTensors files with BitNet b1.58 ternary packed bitstreams (2 bits/weight, 4 weights/byte) and calibrated per-channel scale factors, ensuring direct compatibility with downstream runtimes (`llama.cpp`, Ollama, vLLM).
-- **v0.1.9 (Planned):** Closed-Loop Teacher Surgery: autonomous Teacher-Student co-surgery optimization daemon with iterative recipe generation, delta-PPL verification, and multi-objective Pareto auto-tuning balancing latency, memory traffic, and representation fidelity.
+- **v0.1.7 (Active):** Roofline & Micro-Kernel Profiler: 4-level execution architecture $v0.1.7.0 \to [v0.1.7.1 \dots v0.1.7.9] \to v0.1.8.0$. Predefined hardware target specifications (NVIDIA H100 SXM5, RTX 4090, Apple M3 Max, Apple M2 Ultra, AMD Instinct MI300X, Intel Xeon Platinum 8490H AVX-512) and machine balance knee calculator $I^* = \frac{\text{TFLOP/s}}{\text{Bandwidth GB/s}}$; exact layer-by-layer Operational Arithmetic Intensity ($\text{FLOPs/byte}$) for Linear projections, Scaled Dot-Product Attention, SwiGLU FFN, and FlashAttention-2; 4-tier memory hierarchy cache simulator (L1, L2, L3, DRAM) with eviction latency degradation models; empirical log-log Roofline ceiling curves with `MemoryBound` vs `ComputeBound` classification; dynamic TDP thermal throttling projections; CLI subcommand `thme roofline` with ASCII diagrams and JSON telemetry; MCP tool `thme_profile_roofline`; and Desktop Studio Tab 4 interactive Roofline deck.
+- **v0.1.8 (Planned):** Binary Quantization Exporter: $v0.1.8.0 \to [v0.1.8.1 \dots v0.1.8.9] \to v0.1.9.0$. Direct serialization to deployable GGUF v3 and SafeTensors files with BitNet b1.58 ternary packed bitstreams (2 bits/weight, 4 weights/byte), streaming chunked I/O maintaining $\le 64 \text{ MB}$ RAM footprint, metadata synchronization, and calibrated per-channel/per-group MSE-optimal scale factors, ensuring immediate compatibility with downstream runtimes (`llama.cpp`, Ollama, vLLM).
+- **v0.1.9 (Planned):** Closed-Loop Teacher Surgery: autonomous Teacher-Student co-surgery optimization daemon with iterative recipe generation, delta-PPL verification, and multi-objective 3D Pareto auto-tuning balancing latency, memory traffic, and representation fidelity.
 - **v0.2.0 (Target):** Verified production deployment on real open weights (SmolLM-135M / LLaMA-3.2-1B) with reproducible before-and-after benchmarks, published checkpoints, and signed release binaries.
 - **v0.2.1 (Scheduled):** Direct GPU Driver Execution Engine: pure Rust GPU execution via Vulkan 1.3 SPIR-V compute shaders, Apple Metal 3 Performance Shaders, and NVIDIA CUDA Driver API via `cudarc` bypassing Python runtimes with fused low-bit GEMM kernels.
 - **v0.2.2 (Scheduled):** Tiered Heterogeneous Memory & Out-of-Core NVMe SSD Streaming: asynchronous direct I/O (`io_uring`/Overlapped I/O) enabling 70B parameter inference and surgery in 8 GB consumer VRAM via sequential layer streaming.

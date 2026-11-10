@@ -5,6 +5,7 @@ pub mod mcp;
 pub mod plan;
 pub mod profile;
 pub mod report;
+pub mod roofline;
 pub mod speculate;
 pub mod tweak;
 pub mod validate;
@@ -57,6 +58,9 @@ pub enum Commands {
     /// Synthesize draft models and evaluate multi-token speculative decoding speedups
     Speculate(speculate::SpeculateArgs),
 
+    /// Profile model layers against empirical hardware roofline ceilings and cache hierarchy
+    Roofline(roofline::RooflineArgs),
+
     /// Export PyTorch / CUDA fine-tuning script or Hugging Face configurations
     #[command(alias = "interop")]
     Export(interop::InteropArgs),
@@ -78,6 +82,7 @@ pub fn run() -> Result<()> {
         Commands::Report(args) => report::execute(args),
         Commands::Convert(args) => convert::execute(args),
         Commands::Speculate(args) => speculate::execute(args),
+        Commands::Roofline(args) => roofline::execute(args),
         Commands::Export(args) => interop::execute(args),
         Commands::Mcp(args) => mcp::execute(args),
     }

@@ -804,6 +804,21 @@ pub struct THMEApp {
     spec_tokens_per_pass: f64,
     spec_traffic_savings: f64,
 
+    // Roofline & Micro-Kernel Profiler State (v0.1.7)
+    roofline_hardware_idx: usize,
+    roofline_batch_size: usize,
+    roofline_seq_len: usize,
+    roofline_flash_attn: bool,
+    roofline_thermal_sim: bool,
+    roofline_temp_c: f32,
+    roofline_peak_tflops: f64,
+    roofline_bandwidth_tbps: f64,
+    roofline_knee_intensity: f64,
+    roofline_mem_bound_pct: f64,
+    roofline_comp_bound_pct: f64,
+    roofline_est_latency_ms: f64,
+    roofline_last_report: Option<String>,
+
     // Deep Layer Deconstruction & Anatomy
     selected_subblock: Option<crate::ir::SubBlockCategory>,
     hybrid_topology_mode: usize,
@@ -932,6 +947,21 @@ impl THMEApp {
             spec_acceptance_val: 78.5,
             spec_tokens_per_pass: 3.92,
             spec_traffic_savings: 64.2,
+
+            // Roofline & Micro-Kernel Profiler State (v0.1.7)
+            roofline_hardware_idx: 0,
+            roofline_batch_size: 1,
+            roofline_seq_len: 2048,
+            roofline_flash_attn: true,
+            roofline_thermal_sim: false,
+            roofline_temp_c: 25.0,
+            roofline_peak_tflops: 989.4,
+            roofline_bandwidth_tbps: 3.35,
+            roofline_knee_intensity: 295.34,
+            roofline_mem_bound_pct: 66.7,
+            roofline_comp_bound_pct: 33.3,
+            roofline_est_latency_ms: 1.24,
+            roofline_last_report: None,
 
             // Deep Layer Deconstruction & Anatomy
             selected_subblock: None,
@@ -4144,6 +4174,195 @@ impl THMEApp {
                         .inner_margin(egui::Margin::same(8))
                         .show(ui, |ui| {
                             ui.label(egui::RichText::new("SPECULATIVE SYNTHESIS & TELEMETRY REPORT").strong().color(p.accent));
+                            for line in report.lines() {
+                                ui.label(egui::RichText::new(line).size(9.0).monospace().color(p.text_main));
+                            }
+                        });
+                }
+            });
+
+        ui.add_space(10.0);
+        egui::Frame::NONE
+            .fill(p.bg_card)
+            .stroke(Stroke::new(1.0_f32, p.primary))
+            .inner_margin(egui::Margin::same(12))
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.heading(
+                        egui::RichText::new("ROOFLINE & MICRO-KERNEL PROFILER INTERACTIVE DECK (v0.1.7)")
+                            .size(12.0)
+                            .color(p.primary),
+                    );
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "Knee: {:.1} FLOP/B | {:.1}% Memory-Bound",
+                                self.roofline_knee_intensity, self.roofline_mem_bound_pct
+                            ))
+                            .strong()
+                            .color(p.warning),
+                        );
+                    });
+                });
+                ui.label(
+                    egui::RichText::new(
+                        "Profile layer arithmetic intensity against empirical hardware ceilings, cache hierarchies, and thermal throttling."
+                    )
+                    .size(9.0)
+                    .color(p.text_muted),
+                );
+
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    ui.label("Hardware Target:");
+                    egui::ComboBox::from_id_salt("roofline_hw_combo")
+                        .selected_text(match self.roofline_hardware_idx {
+                            0 => "NVIDIA H100 SXM5 (989 TFLOPS | 3.35 TB/s)",
+                            1 => "NVIDIA RTX 4090 (165 TFLOPS | 1.01 TB/s)",
+                            2 => "Apple M3 Max (32 TFLOPS | 400 GB/s)",
+                            3 => "AMD MI300X (1307 TFLOPS | 5.30 TB/s)",
+                            _ => "Intel Xeon Emerald Rapids (179 TFLOPS | 560 GB/s)",
+                        })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut self.roofline_hardware_idx, 0, "NVIDIA H100 SXM5");
+                            ui.selectable_value(&mut self.roofline_hardware_idx, 1, "NVIDIA RTX 4090");
+                            ui.selectable_value(&mut self.roofline_hardware_idx, 2, "Apple M3 Max");
+                            ui.selectable_value(&mut self.roofline_hardware_idx, 3, "AMD MI300X");
+                            ui.selectable_value(&mut self.roofline_hardware_idx, 4, "Intel Xeon Emerald Rapids");
+                        });
+
+                    ui.add_space(10.0);
+                    ui.label("Batch:");
+                    ui.add(egui::DragValue::new(&mut self.roofline_batch_size).range(1..=64));
+
+                    ui.add_space(10.0);
+                    ui.label("Seq Len:");
+                    ui.add(egui::DragValue::new(&mut self.roofline_seq_len).range(128..=8192));
+
+                    ui.add_space(10.0);
+                    ui.checkbox(&mut self.roofline_flash_attn, "FlashAttention-2");
+                    ui.checkbox(&mut self.roofline_thermal_sim, "Thermal Sim");
+
+                    if self.roofline_thermal_sim {
+                        ui.add(egui::Slider::new(&mut self.roofline_temp_c, 20.0..=105.0).text("°C"));
+                    }
+                });
+
+                ui.add_space(8.0);
+                ui.columns(4, |sub| {
+                    render_stat_box(&mut sub[0], "COMPUTE CEILING", format!("{:.1} TFLOPS", self.roofline_peak_tflops), p.primary, &p);
+                    render_stat_box(&mut sub[1], "MEMORY BANDWIDTH", format!("{:.2} TB/s", self.roofline_bandwidth_tbps), p.accent, &p);
+                    render_stat_box(&mut sub[2], "MACHINE BALANCE KNEE", format!("{:.1} FLOP/B", self.roofline_knee_intensity), p.warning, &p);
+                    render_stat_box(&mut sub[3], "BOUND DISTRIBUTION", format!("{:.0}% Mem / {:.0}% Comp", self.roofline_mem_bound_pct, self.roofline_comp_bound_pct), p.secondary, &p);
+                });
+
+                ui.add_space(8.0);
+                // Custom Painter Interactive Roofline Graph
+                let (rect, _resp) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 160.0), egui::Sense::hover());
+                let painter = ui.painter_at(rect);
+                painter.rect_filled(rect, 4.0, p.bg_dark);
+                painter.rect_stroke(rect, 4.0, Stroke::new(1.0_f32, p.border), egui::StrokeKind::Outside);
+
+                // Coordinate math and rendering for Roofline Curve
+                let origin = Pos2::new(rect.min.x + 50.0, rect.max.y - 30.0);
+                let top_right = Pos2::new(rect.max.x - 20.0, rect.min.y + 20.0);
+                let knee_ratio = (self.roofline_knee_intensity.log10() / 4.0).clamp(0.2, 0.8) as f32;
+                let knee_x = origin.x + (top_right.x - origin.x) * knee_ratio;
+                let ceiling_y = top_right.y + 15.0;
+
+                // Draw axes
+                painter.line_segment([origin, Pos2::new(top_right.x, origin.y)], Stroke::new(1.0_f32, p.border));
+                painter.line_segment([origin, Pos2::new(origin.x, top_right.y)], Stroke::new(1.0_f32, p.border));
+
+                // Draw Sloped Memory-Bound Line & Horizontal Compute-Bound Line
+                painter.line_segment([origin, Pos2::new(knee_x, ceiling_y)], Stroke::new(2.0_f32, p.warning));
+                painter.line_segment([Pos2::new(knee_x, ceiling_y), Pos2::new(top_right.x, ceiling_y)], Stroke::new(2.0_f32, p.primary));
+
+                // Knee marker
+                painter.circle_filled(Pos2::new(knee_x, ceiling_y), 4.0, p.danger);
+                painter.text(Pos2::new(knee_x, ceiling_y - 12.0), egui::Align2::CENTER_BOTTOM, format!("Knee ({:.0} FLOP/B)", self.roofline_knee_intensity), egui::FontId::monospace(9.0), p.text_main);
+
+                // Scatter Points: Memory-bound (projections) and Compute-bound (attention/swiglu)
+                let mem_pt = Pos2::new(origin.x + (knee_x - origin.x) * 0.25, origin.y - (origin.y - ceiling_y) * 0.25);
+                painter.circle_filled(mem_pt, 5.0, p.danger);
+                painter.text(Pos2::new(mem_pt.x + 8.0, mem_pt.y), egui::Align2::LEFT_CENTER, "RMSNorm & Proj (Mem-Bound)", egui::FontId::monospace(8.0), p.text_muted);
+
+                let comp_pt = Pos2::new(knee_x + (top_right.x - knee_x) * 0.35, ceiling_y);
+                painter.circle_filled(comp_pt, 5.0, p.success);
+                painter.text(Pos2::new(comp_pt.x + 8.0, comp_pt.y), egui::Align2::LEFT_CENTER, "Attn & SwiGLU (Comp-Bound)", egui::FontId::monospace(8.0), p.text_muted);
+
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    if ui.button(egui::RichText::new("Run Kernel Roofline Profiler").strong().color(Color32::BLACK)).clicked() {
+                        let hw = match self.roofline_hardware_idx {
+                            0 => crate::profiling::hardware::HardwareSpec::predefined_h100(),
+                            1 => crate::profiling::hardware::HardwareSpec::predefined_rtx4090(),
+                            2 => crate::profiling::hardware::HardwareSpec::predefined_apple_m3_max(),
+                            3 => crate::profiling::hardware::HardwareSpec::predefined_mi300x(),
+                            _ => crate::profiling::hardware::HardwareSpec::predefined_intel_emerald_rapids(),
+                        };
+
+                        let thermal_factor = if self.roofline_thermal_sim {
+                            crate::profiling::thermal::DynamicThermalModel::calculate_throttling_factor(
+                                self.roofline_temp_c,
+                                hw.tdp_watts,
+                            )
+                        } else {
+                            1.0
+                        };
+
+                        let model_ir = self.model().to_model_ir();
+                        if let Ok(report) = crate::profiling::roofline::RooflineModel::profile_model(
+                            &model_ir,
+                            &hw,
+                            self.roofline_batch_size,
+                            self.roofline_seq_len,
+                            self.roofline_flash_attn,
+                            thermal_factor,
+                        ) {
+                            self.roofline_peak_tflops = report.peak_compute_tflops;
+                            self.roofline_bandwidth_tbps = report.memory_bandwidth_gbps / 1000.0;
+                            self.roofline_knee_intensity = report.knee_intensity_flop_per_byte;
+
+                            let mut mem_count = 0;
+                            let mut comp_count = 0;
+                            for pt in &report.points {
+                                match pt.classification {
+                                    crate::profiling::BoundClassification::MemoryBound { .. } => mem_count += 1,
+                                    crate::profiling::BoundClassification::ComputeBound { .. } => comp_count += 1,
+                                }
+                            }
+                            let total = mem_count + comp_count;
+                            self.roofline_mem_bound_pct = if total > 0 { (mem_count as f64 / total as f64) * 100.0 } else { 0.0 };
+                            self.roofline_comp_bound_pct = if total > 0 { (comp_count as f64 / total as f64) * 100.0 } else { 0.0 };
+
+                            let cache_sim = crate::profiling::cache_sim::CacheSimulator4Tier::new(hw.clone());
+                            let working_set_bytes = (model_ir.hidden_size * model_ir.hidden_size * 2 * 4).max(16_000_000);
+                            let cache_summary = cache_sim.simulate_layer_working_set(working_set_bytes);
+                            self.roofline_est_latency_ms = cache_summary.effective_latency_ns * 1e-6 * total as f64 + (self.roofline_batch_size as f64 * 0.05);
+
+                            let ascii_rep = report.format_ascii_report(&hw, report.peak_compute_tflops, report.knee_intensity_flop_per_byte);
+                            self.roofline_last_report = Some(ascii_rep);
+
+                            let m_name = self.model().name.clone();
+                            self.log_audit("PROFILER", "RooflineProfiled", &format!("Hardware: {}, Batch: {}, Knee: {:.1} FLOP/B", hw.name, self.roofline_batch_size, self.roofline_knee_intensity), &m_name);
+                            self.status_msg = format!("Roofline analysis completed for {}!", hw.name);
+                        }
+                    }
+
+                    if self.roofline_last_report.is_some() && ui.button("Clear Report").clicked() {
+                        self.roofline_last_report = None;
+                    }
+                });
+
+                if let Some(ref report) = self.roofline_last_report {
+                    ui.add_space(8.0);
+                    egui::Frame::NONE
+                        .fill(p.bg_dark)
+                        .stroke(Stroke::new(1.0_f32, p.primary))
+                        .inner_margin(egui::Margin::same(8))
+                        .show(ui, |ui| {
+                            ui.label(egui::RichText::new("EMPIRICAL ROOFLINE & KERNEL PROFILE REPORT").strong().color(p.primary));
                             for line in report.lines() {
                                 ui.label(egui::RichText::new(line).size(9.0).monospace().color(p.text_main));
                             }

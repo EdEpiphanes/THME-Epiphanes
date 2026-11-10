@@ -146,291 +146,739 @@
 ## Sprint 6: Hardware-Calibrated Roofline & Micro-Kernel Profiler (Milestone v0.1.7) [ACTIVE]
 
 ### [THME-601] Hardware Target Specifications & Machine Balance Database
-- **Component**: `thme::profiling::hardware`
-- **Problem**: Calculating Roofline boundaries requires calibrated peak compute (TFLOP/s) and peak memory bandwidth (GB/s) parameters for diverse GPUs and CPUs.
+- **Component**: `thme::profiling::hardware` (`src/profiling/hardware.rs`)
+- **Problem**: Calculating Roofline boundaries requires calibrated peak compute (TFLOP/s) and peak memory bandwidth (GB/s) parameters across heterogeneous hardware platforms (NVIDIA, Apple Silicon, AMD, Intel).
 - **Acceptance Criteria**:
-  - Predefined profile library: NVIDIA H100 SXM5, NVIDIA RTX 4090, Apple M3 Max, Apple M2 Ultra, AMD Instinct MI300X, Intel Xeon Platinum 8490H (AVX-512).
-  - Compute machine balance knee $I^* = \frac{\text{Peak TFLOP/s}}{\text{Peak Bandwidth GB/s}}$ for each hardware entry.
-  - Support external JSON hardware specification loading via CLI flag `--hardware-config`.
-- **Done Means**: `cargo test test_hardware_database` validates specs, units, and knee values across all predefined hardware profiles.
+  - Implement predefined hardware specifications: NVIDIA H100 SXM5 (989 TFLOP/s FP16, 3.35 TB/s HBM3), NVIDIA RTX 4090 (82.6 TFLOP/s FP16, 1.01 TB/s GDDR6X), Apple M3 Max (31.2 TFLOP/s FP16, 400 GB/s Unified), Apple M2 Ultra (54.4 TFLOP/s FP16, 800 GB/s Unified), AMD Instinct MI300X (1307 TFLOP/s FP16, 5.3 TB/s HBM3), and Intel Xeon Platinum 8490H (5.0 TFLOP/s AVX-512, 307 GB/s DDR5).
+  - Compute machine balance knee $I^* = \frac{\text{Peak TFLOP/s}}{\text{Peak Bandwidth GB/s}}$ [FLOPs/byte] for each device.
+  - Support external JSON hardware specification loading via CLI flag `--hardware-config <path>`.
+- **Production Pipeline / CI/CD Impact**: Establishes authoritative reference ceilings for automated benchmark regression gates and multi-hardware CI target profiling.
+- **Done Means**: `cargo test test_hardware_database` passes and validates specs, units, and knee values across all 6 predefined hardware profiles.
 
-### [THME-602] Layer Operational Arithmetic Intensity Profiler
-- **Component**: `thme::profiling::intensity`
-- **Problem**: Determining whether layers are compute-bound or memory-bound requires exact FLOP and byte transfer tracking per Transformer sub-block.
+### [THME-602] Linear Projection & Attention Operational Arithmetic Intensity Profiler
+- **Component**: `thme::profiling::intensity` (`src/profiling/intensity.rs`)
+- **Problem**: Determining whether attention projections and matrix multiplications are memory-bandwidth-bound or compute-bound requires tracking exact FLOPs and byte transfers across decode and prefill phases.
 - **Acceptance Criteria**:
-  - Compute exact FLOPs and memory traffic for Attention ($Q, K, V, O$ projections, attention matrix math) and SwiGLU FFN ($W_{\text{gate}}, W_{\text{up}}, W_{\text{down}}$).
-  - Distinguish batch size $B=1$ autoregressive decode traffic (strictly memory-bound) from $B \ge 64$ prompt prefill traffic (compute-bound).
-  - Track KV cache memory traffic across varying context lengths $S \in [1, 32768]$.
-- **Done Means**: Intensity calculator outputs exact FLOP/byte values for all layers of a 32-layer LLaMA architecture.
+  - Compute FLOP counts and memory traffic for linear projections ($W_q, W_k, W_v, W_o$) based on tensor shapes, sequence lengths, and precision types.
+  - Compute Scaled Dot-Product Attention FLOPs ($2 B H S^2 D_{\text{head}}$) and quadratic activation transfer volumes.
+  - Distinguish $B=1$ autoregressive decode traffic (memory-bound, $I \approx 1.0$) from $B \ge 64$ prompt prefill traffic (compute-bound, $I \gg I^*$).
+  - Model KV cache memory traffic across context window lengths $S \in [1, 32768]$.
+- **Production Pipeline / CI/CD Impact**: Feeds layer classification into the Pareto optimizer to prevent over-optimizing compute-bound layers while neglecting memory-bound bottlenecks.
+- **Done Means**: `cargo test test_linear_attention_intensity` passes, confirming exact FLOP and byte calculations for attention layers of LLaMA and Mistral models.
 
-### [THME-603] 4-Tier Memory Hierarchy Cache Simulator
-- **Component**: `thme::profiling::cache_sim`
-- **Problem**: Transformer layers exhibit varying working set sizes that fit into or spill out of L1, L2, L3/SLC, or main memory, incurring steep latency penalties.
+### [THME-603] SwiGLU FFN & FlashAttention-2 Arithmetic Intensity Mathematical Models
+- **Component**: `thme::profiling::intensity` (`src/profiling/intensity.rs`)
+- **Problem**: Modern LLMs rely heavily on SwiGLU feed-forward networks (accounting for ~65% of total parameters) and tiled FlashAttention-2, which require specialized non-linear intensity models.
 - **Acceptance Criteria**:
-  - Model 4 cache tiers: L1 Data (128 KB, 1 cycle), L2 (4-16 MB, 15 cycles), L3/SLC (32-96 MB, 50 cycles), Main Memory (HBM3/GDDR6/DDR5, 200 cycles).
-  - Calculate working set size per layer and predict cache line eviction rates.
-  - Estimate effective memory latency penalty based on cache miss rates.
-- **Done Means**: Cache simulator accurately predicts higher latency degradation on layers whose working sets exceed L2 cache capacity.
+  - Model SwiGLU FFN FLOP count ($6 B D D_{\text{ffn}}$) and memory traffic ($3 D D_{\text{ffn}} b_w + B(2D + 2D_{\text{ffn}}) b_{\text{act}}$).
+  - Model elementwise SiLU activation and Hadamard product arithmetic intensity.
+  - Model FlashAttention-2 SRAM tiling memory reduction factor ($\mathcal{O}(B H S^2 d^2 / M_{\text{SRAM}})$) compared to standard attention.
+- **Production Pipeline / CI/CD Impact**: Informs precision pruning suggestions for feed-forward blocks in automated surgery recipes and benchmark reports.
+- **Done Means**: `cargo test test_swiglu_flashattn_intensity` passes, verifying correct intensity curves for SwiGLU FFN across various hidden dimensions.
 
-### [THME-604] Empirical Roofline Model Generator, CLI `thme roofline`, and Tab 4 Deck
-- **Component**: `thme::profiling::roofline`, `thme::cli::roofline`, `thme::gui::app`
-- **Problem**: Developers need visual and CLI feedback mapping each layer against hardware ceilings to guide precision pruning.
+### [THME-604] 4-Tier Memory Hierarchy Cache Simulator (L1/L2/L3/DRAM)
+- **Component**: `thme::profiling::cache_sim` (`src/profiling/cache_sim.rs`)
+- **Problem**: Transformer layers exhibit distinct tensor working set sizes that fit into or spill out of on-chip caches, introducing multi-cycle latency penalties not captured by simple DRAM bandwidth equations.
 - **Acceptance Criteria**:
-  - Generate log-log Roofline plot data: compute ceiling, bandwidth ceiling, and plotted layer coordinates $(I_l, P_l)$.
-  - Classify layers as `MemoryBound` vs `ComputeBound` and emit concrete optimization recommendations.
-  - Implement CLI `thme roofline` with ASCII diagram and JSON output.
-  - Implement headless MCP tool `thme_profile_roofline`.
-  - Integrate interactive Roofline plot in Desktop Studio Tab 4 with hover tooltips and hardware selection dropdown.
-- **Done Means**: `cargo test --test test_roofline_profiler` passes and verifies correct classification across batch sizes.
+  - Model 4 memory hierarchy tiers: L1 Data (128 KB, 1 cycle / 0.5 ns), L2 Cache (4-16 MB, 15 cycles / 4 ns), L3 / System-Level Cache (32-96 MB, 50 cycles / 15 ns), and Main Memory / VRAM (HBM3/GDDR6/DDR5, 200 cycles / 60 ns).
+  - Simulate hit/miss latency penalties: $T = \sum_{k} (M_k \cdot \text{Latency}_k + \frac{\text{Volume}_k}{\text{Bandwidth}_k})$.
+  - Track active tensor footprint across layer transitions to determine residency.
+- **Production Pipeline / CI/CD Impact**: Provides synthetic cache hit/miss latency projections in headless CI environments without requiring physical hardware performance counters.
+- **Done Means**: `cargo test test_cache_simulator_hierarchy` passes and demonstrates stepped latency degradation when tensor footprints exceed L1, L2, and L3 boundaries.
+
+### [THME-605] Working Set Size & Cache Eviction Latency Degradation Model
+- **Component**: `thme::profiling::cache_sim` (`src/profiling/cache_sim.rs`)
+- **Problem**: Transformer layers with large intermediate activations cause cache thrashing, evicting KV cache pages and model weights, leading to unpredictable latency spikes.
+- **Acceptance Criteria**:
+  - Calculate working set size $W_{\text{active}} = \text{size}(W_{\text{layer}}) + \text{size}(\text{Activations}) + \text{size}(\text{KV}_{\text{page}})$.
+  - Estimate cache line eviction probability using LRU / pseudo-LRU working set simulation.
+  - Compute effective memory latency penalty scaling factor based on predicted eviction rates.
+- **Production Pipeline / CI/CD Impact**: Enables surgery recipes to identify layers that can fit completely into L2/L3 cache upon BitNet b1.58 ternary quantization.
+- **Done Means**: `cargo test test_working_set_eviction_model` validates that quantizing a layer below L2 cache capacity reduces simulated memory stalls by $\ge 60\%$.
+
+### [THME-606] Empirical Roofline Boundary Curve & Memory/Compute Classifier
+- **Component**: `thme::profiling::roofline` (`src/profiling/roofline.rs`)
+- **Problem**: Practitioners need automated, mathematical classification of each model layer to determine whether precision reduction or kernel fusion is the appropriate optimization.
+- **Acceptance Criteria**:
+  - Compute attainable performance ceiling: $P(I) = \min(P_{\text{peak}}, I \times B_{\text{peak}})$.
+  - Classify layers as `MemoryBound` ($I < I^*$) or `ComputeBound` ($I \ge I^*$).
+  - Output efficiency metric $\eta = \frac{P_{\text{observed}}}{P(I)}$ and compute distance to knee $|I - I^*|$.
+  - Emit structured optimization recommendations: suggest low-bit quantization for `MemoryBound` and kernel fusion/tensor core acceleration for `ComputeBound`.
+- **Production Pipeline / CI/CD Impact**: Enforces automated profiling quality gates, preventing optimizations that target the wrong hardware bottleneck.
+- **Done Means**: `cargo test test_roofline_classifier` passes, correctly labeling decode vs prefill across all 32 layers of LLaMA-8B.
+
+### [THME-607] Dynamic TDP Power & Thermal Throttling Projection Engine
+- **Component**: `thme::profiling::thermal` (`src/profiling/thermal.rs`)
+- **Problem**: Sustained compute-bound operations trigger thermal throttling and TDP power clamping, degrading sustained token throughput compared to burst performance.
+- **Acceptance Criteria**:
+  - Model dynamic power dissipation $P_{\text{dyn}} = C V^2 f \alpha + P_{\text{static}}$.
+  - Project thermal accumulation over time: $T(t) = T_{\text{ambient}} + (T_{\max} - T_{\text{ambient}})(1 - e^{-t/\tau_{\text{thermal}}})$.
+  - Predict thermal throttle frequency scaling factor $\beta_{\text{throttle}} \in [0.6, 1.0]$ when $T(t) > T_{\text{crit}}$.
+  - Compute sustained vs peak token throughput projections.
+- **Production Pipeline / CI/CD Impact**: Integrates thermal and energy constraints into mobile and edge deployment verification benchmarks.
+- **Done Means**: `cargo test test_thermal_throttling_model` passes, verifying simulated frequency back-off under sustained high-TDP workloads.
+
+### [THME-608] CLI Subcommand `thme roofline` & MCP Tool `thme_profile_roofline`
+- **Component**: `thme::cli::roofline` (`src/cli/roofline.rs`), `thme::cli::mcp` (`src/cli/mcp.rs`)
+- **Problem**: Terminal users and autonomous MCP agents need seamless programmatic access to Roofline profiling and JSON reports.
+- **Acceptance Criteria**:
+  - CLI command `thme roofline --model <path> --hardware <device> --batch-size <B> --seq-len <S>`.
+  - Generate ASCII log-log Roofline plot with plotted layer markers and hardware ceiling lines.
+  - Support `--json` flag outputting complete telemetry schema (layer coordinates, classifications, recommendations).
+  - Implement MCP tool `thme_profile_roofline` for IDE and agent interaction.
+- **Production Pipeline / CI/CD Impact**: Enables CI pipelines to capture Roofline telemetry artifacts and agents to inspect model bottlenecks via JSON-RPC.
+- **Done Means**: `thme roofline --help` executes cleanly, and unit tests in `tests/test_roofline_profiler.rs` verify CLI and MCP outputs.
+
+### [THME-609] Desktop Studio Tab 4 Interactive SVG/egui Roofline Deck
+- **Component**: `thme::gui::app` (`src/gui/app.rs`)
+- **Problem**: Visual studio users require an interactive, real-time graphical representation of the Roofline model with dynamic parameter manipulation.
+- **Acceptance Criteria**:
+  - Integrate interactive Roofline deck in Tab 4 (Benchmarks) using `egui` native rendering.
+  - Provide interactive dropdowns for predefined hardware profiles and custom JSON configs.
+  - Live sliders for Batch Size ($B = 1 \dots 128$) and Context Length ($S = 128 \dots 32768$) dynamically shifting layer markers.
+  - Hover tooltips displaying exact FLOPs, memory transfer bytes, arithmetic intensity, and optimization advice per layer.
+- **Production Pipeline / CI/CD Impact**: Provides graphical validation deck for interactive release demos and user research workflows.
+- **Done Means**: GUI builds with zero clippy warnings, runs at 60 FPS, and renders the Roofline plot with responsive hover tooltips.
 
 ---
 
-## Sprint 7: BitNet b1.58 Calibrated Scale Quantization Exporter (Milestone v0.1.8) [PLANNED]
+## Sprint 7: Binary Quantization Exporter (Milestone v0.1.8) [PLANNED]
 
-### [THME-701] BitNet b1.58 Vectorized Bitstream Packer
-- **Component**: `thme::exporter::bitnet_pack`
-- **Problem**: Storing 1.58-bit ternary weights ($\{-1, 0, +1\}$) requires dense bit packing (2 bits per weight, 4 weights per byte) with scale extraction.
+### [THME-701] Vectorized BitNet b1.58 Ternary Bitstream Packer
+- **Component**: `thme::exporter::bitnet_pack` (`src/exporter/bitnet_pack.rs`)
+- **Problem**: Storing 1.58-bit ternary weights ($\{-1, 0, +1\}$) requires dense 2-bit packing (4 weights per byte) with SIMD acceleration to minimize export latency.
 - **Acceptance Criteria**:
-  - Implement SIMD bit-packing converting slices of ternary values into packed `u8` buffers.
-  - Implement unpacking routines with per-channel FP16 scale multiplication.
-  - Per-channel MSE-optimal scale factor search $\arg\min_\alpha \|W - \alpha \tilde{W}\|_F^2$.
-- **Done Means**: Round-trip pack and unpack achieves bitwise fidelity and $\ge 8.0\times$ storage reduction.
+  - Implement 2-bit encoding: $-1 \mapsto 00_2$, $0 \mapsto 01_2$, $+1 \mapsto 10_2$ ($11_2$ reserved).
+  - Vectorized packing kernel compressing slices of `i8` or `f32` ternary states into contiguous `u8` buffers.
+  - Support AVX2 / NEON / portable SIMD intrinsics with scalar fallback.
+  - Achieve $\ge 8.0\times$ storage reduction compared to FP16 baselines.
+- **Production Pipeline / CI/CD Impact**: Core serialization kernel ensuring fast export times in CI packaging jobs.
+- **Done Means**: `cargo test test_bitnet_vectorized_packer` passes, verifying exact bitwise round-trip packing fidelity.
 
-### [THME-702] Pure Rust GGUF v3 Binary Writer & Metadata Synchronizer
-- **Component**: `thme::exporter::gguf_writer`
-- **Problem**: Deploying optimized models to runtime engines (`llama.cpp`, Ollama) requires direct serialization to GGUF v3 binary files from pure Rust.
+### [THME-702] Vectorized Ternary Bitstream Unpacker with FP16 Scale Product
+- **Component**: `thme::exporter::bitnet_pack` (`src/exporter/bitnet_pack.rs`)
+- **Problem**: Export verification and downstream decoding require high-speed unpacking of 2-bit representations back into floating-point tensors with scale restoration.
 - **Acceptance Criteria**:
-  - Serialize GGUF v3 header magic (`GGUF`), version 3, tensor count, and kv metadata count.
-  - Serialize architecture metadata (`general.architecture`, `llama.block_count`, etc.).
-  - Enforce 32-byte alignment padding for tensor data payloads.
-  - Stream tensor weight buffers without in-memory duplicate allocations.
-- **Done Means**: Serialized GGUF file passes header validation and tensor index integrity checks.
+  - Zero-allocation unpacking routine converting packed `u8` bytes into `f32`/`f16` activation buffers.
+  - Vectorized fused unpack-and-multiply applying per-channel scale factors $\alpha_i$ on-the-fly.
+  - Guarantee zero loss of numerical accuracy compared to pre-packed ternary values.
+- **Production Pipeline / CI/CD Impact**: Used by CI verification harnesses to validate exported artifacts before deployment.
+- **Done Means**: `cargo test test_ternary_unpacker_fidelity` passes across 100,000 randomized weight matrices.
 
-### [THME-703] Pure Rust SafeTensors Serializer & Streaming Output
-- **Component**: `thme::exporter::safetensors_writer`
-- **Problem**: Deploying to Hugging Face, vLLM, or PyTorch ecosystems requires standard SafeTensors serialization.
+### [THME-703] Direct Pure Rust GGUF v3 Binary Writer & 32-Byte Alignment
+- **Component**: `thme::exporter::gguf_writer` (`src/exporter/gguf_writer.rs`)
+- **Problem**: Deploying models to `llama.cpp` and Ollama requires writing compliant GGUF v3 binary files from pure Rust without external runtime dependencies.
 - **Acceptance Criteria**:
-  - Write 8-byte little-endian header length prefix.
-  - Write formatted JSON metadata block with data offsets, shapes, and dtypes.
-  - Stream raw binary tensor payload buffers aligned to 8-byte boundaries.
-- **Done Means**: Serialized SafeTensors file loads directly via `safetensors` reader with identical tensor shapes and values.
+  - Serialize GGUF header: magic `GGUF` (`0x46554747`), version 3, tensor count, and key-value metadata count.
+  - Write string, array, and numeric metadata records following GGUF v3 specification.
+  - Serialize tensor info table (name, dimensions, GGML type, data offset).
+  - Enforce strict 32-byte alignment padding before tensor data payloads.
+- **Production Pipeline / CI/CD Impact**: Enables THME to produce first-class deployable GGUF files in CI release workflows.
+- **Done Means**: `cargo test test_gguf_v3_writer` passes, and output files pass GGUF header parser validation.
 
-### [THME-704] CLI `thme export` and Downstream Runtime Testbed
-- **Component**: `thme::cli::export`
-- **Problem**: End-users need a one-command export tool to write optimized models to disk.
+### [THME-704] GGUF Metadata Key-Value Reconstitution & Synchronization Engine
+- **Component**: `thme::exporter::metadata` (`src/exporter/metadata.rs`)
+- **Problem**: Restructuring layers or modifying precision alters model architecture metadata, which must be synchronized into the GGUF header to prevent downstream runtime crashes.
 - **Acceptance Criteria**:
-  - CLI `thme export --input <model> --format <gguf|safetensors> --quant <bitnet-b1.58|q8_0|fp16> --output <path>`.
-  - Desktop Studio GUI export wizard in Tab 1 with progress bar and SHA-256 verification.
-  - Test fixture running inference on exported GGUF artifact.
-- **Done Means**: Exported model successfully runs text generation inference in verification testbed.
+  - Automatically update `general.architecture`, `llama.block_count`, `llama.embedding_length`, `llama.feed_forward_length`, and `llama.attention.head_count`.
+  - Inject tokenizer vocabulary metadata, BOS/EOS token IDs, and RoPE frequency scaling parameters.
+  - Reconcile parameter changes resulting from layer pruning or MoE sparse upcycling.
+- **Production Pipeline / CI/CD Impact**: Prevents metadata drift and corrupt model configurations in published model checkpoints.
+- **Done Means**: `cargo test test_gguf_metadata_sync` passes, confirming metadata integrity across all 8 paradigm architectures.
+
+### [THME-705] Direct Pure Rust SafeTensors Binary Serializer & 8-Byte Prefix
+- **Component**: `thme::exporter::safetensors_writer` (`src/exporter/safetensors_writer.rs`)
+- **Problem**: Exporting to PyTorch, Hugging Face `transformers`, and vLLM requires writing compliant SafeTensors binary archives.
+- **Acceptance Criteria**:
+  - Write 8-byte little-endian unsigned integer indicating JSON header length.
+  - Construct formatted, sorted JSON metadata map with tensor data offsets, shapes, and dtypes (`F32`, `F16`, `BF16`, `I8`).
+  - Serialize binary tensor payloads aligned to 8-byte boundaries.
+  - Optional `__metadata__` block embedding THME surgery recipe provenance and git commit hash.
+- **Production Pipeline / CI/CD Impact**: Supplies standard model weights directly to Hugging Face Hub upload pipelines.
+- **Done Means**: `cargo test test_safetensors_serializer` passes, and exported files load successfully via the standard `safetensors` crate.
+
+### [THME-706] Low-Memory Streaming Chunked File Writer Engine
+- **Component**: `thme::exporter::streaming` (`src/exporter/streaming.rs`)
+- **Problem**: Exporting multi-billion parameter models (e.g. 8B to 70B) in one in-memory buffer causes Out-Of-Memory (OOM) crashes on developer workstations.
+- **Acceptance Criteria**:
+  - Implement buffered chunked streaming writer operating with bounded $\le 64 \text{ MB}$ RAM footprint.
+  - Quantize, pack, and stream tensors sequentially layer-by-layer directly to disk.
+  - Maintain backpressure and asynchronous chunk flushing.
+  - Compute running SHA-256 checksum during streaming.
+- **Production Pipeline / CI/CD Impact**: Allows resource-constrained CI runners (7 GB RAM) to export large model weights reliably.
+- **Done Means**: `cargo test test_streaming_chunked_writer` exports an 8B synthetic model without exceeding 64 MB of resident memory.
+
+### [THME-707] Calibrated Per-Channel & Per-Group MSE-Optimal Scale Search
+- **Component**: `thme::exporter::calibration` (`src/exporter/calibration.rs`)
+- **Problem**: Standard absmean scale factors ($\alpha = \frac{1}{N}\|W\|_1$) can cause significant quantization error on outlier distributions; MSE optimization is needed.
+- **Acceptance Criteria**:
+  - Implement grid search / Golden Section search finding $\alpha^* = \arg\min_\alpha \|W - \alpha \tilde{W}\|_F^2$.
+  - Support row-wise, column-wise, and group-wise ($G = 128$) scale factor calibration.
+  - Fall back to analytical absmean when matrix variance is uniform.
+- **Production Pipeline / CI/CD Impact**: Improves representation fidelity of exported 1.58-bit models, reducing perplexity penalty by up to 0.35 points.
+- **Done Means**: `cargo test test_mse_scale_calibration` passes, demonstrating lower Frobenius reconstruction error than baseline absmean.
+
+### [THME-708] CLI Subcommand `thme export` & Desktop Studio Tab 1 Exporter Wizard
+- **Component**: `thme::cli::export` (`src/cli/export.rs`), `thme::gui::app` (`src/gui/app.rs`)
+- **Problem**: Users need intuitive CLI and graphical controls to export models with chosen formats, bit-widths, and destination paths.
+- **Acceptance Criteria**:
+  - CLI command `thme export --input <model> --output <path> --format <gguf|safetensors> --quant <bitnet-b1.58|q8_0|fp16>`.
+  - CLI progress bar showing per-layer quantization and disk write throughput (MB/s).
+  - Desktop Studio Tab 1 Export Wizard modal with target format selectors, scale options, and SHA-256 digest display.
+- **Production Pipeline / CI/CD Impact**: Standard entry point for model deployment automation in production CI/CD workflows.
+- **Done Means**: `thme export --help` displays clean options, and unit tests verify CLI argument parsing and GUI modal state.
+
+### [THME-709] Downstream Runtime Compatibility Testbed
+- **Component**: `tests/test_exporter_compatibility.rs`
+- **Problem**: Exported binary artifacts must be validated against downstream runtimes (`llama.cpp`, Ollama, vLLM) to prevent shipping unparseable models.
+- **Acceptance Criteria**:
+  - Integration test fixture loading exported GGUF files with external or mock `llama.cpp` parser.
+  - Verify tensor names, dimensions, and type tags match standard architecture conventions.
+  - Verify forward pass numerical stability (zero NaN or Inf values).
+- **Production Pipeline / CI/CD Impact**: Serves as the mandatory release quality gate for all quantization exporter updates.
+- **Done Means**: `cargo test --test test_exporter_compatibility` passes, verifying 100% format compliance across test fixtures.
 
 ---
 
-## Sprint 8: Automated Teacher-Student Co-Surgery Pipeline (Milestone v0.1.9) [PLANNED]
+## Sprint 8: Closed-Loop Teacher-Student Co-Surgery (Milestone v0.1.9) [PLANNED]
 
-### [THME-801] Closed-Loop Co-Surgery State Machine & Iteration Controller
-- **Component**: `thme::surgery::closed_loop`
-- **Problem**: Optimizing multi-layer architectures manually is slow; an autonomous feedback loop is required to iteratively propose, apply, and evaluate surgery recipes.
+### [THME-801] Co-Surgery Closed-Loop State Machine & Controller
+- **Component**: `thme::surgery::closed_loop` (`src/surgery/closed_loop.rs`)
+- **Problem**: Manually tuning heterogeneous layer precision is labor-intensive; an autonomous closed-loop state machine is needed to orchestrate iterative surgery.
 - **Acceptance Criteria**:
-  - Implement iterative state machine: Profile Topology $\to$ Synthesize Recipe $\to$ Apply Transformation $\to$ Evaluate $\Delta PPL \to$ Pareto Update $\to$ Commit/Rollback.
-  - Support configurable stopping conditions: target parameter budget, max iterations, or Pareto frontier stabilization.
-- **Done Means**: State machine completes 10 automated iterations without manual intervention.
+  - State machine tracking states: `Idle` $\to$ `ProfileSensitivity` $\to$ `SynthesizeRecipe` $\to$ `ApplySurgery` $\to$ `ValidateQuality` $\to$ `EvaluatePareto` $\to$ `CommitOrRollback`.
+  - Support configurable loop budgets: max iterations ($N_{\max}$), target parameter reduction (%), or target perplexity delta ($\Delta PPL_{\max}$).
+  - Emit structured telemetry events at each state transition.
+- **Production Pipeline / CI/CD Impact**: Enables unattended, continuous model compression runs in nightly optimization pipelines.
+- **Done Means**: `cargo test test_closed_loop_state_machine` completes 10 simulated iterations and transitions to `Completed`.
 
-### [THME-802] Multi-Objective 3D Pareto Optimizer
-- **Component**: `thme::optimization::pareto_solver`
-- **Problem**: Compressing models involves trade-offs between perplexity degradation ($\Delta PPL$), inference memory traffic ($W_{\text{bytes/token}}$), and energy consumption ($E_{\text{token}}$).
+### [THME-802] Teacher LLM Topology Analysis Prompt Synthesizer
+- **Component**: `thme::surgery::prompt_synth` (`src/surgery/prompt_synth.rs`)
+- **Problem**: External Teacher LLMs require concise, mathematically rich context summarizing layer sensitivities, spectral energy decay, and memory bottlenecks to formulate effective surgery recipes.
 - **Acceptance Criteria**:
-  - Implement 3D Pareto dominance tracker over candidate parameter configurations.
-  - Compute Pareto hypervolume indicator to measure optimization progress.
-  - Output non-dominated Pareto optimal model checkpoints.
-- **Done Means**: Optimizer discovers and tracks the non-dominated Pareto frontier across 50 simulated candidates.
+  - Formulate structured markdown/JSON prompt payloads containing model architecture summary, top-K sensitive layers, condition numbers, and EWHA reach profiles.
+  - Include declarative recipe schema specification and strict generation constraints in the prompt.
+  - Keep prompt token footprint compact ($\le 2,048$ tokens).
+- **Production Pipeline / CI/CD Impact**: Standardizes prompt engineering across LLM backends (Anthropic Claude, Google Gemini, OpenAI, local models).
+- **Done Means**: `cargo test test_prompt_synthesizer` passes, verifying correct markdown and JSON prompt structure.
 
-### [THME-803] Self-Healing Rollback Watchdog & Parameter Relaxation Engine
-- **Component**: `thme::surgery::self_healing`
-- **Problem**: Over-aggressive compression can destroy model coherence ($\Delta PPL > \epsilon_{\max}$), requiring automated recovery.
+### [THME-803] Headless JSON-RPC & Subprocess Teacher Agent Communication Bridge
+- **Component**: `thme::surgery::agent_bridge` (`src/surgery/agent_bridge.rs`)
+- **Problem**: The co-surgery engine needs a reliable communication channel to invoke external AI agents (via CLI subprocess, HTTP REST, or MCP JSON-RPC).
 - **Acceptance Criteria**:
-  - Automated checkpoint rollback when validation loss exceeds quality gate tolerance.
-  - Parameter relaxation algorithm: automatically restores precision on the most sensitive layer while applying compression to lower-sensitivity layers.
-- **Done Means**: Self-healing test triggers rollback on bad candidate and successfully converges on relaxed alternative.
+  - Subprocess bridge executing external CLI agents (`claude`, `gemini`, `curl`).
+  - Stdin/stdout pipe handler with timeout protection and stderr logging.
+  - Parse generated JSON surgery recipes with automated schema validation.
+- **Production Pipeline / CI/CD Impact**: Decouples the Rust execution engine from external AI agent providers.
+- **Done Means**: `cargo test test_agent_bridge` passes with mock agent returning valid surgery recipes.
 
-### [THME-804] CLI `thme co-surgery` & Desktop Studio Tab 2 Dashboard
-- **Component**: `thme::cli::co_surgery`, `thme::gui::app`
-- **Problem**: Operators need visibility into closed-loop progress and real-time loss curves.
+### [THME-804] Multi-Objective 3D Pareto Optimizer
+- **Component**: `thme::optimization::pareto_solver` (`src/optimization/pareto_solver.rs`)
+- **Problem**: Compression decisions involve trade-offs across 3 competing objectives: perplexity degradation ($\Delta PPL$), memory traffic ($W_{\text{bytes/token}}$), and wall-clock speedup ($S$).
 - **Acceptance Criteria**:
-  - CLI `thme co-surgery --model <path> --target-reduction 50% --max-ppl-delta 0.5 --iterations 10`.
-  - Desktop Studio GUI Tab 2 dashboard showing iteration history, Pareto scatter plot, and live quality bars.
-- **Done Means**: CLI and GUI display live progress during automated co-surgery runs.
+  - Track 3D objective vectors $\mathbf{y} = (\Delta PPL, W_{\text{token}}, -S)$.
+  - Implement Pareto dominance relation: $\mathbf{a} \prec \mathbf{b}$ iff $a_i \le b_i \ \forall i$ and $\exists j: a_j < b_j$.
+  - Maintain dynamic archive of non-dominated Pareto optimal checkpoints.
+- **Production Pipeline / CI/CD Impact**: Generates optimal candidate frontiers for deployment engineers to pick based on hardware constraints.
+- **Done Means**: `cargo test test_3d_pareto_optimizer` discovers and maintains the non-dominated set across 50 simulated candidates.
+
+### [THME-805] Pareto Hypervolume Indicator Convergence Metric
+- **Component**: `thme::optimization::hypervolume` (`src/optimization/hypervolume.rs`)
+- **Problem**: Autonomous co-surgery needs an objective mathematical stopping criterion to determine when further iterations yield diminishing returns.
+- **Acceptance Criteria**:
+  - Calculate hypervolume indicator $\mathcal{S}(\mathcal{P}, \mathbf{r})$ bounded by reference point $\mathbf{r}$.
+  - Compute relative hypervolume gain $\Delta \mathcal{S}_k = \frac{\mathcal{S}_k - \mathcal{S}_{k-1}}{\mathcal{S}_{k-1}}$.
+  - Trigger termination when $\Delta \mathcal{S}_k < \epsilon_{\text{conv}}$ for 3 consecutive iterations.
+- **Production Pipeline / CI/CD Impact**: Eliminates wasteful compute by stopping automated optimization runs once convergence is reached.
+- **Done Means**: `cargo test test_hypervolume_convergence` correctly halts simulated optimization upon frontier stabilization.
+
+### [THME-806] Automated Self-Healing Parameter Relaxation Heuristic
+- **Component**: `thme::surgery::self_healing` (`src/surgery/self_healing.rs`)
+- **Problem**: Aggressive quantization proposals can breach quality tolerances; rather than discarding the entire recipe, fine-grained relaxation should recover quality.
+- **Acceptance Criteria**:
+  - Identify the single layer contributing highest perplexity degradation.
+  - Relax that layer to higher precision (e.g. Ternary $\to$ INT8 or INT8 $\to$ FP16) while keeping other layers compressed.
+  - Re-evaluate candidate quality before triggering full rollback.
+- **Production Pipeline / CI/CD Impact**: Increases recipe success rate by $> 40\%$ in automated overnight optimization pipelines.
+- **Done Means**: `cargo test test_self_healing_relaxation` demonstrates recovery of breached quality gate without discarding valid optimizations.
+
+### [THME-807] Anti-Degradation Quality Gate Watchdog & Rollback Engine
+- **Component**: `thme::surgery::watchdog` (`src/surgery/watchdog.rs`)
+- **Problem**: Models must never enter production in a degraded or broken state; instant rollback is mandatory when validation fails.
+- **Acceptance Criteria**:
+  - Watchdog monitoring validation output after every surgery step.
+  - If $\Delta PPL > \epsilon_{\max}$ or NaN/Inf is detected, trigger immediate zero-cost pointer restoration to prior snapshot.
+  - Record structured audit event (`SurgeryRollback`) with diagnostic failure reasons.
+- **Production Pipeline / CI/CD Impact**: Critical safety gate preventing corrupt checkpoints from advancing in the release pipeline.
+- **Done Means**: `cargo test test_co_surgery_watchdog_rollback` verifies immediate state restoration upon injected catastrophic degradation.
+
+### [THME-808] CLI Subcommand `thme co-surgery` & Progress Telemetry Stream
+- **Component**: `thme::cli::co_surgery` (`src/cli/co_surgery.rs`)
+- **Problem**: DevOps engineers need a terminal command to launch autonomous co-surgery runs with real-time logging and progress reporting.
+- **Acceptance Criteria**:
+  - CLI `thme co-surgery --model <path> --agent <cmd> --max-iterations <N> --target-reduction <%> --max-ppl-delta <float>`.
+  - Live terminal progress stream: iteration counter, proposed recipe diff, validation $\Delta PPL$, Pareto status.
+  - Support `--non-interactive` flag emitting JSONL events for CI log ingestion.
+- **Production Pipeline / CI/CD Impact**: Primary integration command for continuous model surgery cron jobs and GitHub Actions workflows.
+- **Done Means**: `thme co-surgery --help` displays correct flags, and unit tests verify command dispatch.
+
+### [THME-809] Desktop Studio Tab 2 Closed-Loop Co-Surgery Dashboard
+- **Component**: `thme::gui::app` (`src/gui/app.rs`)
+- **Problem**: Interactive users need visual oversight of autonomous co-surgery sessions with live graphs and manual override buttons.
+- **Acceptance Criteria**:
+  - Interactive co-surgery panel in Tab 2 (Layer Tweaker & Surgery).
+  - Real-time iteration history table, loss curve plot, and 3D Pareto scatter projection.
+  - Start / Pause / Stop buttons and manual intervention controls.
+- **Production Pipeline / CI/CD Impact**: Visual monitoring interface for researchers and internal demonstrations.
+- **Done Means**: Desktop Studio compiles cleanly and renders the Co-Surgery dashboard with responsive controls.
 
 ---
 
 ## Sprint 9: Production Core Release (Milestone v0.2.0) [TARGET]
 
-### [THME-901] Open-Weights Production Testbed (SmolLM-135M / LLaMA-3.2-1B)
+### [THME-901] SmolLM-135M Open-Weights End-to-End Verification Pipeline
 - **Component**: `examples/production_verification.rs`
-- **Problem**: Release claims require rigorous, reproducible verification on genuine open-weights checkpoints.
+- **Problem**: Release validation requires end-to-end proof-of-correctness on genuine, publicly available open weights.
 - **Acceptance Criteria**:
-  - Automated script downloading and validating SmolLM-135M and LLaMA-3.2-1B checkpoints.
-  - End-to-end execution: SafeTensors ingest $\to$ sensitivity profiling $\to$ Pareto BitNet b1.58 surgery $\to$ GGUF export $\to$ WikiText-2 PPL validation.
-- **Done Means**: Full pipeline executes in < 3 minutes on a standard developer machine and passes quality gate ($\Delta PPL \le 0.45$).
+  - Download and ingest genuine SmolLM-135M checkpoint (SafeTensors).
+  - Execute sensitivity profiling, Pareto BitNet b1.58 surgery, and GGUF export.
+  - Validate perplexity on WikiText-2, ensuring $\Delta PPL \le 0.45$.
+  - Complete execution within 3 minutes on standard CI runner.
+- **Production Pipeline / CI/CD Impact**: Mandatory integration test gate required before tagging v0.2.0.
+- **Done Means**: `cargo test --example production_verification -- smollm-135m` passes all quality assertions.
 
-### [THME-902] Reproducible Verification Script & Benchmark Dossier
-- **Component**: `scripts/benchmark_suite.py`, `docs/benchmark_dossier.md`
-- **Problem**: Benchmark results must be completely transparent, hardware-specified, and reproducible by third parties.
+### [THME-902] LLaMA-3.2-1B Open-Weights End-to-End Verification Pipeline
+- **Component**: `examples/production_verification.rs`
+- **Problem**: Verifying scalability to billion-parameter architectures requires a full pipeline run on LLaMA-3.2-1B.
 - **Acceptance Criteria**:
-  - Script generates markdown and CSV comparison tables: parameter count, memory footprint, tokens/sec, WikiText-2 PPL, and EWHA energy.
-  - Explicit hardware attribution (GPU model, driver version, memory bandwidth).
-- **Done Means**: Generated dossier matches reported release specifications with zero manual edits.
+  - Ingest LLaMA-3.2-1B checkpoint under bounded memory constraints ($\le 4 \text{ GB}$ RAM).
+  - Execute layer surgery and export valid GGUF and SafeTensors weights.
+  - Verify generation output coherence on sample prompts.
+- **Production Pipeline / CI/CD Impact**: Validates that THME algorithms scale correctly beyond toy models to modern frontier architectures.
+- **Done Means**: `cargo test --example production_verification -- llama-3.2-1b` runs to completion and verifies tensor integrity.
 
-### [THME-903] Release Artifact Signing & Multi-Platform Packaging
-- **Component**: Release CI Pipeline
-- **Problem**: Production binaries must be secure, tamper-evident, and cross-platform.
+### [THME-903] Automated Reproducible Benchmark Script Suite
+- **Component**: `scripts/benchmark_suite.py`, `scripts/benchmark_suite.sh`
+- **Problem**: External researchers and users need one-command scripts to reproduce all published release benchmarks on their own hardware.
 - **Acceptance Criteria**:
-  - Cryptographic Minisign / GPG signatures on all release binaries.
-  - SHA-256 manifest (`SHA256SUMS.txt`).
-  - Pre-compiled stripped binaries for Linux (x86_64, aarch64), Windows (x64), and macOS (Apple Silicon, Intel).
-- **Done Means**: CI release workflow produces verified signed assets on release tag.
+  - Multi-platform benchmark script (Python 3 and Bash) with zero external library dependencies.
+  - Benchmarks: ingest throughput (MB/s), SVD profiling latency, Pareto allocation time, export speed, and token simulation.
+  - Collect hardware telemetry (CPU model, RAM, OS, cache sizes).
+- **Production Pipeline / CI/CD Impact**: Generates benchmark artifacts uploaded to GitHub Actions release assets.
+- **Done Means**: Running `./scripts/benchmark_suite.sh` on clean environment completes in $< 5$ minutes and outputs `benchmark_results.json`.
+
+### [THME-904] Published Benchmark Dossier Generator
+- **Component**: `docs/benchmark_dossier.md`, `scripts/generate_dossier.py`
+- **Problem**: Benchmark results must be formatted into transparent, publication-grade documentation with clear hardware attribution.
+- **Acceptance Criteria**:
+  - Synthesize benchmark data into Markdown and CSV tables comparing baseline vs THME-optimized models.
+  - Include parameter counts, memory footprint, throughput (tok/s), WikiText-2 PPL, and EWHA energy (mJ/tok).
+  - Include strict hardware attribution (NVIDIA H100, RTX 4090, Apple M3 Max, AMD MI300X, Intel Xeon).
+- **Production Pipeline / CI/CD Impact**: Publishes empirical performance documentation alongside release announcements.
+- **Done Means**: Generated `docs/benchmark_dossier.md` passes format check and contains complete empirical tables.
+
+### [THME-905] Multi-Platform LTO Stripped Binary Release Packaging
+- **Component**: `.github/workflows/release.yml`, `Cargo.toml`
+- **Problem**: Production binaries must be optimized for size and speed across all supported operating systems and architectures.
+- **Acceptance Criteria**:
+  - Configure Release profile with Fat LTO (`lto = "fat"`), single codegen unit (`codegen-units = 1`), and panic abort (`panic = "abort"`).
+  - Strip debug symbols: binary sizes $\le 10 \text{ MB}$ for CLI and $\le 15 \text{ MB}$ for GUI.
+  - Build matrices for Linux (x86_64, aarch64), Windows (x64), and macOS (Apple Silicon, Intel).
+- **Production Pipeline / CI/CD Impact**: Automates multi-platform asset compilation and packaging upon release tag push.
+- **Done Means**: Release workflow builds all 5 target platform archives and validates binary footprint limits.
+
+### [THME-906] Minisign & GPG Cryptographic Artifact Signing Pipeline
+- **Component**: `.github/workflows/release.yml`, `scripts/sign_artifacts.sh`
+- **Problem**: Binary releases must have cryptographic provenance to guarantee authenticity and prevent supply-chain tampering.
+- **Acceptance Criteria**:
+  - Sign release tarballs and executables using Minisign (`.minisig`) and GPG (`.asc`).
+  - Publish public signing key in repository root (`SECURITY.md`).
+  - Automated signature verification check in release workflow.
+- **Production Pipeline / CI/CD Impact**: Establishes a tamper-evident software supply chain for enterprise adopters.
+- **Done Means**: `minisign -Vm <archive> -p epiphanes.pub` verifies signatures with exit code 0.
+
+### [THME-907] SHA-256 Checksum Manifest Generation
+- **Component**: `.github/workflows/release.yml`
+- **Problem**: Users and package managers require standard SHA-256 checksum manifests to verify download integrity.
+- **Acceptance Criteria**:
+  - Generate `SHA256SUMS.txt` manifest covering all release archives and standalone binaries.
+  - Automated verification step verifying `sha256sum -c SHA256SUMS.txt`.
+- **Production Pipeline / CI/CD Impact**: Standard release asset referenced by Homebrew, Winget, and Arch AUR package formulas.
+- **Done Means**: Generated `SHA256SUMS.txt` verifies successfully across all built artifacts.
+
+### [THME-908] Comprehensive Architecture Playbook, User Manual & Man Pages
+- **Component**: `docs/manual.md`, `docs/man/thme.1`
+- **Problem**: Production users and system administrators need exhaustive documentation and standard Unix man pages.
+- **Acceptance Criteria**:
+  - Authoritative User Manual (`docs/manual.md`) covering all CLI commands, GUI tabs, and JSON recipe schemas.
+  - Standard troff Unix man page (`docs/man/thme.1`) installable to `/usr/share/man/man1`.
+  - Architecture Playbook documenting internal data structures and extension points.
+- **Production Pipeline / CI/CD Impact**: Verified by documentation linters in CI to prevent broken links or outdated command flags.
+- **Done Means**: `man ./docs/man/thme.1` renders cleanly without groff warnings.
+
+### [THME-909] End-to-End Clean-Machine Verification Test Harness
+- **Component**: `.github/workflows/clean_machine_test.yml`
+- **Problem**: Binaries must execute on clean operating system installations without hidden dynamic library dependencies or environment assumptions.
+- **Acceptance Criteria**:
+  - Ephemeral CI runner with clean Ubuntu, Windows, and macOS images.
+  - Download release binary, execute `thme --version`, run synthetic profiling, and export model.
+  - Verify zero missing shared library errors (`ldd` / Dependency Walker check).
+- **Production Pipeline / CI/CD Impact**: Final quality gate certifying production readiness before public release announcement.
+- **Done Means**: Clean machine CI workflow passes 100% across all 3 OS platforms.
 
 ---
 
 ## Sprint 10: Direct GPU Driver Execution Engine (Milestone v0.2.1) [SCHEDULED]
 
-### [THME-1001] Unified Hardware Abstraction Layer (HAL) Traits
-- **Component**: `thme::hardware::hal`
-- **Problem**: Direct driver execution across CUDA, Vulkan, and Metal requires a uniform memory and kernel dispatch interface.
+### [THME-1001] Hardware Abstraction Layer (HAL) Core Traits
+- **Component**: `thme::hardware::hal` (`src/hardware/hal.rs`)
+- **Problem**: Supporting multiple GPU backends (CUDA, Vulkan, Metal) requires a unified trait architecture for buffer allocation, memory copies, and kernel launches.
 - **Acceptance Criteria**:
-  - Define core traits: `HardwareDevice`, `DeviceMemoryBuffer`, `CommandQueue`, `KernelLaunchConfig`.
-  - Unified memory allocation, host-to-device transfers, and kernel launch semantics.
-- **Done Means**: Generic layer forward test executes identically across mock CPU, CUDA, and Vulkan backends.
+  - Define core traits: `GpuDevice`, `DeviceBuffer`, `StreamQueue`, `ComputeKernel`, and `KernelLaunchConfig`.
+  - Unified host-to-device, device-to-host, and device-to-device memory copy abstractions.
+  - Device capability querying (compute units, shared memory per block, warp size).
+- **Production Pipeline / CI/CD Impact**: Foundational trait contract decoupling backend implementations from high-level model execution.
+- **Done Means**: `cargo test test_hal_traits` passes with mock CPU backend implementing full HAL interface.
 
 ### [THME-1002] NVIDIA CUDA Driver API Backend via Pure Rust `cudarc`
-- **Component**: `thme::hardware::cuda`
-- **Problem**: External PyTorch runtimes introduce gigabytes of dependencies; THME requires direct driver communication.
+- **Component**: `thme::hardware::cuda` (`src/hardware/cuda.rs`)
+- **Problem**: External PyTorch runtimes introduce gigabytes of dependencies; THME requires direct driver communication via `libcuda.so` / `nvcuda.dll`.
 - **Acceptance Criteria**:
-  - Pure Rust CUDA Driver API integration using `cudarc` (bypasses Python runtime).
-  - JIT compilation of embedded PTX kernels or pre-compiled CUBIN modules.
-  - Asynchronous stream dispatch and event synchronization.
-- **Done Means**: Vector-add and matrix-multiply kernels execute on NVIDIA GPU without Python or PyTorch installed.
+  - Integrate `cudarc` for driver API initialization and context management.
+  - Support JIT PTX compilation and loading pre-compiled CUBIN modules.
+  - Asynchronous stream execution and CUDA event synchronization.
+- **Production Pipeline / CI/CD Impact**: Enables high-performance NVIDIA GPU execution without requiring Python or PyTorch installed.
+- **Done Means**: `cargo test test_cuda_driver_backend` initializes CUDA context and executes vector-add kernel on available NVIDIA GPU.
 
 ### [THME-1003] Vulkan 1.3 SPIR-V Compute Pipeline Backend
-- **Component**: `thme::hardware::vulkan`
+- **Component**: `thme::hardware::vulkan` (`src/hardware/vulkan.rs`)
 - **Problem**: Cross-platform GPU execution across Linux, Windows, and AMD/Intel GPUs requires standard Vulkan compute shaders.
 - **Acceptance Criteria**:
-  - Initialize Vulkan 1.3 compute pipelines via `ash`.
-  - Load pre-compiled SPIR-V shaders for GEMM and activation layers.
-  - Descriptor set binding and pipeline barrier memory synchronization.
-- **Done Means**: Forward pass executes successfully on Vulkan compute device.
+  - Initialize Vulkan 1.3 compute instance and device queue via `ash`.
+  - Load embedded SPIR-V shader modules for matrix multiplication and activation layers.
+  - Manage descriptor sets, storage buffers, and pipeline execution barriers.
+- **Production Pipeline / CI/CD Impact**: Delivers zero-dependency GPU acceleration on non-NVIDIA hardware in standard CI testbeds.
+- **Done Means**: `cargo test test_vulkan_compute_backend` successfully runs matrix multiply on Vulkan compute device.
 
 ### [THME-1004] Apple Metal 3 Performance Shaders Backend
-- **Component**: `thme::hardware::metal`
-- **Problem**: Apple Silicon unified memory requires native Metal 3 integration for zero-copy memory transfers.
+- **Component**: `thme::hardware::metal` (`src/hardware/metal.rs`)
+- **Problem**: Apple Silicon Macs feature high-bandwidth unified memory that requires native Metal 3 Performance Shaders to achieve zero-copy execution.
 - **Acceptance Criteria**:
-  - Metal device initialization and command queue dispatch via `metal-rs`.
-  - Zero-copy shared memory buffer allocation between CPU and GPU.
-  - Integration with Metal Performance Shaders (MPS) and custom MSL compute shaders.
-- **Done Means**: Forward pass executes on Apple Silicon Mac with unified memory zero-copy buffers.
+  - Metal device creation and command queue management via `metal-rs`.
+  - Allocate shared CPU-GPU storage buffers (`MTLStorageModeShared`) with zero memory copies.
+  - Dispatch custom MSL compute shaders and integrate Metal Performance Shaders (MPS) matrix kernels.
+- **Production Pipeline / CI/CD Impact**: Enables native, highly efficient inference and surgery on macOS developer laptops.
+- **Done Means**: `cargo test test_metal_backend` passes on macOS runner, verifying zero-copy execution.
 
-### [THME-1005] Fused Low-Bit Micro-Kernels (BitNet GEMM, RMSNorm, SwiGLU)
-- **Component**: `thme::hardware::kernels`
-- **Problem**: Separate kernel launches for normalization and activation introduce memory round-trips.
+### [THME-1005] Fused BitNet b1.58 GEMV / GEMM Kernel
+- **Component**: `thme::hardware::kernels::bitnet_gemm` (`src/hardware/kernels/bitnet_gemm.rs`)
+- **Problem**: Unpacking 2-bit ternary weights to global memory before GEMM introduces severe memory bandwidth overhead; unpacking must happen inside GPU registers.
 - **Acceptance Criteria**:
-  - Fused BitNet b1.58 GEMV / GEMM kernel unpacking 2-bit ternary weights in register files.
-  - Fused RMSNorm kernel computing variance and scaling in a single thread block pass.
-  - Fused SwiGLU activation kernel combining gate and up projections.
-- **Done Means**: Fused kernels achieve $\ge 1.8\times$ speedup over separate unfused operations.
+  - CUDA, Vulkan, and Metal compute kernels unpacking 2-bit weights directly within register files.
+  - Replace multiplication with conditional addition/subtraction: $y += (w == 1) ? x : ((w == -1) ? -x : 0)$.
+  - Achieve $\ge 2.5\times$ speedup over un-quantized FP16 GEMV during batch size $B=1$ decode.
+- **Production Pipeline / CI/CD Impact**: Core inference speedup engine for deployable BitNet models.
+- **Done Means**: `cargo bench --bench bench_bitnet_gemm` demonstrates $\ge 2.5\times$ throughput improvement.
+
+### [THME-1006] Fused RMSNorm Micro-Kernel
+- **Component**: `thme::hardware::kernels::rmsnorm` (`src/hardware/kernels/rmsnorm.rs`)
+- **Problem**: Separate reduction and scaling passes for RMSNorm incur unnecessary global memory round-trips.
+- **Acceptance Criteria**:
+  - Single-pass thread block cooperative reduction computing root mean square: $\text{RMS}(x) = \sqrt{\frac{1}{d}\sum x_i^2 + \epsilon}$.
+  - Fused weight scaling $y_i = \frac{x_i}{\text{RMS}(x)} \cdot \gamma_i$ writing directly to activation output.
+- **Production Pipeline / CI/CD Impact**: Reduces layer transition latency across all Transformer blocks.
+- **Done Means**: `cargo test test_fused_rmsnorm` passes and verifies bitwise alignment with reference implementation.
+
+### [THME-1007] Fused SwiGLU Activation Micro-Kernel
+- **Component**: `thme::hardware::kernels::swiglu` (`src/hardware/kernels/swiglu.rs`)
+- **Problem**: SwiGLU requires computing $\text{SiLU}(W_{\text{gate}} x) \odot (W_{\text{up}} x)$, which wastes memory bandwidth if intermediate activations are written to DRAM.
+- **Acceptance Criteria**:
+  - Fused elementwise kernel computing $\text{SiLU}(a) = \frac{a}{1 + e^{-a}}$ and multiplying by $b$ in local registers.
+  - Zero global memory allocation for intermediate activation buffers.
+- **Production Pipeline / CI/CD Impact**: Accelerates MLP execution by $\ge 35\%$ across modern LLaMA-style architectures.
+- **Done Means**: `cargo test test_fused_swiglu` verifies numerical correctness within $10^{-5}$ tolerance.
+
+### [THME-1008] Fused Rotary Position Embedding (RoPE) Kernel
+- **Component**: `thme::hardware::kernels::rope` (`src/hardware/kernels/rope.rs`)
+- **Problem**: Applying RoPE to $Q$ and $K$ matrices requires complex sinusoidal rotation that can bottleneck attention pre-processing.
+- **Acceptance Criteria**:
+  - Fused in-place 2D rotation kernel: $\begin{pmatrix} x_{2i} \\ x_{2i+1} \end{pmatrix} \mapsto \begin{pmatrix} \cos \theta & -\sin \theta \\ \sin \theta & \cos \theta \end{pmatrix} \begin{pmatrix} x_{2i} \\ x_{2i+1} \end{pmatrix}$.
+  - Support precomputed frequency tables and dynamic RoPE scaling (YaRN, Linear).
+- **Production Pipeline / CI/CD Impact**: Streamlines attention projection pipeline in pure Rust driver execution.
+- **Done Means**: `cargo test test_fused_rope` verifies exact rotation matching Hugging Face LLaMA reference.
+
+### [THME-1009] CLI Subcommand `thme run` Direct Inference
+- **Component**: `thme::cli::run` (`src/cli/run.rs`)
+- **Problem**: Users need a direct CLI command to run LLM inference using native GPU drivers without Python.
+- **Acceptance Criteria**:
+  - CLI `thme run --model <path> --backend <cuda|vulkan|metal|cpu> --prompt <text> --max-tokens <N>`.
+  - Token generation loop with live tok/s throughput and latency metrics.
+  - Automatic hardware backend detection and graceful fallback to CPU SIMD.
+- **Production Pipeline / CI/CD Impact**: Primary command for standalone inference benchmarks and edge deployment.
+- **Done Means**: `thme run --help` executes cleanly, and integration test runs end-to-end token generation on test fixture.
 
 ---
 
-## Sprint 11: Out-of-Core NVMe SSD Layer Streaming (Milestone v0.2.2) [SCHEDULED]
+## Sprint 11: Tiered Out-of-Core NVMe SSD Streaming (Milestone v0.2.2) [SCHEDULED]
 
-### [THME-1101] Direct Asynchronous I/O Engine (`io_uring` & Overlapped I/O)
-- **Component**: `thme::storage::direct_io`
-- **Problem**: OS page cache introduces double-buffering overhead during high-speed SSD model streaming.
+### [THME-1101] Linux Direct Asynchronous I/O Engine (`io_uring`)
+- **Component**: `thme::storage::direct_io` (`src/storage/direct_io.rs`)
+- **Problem**: Standard OS file reading incurs page cache buffering and context switch overhead, capping disk throughput below PCIe 4.0/5.0 line rates.
 - **Acceptance Criteria**:
-  - Linux: direct asynchronous disk block reading via `io_uring` with submission/completion queues.
-  - Windows: Overlapped I/O with `FILE_FLAG_NO_BUFFERING` via Win32 completion ports (`IOCP`).
-  - Achieve $> 6,000 \text{ MB/s}$ sequential throughput on PCIe 4.0/5.0 NVMe drives.
-- **Done Means**: Benchmark reads 10 GB model tensor data with zero OS buffer caching and verified data integrity.
+  - Implement `io_uring` submission and completion queue polling via `io-uring` crate.
+  - Use `O_DIRECT` flag to bypass OS kernel buffer cache and read directly into user-space buffers.
+  - Achieve $> 6,000 \text{ MB/s}$ sustained sequential read throughput on NVMe SSDs.
+- **Production Pipeline / CI/CD Impact**: Establishes high-speed storage streaming backbone for Linux servers.
+- **Done Means**: `cargo test test_io_uring_direct_io` passes on Linux runner, reading 1 GB test file with zero page cache caching.
 
-### [THME-1102] Sequential Layer Streaming & Double-Buffered Prefetch Pipeline
-- **Component**: `thme::storage::layer_streamer`
-- **Problem**: 70B parameter models require 140 GB of storage; consumer GPUs have 8-16 GB VRAM.
+### [THME-1102] Windows Direct Asynchronous I/O Engine (Overlapped I/O)
+- **Component**: `thme::storage::direct_io` (`src/storage/direct_io.rs`)
+- **Problem**: Windows developers require native unbuffered disk streaming matching Linux `io_uring` throughput.
 - **Acceptance Criteria**:
-  - AirLLM-style sequential layer loading: load layer $k$ into pinned RAM $\to$ DMA to GPU $\to$ execute $\to$ reuse buffer for $k+1$.
-  - Double-buffered prefetch pipeline: stream layer $k+1$ from SSD in parallel while GPU computes layer $k$.
-- **Done Means**: Layer streaming forward pass completes with GPU compute overlapping disk I/O.
+  - Implement Win32 Overlapped I/O using `FILE_FLAG_NO_BUFFERING` and `FILE_FLAG_OVERLAPPED`.
+  - Asynchronous completion handling via I/O Completion Ports (`IOCP`).
+  - Enforce sector-aligned memory buffer allocation (`VirtualAlloc` on 4096-byte boundaries).
+- **Production Pipeline / CI/CD Impact**: Enables high-speed SSD model streaming on Windows developer workstations.
+- **Done Means**: `cargo test test_windows_overlapped_io` passes on Windows runner with verified direct I/O throughput.
 
-### [THME-1103] REA-LLM Tiered Heterogeneous Memory Placement Manager
-- **Component**: `thme::memory::tiered_allocator`
-- **Problem**: Heterogeneous systems have distinct memory tiers with differing latency and capacity.
+### [THME-1103] Sequential Layer Streaming & Eviction Engine
+- **Component**: `thme::storage::layer_streamer` (`src/storage/layer_streamer.rs`)
+- **Problem**: Executing a 70B parameter model requires 140 GB of weights, exceeding consumer GPU VRAM; layers must be loaded and evicted sequentially.
 - **Acceptance Criteria**:
-  - Tier placement policy driven by layer reach probability $q_l$: hot layers in VRAM, warm layers in Host RAM, deep layers on NVMe SSD.
-  - Zero-copy pinned memory staging buffers.
-- **Done Means**: Memory manager enforces hard 8 GB VRAM limit while executing full model forward pass.
+  - Layer-by-layer forward execution: stream layer $k$ from disk $\to$ transfer to GPU $\to$ execute forward step $\to$ release buffer for layer $k+1$.
+  - Maintain single-layer active memory ceiling in VRAM.
+- **Production Pipeline / CI/CD Impact**: Enables massive model execution in memory-constrained CI environments.
+- **Done Means**: `cargo test test_layer_streaming_execution` completes forward pass across 32 layers using single-layer memory budget.
 
-### [THME-1104] 70B Model in 8 GB VRAM End-to-End Testbed
+### [THME-1104] Double-Buffered Prefetch Pipeline
+- **Component**: `thme::storage::prefetch` (`src/storage/prefetch.rs`)
+- **Problem**: Sequential loading stalls GPU compute while waiting for disk reads; I/O and computation must be overlapped.
+- **Acceptance Criteria**:
+  - Double-buffered queue: asynchronous disk thread prefetches layer $k+1$ while GPU compute stream executes layer $k$.
+  - Synchronize streams using non-blocking barriers.
+  - Eliminate $\ge 80\%$ of disk I/O latency stalls during continuous autoregressive generation.
+- **Production Pipeline / CI/CD Impact**: Maximizes throughput during out-of-core model surgery and profiling.
+- **Done Means**: `cargo test test_double_buffered_prefetch` demonstrates concurrent disk reading and mock layer compute.
+
+### [THME-1105] Pinned Memory Staging Buffers (`mlock` / `VirtualLock`)
+- **Component**: `thme::memory::pinned` (`src/memory/pinned.rs`)
+- **Problem**: GPU DMA transfers from pageable host RAM require intermediate copies into pinned memory, reducing transfer bandwidth.
+- **Acceptance Criteria**:
+  - Allocate page-locked host memory buffers using `mlock` on Unix and `VirtualLock` on Windows.
+  - Enable direct DMA transfers from host buffer to GPU VRAM at full PCIe bandwidth ($\sim 31.5 \text{ GB/s}$ on PCIe 4.0 x16).
+- **Production Pipeline / CI/CD Impact**: Eliminates host memory copy bottlenecks during layer streaming.
+- **Done Means**: `cargo test test_pinned_memory_allocation` verifies lock status and zero-copy DMA transfer capabilities.
+
+### [THME-1106] REA-LLM Tiered Heterogeneous Memory Placement Manager
+- **Component**: `thme::memory::tiered_allocator` (`src/memory/tiered_allocator.rs`)
+- **Problem**: Different model layers exhibit different reach probabilities $q_l$; memory placement should be tiered strategically across VRAM, Host RAM, and NVMe SSD.
+- **Acceptance Criteria**:
+  - Placement policy: hot layers ($q_l > 0.8$) permanently pinned in VRAM, warm layers ($0.4 \le q_l \le 0.8$) staged in Host RAM, deep layers ($q_l < 0.4$) streamed from NVMe SSD.
+  - Dynamically adapt layer placement based on runtime reach telemetry.
+- **Production Pipeline / CI/CD Impact**: Optimizes execution speed under strict hardware memory constraints.
+- **Done Means**: `cargo test test_tiered_memory_placement` verifies correct layer distribution across simulated 3-tier hierarchy.
+
+### [THME-1107] Dynamic VRAM Memory Accountant
+- **Component**: `thme::memory::accountant` (`src/memory/accountant.rs`)
+- **Problem**: Out-of-core execution without strict VRAM accounting risks hitting hard CUDA OOM errors.
+- **Acceptance Criteria**:
+  - Track active VRAM allocations in real-time (model weights, KV cache, activation buffers).
+  - Enforce user-defined hard ceiling (e.g. `--max-vram 8GB`), throttling prefetch queue if VRAM headroom is $< 512 \text{ MB}$.
+- **Production Pipeline / CI/CD Impact**: Prevents catastrophic OOM aborts in CI and production deployments.
+- **Done Means**: `cargo test test_vram_accountant_ceiling` strictly caps allocated memory under stress testing.
+
+### [THME-1108] 70B Model in 8 GB VRAM End-to-End Testbed
 - **Component**: `tests/test_out_of_core_streaming.rs`
-- **Problem**: Validating out-of-core streaming requires end-to-end multi-layer execution under memory constraints.
+- **Problem**: Verifying out-of-core streaming requires full multi-layer autoregressive execution on a genuine 70B parameter topology under an 8 GB memory limit.
 - **Acceptance Criteria**:
-  - Ingest synthetic 70B parameter topology (80 layers, $D=8192$).
-  - Execute full autoregressive token step on host with strictly limited 8 GB VRAM footprint.
-- **Done Means**: Full forward step succeeds without out-of-memory aborts or segmentation faults.
+  - Generate synthetic 70B parameter model topology (80 layers, $D=8192$, $D_{\text{ffn}}=28672$).
+  - Execute end-to-end forward token step strictly bounded within 8 GB VRAM footprint.
+  - Verify numerical consistency with standard un-streamed reference output.
+- **Production Pipeline / CI/CD Impact**: Primary proof that THME enables large-model inference on consumer GPUs.
+- **Done Means**: `cargo test --test test_out_of_core_streaming` passes and verifies $< 8 \text{ GB}$ peak VRAM usage.
+
+### [THME-1109] PCIe Bandwidth Saturation & Disk I/O Telemetry Monitor
+- **Component**: `thme::profiling::io_monitor` (`src/profiling/io_monitor.rs`)
+- **Problem**: Operators need visibility into PCIe bus saturation, disk read queue depths, and streaming bottlenecks.
+- **Acceptance Criteria**:
+  - Real-time telemetry: PCIe transfer rate (GB/s), NVMe read throughput (MB/s), and I/O wait latency fraction ($f_{\text{wait}} \in [0, 1]$).
+  - Expose metrics to CLI status bars and Desktop Studio Tab 4 benchmark deck.
+- **Production Pipeline / CI/CD Impact**: Identifies storage and bus bottlenecks during hardware profiling.
+- **Done Means**: `cargo test test_io_telemetry_monitor` validates accurate metric computation and reporting.
 
 ---
 
 ## Sprint 12: Distributed Heterogeneous Multi-Node Clustering (Milestone v0.2.3) [SCHEDULED]
 
-### [THME-1201] Intra-Node Tensor Parallelism & Inter-Node Pipeline Parallelism
-- **Component**: `thme::cluster::parallel`
-- **Problem**: Scaling across heterogeneous nodes requires combining Tensor Parallelism locally and Pipeline Parallelism across the network.
+### [THME-1201] Intra-Node Tensor Parallelism (TP) Projection Splitter
+- **Component**: `thme::cluster::tensor_parallel` (`src/cluster/tensor_parallel.rs`)
+- **Problem**: Multi-GPU workstations require splitting Attention and MLP projection matrices across local accelerators to reduce per-device memory footprint and latency.
 - **Acceptance Criteria**:
-  - Intra-node Tensor Parallelism splitting attention and MLP projections across local accelerators.
-  - Inter-node Pipeline Parallelism distributing layer partitions across networked nodes.
-  - 1F1B schedule minimizing activation pipeline bubbles.
-- **Done Means**: Distributed forward pass splits layers across 2 nodes and produces identical output tokens.
+  - Column-parallel linear projections for $W_q, W_k, W_v$ and MLP $W_{\text{gate}}, W_{\text{up}}$.
+  - Row-parallel linear projections for $W_o$ and MLP $W_{\text{down}}$ with local partial sum reduction.
+  - Zero numerical divergence from single-device forward pass.
+- **Production Pipeline / CI/CD Impact**: Enables multi-GPU scaling on single compute nodes.
+- **Done Means**: `cargo test test_tensor_parallel_projections` passes, verifying exact output match across 2 and 4 simulated devices.
 
-### [THME-1202] Pure Rust Asynchronous TCP/RDMA Ring All-Reduce
-- **Component**: `thme::cluster::ring`
-- **Problem**: Multi-node communication must avoid heavy MPI or NCCL runtime dependencies.
+### [THME-1202] Inter-Node Pipeline Parallelism (PP) & Layer Partitioner
+- **Component**: `thme::cluster::pipeline_parallel` (`src/cluster/pipeline_parallel.rs`)
+- **Problem**: Distributing multi-layer models across networked nodes requires partitioning consecutive layer blocks across heterogeneous machines.
 - **Acceptance Criteria**:
-  - Pure Rust Ring All-Reduce over asynchronous non-blocking TCP streams.
-  - Hardware RDMA / RoCE fallback when InfiniBand hardware is available.
-  - Bandwidth saturation $> 85\%$ of theoretical network link capacity.
-- **Done Means**: Multi-node tensor synchronization test verifies bitwise consistency across 4 nodes.
+  - Dynamic layer partitioning algorithm assigning layers to nodes based on compute capacity and network link speed.
+  - Activation communication pipeline forwarding intermediate activation tensors between nodes.
+- **Production Pipeline / CI/CD Impact**: Allows clustering mixed machines (e.g. desktop + server) to run massive models.
+- **Done Means**: `cargo test test_pipeline_parallel_partitioning` splits 32 layers across 3 nodes with balanced execution.
 
-### [THME-1203] Cluster Heartbeat Watchdog & Dynamic Fault-Tolerant Re-Sharding
-- **Component**: `thme::cluster::watchdog`
-- **Problem**: Nodes in heterogeneous ad-hoc clusters may disconnect or fail unexpectedly.
+### [THME-1203] 1F1B (One-Forward-One-Backward) Pipeline Bubble Minimizer
+- **Component**: `thme::cluster::schedule_1f1b` (`src/cluster/schedule_1f1b.rs`)
+- **Problem**: Naive pipeline parallelism leaves nodes idle while waiting for activations (pipeline bubbles); a 1F1B schedule is needed.
 - **Acceptance Criteria**:
-  - Continuous heartbeat monitoring with 100 ms timeout window.
-  - Automatic layer re-sharding redistributing orphaned layers to remaining active nodes.
-- **Done Means**: Simulated node drop triggers automated re-sharding and forward pass recovers without termination.
+  - Implement 1F1B micro-batch scheduling interleaving forward and backward passes.
+  - Reduce pipeline bubble fraction to $\frac{p - 1}{m}$ where $p$ is pipeline depth and $m$ is micro-batch count.
+- **Production Pipeline / CI/CD Impact**: Maximizes cluster accelerator utilization during distributed micro-training.
+- **Done Means**: `cargo test test_1f1b_scheduler` verifies micro-batch ordering and idle time minimization.
+
+### [THME-1204] Pure Rust Asynchronous TCP Ring All-Reduce
+- **Component**: `thme::cluster::ring_allreduce` (`src/cluster/ring_allreduce.rs`)
+- **Problem**: Distributed communication must avoid heavy MPI or NCCL runtime dependencies, providing pure Rust network communication.
+- **Acceptance Criteria**:
+  - Asynchronous Ring All-Reduce over non-blocking TCP socket streams using `tokio`.
+  - Scatter-Reduce and All-Gather phases transferring $2 \frac{N-1}{N} S$ bytes per node.
+  - Achieve $> 85\%$ network bandwidth utilization on 10 GbE / 100 GbE connections.
+- **Production Pipeline / CI/CD Impact**: Pure Rust distributed primitives running anywhere without complex cluster runtime configuration.
+- **Done Means**: `cargo test test_ring_allreduce_tcp` passes across 4 simulated local nodes.
+
+### [THME-1205] Hardware RDMA / RoCE Network Fallback Engine
+- **Component**: `thme::cluster::rdma` (`src/cluster/rdma.rs`)
+- **Problem**: High-end HPC clusters feature InfiniBand / RoCE networking; THME should leverage kernel-bypass RDMA when available.
+- **Acceptance Criteria**:
+  - Detect InfiniBand / RoCE hardware interfaces via `libibverbs` FFI bindings.
+  - Establish RDMA Queue Pairs (QP) for zero-copy memory transfers.
+  - Fall back transparently to TCP ring all-reduce if RDMA hardware is not present.
+- **Production Pipeline / CI/CD Impact**: Delivers enterprise-grade multi-node scaling on HPC clusters.
+- **Done Means**: `cargo test test_rdma_detection_and_fallback` verifies fallback behavior and queue pair setup.
+
+### [THME-1206] Multicast / mDNS Cluster Node Discovery & Capability Handshake
+- **Component**: `thme::cluster::discovery` (`src/cluster/discovery.rs`)
+- **Problem**: Ad-hoc clustering requires machines on a local subnet to automatically discover each other without manual IP configuration.
+- **Acceptance Criteria**:
+  - mDNS / UDP multicast beacon broadcasting THME node ID, compute capability (TFLOP/s), and available VRAM.
+  - Dynamic capability handshake establishing cluster topology and leader election.
+- **Production Pipeline / CI/CD Impact**: Zero-configuration cluster setup for local network workstations.
+- **Done Means**: `cargo test test_cluster_mdns_discovery` discovers peers and exchanges hardware capability payloads.
+
+### [THME-1207] Continuous 100 ms Heartbeat & Dead-Node Watchdog
+- **Component**: `thme::cluster::watchdog` (`src/cluster/watchdog.rs`)
+- **Problem**: Nodes in heterogeneous or ad-hoc clusters may disconnect, reboot, or experience network drops during long runs.
+- **Acceptance Criteria**:
+  - Periodic heartbeat ping every 100 ms between cluster nodes.
+  - Detect dead or unresponsive nodes after 3 missed heartbeats (300 ms).
+  - Emit cluster health alert and trigger failover protocol.
+- **Production Pipeline / CI/CD Impact**: Protects distributed training and inference jobs from silent network hangs.
+- **Done Means**: `cargo test test_cluster_heartbeat_watchdog` detects simulated node failure within 300 ms.
+
+### [THME-1208] Automated Dynamic Layer Re-Sharding Failover
+- **Component**: `thme::cluster::reshard` (`src/cluster/reshard.rs`)
+- **Problem**: When a node disconnects, its assigned model layers become orphaned; the cluster must redistribute them without terminating the job.
+- **Acceptance Criteria**:
+  - Automated re-sharding algorithm redistributing orphaned layers to remaining healthy nodes.
+  - Re-establish communication pipelines and resume forward pass from current checkpoint.
+- **Production Pipeline / CI/CD Impact**: Guarantees fault-tolerant execution in volatile distributed environments.
+- **Done Means**: `cargo test test_dynamic_resharding` demonstrates forward pass recovery after dropping 1 of 3 nodes.
+
+### [THME-1209] CLI Subcommand `thme cluster` & Cluster Formation Wizard
+- **Component**: `thme::cli::cluster` (`src/cli/cluster.rs`)
+- **Problem**: Operators need a command-line interface to initialize, join, and inspect distributed clusters.
+- **Acceptance Criteria**:
+  - CLI `thme cluster init --port <port>`, `thme cluster join --leader <ip:port>`, and `thme cluster status`.
+  - Terminal dashboard showing active nodes, hardware specifications, assigned layers, and network latency matrix.
+- **Production Pipeline / CI/CD Impact**: Primary CLI for managing distributed THME deployments in data centers and local labs.
+- **Done Means**: `thme cluster --help` executes cleanly, unit tests verify cluster command dispatch.
 
 ---
 
 ## Sprint 13: Universal Agentic AI Connectivity Gateway (Milestone v0.2.4) [SCHEDULED]
 
-### [THME-1301] High-Performance WebSocket Streaming Daemon & JSON-RPC Router
-- **Component**: `thme::daemon::server`
-- **Problem**: Autonomous AI agents, CI/CD harnesses, desktop apps, and IDEs require concurrent programmatic control and live telemetry.
+### [THME-1301] High-Throughput Asynchronous WebSocket Event Streaming Daemon
+- **Component**: `thme::daemon::server` (`src/daemon/server.rs`)
+- **Problem**: Remote agents, IDEs, and dashboards require real-time bidirectional WebSocket streaming of per-token progress, layer execution, and telemetry.
 - **Acceptance Criteria**:
-  - Headless daemon (`thme daemon --port 9090`) handling concurrent JSON-RPC 2.0 requests.
-  - Real-time WebSocket streaming broadcasting per-token progress, layer execution, and thermal metrics.
-- **Done Means**: Concurrent clients connect, invoke surgery methods, and receive real-time telemetry streams.
+  - Headless daemon (`thme daemon --port 9090`) based on `tokio-tungstenite`.
+  - Broadcast structured JSON event streams: `TokenGenerated`, `LayerExecuted`, `SurgeryApplied`, `ThermalWarning`.
+  - Support $> 100$ concurrent client WebSocket connections with $< 1 \text{ ms}$ broadcast latency.
+- **Production Pipeline / CI/CD Impact**: Core event hub connecting all external clients to running THME instances.
+- **Done Means**: `cargo test test_websocket_streaming_daemon` verifies concurrent client connections and message broadcasting.
 
-### [THME-1302] Cryptographic HMAC-SHA256 Surgery Recipe Attestation
-- **Component**: `thme::daemon::attestation`
-- **Problem**: Remote agent surgery poses security risks; recipes must be verified and tamper-proof.
+### [THME-1302] JSON-RPC 2.0 Method Router & Remote Protocol Dispatcher
+- **Component**: `thme::daemon::router` (`src/daemon/router.rs`)
+- **Problem**: External tools need a standardized remote procedure call API to invoke THME operations (inspect, surgery, validate, export).
 - **Acceptance Criteria**:
-  - Cryptographic HMAC-SHA256 signing of surgery recipe payloads with shared secrets or public keys.
-  - Daemon rejects unauthenticated or altered recipe JSON payloads with structured error responses.
-- **Done Means**: Tampered recipe payload is rejected with `AttestationVerificationFailed` error.
+  - JSON-RPC 2.0 specification compliant router supporting batch requests and error codes.
+  - Dispatch methods: `thme_inspectModel`, `thme_applySurgery`, `thme_validateQuality`, `thme_exportModel`, `thme_profileRoofline`.
+- **Production Pipeline / CI/CD Impact**: Provides stable, language-agnostic API for third-party developer integrations.
+- **Done Means**: `cargo test test_jsonrpc_method_router` validates JSON-RPC request and response payloads.
 
-### [THME-1303] Universal Agent Adapter Matrix (CLI, CI/CD, Desktop, IDEs)
-- **Component**: `thme::daemon::adapters`
-- **Problem**: Diverse agent ecosystems require dedicated integration bridges.
+### [THME-1303] Cryptographic HMAC-SHA256 Surgery Recipe Attestation
+- **Component**: `thme::daemon::attestation` (`src/daemon/attestation.rs`)
+- **Problem**: Exposing model surgery over a network creates security vulnerabilities; recipes must be authenticated and tamper-proof.
 - **Acceptance Criteria**:
-  - Autonomous CLI Agent adapter (Claude Code, Gemini CLI, Aider).
-  - CI/CD Orchestration Harness adapter (Harness CI/CD, GitHub Actions).
-  - Desktop Studio WebSocket connector (`thme-gui` remote daemon connection).
-  - IDE extension connector (VS Code, Copilot LM Tools).
-- **Done Means**: All 4 client archetypes connect, authenticate, and execute surgery recipes via standard adapters.
+  - HMAC-SHA256 signature verification on incoming JSON surgery recipe payloads using pre-shared keys or bearer tokens.
+  - Reject unsigned or altered payloads with `401 Unauthorized` / `AttestationFailed` error.
+  - Rate limiting and request throttling per authenticated identity.
+- **Production Pipeline / CI/CD Impact**: Enforces software supply-chain security and prevents unauthorized model modifications in shared environments.
+- **Done Means**: `cargo test test_hmac_recipe_attestation` rejects tampered recipes and accepts validly signed payloads.
+
+### [THME-1304] Autonomous CLI Agent Adapter
+- **Component**: `thme::daemon::adapters::cli_agent` (`src/daemon/adapters/cli_agent.rs`)
+- **Problem**: Coding agents (Claude Code, Gemini CLI, Aider, OpenHands) need formatted tool schemas and direct execution wrappers.
+- **Acceptance Criteria**:
+  - Generate agent tool configuration blocks compatible with popular coding agent frameworks.
+  - Structured error messages suggesting specific remediation steps when surgery operations fail.
+- **Production Pipeline / CI/CD Impact**: Enables autonomous coding agents to perform automated model surgery directly from CLI prompts.
+- **Done Means**: `cargo test test_cli_agent_adapter` verifies agent schema generation and tool calling.
+
+### [THME-1305] CI/CD Orchestration Harness Adapter
+- **Component**: `thme::daemon::adapters::cicd` (`src/daemon/adapters/cicd.rs`)
+- **Problem**: Enterprise CI/CD systems (Harness CI/CD, GitHub Actions, GitLab CI) need structured step outputs, JUnit reports, and exit code mappings.
+- **Acceptance Criteria**:
+  - Emit GitHub Actions workflow commands (`::set-output`, `::error`, `::notice`).
+  - Generate standard JUnit XML test reports from model validation and perplexity benchmarks.
+- **Production Pipeline / CI/CD Impact**: Seamlessly integrates THME quality gates into enterprise CI/CD deployment pipelines.
+- **Done Means**: `cargo test test_cicd_adapter_reports` verifies JUnit XML generation and workflow command formatting.
+
+### [THME-1306] Desktop Studio Remote Daemon Connection Bridge
+- **Component**: `thme::gui::remote_client` (`src/gui/remote_client.rs`)
+- **Problem**: Users running `thme-gui` on lightweight laptops want to connect to remote GPU servers hosting THME daemon instances.
+- **Acceptance Criteria**:
+  - Remote connection modal in Desktop Studio: enter host IP, port, and authentication token.
+  - Remote state synchronization mirroring remote model inventory, telemetry, and surgery state in the local GUI.
+- **Production Pipeline / CI/CD Impact**: Expands Desktop Studio usability to remote headless GPU clouds.
+- **Done Means**: `cargo test test_gui_remote_bridge` establishes WebSocket session and synchronizes model state.
+
+### [THME-1307] IDE & GitHub Copilot Extension Bridge
+- **Component**: `thme::daemon::adapters::ide_bridge` (`src/daemon/adapters/ide_bridge.rs`)
+- **Problem**: VS Code, Cursor, and Windsurf extensions require live daemon connectivity to stream model topology changes into editor sidebars.
+- **Acceptance Criteria**:
+  - Bi-directional bridge connecting editor language servers to THME daemon.
+  - Live workspace telemetry updating VS Code tree views upon layer surgery.
+- **Production Pipeline / CI/CD Impact**: Closes the loop between developer code editors and active model surgery daemons.
+- **Done Means**: `cargo test test_ide_bridge_synchronization` verifies event passing between editor client and daemon.
+
+### [THME-1308] Real-Time System Telemetry & Resource Pressure Broadcasting
+- **Component**: `thme::daemon::telemetry_broadcaster` (`src/daemon/telemetry_broadcaster.rs`)
+- **Problem**: Remote monitoring systems (Grafana, Datadog) need real-time streams of VRAM pressure, GPU utilization, and token throughput.
+- **Acceptance Criteria**:
+  - Stream metrics in OpenTelemetry / Prometheus format: `thme_tokens_per_second`, `thme_vram_used_bytes`, `thme_layer_latency_seconds`.
+  - Publish metrics over HTTP endpoint `/metrics`.
+- **Production Pipeline / CI/CD Impact**: Standard observability integration for enterprise model serving infrastructure.
+- **Done Means**: `cargo test test_telemetry_prometheus_exporter` verifies `/metrics` response format and values.
+
+### [THME-1309] CLI Subcommand `thme daemon` & Universal Daemon Controller
+- **Component**: `thme::cli::daemon` (`src/cli/daemon.rs`)
+- **Problem**: System administrators require a dedicated CLI command to launch, configure, and daemonize the gateway server.
+- **Acceptance Criteria**:
+  - CLI `thme daemon --port <port> --bind <ip> --token <secret> --cors <origins>`.
+  - Support graceful shutdown on SIGINT/SIGTERM, draining active connections.
+  - Built-in logging with `--verbose` and structured JSON logs.
+- **Production Pipeline / CI/CD Impact**: Primary system service entry point for systemd / docker container deployments.
+- **Done Means**: `thme daemon --help` displays clean options, and integration tests verify server start and graceful shutdown.

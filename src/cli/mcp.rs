@@ -255,6 +255,44 @@ fn handle_tools_list(id: Value) -> JsonRpcResponse {
                     "apply_bitnet": { "type": "boolean", "description": "Use BitNet b1.58 ternary format in draft model (default false)." }
                 }
             }
+        },
+        {
+            "name": "thme_profile_roofline",
+            "description": "Profiles model layers against empirical hardware roofline ceilings, calculating arithmetic intensity (FLOPs/byte), cache residency across L1/L2/L3/DRAM, thermal throttling, and MemoryBound vs ComputeBound classification.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "model_path": {
+                        "type": "string",
+                        "description": "Optional model path (.safetensors or .gguf). Omit to use synthetic baseline."
+                    },
+                    "hardware": {
+                        "type": "string",
+                        "enum": ["h100", "rtx4090", "m3_max", "mi300x", "emerald_rapids"],
+                        "description": "Target hardware architecture (default 'h100')."
+                    },
+                    "batch_size": {
+                        "type": "integer",
+                        "description": "Inference batch size B (default 1)."
+                    },
+                    "seq_len": {
+                        "type": "integer",
+                        "description": "Sequence context length S (default 2048)."
+                    },
+                    "enable_flash_attention": {
+                        "type": "boolean",
+                        "description": "Whether to model FlashAttention-2 tiling intensity (default true)."
+                    },
+                    "thermal_throttling": {
+                        "type": "boolean",
+                        "description": "Simulate thermal TDP power throttling (default false)."
+                    },
+                    "temperature_c": {
+                        "type": "number",
+                        "description": "Operating ambient temperature in Celsius (optional)."
+                    }
+                }
+            }
         }
     ]);
 
@@ -297,6 +335,7 @@ fn handle_tools_call(
         "thme_simulate_speculative_decoding" => {
             tool_simulate_speculative_decoding(&args, active_model_path)
         }
+        "thme_profile_roofline" => tool_profile_roofline(&args, active_model_path),
         _ => Err(format!("Unknown tool: {}", name)),
     };
 
@@ -859,5 +898,158 @@ fn tool_simulate_speculative_decoding(
         telemetry.memory_traffic_savings_pct,
         opt_gamma,
         opt_s
+    ))
+}
+
+fn tool_profile_roofline(
+    args: &Value,
+    active_model_path: &mut Option<String>,
+) -> Result<String, String> {
+    let path_opt = args
+        .get("model_path")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .or_else(|| active_model_path.clone());
+
+    let model = if let Some(ref path) = path_opt {
+        *active_model_path = Some(path.clone());
+        let p = std::path::Path::new(path);
+        crate::parser::ModelImporter::import(p).map_err(|e| format!("Import failed: {}", e))?
+    } else {
+        crate::ir::ParadigmConverter::create_synthetic_baseline()
+    };
+
+    let hw_str = args
+        .get("hardware")
+        .and_then(|v| v.as_str())
+        .unwrap_or("h100");
+    let batch_size = args.get("batch_size").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
+    let seq_len = args.get("seq_len").and_then(|v| v.as_u64()).unwrap_or(2048) as usize;
+    let enable_flash_attn = args
+        .get("enable_flash_attention")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    let thermal_sim = args
+        .get("thermal_throttling")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let temp_c = args
+        .get("temperature_c")
+        .and_then(|v| v.as_f64())
+        .map(|f| f as f32);
+
+    let hw = std::str::FromStr::from_str(hw_str)
+        .ok()
+        .map(crate::profiling::hardware::HardwareSpec::from_target)
+        .or_else(|| crate::profiling::hardware::HardwareDevice::find_device(hw_str))
+        .unwrap_or_else(crate::profiling::hardware::HardwareDevice::predefined_h100);
+
+    let thermal_factor = if thermal_sim || temp_c.is_some() {
+        let t = temp_c.unwrap_or_else(|| {
+            let tm = crate::profiling::thermal::DynamicThermalModel::new(
+                hw.clone(),
+                crate::profiling::thermal::ThermalConfig::default(),
+            );
+            tm.steady_state_temp(1.0, 1.0) as f32
+        });
+        crate::profiling::thermal::DynamicThermalModel::calculate_throttling_factor(t, hw.tdp_watts)
+    } else {
+        1.0
+    };
+
+    let report = crate::profiling::roofline::RooflineModel::profile_model(
+        &model,
+        &hw,
+        batch_size,
+        seq_len,
+        enable_flash_attn,
+        thermal_factor,
+    )
+    .map_err(|e| format!("Roofline profiling failed: {}", e))?;
+
+    let effective_peak = report.peak_compute_tflops;
+    let knee = report.knee_intensity_flop_per_byte;
+
+    let mut mem_bound_count = 0;
+    let mut comp_bound_count = 0;
+    for pt in &report.points {
+        match pt.classification {
+            crate::profiling::BoundClassification::MemoryBound { .. } => mem_bound_count += 1,
+            crate::profiling::BoundClassification::ComputeBound { .. } => comp_bound_count += 1,
+        }
+    }
+    let total_pts = mem_bound_count + comp_bound_count;
+    let mem_pct = if total_pts > 0 {
+        (mem_bound_count as f64 / total_pts as f64) * 100.0
+    } else {
+        0.0
+    };
+    let comp_pct = if total_pts > 0 {
+        (comp_bound_count as f64 / total_pts as f64) * 100.0
+    } else {
+        0.0
+    };
+
+    let cache_sim = crate::profiling::cache_sim::CacheSimulator4Tier::new(hw.clone());
+    let working_set_bytes = (model.hidden_size * model.hidden_size * 2 * 4).max(16_000_000);
+    let cache_summary = cache_sim.simulate_layer_working_set(working_set_bytes);
+
+    let mut points_str = String::new();
+    for p in &report.points {
+        let class_str = match p.classification {
+            crate::profiling::BoundClassification::MemoryBound { .. } => "MEMORY-BOUND",
+            crate::profiling::BoundClassification::ComputeBound { .. } => "COMPUTE-BOUND",
+        };
+        points_str.push_str(&format!(
+            "- `{}`: {:.2} FLOP/Byte | Attainable: {:.1} TFLOPS | {}\n",
+            p.name, p.arithmetic_intensity, p.attainable_tflops, class_str
+        ));
+    }
+
+    Ok(format!(
+        "### THME Roofline & Micro-Kernel Profiling Report\n\
+        - **Target Hardware**: `{}` (TDP: {:.0}W)\n\
+        - **Peak FP16 Compute**: {:.1} TFLOPS (Effective: {:.1} TFLOPS, Throttling: {:.1}%)\n\
+        - **Memory Bandwidth**: {:.1} GB/s ({:.2} TB/s)\n\
+        - **Machine Balance Knee**: {:.2} FLOPs/Byte\n\
+        - **Inference Setup**: Batch = {}, SeqLen = {}, FlashAttention-2 = {}\n\
+        - **Memory-Bound Kernels**: {}\n\
+        - **Compute-Bound Kernels**: {}\n\
+        \n\
+        #### Execution Bound Breakdown\n\
+        - **Memory-Bound Kernels**: {} ({:.1}%)\n\
+        - **Compute-Bound Kernels**: {} ({:.1}%)\n\
+        \n\
+        #### Kernel Arithmetic Intensity & Attainable Performance\n\
+        {}\n\
+        #### Cache Hierarchy Simulation\n\
+        - Effective Latency: {:.2} ns\n\
+        - Effective Bandwidth: {:.1} GB/s\n\
+        - DRAM Spill Traffic: {:.2} MB\n\
+        \n\
+        #### Architectural Recommendations\n\
+        - Quantize memory-bound projection GEMMs with BitNet b1.58 ternary format or Q4_K to alleviate memory bandwidth bottleneck.\n\
+        - Keep compute-bound attention and SwiGLU kernels in high-throughput tensor paths.",
+        hw.name,
+        hw.tdp_watts,
+        hw.peak_fp16_tflops,
+        effective_peak,
+        (1.0 - thermal_factor) * 100.0,
+        hw.dram_bandwidth_gbps,
+        hw.memory_bandwidth_tbps(),
+        knee,
+        batch_size,
+        seq_len,
+        enable_flash_attn,
+        mem_bound_count,
+        comp_bound_count,
+        mem_bound_count,
+        mem_pct,
+        comp_bound_count,
+        comp_pct,
+        points_str,
+        cache_summary.effective_latency_ns,
+        cache_summary.effective_bandwidth_gbps,
+        cache_summary.dram_spill_bytes as f64 / (1024.0 * 1024.0)
     ))
 }

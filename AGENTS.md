@@ -79,20 +79,29 @@ cargo test
 
 ## 5. Versioning & Production Roadmap (v0.1 to v0.2)
 
-| Version | Focus Area | Deliverables | Status |
+### 5.1 Sub-Milestone Execution Architecture
+Every major release milestone $v0.1.x$ is governed by a 4-level sub-milestone decomposition:
+$$v0.1.x.0 \longrightarrow \left[ v0.1.x.1, v0.1.x.2, v0.1.x.3, \dots, v0.1.x.9 \right] \longrightarrow v0.1.(x+1).0$$
+- **Baseline Contract ($v0.1.x.0$)**: Architectural specification, trait contracts, and baseline benchmark definitions.
+- **Parallel Sub-Functions ($v0.1.x.1 \dots v0.1.x.9$)**: Exactly 9 interdependent sub-milestones executed concurrently across modular subsystems, feeding continuously into CI/CD quality gates.
+- **Convergence ($v0.1.(x+1).0$)**: End-to-end integration and verification gate preceding the subsequent milestone cycle.
+
+### 5.2 Milestone Progress Ledger
+
+| Version | Focus Area | Sub-Milestones [1-9] Summary | Status |
 | :--- | :--- | :--- | :--- |
-| **v0.1.0** | Core Foundations | Zero-copy SafeTensors/GGUF parsing, Pareto precision allocator, live 60 FPS studio GUI, matrix distillation engine, token flow simulator, audit logging, and declarative surgery recipes. | Completed |
-| **v0.1.1** | Path Hygiene & CI | Rebranded to THME under Epiphanes, 3-OS GitHub Actions CI matrix, automated path-leak guard, release automation, zero linter warnings, surgery JSON schema. | Completed |
-| **v0.1.2** | Format Correctness | Full GGUF v2/v3 quant matrix (K-quants, I-quants), zero-allocation block decoders, truncated stream recovery, and infallible parser fuzz suite. | Completed |
-| **v0.1.3** | BYOA & REA-LLM Engine | Bring Your Own Algorithm registry with JSON import/export, architecture rebuilder from scratch, open weights remapping, REA-LLM EWHA routing & energy telemetry, layer anatomy deconstruction, dataset ingestion, and micro-trainer. | Completed |
-| **v0.1.4** | Empirical Quality Gate | External perplexity evaluation bridge (WikiText-2, C4) with automated rollback gating (Delta PPL <= epsilon) and CLI validate enhancements. | Completed |
-| **v0.1.5** | Surgery Daemon, IDE & Interop | Headless JSON-RPC MCP server (`thme mcp`), VS Code extension (`thme-vscode-0.1.5.vsix`), GitHub Copilot LM Tools, PyTorch/CUDA ecosystem interop bridge with PEFT LoRA zero-copy merge, and Universal 8 Specialized AI Model Paradigm Converter (LLM, LCM, LAM, MoE, VLM, SLM, MLM, SAM). | Completed |
-| **v0.1.6** | Speculative Decoding Synthesizer | Draft model manifold extraction from early-exit checkpoints, multi-token tree speculation verification engine, acceptance rate & latency speedup modeling, and Desktop Studio deck. | Completed |
-| **v0.1.7** | Roofline & Kernel Profiler | Hardware-calibrated Arithmetic Intensity vs Memory Bandwidth roofline model with L1/L2/L3/HBM cache hierarchy simulation. | Active |
-| **v0.1.8** | Binary Quantization Exporter | Direct serialization to deployable GGUF and SafeTensors files with BitNet b1.58 ternary packed weights and calibrated per-channel scale factors. | Planned |
-| **v0.1.9** | Closed-Loop Teacher Surgery | Autonomous Teacher-Student co-surgery optimization pipeline: automated recipe generation, delta-PPL verification, and iterative Pareto tuning. | Planned |
-| **v0.2.0** | Production Core Release | Verified production deployment on real open weights (SmolLM-135M / LLaMA-3.2-1B) with reproducible before-and-after benchmarks and signed release binaries. | Target |
-| **v0.2.1** | Direct GPU Driver Engine | Pure Rust GPU execution via Vulkan 1.3 SPIR-V, Apple Metal 3, and NVIDIA CUDA Driver API bypassing Python runtimes. | Scheduled |
-| **v0.2.2** | Tiered Out-of-Core SSD Streaming | Three-tier memory hierarchy (VRAM <-> RAM <-> NVMe SSD) with asynchronous direct I/O for 70B inference in 8 GB VRAM. | Scheduled |
-| **v0.2.3** | Multi-Node Heterogeneous Clustering | Distributed Pipeline and Tensor Parallelism across mixed nodes with pure Rust async TCP/RDMA ring all-reduce. | Scheduled |
-| **v0.2.4** | Universal Agentic AI Gateway | JSON-RPC 2.0 / WebSocket daemon connecting CLI agents, CI/CD harnesses, desktop studio, and IDEs with HMAC-SHA256 recipe attestation. | Scheduled |
+| **v0.1.0.0** | Core Foundations | [v0.1.0.1 - v0.1.0.9] SafeTensors/GGUF mmap, SVD decay, condition number, Fisher proxy, Pareto DP allocator, 60 FPS studio, token simulator, recipe engine. | Completed |
+| **v0.1.1.0** | Path Hygiene & CI | [v0.1.1.1 - v0.1.1.9] Rebranding, AGENTS.md governance, 3-OS CI matrix, path-leak guard, tag release pipeline, zero warnings, recipe schema, alias, symbol stripping. | Completed |
+| **v0.1.2.0** | Format Correctness | [v0.1.2.1 - v0.1.2.9] 28 GGML quant types, zero-alloc decoders, header recovery, crate modularization, 1k fuzz suite, SafeTensors fuzzing, crates.io prep, diagnostic errors. | Completed |
+| **v0.1.3.0** | BYOA & REA-LLM Engine | [v0.1.3.1 - v0.1.3.9] Algorithm registry, JSON import/export, architecture rebuilder, open-weights remapping, EWHA reach profile, memory metric, energy model, layer anatomy, SIMD benches. | Completed |
+| **v0.1.4.0** | Empirical Quality Gate | [v0.1.4.1 - v0.1.4.9] External PPL bridge, WikiText-2 harness, C4/PTB corpora, delta-PPL math, automated rollback, Pareto degradation, CLI validate, JSON audit, studio telemetry. | Completed |
+| **v0.1.5.0** | Surgery Daemon & 8 Models | [v0.1.5.1 - v0.1.5.9] MCP JSON-RPC server, VS Code .vsix, Copilot LM tools, train_cuda.py, HF config generator, PEFT LoRA merger, 8 model paradigms, sparse upcycling, SLM BitNet. | Completed |
+| **v0.1.6.0** | Speculative Decoding | [v0.1.6.1 - v0.1.6.9] Prefix manifold extractor, strided sampler, BitNet draft, rejection sampling, Leviathan speedup math, horizon search, tree topology, 2D attention mask, CLI speculate. | Completed |
+| **v0.1.7.0** | Roofline & Kernel Profiler | [v0.1.7.1 - v0.1.7.9] Hardware DB, linear/attn intensity, SwiGLU math, 4-tier cache sim, eviction latency model, roofline boundary, thermal TDP, CLI roofline, Tab 4 deck. | Active |
+| **v0.1.8.0** | Quantization Exporter | [v0.1.8.1 - v0.1.8.9] BitNet packer, ternary unpacker, pure GGUF v3 writer, metadata sync, SafeTensors writer, streaming chunk I/O, MSE scale search, CLI export, downstream testbed. | Planned |
+| **v0.1.9.0** | Closed-Loop Co-Surgery | [v0.1.9.1 - v0.1.9.9] Co-surgery state machine, prompt synthesizer, agent bridge, 3D Pareto optimizer, hypervolume indicator, self-healing relaxation, rollback watchdog, CLI co-surgery, Tab 2 dashboard. | Planned |
+| **v0.2.0.0** | Production Core Release | [v0.2.0.1 - v0.2.0.9] SmolLM-135M pipeline, LLaMA-3.2-1B pipeline, reproducible script, benchmark dossier, multi-platform LTO, Minisign/GPG signing, SHA-256 manifest, manual/man pages, verification harness. | Target |
+| **v0.2.1.0** | Direct GPU Driver Engine | [v0.2.1.1 - v0.2.1.9] HAL traits, CUDA Driver API (cudarc), Vulkan 1.3 SPIR-V, Apple Metal 3, fused BitNet GEMM, fused RMSNorm, fused SwiGLU, fused RoPE, CLI run. | Scheduled |
+| **v0.2.2.0** | Out-of-Core NVMe Streaming | [v0.2.2.1 - v0.2.2.9] Linux io_uring, Windows Overlapped I/O, double-buffered prefetch, pinned memory staging, REA-LLM tiered allocation, VRAM accountant, 70B in 8GB testbed, sequential dealloc, saturation monitor. | Scheduled |
+| **v0.2.3.0** | Heterogeneous Clustering | [v0.2.3.1 - v0.2.3.9] Intra-node TP, inter-node PP, 1F1B schedule, pure Rust async TCP ring all-reduce, RDMA/RoCE fallback, mDNS discovery, 100ms heartbeat, automated re-sharding, CLI cluster. | Scheduled |
+| **v0.2.4.0** | Universal Agentic Gateway | [v0.2.4.1 - v0.2.4.9] WebSocket daemon, JSON-RPC router, HMAC-SHA256 attestation, CLI agent adapter, CI/CD harness adapter, Desktop GUI connector, IDE/Copilot bridge, real-time telemetry, CLI daemon. | Scheduled |
