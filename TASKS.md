@@ -25,6 +25,7 @@ cargo test
 cargo test --test test_byoa            # BYOA registry & weight transformation
 cargo test --test test_rea_llm         # REA-LLM EWHA routing & energy accounting
 cargo test --test test_rebuilder       # Open-weights architecture rebuilder & surgery
+cargo test --test test_layer_deconstruction # Layer anatomy deconstruction & routing
 cargo test --test test_gguf_quant_types # GGUF block decoders & quant matrix
 cargo test --test test_fuzz_parsers    # Infallible prefix-truncation parser fuzz suite
 cargo test --test test_matrix_distill  # SVD, Hadamard, SmoothQuant, BitNet, Sparsity
@@ -147,6 +148,15 @@ git grep -inE "(C:\\\\Users\\\\[a-zA-Z0-9_-]+|/home/[a-zA-Z0-9_-]+)"
     - Representation mix allocations across channel groups ($\alpha_l$ Binary, $\beta_l$ Ternary, $\gamma_l$ Phase, FP16 fallback).
     - Analytic memory traffic accountant: $W_{\text{bytes/token}} \approx \sum_l q_l \cdot W_{l,\text{active}}$.
     - Per-token energy accountant: $E_{\text{token}} = \sum_l q_l \cdot E_{l,\text{active}}$.
+  - **Status**: Verified Complete.
+- [x] **Layer Anatomy Deconstruction & Dataflow Routing Engine**
+  - **Source**: `src/ir/layer_decomp.rs`, `src/ir/mod.rs`, `src/gui/app.rs`
+  - **Verification**: `cargo test --test test_layer_deconstruction` (2/2 tests passing)
+  - **Features**:
+    - Complete topological disassembly of any layer down to its constituent sub-blocks: Input RMSNorm, Sequence Mixer ($W_q, W_k, W_v, W_o$), Residual Highway 1, Post-Mixer RMSNorm, Feed-Forward SwiGLU MLP ($W_{\text{gate}}, W_{\text{up}}, W_{\text{down}}$), Residual Highway 2, and Routing & Early-Exit Gateway.
+    - Full detection and classification of layer topologies: `StandardMonolithic`, `HybridDualMixer`, `TribridTriMixer`, `MambaSsmHybrid`, and `CustomByoaTopology`.
+    - Active forward dataflow routing paths traced for every matrix (e.g. `RoPE -> KV-Cache`, `SwiGLU Elementwise Mult`, `Residual Highway 2`).
+    - Interactive Visual Layer Anatomy & Dataflow Map in Tab 2 with direct parameter inspection focus and sub-block BYOA converter.
   - **Status**: Verified Complete.
 - [x] **Desktop Studio GUI Updates (60 FPS Native)**
   - **Source**: `src/gui/app.rs`
