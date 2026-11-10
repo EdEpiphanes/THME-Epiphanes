@@ -77,18 +77,14 @@ cargo test
 
 ---
 
-## 5. Versioning & Production Roadmap (v0.1.0 to v0.2.0)
+## 5. Versioning & Production Roadmap (v0.1 to v0.2)
 
-| Version | Focus Area | Deliverables |
-| :--- | :--- | :--- |
-| **v0.1.0** | Foundations | Zero-copy SafeTensors/GGUF parsing, CLI inspection, basic memory profiling. |
-| **v0.1.1** | Sensitivity Profiling | SVD energy ratio, condition number, Fisher proxy estimation. |
-| **v0.1.2** | Pareto Allocation | Dynamic programming precision planner, quality gate enforcement. |
-| **v0.1.3** | Live Studio GUI | Native 60 FPS egui/eframe dashboard, telemetry flow, 5 color palettes. |
-| **v0.1.4** | Distillation Engine | Truncated SVD, Walsh-Hadamard rotation, SmoothQuant, BitNet b1.58. |
-| **v0.1.5** | AutoDecider | Parameter-level algorithm recommendation based on kurtosis and spectral decay. |
-| **v0.1.6** | Token Telemetry | Live 13-stage Transformer forward simulator, batch scaling, KV projections. |
-| **v0.1.7** | History & Audit Trail | Snapshot rollback checkpoints, cryptographically indexed audit events. |
-| **v0.1.8** | Teacher LLM Surgery | Declarative JSON recipes for layer replacement, pruning, and bit-tweaking. |
-| **v0.1.9** | Cross-Platform Release | Reproducible CI builds, stripped symbols, multi-platform binaries. |
-| **v0.2.0** | Production Hardening | Hardware execution backends (Vulkan / Metal / CUDA kernels) & live distillation. |
+| Version | Focus Area | Deliverables | Status |
+| :--- | :--- | :--- | :--- |
+| **v0.1.0** | Core Foundations | Zero-copy SafeTensors/GGUF parsing, Pareto precision allocator, live 60 FPS studio GUI, matrix distillation engine, token flow simulator, audit logging, and declarative surgery recipes. | Completed |
+| **v0.1.1** | Path Hygiene & CI | Rebranded to THME under Epiphanes, 3-OS GitHub Actions CI matrix, automated path-leak guard, release automation, zero linter warnings, surgery JSON schema. | Completed |
+| **v0.1.2** | Format Correctness | Full GGUF v2/v3 quant matrix (K-quants, I-quants), zero-allocation block decoders, truncated stream recovery, and infallible parser fuzz suite. | Completed |
+| **v0.1.3** | Real Telemetry & SIMD | AVX2 / AVX-512 / ARM NEON vector micro-kernels for matrix transformations, and Criterion benchmarks integrated into CI. | In Progress |
+| **v0.1.4** | Empirical Quality Gate | External perplexity evaluation bridge (WikiText-2, C4) with automated rollback gating (Delta PPL <= epsilon). | Planned |
+| **v0.1.5** | Surgery Daemon & API | Headless JSON-RPC & REST server allowing remote Teacher LLMs to query model IR and dispatch surgery recipes programmatically. | Planned |
+| **v0.2.0** | Production Release | Verified BitNet b1.58 and calibrated scale quantization exporter with end-to-end reproducible small-model demonstration. | Target |

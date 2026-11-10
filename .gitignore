@@ -24,6 +24,12 @@ examples/mock_llama/
 examples/report.md
 *.log
 
+# Local logs and audit notes (never commit)
+local_deferred_audit.md
+*.local.md
+*.local.log
+.local/
+
 # Editor and backup files
 **/*.rs.bk
 .DS_Store

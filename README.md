@@ -274,7 +274,7 @@ flowchart TD
 
 ### Installation
 ```bash
-git clone https://github.com/EdEpiphanes/THME-Epiphanes-Epiphanes.git
+git clone https://github.com/EdEpiphanes/THME-Epiphanes.git
 cd THME
 cargo build --release
 ```
