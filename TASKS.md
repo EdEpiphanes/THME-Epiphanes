@@ -236,6 +236,14 @@ git grep -inE "(C:\\\\Users\\\\[a-zA-Z0-9_-]+|/home/[a-zA-Z0-9_-]+)"
   - **Source**: `src/interop/pytorch.rs`, `src/cli/interop.rs`
   - **Verification**: `cargo test --test test_interop` (3/3 passed)
   - **Status**: Verified Complete. Pure Rust code generation for PyTorch CUDA scripts (`train_cuda.py`), Hugging Face `config.json` generator, and PEFT LoRA adapter merge math ($W = W_0 + \frac{\alpha}{r} B \times A$).
+- [x] **High-Definition Showcase & Marketing GIF Suite (`assets/`)**
+  - **Source**: `scripts/generate_showcase_gifs.py`
+  - **Verification**: Generates 4 animations:
+    - `assets/live_neural_benchmark.gif` (Updated Studio v0.1.5 showcase)
+    - `assets/scientific_math_optimization.gif` (Spectral decay, Hadamard rotation, BitNet b1.58, EWHA energy)
+    - `assets/layer_deconstruction_surgery.gif` (7 sub-blocks, RMSNorm, sequence mixer, SwiGLU, early-exit)
+    - `assets/pytorch_cuda_interop.gif` (PyTorch script generator, CUDA TF32, and PEFT LoRA zero-copy merge)
+  - **Status**: Verified Complete. All 4 GIFs rendered in 15 seconds, verified sizes < 700 KB, 0 emojis.
 
 ---
 

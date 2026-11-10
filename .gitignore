@@ -39,3 +39,8 @@ Thumbs.db
 editors/vscode/node_modules/
 editors/vscode/out/
 *.vsix
+
+# Python cache artifacts
+__pycache__/
+*.pyc
+*.pyo

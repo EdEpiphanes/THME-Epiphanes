@@ -27,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Auto-discovery workspace configuration `.vscode/mcp.json`.
 - **Interoperability Test Suite (`tests/test_interop.rs`)**:
   - Tests for PyTorch script generation (LoRA, QLoRA, Unsloth, DeepSpeed ZeRO-2/3), Hugging Face config generation, and PEFT LoRA mathematical weight merging. Total test count expanded to 71 passing tests.
+- **High-Definition Showcase & Marketing GIF Suite (`assets/`, `scripts/generate_showcase_gifs.py`)**:
+  - `assets/live_neural_benchmark.gif` (Updated to v0.1.5): 920x520 widescreen multi-panel demonstration of all 9 studio tabs, 8x8 weight slice matrix, 16-bar spectral kurtosis histogram, and 13-stage Transformer forward token flow.
+  - `assets/scientific_math_optimization.gif`: Demonstrates scientific and mathematical formulations in action (Fast Walsh-Hadamard Transform orthogonal rotation, BitNet b1.58 ternary discretization, EWHA energy accounting, and Pareto DP optimization) delivering a $+2.18\times$ throughput speedup, $-68.5\%$ energy reduction, and near-zero quality degradation ($\Delta PPL \le 0.032$).
+  - `assets/layer_deconstruction_surgery.gif`: Showcases deep layer anatomy deconstruction across 7 sub-block nodes (Input RMSNorm, Sequence Mixer, Residual Highway 1, Post-Mixer RMSNorm, SwiGLU MLP, Residual Highway 2, and Early-Exit Gate) with live declarative recipe execution.
+  - `assets/pytorch_cuda_interop.gif`: Visualizes automated `train_cuda.py` script generation, QLoRA 4-bit BitsAndBytes setup, and in-engine PEFT LoRA adapter zero-copy weight merging ($W = W_0 + \frac{\alpha}{r} B \times A$).
 
 ### Changed
 - **Professional Engineering UI Refactoring**:

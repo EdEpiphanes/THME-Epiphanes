@@ -24,13 +24,14 @@
 <p align="center">
   <a href="#overview">Overview</a> •
   <a href="#desktop-studio-showcase">Desktop Studio</a> •
+  <a href="#scientific-math--algorithmic-optimization">Science & Math Engine</a> •
+  <a href="#layer-anatomy-deconstruction--surgery">Layer Surgery</a> •
+  <a href="#pytorch-cuda--fine-tuning-tools-interoperability">PyTorch & CUDA Bridge</a> •
   <a href="#the-9-interactive-studio-workspaces">Studio Workspaces</a> •
-  <a href="#vs-code--github-copilot-extension">IDE Extension & Copilot</a> •
+  <a href="#vs-code--github-copilot-extension">IDE Extension</a> •
   <a href="#cli-tools">CLI Tools</a> •
-  <a href="#teacher-llm-surgery">Teacher LLM Surgery</a> •
   <a href="ROADMAP.md">Roadmap</a> •
-  <a href="CHANGELOG.md">Changelog</a> •
-  <a href="#quickstart">Quickstart</a>
+  <a href="CHANGELOG.md">Changelog</a>
 </p>
 
 ---
@@ -258,7 +259,11 @@ thme validate --corpus c4 --baseline-ppl 7.12 --candidate-ppl 7.35 --max-ppl-del
 
 ---
 
-## Bring Your Own Algorithm (BYOA) & Rebuilder
+## Bring Your Own Algorithm (BYOA), Layer Anatomy & Rebuilder
+
+<p align="center">
+  <img src="assets/layer_deconstruction_surgery.gif" alt="THME Layer Anatomy Deconstruction and Sub-Block Topological Surgery" width="920" />
+</p>
 
 THME's BYOA subsystem (`src/transform/byoa.rs`) allows researchers and contributors to plug arbitrary compression, quantization, and projection algorithms directly into the manifold engine:
 
@@ -280,6 +285,10 @@ Based on the Energy-Wait-Hop-Activate (EWHA) paradigm, THME computes true physic
 ---
 
 ## PyTorch, CUDA & Fine-Tuning Tools Interoperability
+
+<p align="center">
+  <img src="assets/pytorch_cuda_interop.gif" alt="THME PyTorch, CUDA & PEFT LoRA Zero-Copy Interoperability Bridge" width="920" />
+</p>
 
 While THME's analytical, surgical, and precision allocation engine is built in 100% pure Rust, modern practitioners often operate distributed GPU clusters and existing pipelines entrenched in PyTorch, CUDA, Hugging Face, DeepSpeed, and PEFT. 
 
@@ -386,7 +395,21 @@ Quantized KV Cache global format to INT8
 
 The scientific architecture is documented in [`docs/research/THME_Research_Programme_v2.pdf`](docs/research/THME_Research_Programme_v2.pdf).
 
-### KV cache memory formula
+<p align="center">
+  <img src="assets/scientific_math_optimization.gif" alt="THME Mathematical Engine - Spectral Decay, Orthogonal Hadamard Rotation and Pareto Proofs" width="920" />
+</p>
+
+### Scientific & Mathematical Optimization Formulations
+
+THME grounds every optimization in exact analytical formulas:
+- **Fast Walsh-Hadamard Transform (FWHT)**: Orthogonally rotates activation outliers into uniform distributions:
+  $$Y = \frac{1}{\sqrt{D}} H_D X$$
+- **BitNet b1.58 Ternary Discretization**: Compresses full-precision tensors into ternary states (-1, 0, +1) while preserving signal-to-noise ratio:
+  $$\tilde{W} = \text{RoundClip}\left(\frac{W}{\gamma}, -1, +1\right) \quad \text{where } \gamma = \frac{1}{N} \|W\|_1$$
+- **EWHA Dynamic Energy & Traffic Accountants**:
+  $$W_{\text{bytes/token}} \approx \sum_{l=0}^{N-1} q_l \cdot W_{l,\text{active}}, \quad E_{\text{token}} = \sum_{l=0}^{N-1} q_l \cdot E_{l,\text{active}}$$
+- **Pareto Optimal Multi-Constraint Knapsack**:
+  $$\max \sum_{l} \Delta M_l \quad \text{subject to} \quad \Delta Q \le \epsilon$$
 Autoregressive generation stores historical Key and Value representations. THME computes this footprint using:
 $$M_{\mathrm{KV}} = 2 \times L \times B \times S \times H_{\mathrm{KV}} \times D_{\mathrm{head}} \times \text{bytes}$$
 where $L$ is layer count, $B$ is batch size, $S$ is context sequence length, $H_{\mathrm{KV}}$ is key-value head count (distinguishing Grouped-Query Attention from Multi-Head Attention), and $D_{\mathrm{head}}$ is head dimension.
