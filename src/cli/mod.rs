@@ -1,3 +1,4 @@
+pub mod co_surgery;
 pub mod convert;
 pub mod export;
 pub mod inspect;
@@ -71,6 +72,10 @@ pub enum Commands {
     /// Run Model Context Protocol (MCP) server for VS Code, Copilot & AI agents
     #[command(alias = "daemon")]
     Mcp(mcp::McpArgs),
+
+    /// Run autonomous Closed-Loop Teacher-Student Co-Surgery optimization
+    #[command(name = "co-surgery", alias = "cosurgery")]
+    CoSurgery(co_surgery::CoSurgeryArgs),
 }
 
 pub fn run() -> Result<()> {
@@ -89,5 +94,6 @@ pub fn run() -> Result<()> {
         Commands::Export(args) => export::execute(args),
         Commands::Interop(args) => interop::execute(args),
         Commands::Mcp(args) => mcp::execute(args),
+        Commands::CoSurgery(args) => co_surgery::execute(args),
     }
 }

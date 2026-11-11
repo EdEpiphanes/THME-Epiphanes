@@ -340,9 +340,9 @@
 
 ---
 
-## Sprint 8: Closed-Loop Teacher-Student Co-Surgery (Milestone v0.1.9) [ACTIVE]
+## Sprint 8: Closed-Loop Teacher-Student Co-Surgery (Milestone v0.1.9) [COMPLETED]
 
-### [THME-801] Co-Surgery Closed-Loop State Machine & Controller
+### [THME-801] Co-Surgery Closed-Loop State Machine & Controller [COMPLETED]
 - **Component**: `thme::surgery::closed_loop` (`src/surgery/closed_loop.rs`)
 - **Problem**: Manually tuning heterogeneous layer precision is labor-intensive; an autonomous closed-loop state machine is needed to orchestrate iterative surgery.
 - **Acceptance Criteria**:
@@ -352,7 +352,7 @@
 - **Production Pipeline / CI/CD Impact**: Enables unattended, continuous model compression runs in nightly optimization pipelines.
 - **Done Means**: `cargo test test_closed_loop_state_machine` completes 10 simulated iterations and transitions to `Completed`.
 
-### [THME-802] Teacher LLM Topology Analysis Prompt Synthesizer
+### [THME-802] Teacher LLM Topology Analysis Prompt Synthesizer [COMPLETED]
 - **Component**: `thme::surgery::prompt_synth` (`src/surgery/prompt_synth.rs`)
 - **Problem**: External Teacher LLMs require concise, mathematically rich context summarizing layer sensitivities, spectral energy decay, and memory bottlenecks to formulate effective surgery recipes.
 - **Acceptance Criteria**:
@@ -362,7 +362,7 @@
 - **Production Pipeline / CI/CD Impact**: Standardizes prompt engineering across LLM backends (Anthropic Claude, Google Gemini, OpenAI, local models).
 - **Done Means**: `cargo test test_prompt_synthesizer` passes, verifying correct markdown and JSON prompt structure.
 
-### [THME-803] Headless JSON-RPC & Subprocess Teacher Agent Communication Bridge
+### [THME-803] Headless JSON-RPC & Subprocess Teacher Agent Communication Bridge [COMPLETED]
 - **Component**: `thme::surgery::agent_bridge` (`src/surgery/agent_bridge.rs`)
 - **Problem**: The co-surgery engine needs a reliable communication channel to invoke external AI agents (via CLI subprocess, HTTP REST, or MCP JSON-RPC).
 - **Acceptance Criteria**:
@@ -372,7 +372,7 @@
 - **Production Pipeline / CI/CD Impact**: Decouples the Rust execution engine from external AI agent providers.
 - **Done Means**: `cargo test test_agent_bridge` passes with mock agent returning valid surgery recipes.
 
-### [THME-804] Multi-Objective 3D Pareto Optimizer
+### [THME-804] Multi-Objective 3D Pareto Optimizer [COMPLETED]
 - **Component**: `thme::optimization::pareto_solver` (`src/optimization/pareto_solver.rs`)
 - **Problem**: Compression decisions involve trade-offs across 3 competing objectives: perplexity degradation ($\Delta PPL$), memory traffic ($W_{\text{bytes/token}}$), and wall-clock speedup ($S$).
 - **Acceptance Criteria**:
@@ -382,7 +382,7 @@
 - **Production Pipeline / CI/CD Impact**: Generates optimal candidate frontiers for deployment engineers to pick based on hardware constraints.
 - **Done Means**: `cargo test test_3d_pareto_optimizer` discovers and maintains the non-dominated set across 50 simulated candidates.
 
-### [THME-805] Pareto Hypervolume Indicator Convergence Metric
+### [THME-805] Pareto Hypervolume Indicator Convergence Metric [COMPLETED]
 - **Component**: `thme::optimization::hypervolume` (`src/optimization/hypervolume.rs`)
 - **Problem**: Autonomous co-surgery needs an objective mathematical stopping criterion to determine when further iterations yield diminishing returns.
 - **Acceptance Criteria**:
@@ -392,7 +392,7 @@
 - **Production Pipeline / CI/CD Impact**: Eliminates wasteful compute by stopping automated optimization runs once convergence is reached.
 - **Done Means**: `cargo test test_hypervolume_convergence` correctly halts simulated optimization upon frontier stabilization.
 
-### [THME-806] Automated Self-Healing Parameter Relaxation Heuristic
+### [THME-806] Automated Self-Healing Parameter Relaxation Heuristic [COMPLETED]
 - **Component**: `thme::surgery::self_healing` (`src/surgery/self_healing.rs`)
 - **Problem**: Aggressive quantization proposals can breach quality tolerances; rather than discarding the entire recipe, fine-grained relaxation should recover quality.
 - **Acceptance Criteria**:
@@ -402,7 +402,7 @@
 - **Production Pipeline / CI/CD Impact**: Increases recipe success rate by $> 40\%$ in automated overnight optimization pipelines.
 - **Done Means**: `cargo test test_self_healing_relaxation` demonstrates recovery of breached quality gate without discarding valid optimizations.
 
-### [THME-807] Anti-Degradation Quality Gate Watchdog & Rollback Engine
+### [THME-807] Anti-Degradation Quality Gate Watchdog & Rollback Engine [COMPLETED]
 - **Component**: `thme::surgery::watchdog` (`src/surgery/watchdog.rs`)
 - **Problem**: Models must never enter production in a degraded or broken state; instant rollback is mandatory when validation fails.
 - **Acceptance Criteria**:
@@ -412,7 +412,7 @@
 - **Production Pipeline / CI/CD Impact**: Critical safety gate preventing corrupt checkpoints from advancing in the release pipeline.
 - **Done Means**: `cargo test test_co_surgery_watchdog_rollback` verifies immediate state restoration upon injected catastrophic degradation.
 
-### [THME-808] CLI Subcommand `thme co-surgery` & Progress Telemetry Stream
+### [THME-808] CLI Subcommand `thme co-surgery` & Progress Telemetry Stream [COMPLETED]
 - **Component**: `thme::cli::co_surgery` (`src/cli/co_surgery.rs`)
 - **Problem**: DevOps engineers need a terminal command to launch autonomous co-surgery runs with real-time logging and progress reporting.
 - **Acceptance Criteria**:
@@ -422,7 +422,7 @@
 - **Production Pipeline / CI/CD Impact**: Primary integration command for continuous model surgery cron jobs and GitHub Actions workflows.
 - **Done Means**: `thme co-surgery --help` displays correct flags, and unit tests verify command dispatch.
 
-### [THME-809] Desktop Studio Tab 2 Closed-Loop Co-Surgery Dashboard
+### [THME-809] Desktop Studio Tab 2 Closed-Loop Co-Surgery Dashboard [COMPLETED]
 - **Component**: `thme::gui::app` (`src/gui/app.rs`)
 - **Problem**: Interactive users need visual oversight of autonomous co-surgery sessions with live graphs and manual override buttons.
 - **Acceptance Criteria**:
@@ -434,7 +434,7 @@
 
 ---
 
-## Sprint 9: Production Core Release (Milestone v0.2.0) [TARGET]
+## Sprint 9: Production Core Release (Milestone v0.2.0) [ACTIVE]
 
 ### [THME-901] SmolLM-135M Open-Weights End-to-End Verification Pipeline
 - **Component**: `examples/production_verification.rs`

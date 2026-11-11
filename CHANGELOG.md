@@ -7,11 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.1.9] - Unreleased
+## [0.1.9] - 2026-11-11
 
 ### Added
 - **Closed-Loop Teacher-Student Co-Surgery Baseline (`src/surgery/`)**:
-  - Closed-loop optimization controller, Teacher LLM prompt synthesis, JSON-RPC communication bridge, 3D Pareto frontier optimization, and self-healing degradation watchdog.
+  - Autonomous closed-loop state machine & controller (`src/surgery/closed_loop.rs`) governing iterative `ProfileSensitivity` $\to$ `SynthesizeRecipe` $\to$ `ApplySurgery` $\to$ `ValidateQuality` $\to$ `EvaluatePareto` $\to$ `Commit`/`Rollback` state transitions.
+  - Teacher LLM topology analysis prompt synthesizer (`src/surgery/prompt_synth.rs`) formatting top-K layer sensitivity, SVD decay rates, and memory reach profiles.
+  - Headless JSON-RPC & subprocess Teacher agent communication bridge (`src/surgery/agent_bridge.rs`) for external agent orchestration and mock testing.
+  - Multi-objective 3D Pareto optimizer & hypervolume metric (`src/surgery/pareto_3d.rs`) tracking trade-offs across $\Delta\text{PPL}$, size reduction ratio, and speedup multipliers.
+  - Automated self-healing parameter relaxation heuristic (`src/surgery/relaxation.rs`) backing off aggressive precision on sensitive layers.
+  - Anti-degradation quality gate watchdog & rollback coordinator (`src/surgery/watchdog.rs`) restoring verified model checkpoints.
+  - CLI subcommand `thme co-surgery` (`src/cli/co_surgery.rs`) with real-time per-step terminal telemetry stream and JSON reporting.
+  - Desktop Studio Tab 9 Closed-Loop Co-Surgery dashboard (`src/gui/app.rs`) with budget controls, live telemetry logs, and Pareto checkpoint history.
 
 ---
 

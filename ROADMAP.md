@@ -56,18 +56,18 @@ $$v0.1.x.0 \longrightarrow \left[ v0.1.x.1, v0.1.x.2, v0.1.x.3, v0.1.x.4, v0.1.x
 |     |-> [v0.1.8.8] CLI Subcommand thme export & Desktop Studio Exporter Wizard                             [COMPLETED] |
 |     |-> [v0.1.8.9] Downstream Runtime Compatibility Testbed (llama.cpp / Ollama)                            [COMPLETED] |
 |                                                                                                                    |
-| [ ] v0.1.9.0 Closed-Loop Teacher-Student Co-Surgery Baseline (ACTIVE)                                               |
-|     |-> [v0.1.9.1] Co-Surgery Closed-Loop State Machine & Controller                                       [PLAN]   |
-|     |-> [v0.1.9.2] Teacher LLM Topology Analysis Prompt Synthesizer                                        [PLAN]   |
-|     |-> [v0.1.9.3] Headless JSON-RPC & Subprocess Teacher Agent Communication Bridge                       [PLAN]   |
-|     |-> [v0.1.9.4] Multi-Objective 3D Pareto Optimizer (Delta PPL, Bytes/token, Energy)                    [PLAN]   |
-|     |-> [v0.1.9.5] Pareto Hypervolume Indicator Convergence Metric                                         [PLAN]   |
-|     |-> [v0.1.9.6] Automated Self-Healing Parameter Relaxation Heuristic                                   [PLAN]   |
-|     |-> [v0.1.9.7] Anti-Degradation Quality Gate Watchdog & Immediate Rollback Engine                      [PLAN]   |
-|     |-> [v0.1.9.8] CLI Subcommand thme co-surgery & Progress Telemetry Stream                              [PLAN]   |
-|     |-> [v0.1.9.9] Desktop Studio Tab 2 Closed-Loop Co-Surgery Interactive Dashboard                       [PLAN]   |
+| [x] v0.1.9.0 Closed-Loop Teacher-Student Co-Surgery Baseline (COMPLETED)                                           |
+|     |-> [v0.1.9.1] Co-Surgery Closed-Loop State Machine & Controller                                       [COMPLETED] |
+|     |-> [v0.1.9.2] Teacher LLM Topology Analysis Prompt Synthesizer                                        [COMPLETED] |
+|     |-> [v0.1.9.3] Headless JSON-RPC & Subprocess Teacher Agent Communication Bridge                       [COMPLETED] |
+|     |-> [v0.1.9.4] Multi-Objective 3D Pareto Optimizer (Delta PPL, Bytes/token, Energy)                    [COMPLETED] |
+|     |-> [v0.1.9.5] Pareto Hypervolume Indicator Convergence Metric                                         [COMPLETED] |
+|     |-> [v0.1.9.6] Automated Self-Healing Parameter Relaxation Heuristic                                   [COMPLETED] |
+|     |-> [v0.1.9.7] Anti-Degradation Quality Gate Watchdog & Immediate Rollback Engine                      [COMPLETED] |
+|     |-> [v0.1.9.8] CLI Subcommand thme co-surgery & Progress Telemetry Stream                              [COMPLETED] |
+|     |-> [v0.1.9.9] Desktop Studio Tab 2 Closed-Loop Co-Surgery Interactive Dashboard                       [COMPLETED] |
 |                                                                                                                    |
-| [ ] v0.2.0.0 Production Core Release Baseline (TARGET)                                                             |
+| [ ] v0.2.0.0 Production Core Release Baseline (ACTIVE)                                                             |
 |     |-> [v0.2.0.1] SmolLM-135M Open-Weights End-to-End Verification Pipeline                               [TARGET] |
 |     |-> [v0.2.0.2] LLaMA-3.2-1B Open-Weights End-to-End Verification Pipeline                             [TARGET] |
 |     |-> [v0.2.0.3] Automated Reproducible Benchmark Script Suite                                            [TARGET] |
@@ -285,7 +285,7 @@ Enables direct binary disk serialization of modified and distilled models into d
 
 ---
 
-#### [ ] v0.1.9.0 — Closed-Loop Teacher-Student Co-Surgery Baseline (ACTIVE)
+#### [x] v0.1.9.0 — Closed-Loop Teacher-Student Co-Surgery Baseline (COMPLETED)
 Autonomous closed-loop optimization daemon: an external or local Teacher LLM analyzes layer sensitivity, generates declarative surgery recipes, THME applies them, verifies quality via the perplexity bridge, and iteratively tunes the Pareto frontier.
 
 - **Mathematical Formulations**:
@@ -297,31 +297,31 @@ Autonomous closed-loop optimization daemon: an external or local Teacher LLM ana
     $$\theta^{(k+1)} = \text{Relax}\left(\theta^{(k)}, \nabla_{\theta} \text{Sensitivity}\right)$$
 
 - **Parallel Sub-Milestone Breakdown [v0.1.9.1 - v0.1.9.9]**:
-  - [ ] **v0.1.9.1**: Co-Surgery Closed-Loop State Machine & Controller (`src/surgery/closed_loop.rs`):
+  - [x] **v0.1.9.1**: Co-Surgery Closed-Loop State Machine & Controller (`src/surgery/closed_loop.rs`):
     - Coordinates iterative optimization loop: Inspect $\to$ Propose $\to$ Apply $\to$ Validate $\to$ Update Pareto $\to$ Commit/Rollback.
     - *Pipeline Impact*: Automates continuous unattended model optimization.
-  - [ ] **v0.1.9.2**: Teacher LLM Topology Analysis Prompt Synthesizer (`src/surgery/teacher_agent.rs`):
+  - [x] **v0.1.9.2**: Teacher LLM Topology Analysis Prompt Synthesizer (`src/surgery/prompt_synth.rs`):
     - Formats top-K layer sensitivity, SVD decay rates, and EWHA reach profiles into structured context for Teacher models.
     - *Pipeline Impact*: Standardizes agentic prompt payloads across LLM backends.
-  - [ ] **v0.1.9.3**: Headless JSON-RPC & Subprocess Teacher Agent Communication Bridge:
+  - [x] **v0.1.9.3**: Headless JSON-RPC & Subprocess Teacher Agent Communication Bridge (`src/surgery/agent_bridge.rs`):
     - Connects external Teacher LLMs (Claude Code, Gemini CLI, local models) to the surgery engine via stdin/stdout or IPC.
     - *Pipeline Impact*: Decouples optimization intelligence from execution engine.
-  - [ ] **v0.1.9.4**: Multi-Objective 3D Pareto Optimizer (`src/optimization/pareto_solver.rs`):
+  - [x] **v0.1.9.4**: Multi-Objective 3D Pareto Optimizer (`src/surgery/pareto_3d.rs`):
     - Tracks non-dominated frontier across $\Delta PPL$, memory traffic $W_{\text{token}}$, and speedup multiplier $S$.
     - *Pipeline Impact*: Automatically identifies optimal compression trade-offs.
-  - [ ] **v0.1.9.5**: Pareto Hypervolume Indicator Convergence Metric:
+  - [x] **v0.1.9.5**: Pareto Hypervolume Indicator Convergence Metric (`src/surgery/pareto_3d.rs`):
     - Calculates hypervolume coverage metric to determine convergence and terminate optimization loops.
     - *Pipeline Impact*: Provides quantitative stopping criteria for automated CI runs.
-  - [ ] **v0.1.9.6**: Automated Self-Healing Parameter Relaxation Heuristic:
+  - [x] **v0.1.9.6**: Automated Self-Healing Parameter Relaxation Heuristic (`src/surgery/relaxation.rs`):
     - Backs off compression on the highest-sensitivity layer when quality degradation breaches tolerance.
     - *Pipeline Impact*: Prevents catastrophic model failure during aggressive automated tuning.
-  - [ ] **v0.1.9.7**: Anti-Degradation Quality Gate Watchdog & Immediate Rollback Engine:
+  - [x] **v0.1.9.7**: Anti-Degradation Quality Gate Watchdog & Immediate Rollback Engine (`src/surgery/watchdog.rs`):
     - Automatically restores previous baseline checkpoint upon gate failure, logging diagnostic audit trails.
     - *Pipeline Impact*: Protects model integrity against unrecoverable transformations.
-  - [ ] **v0.1.9.8**: CLI Subcommand `thme co-surgery` & Progress Telemetry Stream (`src/cli/co_surgery.rs`):
+  - [x] **v0.1.9.8**: CLI Subcommand `thme co-surgery` & Progress Telemetry Stream (`src/cli/co_surgery.rs`):
     - Interactive CLI driving automated runs with `--target-reduction <%>` and `--max-ppl-delta <float>`.
     - *Pipeline Impact*: Enables headless invocation from cron jobs and CI harnesses.
-  - [ ] **v0.1.9.9**: Desktop Studio Tab 2 Closed-Loop Co-Surgery Interactive Dashboard (`src/gui/app.rs`):
+  - [x] **v0.1.9.9**: Desktop Studio Tab 2 Closed-Loop Co-Surgery Interactive Dashboard (`src/gui/app.rs`):
     - Real-time iteration timeline, loss curve monitors, and interactive Pareto scatter plot.
     - *Pipeline Impact*: Visual studio interface for monitoring autonomous optimization.
 
@@ -329,7 +329,7 @@ Autonomous closed-loop optimization daemon: an external or local Teacher LLM ana
 
 ### Phase 5: Production Core Release
 
-#### [ ] v0.2.0.0 — Production Core Release Baseline (TARGET)
+#### [ ] v0.2.0.0 — Production Core Release Baseline (ACTIVE)
 Demonstrates end-to-end verified profiling, optimization, export, and verification on real open-weights models (SmolLM-135M / LLaMA-3.2-1B) with published reproducible results and signed binaries.
 
 - **Parallel Sub-Milestone Breakdown [v0.2.0.1 - v0.2.0.9]**:
