@@ -20,8 +20,12 @@ jobs:
             target: x86_64-pc-windows-msvc
             binary_name: thme.exe
             gui_name: thme-gui.exe
-          - os: macos-latest
+          - os: macos-13
             target: x86_64-apple-darwin
+            binary_name: thme
+            gui_name: thme-gui
+          - os: macos-latest
+            target: aarch64-apple-darwin
             binary_name: thme
             gui_name: thme-gui
     steps:
@@ -59,18 +63,29 @@ jobs:
           archive="thme-${{ github.ref_name }}-${{ matrix.target }}.tar.gz"
           tar -czf "$archive" "${{ matrix.binary_name }}" "${{ matrix.gui_name }}"
           if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum "$archive" > SHA256SUMS
+            sha256sum "$archive" > SHA256SUMS.txt
           else
-            shasum -a 256 "$archive" > SHA256SUMS
+            shasum -a 256 "$archive" > SHA256SUMS.txt
           fi
           test -s "$archive"
-          test -s SHA256SUMS
+          test -s SHA256SUMS.txt
+
+      - name: Sign Release Assets (Minisign)
+        shell: bash
+        if: env.MINISIGN_KEY != ''
+        env:
+          MINISIGN_KEY: ${{ secrets.MINISIGN_KEY }}
+        run: |
+          set -euo pipefail
+          bash scripts/sign_artifacts.sh dist/
 
       - name: Publish Release Assets
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/*.tar.gz
-            dist/SHA256SUMS
+            dist/*.minisig
+            dist/*.asc
+            dist/SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

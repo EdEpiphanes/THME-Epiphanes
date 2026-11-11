@@ -68,15 +68,15 @@ $$v0.1.x.0 \longrightarrow \left[ v0.1.x.1, v0.1.x.2, v0.1.x.3, v0.1.x.4, v0.1.x
 |     |-> [v0.1.9.9] Desktop Studio Tab 2 Closed-Loop Co-Surgery Interactive Dashboard                       [COMPLETED] |
 |                                                                                                                    |
 | [ ] v0.2.0.0 Production Core Release Baseline (ACTIVE)                                                             |
-|     |-> [v0.2.0.1] SmolLM-135M Open-Weights End-to-End Verification Pipeline                               [TARGET] |
-|     |-> [v0.2.0.2] LLaMA-3.2-1B Open-Weights End-to-End Verification Pipeline                             [TARGET] |
-|     |-> [v0.2.0.3] Automated Reproducible Benchmark Script Suite                                            [TARGET] |
-|     |-> [v0.2.0.4] Published Benchmark Dossier Generator (Markdown & CSV)                                  [TARGET] |
-|     |-> [v0.2.0.5] Multi-Platform LTO Stripped Binary Release Packaging                                     [TARGET] |
-|     |-> [v0.2.0.6] Minisign & GPG Cryptographic Artifact Signing Pipeline                                  [TARGET] |
-|     |-> [v0.2.0.7] SHA-256 Checksum Manifest Generation (SHA256SUMS.txt)                                   [TARGET] |
-|     |-> [v0.2.0.8] Comprehensive Architecture Playbook, User Manual & Man Pages                            [TARGET] |
-|     |-> [v0.2.0.9] End-to-End Clean-Machine Verification Test Harness                                      [TARGET] |
+|     |-> [v0.2.0.1] SmolLM-135M Open-Weights End-to-End Verification Pipeline                               [PLAN]   |
+|     |-> [v0.2.0.2] LLaMA-3.2-1B Open-Weights End-to-End Verification Pipeline                             [PLAN]   |
+|     |-> [v0.2.0.3] Automated Reproducible Benchmark Script Suite                                            [PLAN]   |
+|     |-> [v0.2.0.4] Published Benchmark Dossier Generator (Markdown & CSV)                                  [PLAN]   |
+|     |-> [v0.2.0.5] Multi-Platform LTO Stripped Binary Release Packaging                                     [PLAN]   |
+|     |-> [v0.2.0.6] Minisign & GPG Cryptographic Artifact Signing Pipeline                                  [PLAN]   |
+|     |-> [v0.2.0.7] SHA-256 Checksum Manifest Generation (SHA256SUMS.txt)                                   [PLAN]   |
+|     |-> [v0.2.0.8] Comprehensive Architecture Playbook, User Manual & Man Pages                            [PLAN]   |
+|     |-> [v0.2.0.9] End-to-End Clean-Machine Verification Test Harness                                      [PLAN]   |
 |                                                                                                                    |
 | [ ] v0.2.1.0 Direct GPU Driver Execution Engine Baseline (SCHEDULED)                                               |
 |     |-> [v0.2.1.1 - v0.2.1.9] HAL Traits, cudarc CUDA Driver, Vulkan SPIR-V, Metal 3, Fused Kernels, CLI run   |
@@ -330,35 +330,45 @@ Autonomous closed-loop optimization daemon: an external or local Teacher LLM ana
 ### Phase 5: Production Core Release
 
 #### [ ] v0.2.0.0 — Production Core Release Baseline (ACTIVE)
-Demonstrates end-to-end verified profiling, optimization, export, and verification on real open-weights models (SmolLM-135M / LLaMA-3.2-1B) with published reproducible results and signed binaries.
+Demonstrates end-to-end verified profiling, optimization, export, and verification on real open-weights models (SmolLM-135M / LLaMA-3.2-1B) with published reproducible results, cryptographic signatures, and production release artifacts.
+
+- **Mathematical Formulations & Production Invariants**:
+  - Verification Quality Bound:
+    $$\Delta PPL = PPL_{\text{candidate}} - PPL_{\text{baseline}} \le \tau_{\text{ppl}} \quad (\tau_{\text{ppl}} = 0.45 \text{ on WikiText-2})$$
+  - Heterogeneous Pareto Compression Ratio:
+    $$\mathcal{R}_{\text{comp}} = 1.0 - \frac{\sum_{l \in \mathcal{L}} B_{\text{quant}}(l) + B_{\text{meta}}}{\sum_{l \in \mathcal{L}} B_{\text{orig}}(l)} \ge 0.40 \quad (40\%\text{–}65\% \text{ reduction})$$
+  - Hardware Arithmetic Intensity Ceiling:
+    $$I_{\text{arith}} = \frac{2 \cdot N_{\text{FLOPs}}}{B_{\text{DRAM\_transferred}}} \quad [\text{FLOP/byte}]$$
+  - Cryptographic Digest Multi-Hash:
+    $$H_{\text{release}} = \text{SHA256}(M_{\text{binary}}), \quad \Sigma_{\text{minisign}} = \text{Sign}_{sk_{\text{epiphanes}}}(H_{\text{release}})$$
 
 - **Parallel Sub-Milestone Breakdown [v0.2.0.1 - v0.2.0.9]**:
   - [ ] **v0.2.0.1**: SmolLM-135M Open-Weights End-to-End Verification Pipeline (`examples/production_verification.rs`):
-    - Ingests genuine SmolLM-135M checkpoint, applies Pareto BitNet/SVD surgery, exports GGUF, and evaluates perplexity.
-    - *Pipeline Impact*: Primary proof-of-correctness gate for release verification.
-  - [ ] **v0.2.0.2**: LLaMA-3.2-1B Open-Weights End-to-End Verification Pipeline:
-    - Validates pipeline on 1B parameter scale model under real hardware memory limits.
-    - *Pipeline Impact*: Validates scaling behavior on multi-billion parameter architectures.
-  - [ ] **v0.2.0.3**: Automated Reproducible Benchmark Script Suite (`scripts/benchmark_suite.py` / `.sh`):
-    - One-command execution generating full benchmark metrics on clean developer machines.
-    - *Pipeline Impact*: Enables third-party reproducibility of all published performance numbers.
-  - [ ] **v0.2.0.4**: Published Benchmark Dossier Generator (`docs/benchmark_dossier.md`):
-    - Synthesizes markdown and CSV performance comparison tables with verified hardware attribution.
-    - *Pipeline Impact*: Serves as official empirical performance documentation.
-  - [ ] **v0.2.0.5**: Multi-Platform LTO Stripped Binary Release Packaging:
-    - Automated packaging of optimized, stripped release binaries for Linux (x86_64, aarch64), Windows (x64), and macOS (ARM/Intel).
-    - *Pipeline Impact*: Delivers production binary assets on GitHub Releases.
-  - [ ] **v0.2.0.6**: Minisign & GPG Cryptographic Artifact Signing Pipeline:
-    - Signs all release binaries and tarballs with cryptographic provenance signatures.
-    - *Pipeline Impact*: Prevents binary tampering and ensures software supply chain security.
+    - Ingests genuine SmolLM-135M checkpoint (SafeTensors/GGUF), applies Pareto BitNet b1.58 / SVD surgery, exports GGUF, and verifies $\Delta PPL \le 0.45$ on WikiText-2.
+    - *Pipeline Impact*: Primary proof-of-correctness gate for small language model release verification.
+  - [ ] **v0.2.0.2**: LLaMA-3.2-1B Open-Weights End-to-End Verification Pipeline (`examples/production_verification.rs`):
+    - Validates pipeline on 1B parameter scale model under real hardware memory limits ($\le 4\text{ GB}$ RAM) with zero-alloc memory mapping.
+    - *Pipeline Impact*: Validates scaling behavior on multi-billion parameter production architectures.
+  - [ ] **v0.2.0.3**: Automated Reproducible Benchmark Script Suite (`scripts/benchmark_suite.py`, `scripts/benchmark_suite.sh`):
+    - One-command execution measuring memory ingestion throughput (MB/s), SVD profiling latency, Pareto DP solver time, and token generation speed.
+    - *Pipeline Impact*: Enables third-party reproducibility of all published performance numbers on arbitrary hardware.
+  - [ ] **v0.2.0.4**: Published Benchmark Dossier Generator (`scripts/generate_dossier.py`, `docs/benchmark_dossier.md`):
+    - Synthesizes machine-readable benchmark JSON into publication-grade Markdown and CSV tables with verified hardware attribution (H100, RTX 4090, Apple Silicon, MI300X, Xeon).
+    - *Pipeline Impact*: Serves as official empirical performance documentation and marketing specification.
+  - [ ] **v0.2.0.5**: Multi-Platform LTO Stripped Binary Release Packaging (`.github/workflows/release.yml`, `Cargo.toml`):
+    - Automated compilation of Fat-LTO stripped release binaries for Linux (x86_64, aarch64), Windows (x64), and macOS (Apple Silicon, Intel) with strict footprint constraints ($\le 10\text{ MB}$ CLI, $\le 15\text{ MB}$ GUI).
+    - *Pipeline Impact*: Delivers production binary assets directly to GitHub Releases.
+  - [ ] **v0.2.0.6**: Minisign & GPG Cryptographic Artifact Signing Pipeline (`scripts/sign_artifacts.sh`, `SECURITY.md`):
+    - Signs all release binaries, tarballs, and checksum files with Minisign (`.minisig`) and GPG detached signatures (`.asc`) for supply-chain provenance.
+    - *Pipeline Impact*: Prevents binary tampering and ensures software supply chain integrity.
   - [ ] **v0.2.0.7**: SHA-256 Checksum Manifest Generation (`SHA256SUMS.txt`):
-    - Automated generation and verification of SHA-256 digest manifests.
-    - *Pipeline Impact*: Standard release integrity verification for package managers.
-  - [ ] **v0.2.0.8**: Comprehensive Architecture Playbook, User Manual & Man Pages:
-    - Finalized User Manual (`docs/manual.md`), Unix man pages (`docs/man/thme.1`), and architectural documentation.
-    - *Pipeline Impact*: Complete documentation set for enterprise and open-source users.
-  - [ ] **v0.2.0.9**: End-to-End Clean-Machine Verification Test Harness:
-    - CI job spinning up a clean VM to test installation, execution, and export without pre-existing dependencies.
+    - Automated generation and validation of universal `SHA256SUMS.txt` manifests across all release assets.
+    - *Pipeline Impact*: Standard release integrity verification for Homebrew, Winget, and package managers.
+  - [ ] **v0.2.0.8**: Comprehensive Architecture Playbook, User Manual & Man Pages (`docs/manual.md`, `docs/man/thme.1`):
+    - Complete User Manual covering all 14 CLI subcommands and Studio tabs, plus troff Unix man page installable to `/usr/share/man/man1`.
+    - *Pipeline Impact*: Complete documentation set for enterprise operators and command-line developers.
+  - [ ] **v0.2.0.9**: End-to-End Clean-Machine Verification Test Harness (`.github/workflows/clean_machine_test.yml`, `tests/test_clean_machine.rs`):
+    - Automated clean-machine environment validation testing installation, execution, and artifact generation without prior cache.
     - *Pipeline Impact*: Final pre-release acceptance gate.
 
 ---

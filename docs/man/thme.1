@@ -1,0 +1,63 @@
+.TH THME 1 "November 2026" "THME 0.2.0" "Epiphanes User Commands"
+.SH NAME
+thme \- Topological Heterogeneous Manifold Engine for LLM Optimization
+.SH SYNOPSIS
+.B thme
+[\fISUBCOMMAND\fR] [\fIOPTIONS\fR]
+.SH DESCRIPTION
+.B THME
+(Topological Heterogeneous Manifold Engine) is a pure-Rust framework for zero-copy LLM memory profiling, layer sensitivity estimation, Pareto precision optimization, speculative decoding drafting, hardware roofline boundary analysis, and autonomous closed-loop co-surgery.
+.SH SUBCOMMANDS
+.TP
+\fBgui\fR, \fBui\fR
+Launch the 60 FPS interactive native Desktop Studio GUI.
+.TP
+\fBinspect\fR \fIMODEL\fR
+Inspect SafeTensors or GGUF tensor shapes, dtypes, and metadata zero-copy.
+.TP
+\fBprofile\fR \fIMODEL\fR
+Profile layer topological sensitivity, SVD decay spectra, and KV-cache scaling.
+.TP
+\fBplan\fR \fIMODEL\fR
+Generate heterogeneous precision Pareto allocation plans.
+.TP
+\fBvalidate\fR, \fBcheck\fR
+Run quality gate perplexity validation between baseline and candidate models.
+.TP
+\fBtweak\fR, \fBsurgery\fR \fIMODEL\fR \fIRECIPE\fR
+Apply declarative surgery recipes to model weights.
+.TP
+\fBreport\fR
+Export optimization and sensitivity summary reports in Markdown or JSON.
+.TP
+\fBconvert\fR
+Cross-convert model topology across 8 specialized AI paradigms.
+.TP
+\fBspeculate\fR
+Synthesize draft models and evaluate multi-token speculative decoding speedups.
+.TP
+\fBroofline\fR
+Profile model operational intensity against empirical hardware ceilings.
+.TP
+\fBexport\fR \fIMODEL\fR \fB--output\fR \fIOUT\fR
+Export source-backed model as GGUF v3 or SafeTensors.
+.TP
+\fBinterop\fR
+Generate PyTorch fine-tuning scripts and Hugging Face configuration files.
+.TP
+\fBmcp\fR, \fBdaemon\fR
+Run Model Context Protocol JSON-RPC daemon for AI agent connectivity.
+.TP
+\fBco-surgery\fR, \fBcosurgery\fR
+Run autonomous closed-loop Teacher-Student co-surgery optimization.
+.SH OPTIONS
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help message and exit.
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Print version information and exit.
+.SH AUTHORS
+Epiphanes <https://github.com/EdEpiphanes/THME-Epiphanes>
+.SH SEE ALSO
+Full documentation available at \fIdocs/manual.md\fR.

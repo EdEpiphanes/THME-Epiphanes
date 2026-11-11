@@ -4,7 +4,27 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
+| 0.2.x   | :white_check_mark: |
 | 0.1.x   | :white_check_mark: |
+
+## Binary Verification & Cryptographic Provenance
+
+All official release binaries, archives, and manifests for THME (Epiphanes) are signed cryptographically:
+
+1. **SHA-256 Digest**:
+   ```bash
+   sha256sum -c SHA256SUMS.txt
+   ```
+
+2. **Minisign Verification**:
+   ```bash
+   minisign -Vm <archive>.tar.gz -P RWTJ3yD... (Epiphanes public key)
+   ```
+
+3. **GPG Signature Verification**:
+   ```bash
+   gpg --verify <archive>.tar.gz.asc <archive>.tar.gz
+   ```
 
 ## Reporting a Vulnerability
 
