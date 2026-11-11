@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.9] - Unreleased
+
+### Added
+- **Closed-Loop Teacher-Student Co-Surgery Baseline (`src/surgery/`)**:
+  - Closed-loop optimization controller, Teacher LLM prompt synthesis, JSON-RPC communication bridge, 3D Pareto frontier optimization, and self-healing degradation watchdog.
+
+---
+
+## [0.1.8] - 2026-11-11
+
+### Added
+- **Binary Quantization Exporter Suite (`src/exporter/`)**:
+  - Vectorized BitNet b1.58 ternary packer and unpacker (`src/exporter/bitnet_pack.rs`) with 4 weights per byte and scale product de-quantization.
+  - Pure-Rust GGUF v3 binary writer (`src/exporter/gguf_writer.rs`) with 32-byte alignment and metadata serialization.
+  - GGUF architecture metadata reconstitution engine (`src/exporter/metadata.rs`) across all 8 paradigm architectures.
+  - Pure-Rust SafeTensors binary serializer (`src/exporter/safetensors_writer.rs`) with 8-byte length prefix and JSON metadata table.
+  - Low-memory bounded streaming chunked file writer (`src/exporter/streaming_writer.rs`) with concurrent SHA-256 calculation.
+  - Calibrated per-channel and per-group MSE-optimal scale search (`src/exporter/calibration.rs`).
+  - CLI subcommand `thme export` (`src/cli/export.rs`) and Desktop Studio export wizard controls.
+  - Comprehensive downstream runtime compatibility test suite (`tests/test_exporter_compatibility.rs`).
+
+---
+
+## [0.1.7] - 2026-11-10
+
+### Added
+- **Hardware-Calibrated Roofline & Micro-Kernel Profiler (`src/profiling/`)**:
+  - Hardware specifications database for H100 SXM5, RTX 4090, Apple Silicon, AMD MI300X, and Intel Xeon (`src/profiling/hardware.rs`).
+  - Operational arithmetic intensity analysis for linear GEMM, SDPA, SwiGLU FFN, and FlashAttention-2 (`src/profiling/intensity.rs`).
+  - 4-tier cache simulator (L1, L2, L3, DRAM) and working set eviction model (`src/profiling/cache_sim.rs`).
+  - Empirical roofline boundary curve generator and memory vs compute classifier (`src/profiling/roofline.rs`).
+  - Dynamic TDP thermal and DVFS throttling projection engine (`src/profiling/thermal.rs`).
+  - CLI subcommand `thme roofline` (`src/cli/roofline.rs`), MCP tool `thme_profile_roofline`, and Tab 4 GUI deck.
+
+---
+
 ## [0.1.6] - 2026-11-10
 
 ### Added
