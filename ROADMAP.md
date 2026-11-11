@@ -17,7 +17,7 @@ $$v0.1.x.0 \longrightarrow \left[ v0.1.x.1, v0.1.x.2, v0.1.x.3, v0.1.x.4, v0.1.x
 1. **Parallel Execution with Interdependent Delivery**: Sub-functions within the $[v0.1.x.1 \dots v0.1.x.9]$ block execute concurrently across modular components (parsers, kernels, CLI commands, telemetry modules, and GUI decks). They share type contracts and IR data structures defined at $v0.1.x.0$.
 2. **Production Pipeline & CI/CD Impact**: Every sub-function integrates into the automated testing and delivery pipeline. Modifications trigger targeted unit tests, property fuzz suites, Criterion benchmark regressions, and release bundle gates before converging into $v0.1.(x+1).0$.
 3. **Active Parallel Progression Block**: The current release transition is explicitly modeled as:
-   $$v0.1.7.0 \longrightarrow \left[ v0.1.7.1, v0.1.7.2, v0.1.7.3, v0.1.7.4, v0.1.7.5, v0.1.7.6, v0.1.7.7, v0.1.7.8, v0.1.7.9 \right] \longrightarrow v0.1.8.0 \longrightarrow \left[ v0.1.8.1 \dots v0.1.8.9 \right]$$
+   $$v0.1.9.0 \longrightarrow \left[ v0.1.9.1, v0.1.9.2, v0.1.9.3, v0.1.9.4, v0.1.9.5, v0.1.9.6, v0.1.9.7, v0.1.9.8, v0.1.9.9 \right] \longrightarrow v0.2.0.0 \longrightarrow \left[ v0.2.0.1 \dots v0.2.0.9 \right]$$
 
 ---
 
@@ -346,30 +346,39 @@ Demonstrates end-to-end verified profiling, optimization, export, and verificati
   - [ ] **v0.2.0.1**: SmolLM-135M Open-Weights End-to-End Verification Pipeline (`examples/production_verification.rs`):
     - Ingests genuine SmolLM-135M checkpoint (SafeTensors/GGUF), applies Pareto BitNet b1.58 / SVD surgery, exports GGUF, and verifies $\Delta PPL \le 0.45$ on WikiText-2.
     - *Pipeline Impact*: Primary proof-of-correctness gate for small language model release verification.
+    - *Progress*: Pipeline laid out and registered in `Cargo.toml`. Verified with `cargo run --example production_verification -- --target smollm135m --dry-run`.
   - [ ] **v0.2.0.2**: LLaMA-3.2-1B Open-Weights End-to-End Verification Pipeline (`examples/production_verification.rs`):
     - Validates pipeline on 1B parameter scale model under real hardware memory limits ($\le 4\text{ GB}$ RAM) with zero-alloc memory mapping.
     - *Pipeline Impact*: Validates scaling behavior on multi-billion parameter production architectures.
+    - *Progress*: Architectural scaffold, tensor mappings, and surgery recipe laid out. Verified with `cargo run --example production_verification -- --target llama321b --dry-run`.
   - [ ] **v0.2.0.3**: Automated Reproducible Benchmark Script Suite (`scripts/benchmark_suite.py`, `scripts/benchmark_suite.sh`):
     - One-command execution measuring memory ingestion throughput (MB/s), SVD profiling latency, Pareto DP solver time, and token generation speed.
     - *Pipeline Impact*: Enables third-party reproducibility of all published performance numbers on arbitrary hardware.
+    - *Progress*: Shell runner and Python telemetry collector laid out with hardware inspection and JSON reporting (`target/benchmark_results.json`).
   - [ ] **v0.2.0.4**: Published Benchmark Dossier Generator (`scripts/generate_dossier.py`, `docs/benchmark_dossier.md`):
     - Synthesizes machine-readable benchmark JSON into publication-grade Markdown and CSV tables with verified hardware attribution (H100, RTX 4090, Apple Silicon, MI300X, Xeon).
     - *Pipeline Impact*: Serves as official empirical performance documentation and marketing specification.
+    - *Progress*: Dossier generator laid out. Generated `docs/benchmark_dossier.md` and `docs/benchmark_dossier.csv`.
   - [ ] **v0.2.0.5**: Multi-Platform LTO Stripped Binary Release Packaging (`.github/workflows/release.yml`, `Cargo.toml`):
     - Automated compilation of Fat-LTO stripped release binaries for Linux (x86_64, aarch64), Windows (x64), and macOS (Apple Silicon, Intel) with strict footprint constraints ($\le 10\text{ MB}$ CLI, $\le 15\text{ MB}$ GUI).
     - *Pipeline Impact*: Delivers production binary assets directly to GitHub Releases.
+    - *Progress*: Release workflow updated with 4-target cross-platform matrix and size assertion gates.
   - [ ] **v0.2.0.6**: Minisign & GPG Cryptographic Artifact Signing Pipeline (`scripts/sign_artifacts.sh`, `SECURITY.md`):
     - Signs all release binaries, tarballs, and checksum files with Minisign (`.minisig`) and GPG detached signatures (`.asc`) for supply-chain provenance.
     - *Pipeline Impact*: Prevents binary tampering and ensures software supply chain integrity.
+    - *Progress*: Signing script laid out in `scripts/sign_artifacts.sh`; verification instructions documented in `SECURITY.md`.
   - [ ] **v0.2.0.7**: SHA-256 Checksum Manifest Generation (`SHA256SUMS.txt`):
     - Automated generation and validation of universal `SHA256SUMS.txt` manifests across all release assets.
     - *Pipeline Impact*: Standard release integrity verification for Homebrew, Winget, and package managers.
+    - *Progress*: Integrated into `.github/workflows/release.yml` and verified in clean machine test harness.
   - [ ] **v0.2.0.8**: Comprehensive Architecture Playbook, User Manual & Man Pages (`docs/manual.md`, `docs/man/thme.1`):
     - Complete User Manual covering all 14 CLI subcommands and Studio tabs, plus troff Unix man page installable to `/usr/share/man/man1`.
     - *Pipeline Impact*: Complete documentation set for enterprise operators and command-line developers.
+    - *Progress*: User manual authored in `docs/manual.md`; Unix man page authored in `docs/man/thme.1`.
   - [ ] **v0.2.0.9**: End-to-End Clean-Machine Verification Test Harness (`.github/workflows/clean_machine_test.yml`, `tests/test_clean_machine.rs`):
     - Automated clean-machine environment validation testing installation, execution, and artifact generation without prior cache.
     - *Pipeline Impact*: Final pre-release acceptance gate.
+    - *Progress*: Standalone integration test implemented in `tests/test_clean_machine.rs` (passing) and CI workflow in `.github/workflows/clean_machine_test.yml`.
 
 ---
 

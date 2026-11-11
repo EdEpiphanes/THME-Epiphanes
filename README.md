@@ -278,7 +278,7 @@ flowchart TD
     classDef planned fill:#6366f1,stroke:#4f46e5,stroke-width:2px,color:#ffffff;
     classDef target fill:#f59e0b,stroke:#d97706,stroke-width:2px,color:#ffffff;
 
-    subgraph Released ["Completed Milestones (v0.1.0 - v0.1.6)"]
+    subgraph Released ["Completed Milestones (v0.1.0 - v0.1.9)"]
         v010["v0.1.0: Zero-Copy SafeTensors/GGUF, Pareto Allocator & Studio GUI"]:::done
         v011["v0.1.1: 3-OS CI Matrix, Path-Leak Guard & Surgery Schema"]:::done
         v012["v0.1.2: 28 GGML Quant Types, Block Decoders & Stream Fuzzing"]:::done
@@ -287,38 +287,38 @@ flowchart TD
         v015["v0.1.5: MCP Server, Copilot Tools, PyTorch Bridge & 8 AI Paradigms"]:::done
         v016["v0.1.6: Speculative Decoding Synthesizer, Tree Engine & Rejection Sampling"]:::done
         v017["v0.1.7: Hardware-Calibrated Roofline Profiler & 4-Tier Cache Simulator"]:::done
+        v018["v0.1.8: Binary Quantization Exporter & GGUF/SafeTensors Streaming"]:::done
+        v019["v0.1.9: Closed-Loop Teacher-Student Co-Surgery Daemon"]:::done
 
-        v010 --> v011 --> v012 --> v013 --> v014 --> v015 --> v016 --> v017
+        v010 --> v011 --> v012 --> v013 --> v014 --> v015 --> v016 --> v017 --> v018 --> v019
     end
 
-    v017 --> v018_0
+    v019 --> v020_0
 
-    subgraph ActiveMilestone ["Active Milestone: v0.1.8 Binary Quantization Exporter"]
-        v018_0["v0.1.8.0 Baseline Exporter Contract"]:::active
-        v018_1["v0.1.8.1 Vectorized BitNet b1.58 Bitstream Packer"]:::active
-        v018_2["v0.1.8.2 Vectorized Ternary Unpacker with Scale Restoration"]:::active
-        v018_3["v0.1.8.3 Pure Rust GGUF v3 Binary Writer"]:::active
-        v018_4["v0.1.8.4 GGUF Metadata Reconstitution & Sync"]:::active
-        v018_5["v0.1.8.5 Pure Rust SafeTensors Binary Serializer"]:::active
-        v018_6["v0.1.8.6 Low-Memory Streaming Chunked Writer"]:::active
-        v018_7["v0.1.8.7 Calibrated Per-Channel MSE Scale Search"]:::active
-        v018_8["v0.1.8.8 CLI thme export & Tab 1 Export Wizard"]:::active
-        v018_9["v0.1.8.9 Downstream Runtime Testbed llama.cpp/vLLM"]:::active
+    subgraph ActiveMilestone ["Active Milestone: v0.2.0 Production Core Release"]
+        v020_0["v0.2.0.0 Production Core Baseline Contract"]:::active
+        v020_1["v0.2.0.1 SmolLM-135M Open-Weights Verification"]:::active
+        v020_2["v0.2.0.2 LLaMA-3.2-1B Open-Weights Verification"]:::active
+        v020_3["v0.2.0.3 Automated Reproducible Benchmark Suite"]:::active
+        v020_4["v0.2.0.4 Published Benchmark Dossier Generator"]:::active
+        v020_5["v0.2.0.5 Multi-Platform LTO Stripped Binary Packaging"]:::active
+        v020_6["v0.2.0.6 Minisign & GPG Cryptographic Artifact Signing"]:::active
+        v020_7["v0.2.0.7 SHA-256 Checksum Manifest Generation"]:::active
+        v020_8["v0.2.0.8 Architecture Playbook, User Manual & Man Pages"]:::active
+        v020_9["v0.2.0.9 Clean-Machine Verification Test Harness"]:::active
 
-        v018_0 --> v018_1 & v018_2 & v018_3 & v018_4 & v018_5 & v018_6 & v018_7 & v018_8 & v018_9
+        v020_0 --> v020_1 & v020_2 & v020_3 & v020_4 & v020_5 & v020_6 & v020_7 & v020_8 & v020_9
     end
 
-    v018_1 & v018_2 & v018_3 & v018_4 & v018_5 & v018_6 & v018_7 & v018_8 & v018_9 --> v019
+    v020_1 & v020_2 & v020_3 & v020_4 & v020_5 & v020_6 & v020_7 & v020_8 & v020_9 --> v021
 
-    subgraph PlannedMilestones ["Planned Milestones (v0.1.9 - v0.2.4)"]
-        v019["v0.1.9: Closed-Loop Teacher-Student Co-Surgery Daemon"]:::planned
-        v020["v0.2.0: Production Core Release & Open-Weights Verification"]:::target
+    subgraph PlannedMilestones ["Planned Milestones (v0.2.1 - v0.2.4)"]
         v021["v0.2.1: Direct GPU Driver Execution Engine (CUDA/Vulkan/Metal)"]:::planned
         v022["v0.2.2: Tiered Out-of-Core NVMe SSD Streaming (70B in 8GB)"]:::planned
         v023["v0.2.3: Distributed Heterogeneous Multi-Node Clustering"]:::planned
         v024["v0.2.4: Universal Agentic AI Connectivity Gateway"]:::planned
 
-        v019 --> v020 --> v021 --> v022 --> v023 --> v024
+        v021 --> v022 --> v023 --> v024
     end
 ```
 
@@ -957,9 +957,9 @@ Detailed roadmap specifications and architectural contracts are maintained in [R
 - **v0.1.5 (Completed)**: Headless JSON-RPC Model Context Protocol (MCP) server (`thme mcp`), VS Code extension packaging (`thme-vscode-0.1.5.vsix`), Language Model Tools for GitHub Copilot (`thme_copilot_inspect`, `thme_copilot_surgery`, `thme_copilot_validate`), PyTorch & CUDA fine-tuning interop bridge with PEFT LoRA adapter merge math ($W = W_0 + \frac{\alpha}{r} B \times A$), and Universal 8 Specialized AI Model Paradigm Converter (LLM, LCM, LAM, MoE, VLM, SLM, MLM, SAM) with sparse upcycling and BitNet b1.58 edge compaction.
 - **v0.1.6 (Completed)**: Speculative Decoding Synthesizer: draft model manifold extraction (prefix layers, strided layers, low-rank projection, BitNet b1.58 ternary draft with 76.8% memory reduction), multi-token speculative rejection sampling verification ($S = \frac{\mathbb{E}[k]+1}{1+\gamma \cdot r} \ge 1.53\times$), Medusa/Eagle multi-branch tree speculation topology with 2D causal tree attention mask synthesis, CLI `thme speculate`, MCP tool `thme_simulate_speculative_decoding`, and Desktop Studio Tab 4 benchmark deck.
 - **v0.1.7 (Completed)**: Roofline & Micro-Kernel Profiler: 4-level execution architecture $v0.1.7.0 \to [v0.1.7.1 \dots v0.1.7.9] \to v0.1.8.0$. Predefined hardware target specifications (NVIDIA H100 SXM5, RTX 4090, Apple M3 Max, Apple M2 Ultra, AMD Instinct MI300X, Intel Xeon Platinum 8490H AVX-512) and machine balance knee calculator $I^* = \frac{\text{TFLOP/s}}{\text{Bandwidth GB/s}}$; exact layer-by-layer Operational Arithmetic Intensity ($\text{FLOPs/byte}$) for Linear projections, Scaled Dot-Product Attention, SwiGLU FFN, and FlashAttention-2; 4-tier memory hierarchy cache simulator (L1, L2, L3, DRAM) with eviction latency degradation models; empirical log-log Roofline ceiling curves with `MemoryBound` vs `ComputeBound` classification; dynamic TDP thermal throttling projections; CLI subcommand `thme roofline` with ASCII diagrams and JSON telemetry; MCP tool `thme_profile_roofline`; and Desktop Studio Tab 4 interactive Roofline deck.
-- **v0.1.8 (Active)**: Binary Quantization Exporter: $v0.1.8.0 \to [v0.1.8.1 \dots v0.1.8.9] \to v0.1.9.0$. Direct serialization to deployable GGUF v3 and SafeTensors files with BitNet b1.58 ternary packed bitstreams (2 bits/weight, 4 weights/byte), streaming chunked I/O maintaining $\le 64 \text{ MB}$ RAM footprint, metadata synchronization, and calibrated per-channel/per-group MSE-optimal scale factors, ensuring immediate compatibility with downstream runtimes (`llama.cpp`, Ollama, vLLM).
-- **v0.1.9 (Planned)**: Closed-Loop Teacher Surgery: autonomous Teacher-Student co-surgery optimization daemon with iterative recipe generation, delta-PPL verification, and multi-objective 3D Pareto auto-tuning balancing latency, memory traffic, and representation fidelity.
-- **v0.2.0 (Target)**: Verified production deployment on real open weights (SmolLM-135M / LLaMA-3.2-1B) with reproducible before-and-after benchmarks, published checkpoints, and signed release binaries.
+- **v0.1.8 (Completed)**: Binary Quantization Exporter: $v0.1.8.0 \to [v0.1.8.1 \dots v0.1.8.9] \to v0.1.9.0$. Direct serialization to deployable GGUF v3 and SafeTensors files with BitNet b1.58 ternary packed bitstreams (2 bits/weight, 4 weights/byte), streaming chunked I/O maintaining $\le 64 \text{ MB}$ RAM footprint, metadata synchronization, and calibrated per-channel/per-group MSE-optimal scale factors, ensuring immediate compatibility with downstream runtimes (`llama.cpp`, Ollama, vLLM).
+- **v0.1.9 (Completed)**: Closed-Loop Teacher Surgery: autonomous Teacher-Student co-surgery optimization daemon ($v0.1.9.0 \to [v0.1.9.1 \dots v0.1.9.9] \to v0.2.0.0$) with iterative state machine controller, Teacher LLM prompt synthesis, JSON-RPC communication bridge, 3D Pareto frontier optimization, self-healing parameter relaxation, anti-degradation rollback watchdog, CLI `thme co-surgery`, and Studio Tab 9 dashboard.
+- **v0.2.0 (Active)**: Production Core Release ($v0.2.0.0 \to [v0.2.0.1 \dots v0.2.0.9] \to v0.2.1.0$): Verified production deployment on real open weights (SmolLM-135M / LLaMA-3.2-1B) with reproducible before-and-after benchmarks, published benchmark dossier, multi-platform LTO release packaging, Minisign/GPG cryptographic signing, SHA-256 manifests, user manual & man pages, and clean-machine verification.
 - **v0.2.1 (Scheduled)**: Direct GPU Driver Execution Engine: pure Rust GPU execution via Vulkan 1.3 SPIR-V compute shaders, Apple Metal 3 Performance Shaders, and NVIDIA CUDA Driver API via `cudarc` bypassing Python runtimes with fused low-bit GEMM kernels.
 - **v0.2.2 (Scheduled)**: Tiered Heterogeneous Memory & Out-of-Core NVMe SSD Streaming: asynchronous direct I/O (`io_uring`/Overlapped I/O) enabling 70B parameter inference and surgery in 8 GB consumer VRAM via sequential layer streaming.
 - **v0.2.3 (Scheduled)**: Distributed Heterogeneous Multi-Node Clustering: Tensor and Pipeline Parallelism across mixed hardware nodes with pure Rust async TCP/RDMA ring all-reduce.
