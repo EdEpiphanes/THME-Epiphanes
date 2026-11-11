@@ -10,118 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::time::Instant;
 
-/// UI/UX Pro Max Multi-Theme Palette Engine
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-pub enum GuiTheme {
-    ObsidianCyan,
-    CyberpunkNeon,
-    MatrixEmerald,
-    NordicFrost,
-    SolarizedAmber,
-}
-
-impl GuiTheme {
-    pub fn name(&self) -> &'static str {
-        match self {
-            GuiTheme::ObsidianCyan => "Obsidian Cyan",
-            GuiTheme::CyberpunkNeon => "Cyberpunk Neon",
-            GuiTheme::MatrixEmerald => "Matrix Emerald",
-            GuiTheme::NordicFrost => "Nordic Frost",
-            GuiTheme::SolarizedAmber => "Solarized Amber",
-        }
-    }
-
-    pub fn palette(&self) -> ThemePalette {
-        match self {
-            GuiTheme::ObsidianCyan => ThemePalette {
-                bg_dark: Color32::from_rgb(11, 15, 25),
-                bg_card: Color32::from_rgb(21, 30, 46),
-                bg_input: Color32::from_rgb(30, 41, 59),
-                border: Color32::from_rgb(51, 65, 85),
-                text_main: Color32::from_rgb(248, 250, 252),
-                text_muted: Color32::from_rgb(148, 163, 184),
-                primary: Color32::from_rgb(6, 182, 212), // Cyan
-                secondary: Color32::from_rgb(168, 85, 247), // Purple
-                accent: Color32::from_rgb(59, 130, 246), // Blue
-                success: Color32::from_rgb(16, 185, 129), // Emerald
-                warning: Color32::from_rgb(245, 158, 11), // Amber
-                danger: Color32::from_rgb(244, 63, 94),  // Rose
-            },
-            GuiTheme::CyberpunkNeon => ThemePalette {
-                bg_dark: Color32::from_rgb(15, 13, 26),
-                bg_card: Color32::from_rgb(28, 23, 46),
-                bg_input: Color32::from_rgb(42, 34, 69),
-                border: Color32::from_rgb(91, 33, 182),
-                text_main: Color32::from_rgb(253, 244, 255),
-                text_muted: Color32::from_rgb(196, 181, 253),
-                primary: Color32::from_rgb(244, 63, 94), // Hot Rose
-                secondary: Color32::from_rgb(192, 132, 252), // Electric Lavender
-                accent: Color32::from_rgb(6, 182, 212),  // Neon Cyan
-                success: Color32::from_rgb(34, 197, 94), // Neon Green
-                warning: Color32::from_rgb(251, 191, 36), // Gold
-                danger: Color32::from_rgb(239, 68, 68),  // Red
-            },
-            GuiTheme::MatrixEmerald => ThemePalette {
-                bg_dark: Color32::from_rgb(5, 14, 8),
-                bg_card: Color32::from_rgb(11, 28, 18),
-                bg_input: Color32::from_rgb(19, 48, 30),
-                border: Color32::from_rgb(31, 88, 54),
-                text_main: Color32::from_rgb(236, 253, 245),
-                text_muted: Color32::from_rgb(110, 231, 183),
-                primary: Color32::from_rgb(16, 185, 129), // Phosphor Emerald
-                secondary: Color32::from_rgb(52, 211, 153), // Mint
-                accent: Color32::from_rgb(6, 182, 212),   // Cyan
-                success: Color32::from_rgb(34, 197, 94),  // Green
-                warning: Color32::from_rgb(234, 179, 8),  // Yellow
-                danger: Color32::from_rgb(239, 68, 68),   // Red
-            },
-            GuiTheme::NordicFrost => ThemePalette {
-                bg_dark: Color32::from_rgb(15, 23, 42),
-                bg_card: Color32::from_rgb(30, 41, 59),
-                bg_input: Color32::from_rgb(51, 65, 85),
-                border: Color32::from_rgb(71, 85, 105),
-                text_main: Color32::from_rgb(241, 245, 249),
-                text_muted: Color32::from_rgb(148, 163, 184),
-                primary: Color32::from_rgb(56, 189, 248), // Sky Polar Blue
-                secondary: Color32::from_rgb(129, 140, 248), // Indigo Ice
-                accent: Color32::from_rgb(45, 212, 191),  // Glacier Mint
-                success: Color32::from_rgb(52, 211, 153), // Mint
-                warning: Color32::from_rgb(251, 146, 60), // Arctic Sun
-                danger: Color32::from_rgb(248, 113, 113), // Soft Red
-            },
-            GuiTheme::SolarizedAmber => ThemePalette {
-                bg_dark: Color32::from_rgb(20, 16, 12),
-                bg_card: Color32::from_rgb(36, 28, 21),
-                bg_input: Color32::from_rgb(56, 43, 31),
-                border: Color32::from_rgb(92, 70, 50),
-                text_main: Color32::from_rgb(254, 243, 199),
-                text_muted: Color32::from_rgb(217, 119, 6),
-                primary: Color32::from_rgb(245, 158, 11), // Amber Gold
-                secondary: Color32::from_rgb(251, 146, 60), // Copper
-                accent: Color32::from_rgb(234, 88, 12),   // Burnt Orange
-                success: Color32::from_rgb(132, 204, 22), // Lime Gold
-                warning: Color32::from_rgb(249, 115, 22), // Orange
-                danger: Color32::from_rgb(239, 68, 68),   // Red
-            },
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct ThemePalette {
-    pub bg_dark: Color32,
-    pub bg_card: Color32,
-    pub bg_input: Color32,
-    pub border: Color32,
-    pub text_main: Color32,
-    pub text_muted: Color32,
-    pub primary: Color32,
-    pub secondary: Color32,
-    pub accent: Color32,
-    pub success: Color32,
-    pub warning: Color32,
-    pub danger: Color32,
-}
+use super::theme::{self, GuiTheme, ThemePalette};
 
 // Layer node and model representations
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -864,7 +753,7 @@ impl THMEApp {
         let start_instant = Instant::now();
 
         let mut app = Self {
-            theme: GuiTheme::ObsidianCyan,
+            theme: GuiTheme::ZincDark,
             models: vec![initial_model],
             active_model_idx: 0,
             active_tab: 0,
@@ -1493,12 +1382,7 @@ impl eframe::App for THMEApp {
         }
 
         let p = self.palette();
-
-        let mut visuals = egui::Visuals::dark();
-        visuals.override_text_color = Some(p.text_main);
-        visuals.panel_fill = p.bg_dark;
-        visuals.window_fill = p.bg_card;
-        ctx.set_visuals(visuals);
+        theme::configure_visuals(ctx, &p);
 
         // Top Control Header
         egui::TopBottomPanel::top("header_panel")
@@ -1518,7 +1402,7 @@ impl eframe::App for THMEApp {
                         egui::Align2::CENTER_CENTER,
                         "THME v2.0",
                         egui::FontId::proportional(12.0),
-                        Color32::BLACK,
+                        Color32::WHITE,
                     );
 
                     ui.add_space(8.0);
@@ -1559,31 +1443,13 @@ impl eframe::App for THMEApp {
                             .selected_text(self.theme.name())
                             .width(135.0)
                             .show_ui(ui, |ui| {
-                                ui.selectable_value(
-                                    &mut self.theme,
-                                    GuiTheme::ObsidianCyan,
-                                    "Obsidian Cyan",
-                                );
-                                ui.selectable_value(
-                                    &mut self.theme,
-                                    GuiTheme::CyberpunkNeon,
-                                    "Cyberpunk Neon",
-                                );
-                                ui.selectable_value(
-                                    &mut self.theme,
-                                    GuiTheme::MatrixEmerald,
-                                    "Matrix Emerald",
-                                );
-                                ui.selectable_value(
-                                    &mut self.theme,
-                                    GuiTheme::NordicFrost,
-                                    "Nordic Frost",
-                                );
-                                ui.selectable_value(
-                                    &mut self.theme,
-                                    GuiTheme::SolarizedAmber,
-                                    "Solarized Amber",
-                                );
+                                for theme_opt in GuiTheme::ALL {
+                                    ui.selectable_value(
+                                        &mut self.theme,
+                                        *theme_opt,
+                                        theme_opt.name(),
+                                    );
+                                }
                             });
 
                         ui.add_space(12.0);
@@ -1591,7 +1457,7 @@ impl eframe::App for THMEApp {
                         if ui
                             .button(
                                 egui::RichText::new("Auto-Decide Plan")
-                                    .color(Color32::BLACK)
+                                    .color(Color32::WHITE)
                                     .strong(),
                             )
                             .clicked()
@@ -1921,7 +1787,7 @@ impl THMEApp {
 
             // Dashboard Quick Action Bar
             ui.horizontal(|ui| {
-                if ui.button(egui::RichText::new("Run Auto-Decider For All Parameters").strong().color(Color32::BLACK)).clicked() {
+                if ui.button(egui::RichText::new("Run Auto-Decider For All Parameters").strong().color(Color32::WHITE)).clicked() {
                     self.run_auto_decider_internal();
                     self.status_msg = "Evaluated all parameters and generated Pareto-optimal matrix & distillation plan!".to_string();
                 }
@@ -1983,7 +1849,7 @@ impl THMEApp {
                             egui::Align2::CENTER_CENTER,
                             f!("L{}", l),
                             egui::FontId::proportional(8.0),
-                            if is_cur { Color32::BLACK } else { Color32::WHITE },
+                            Color32::WHITE,
                         );
                     }
 
@@ -1996,38 +1862,7 @@ impl THMEApp {
                     ui.label(egui::RichText::new("Parabolic sensitivity curve and precision bit-width distribution across layers.").size(9.0).color(p.text_muted));
                     ui.add_space(4.0);
 
-                    let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 160.0), egui::Sense::hover());
-                    ui.painter().rect_filled(rect, 6.0, p.bg_card);
-                    ui.painter().rect_stroke(rect, 6.0, Stroke::new(1.0_f32, p.border), egui::StrokeKind::Outside);
-
-                    let n = self.model().layers.len().max(1);
-                    let bar_w = (rect.width() - 32.0) / n as f32;
-                    for (i, layer) in self.model().layers.iter().enumerate() {
-                        let bx = rect.min.x + 16.0 + (i as f32 * bar_w);
-                        let bh = 100.0 * (layer.reach_probability * 0.5 + 0.5);
-                        let by = rect.max.y - 20.0 - bh;
-
-                        let color = if layer.beta_ternary >= 0.5 {
-                            p.success
-                        } else if layer.alpha_binary >= 0.35 {
-                            p.primary
-                        } else {
-                            p.warning
-                        };
-
-                        ui.painter().rect_filled(
-                            Rect::from_min_size(Pos2::new(bx, by), Vec2::new(bar_w - 2.0, bh)),
-                            2.0,
-                            color,
-                        );
-                        ui.painter().text(
-                            Pos2::new(bx + bar_w / 2.0, rect.max.y - 10.0),
-                            egui::Align2::CENTER_CENTER,
-                            f!("L{}", i),
-                            egui::FontId::monospace(7.0),
-                            p.text_muted,
-                        );
-                    }
+                    theme::draw_waterfall_chart(ui, &self.model().layers, &p);
                 });
             });
 
@@ -2152,7 +1987,7 @@ impl THMEApp {
 
                             ui.add_space(6.0);
                             ui.horizontal(|ui| {
-                                if ui.button(egui::RichText::new("Assemble & Activate New Architecture").strong().color(Color32::BLACK)).clicked() {
+                                if ui.button(egui::RichText::new("Assemble & Activate New Architecture").strong().color(Color32::WHITE)).clicked() {
                                     let bp = crate::ir::ArchitectureBlueprint::new_hybrid_llama(
                                         &self.rebuild_model_name,
                                         self.rebuild_num_layers,
@@ -2299,7 +2134,7 @@ impl THMEApp {
                                     .button(
                                         egui::RichText::new(format!("Execute Conversion to {}", target_paradigm.code()))
                                             .strong()
-                                            .color(Color32::BLACK),
+                                            .color(Color32::WHITE),
                                     )
                                     .clicked()
                                 {
@@ -3143,7 +2978,7 @@ impl THMEApp {
                                 });
                         });
 
-                        if ui.button(egui::RichText::new("Apply Algorithm to Selected Sub-Block").strong().color(Color32::BLACK)).clicked() {
+                        if ui.button(egui::RichText::new("Apply Algorithm to Selected Sub-Block").strong().color(Color32::WHITE)).clicked() {
                             apply_subblock_algo = true;
                         }
 
@@ -3430,7 +3265,7 @@ impl THMEApp {
                 .button(
                     egui::RichText::new("Run Automated Parameter Decider")
                         .strong()
-                        .color(Color32::BLACK),
+                        .color(Color32::WHITE),
                 )
                 .clicked()
             {
@@ -3688,7 +3523,7 @@ impl THMEApp {
                                 ui.add(egui::Slider::new(&mut self.new_byoa_bits, 0.5..=16.0).step_by(0.1));
                             });
                             ui.horizontal(|ui| {
-                                if ui.button(egui::RichText::new("Register Algorithm").strong().color(Color32::BLACK)).clicked()
+                                if ui.button(egui::RichText::new("Register Algorithm").strong().color(Color32::WHITE)).clicked()
                                     && !self.new_byoa_id.is_empty()
                                     && !self.new_byoa_name.is_empty()
                                 {
@@ -3853,7 +3688,7 @@ impl THMEApp {
                 ui.horizontal(|ui| {
                     match snap.status {
                         crate::profiling::TokenFlowStatus::Idle | crate::profiling::TokenFlowStatus::Completed => {
-                            if ui.button(egui::RichText::new("Start Live Flow Benchmark").strong().color(Color32::BLACK)).clicked() {
+                            if ui.button(egui::RichText::new("Start Live Flow Benchmark").strong().color(Color32::WHITE)).clicked() {
                                 self.simulator = crate::profiling::LiveFlowSimulator::new(
                                     &self.baseline_prompt,
                                     self.baseline_tokens,
@@ -4084,7 +3919,7 @@ impl THMEApp {
 
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
-                    if ui.button(egui::RichText::new("Simulate Speculative Forward Pass").strong().color(Color32::BLACK)).clicked() {
+                    if ui.button(egui::RichText::new("Simulate Speculative Forward Pass").strong().color(Color32::WHITE)).clicked() {
                         let source_ir = self.model().to_model_ir();
                         let draft_cfg = crate::speculative::DraftExtractionConfig {
                             strategy: if self.spec_apply_bitnet {
@@ -4293,7 +4128,7 @@ impl THMEApp {
 
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
-                    if ui.button(egui::RichText::new("Run Kernel Roofline Profiler").strong().color(Color32::BLACK)).clicked() {
+                    if ui.button(egui::RichText::new("Run Kernel Roofline Profiler").strong().color(Color32::WHITE)).clicked() {
                         let hw = match self.roofline_hardware_idx {
                             0 => crate::profiling::hardware::HardwareSpec::predefined_h100(),
                             1 => crate::profiling::hardware::HardwareSpec::predefined_rtx4090(),
@@ -4792,7 +4627,7 @@ impl THMEApp {
                 });
 
                 ui.add_space(6.0);
-                if ui.button(egui::RichText::new("Apply Teacher LLM Surgery Recipe").strong().color(Color32::BLACK)).clicked() {
+                if ui.button(egui::RichText::new("Apply Teacher LLM Surgery Recipe").strong().color(Color32::WHITE)).clicked() {
                     match serde_json::from_str::<crate::surgery::TweakRecipe>(&self.tweak_recipe_text) {
                         Ok(recipe) => {
                             let mut model_ir = crate::ir::ModelIR::new(
@@ -4877,7 +4712,7 @@ impl THMEApp {
                             .button(
                                 egui::RichText::new("Load File")
                                     .strong()
-                                    .color(Color32::BLACK),
+                                    .color(Color32::WHITE),
                             )
                             .clicked()
                         {
@@ -5434,7 +5269,7 @@ impl THMEApp {
                         .button(
                             egui::RichText::new("Run 1 Step")
                                 .strong()
-                                .color(Color32::BLACK),
+                                .color(Color32::WHITE),
                         )
                         .clicked()
                     {
@@ -5657,38 +5492,12 @@ fn render_stat_box(
     color: Color32,
     p: &ThemePalette,
 ) {
-    let (rect, _) =
-        ui.allocate_exact_size(Vec2::new(ui.available_width(), 46.0), egui::Sense::hover());
-    ui.painter().rect_filled(rect, 4.0, p.bg_card);
-    ui.painter().rect_stroke(
-        rect,
-        4.0,
-        Stroke::new(1.0_f32, p.border),
-        egui::StrokeKind::Outside,
-    );
-    // Colored bottom accent indicator
-    ui.painter().rect_filled(
-        Rect::from_min_size(
-            Pos2::new(rect.min.x + 4.0, rect.max.y - 3.0),
-            Vec2::new(rect.width() - 8.0, 2.0),
-        ),
-        1.0,
-        color,
-    );
-    ui.painter().text(
-        Pos2::new(rect.min.x + 8.0, rect.min.y + 12.0),
-        egui::Align2::LEFT_CENTER,
-        title,
-        egui::FontId::proportional(8.0),
-        p.text_muted,
-    );
-    ui.painter().text(
-        Pos2::new(rect.min.x + 8.0, rect.min.y + 28.0),
-        egui::Align2::LEFT_CENTER,
-        value,
-        egui::FontId::proportional(12.0),
-        color,
-    );
+    let badge = if color != p.text_main && color != Color32::WHITE {
+        Some(("•", color))
+    } else {
+        None
+    };
+    theme::draw_kpi_card(ui, title, &value, badge, p);
 }
 
 fn render_scorecard_box(
@@ -5699,45 +5508,12 @@ fn render_scorecard_box(
     color: Color32,
     p: &ThemePalette,
 ) {
-    let (rect, _) =
-        ui.allocate_exact_size(Vec2::new(ui.available_width(), 64.0), egui::Sense::hover());
-    ui.painter().rect_filled(rect, 6.0, p.bg_card);
-    ui.painter().rect_stroke(
-        rect,
-        6.0,
-        Stroke::new(1.0_f32, p.border),
-        egui::StrokeKind::Outside,
-    );
-    // Left vertical accent bar
-    ui.painter().rect_filled(
-        Rect::from_min_size(
-            Pos2::new(rect.min.x, rect.min.y),
-            Vec2::new(3.0, rect.height()),
-        ),
-        1.5,
-        color,
-    );
-    ui.painter().text(
-        Pos2::new(rect.min.x + 10.0, rect.min.y + 14.0),
-        egui::Align2::LEFT_CENTER,
-        title,
-        egui::FontId::proportional(9.0),
-        p.text_muted,
-    );
-    ui.painter().text(
-        Pos2::new(rect.min.x + 10.0, rect.min.y + 32.0),
-        egui::Align2::LEFT_CENTER,
-        value,
-        egui::FontId::proportional(15.0),
-        color,
-    );
-    ui.painter().text(
-        Pos2::new(rect.min.x + 10.0, rect.min.y + 50.0),
-        egui::Align2::LEFT_CENTER,
-        gain,
-        egui::FontId::proportional(9.0),
-        p.success,
-    );
+    let badge = if !gain.is_empty() {
+        Some((gain.as_str(), color))
+    } else {
+        None
+    };
+    theme::draw_kpi_card(ui, title, &value, badge, p);
 }
 
 fn tab_button(
@@ -5747,26 +5523,5 @@ fn tab_button(
     active_tab: &mut usize,
     p: &ThemePalette,
 ) {
-    let is_active = *active_tab == tab_idx;
-    let text_col = if is_active { p.text_main } else { p.text_muted };
-    let bg_col = if is_active {
-        p.bg_input
-    } else {
-        Color32::TRANSPARENT
-    };
-    let stroke = if is_active {
-        Stroke::new(1.5_f32, p.primary)
-    } else {
-        Stroke::NONE
-    };
-
-    let btn = ui.add(
-        egui::Button::new(egui::RichText::new(title).strong().color(text_col))
-            .fill(bg_col)
-            .stroke(stroke)
-            .corner_radius(4.0),
-    );
-    if btn.clicked() {
-        *active_tab = tab_idx;
-    }
+    theme::draw_tab_button(ui, title, tab_idx, active_tab, p);
 }

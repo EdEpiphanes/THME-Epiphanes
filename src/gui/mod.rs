@@ -1,6 +1,10 @@
 pub mod app;
+pub mod theme;
 
-pub use app::{GuiTheme, LayerNode, THMEApp, TensorInfo, ThemePalette, UniversalModel};
+pub use app::{LayerNode, THMEApp, TensorInfo, UniversalModel};
+pub use theme::{
+    configure_visuals, draw_kpi_card, draw_tab_button, draw_waterfall_chart, GuiTheme, ThemePalette,
+};
 
 use eframe::egui;
 
