@@ -1,6 +1,10 @@
 # THME: Topological Heterogeneous Manifold Engine
 
 <p align="center">
+  <img src="assets/brand/thme_insignia_emblem.svg" alt="THME Insignia Emblem - Epiphanes Systems" width="240" />
+</p>
+
+<p align="center">
   <img src="assets/live_neural_benchmark.gif" alt="THME Desktop Studio - Live Neural Network Token Flow and Telemetry Benchmarker" width="920" />
 </p>
 

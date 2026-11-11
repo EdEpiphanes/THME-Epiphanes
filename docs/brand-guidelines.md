@@ -109,9 +109,25 @@ The voice of Epiphanes and THME is that of a seasoned systems researcher and per
 
 ---
 
-## 4. Logo & Monogram Standards
+## 4. Logo & Insignia Standards
 
-The primary logomark represents the topological transformation of deep manifold surfaces:
+THME brand identity combines neoclassical architectural engraving with topological manifold geometry.
+
+### 4.1 Master Emblem: Neoclassical Insignia (`assets/brand/thme_insignia_emblem.svg`)
+The primary emblem for README heroes, splash screens, documentation covers, and official releases:
+- **Central Bust**: Epiphaneia (Divine Insight / Sophia), personifying the high-rank unquantized Teacher LLM prior to model surgery.
+- **Topological Compass**: Outer coordinate dial with 360-degree ticks, orbital coordinate nodes, and directional vector arrows (`↑`).
+- **Signal Modulation**: Undulating waveform passing through the coordinate origin, symbolizing Fast Walsh-Hadamard Transform (FWHT) and spectral kurtosis outlier suppression.
+- **Heterogeneous Lattice**: 4-tier memory hierarchy and tensor wireframe mesh in the upper quadrant.
+- **Acronym Cipher**: Nordic/Celtic knotwork breastplate emblem interlocking `T`, `H`, `M`, and `E`.
+
+### 4.2 Application Sigil & Favicon (`assets/brand/thme_sigil_icon.svg`)
+The scalable vector glyph for desktop app icons, browser favicons, dock icons, and CLI output:
+- **Scalability**: Pure geometric Bézier curves designed for crisp legibility from 16×16px to 512×512px.
+- **Contrast**: Meets WCAG 2.1 AAA (19.06:1 on OLED Obsidian `#09090B`).
+
+### 4.3 Monogram & ASCII Lockup
+For terminal environments without vector rendering:
 
 ```
 +---+---+
@@ -123,4 +139,4 @@ The primary logomark represents the topological transformation of deep manifold 
 
 - **Clearspace**: Minimum 16px padding on all sides of the logomark.
 - **Monochrome Inversion**: On light backgrounds (print or export documentation), invert canvas to pure white (`#FFFFFF`) with Obsidian Slate (`#09090B`) mark strokes.
-- **Minimum Digital Size**: 24×24 pixels for favicon and app icons.
+- **Minimum Digital Size**: 16×16 pixels for favicon; 24×24 pixels for app icons.

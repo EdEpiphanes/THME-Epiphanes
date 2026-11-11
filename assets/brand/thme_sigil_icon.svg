@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="100%" height="100%">
+  <defs>
+    <radialGradient id="sigilGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#18181b"/>
+      <stop offset="80%" stop-color="#09090b"/>
+      <stop offset="100%" stop-color="#050507"/>
+    </radialGradient>
+    <linearGradient id="sigilCyan" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#80f2ff"/>
+      <stop offset="50%" stop-color="#00e5ff"/>
+      <stop offset="100%" stop-color="#00b4d8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="256" height="256" rx="48" fill="#09090b"/>
+  <circle cx="128" cy="128" r="116" fill="url(#sigilGlow)" stroke="#27272a" stroke-width="2"/>
+  <circle cx="128" cy="128" r="102" fill="none" stroke="#00e5ff" stroke-width="1.5" stroke-opacity="0.3" stroke-dasharray="3,5"/>
+
+  <!-- Orbital Coordinate Nodes -->
+  <circle cx="128" cy="26" r="4.5" fill="#00e5ff"/>
+  <circle cx="230" cy="128" r="4.5" fill="#10b981"/>
+  <circle cx="128" cy="230" r="4.5" fill="#f59e0b"/>
+  <circle cx="26" cy="128" r="4.5" fill="#00e5ff"/>
+
+  <!-- Central Topological Manifold Diagonal Lattice -->
+  <line x1="58" y1="58" x2="198" y2="198" stroke="#27272a" stroke-width="1.5"/>
+  <line x1="198" y1="58" x2="58" y2="198" stroke="#27272a" stroke-width="1.5"/>
+
+  <!-- Interlocking T-H-M-E Knotwork Sigil -->
+  <!-- 'T' Top Bar & Vertical Stem -->
+  <path d="M86,68 L170,68 M128,68 L128,188" fill="none" stroke="url(#sigilCyan)" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- 'H' Uprights and Crossbar -->
+  <path d="M72,102 L72,188 M184,102 L184,188 M72,142 L184,142" fill="none" stroke="#10b981" stroke-width="4.5" stroke-linecap="round"/>
+
+  <!-- 'M' Chevrons Intertwined -->
+  <path d="M72,188 L104,136 L128,168 L152,136 L184,188" fill="none" stroke="#f59e0b" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Node Accents -->
+  <polygon points="128,52 138,68 128,84 118,68" fill="#00e5ff"/>
+  <circle cx="128" cy="168" r="4" fill="#ffffff"/>
+  <circle cx="128" cy="188" r="4" fill="#10b981"/>
+</svg>
