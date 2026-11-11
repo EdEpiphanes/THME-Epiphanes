@@ -269,6 +269,7 @@ Enables direct binary disk serialization of modified and distilled models into d
   - [ ] **v0.1.8.6**: Low-Memory Streaming Chunked File Writer Engine:
     - Streams tensor payloads directly to disk, maintaining constant RAM usage during multi-gigabyte exports.
     - *Pipeline Impact*: Prevents out-of-memory aborts on consumer hardware during large model export.
+    - Progress: A public 64 KiB chunked reader-to-writer helper is available; existing export paths still materialize payload buffers, so this milestone remains incomplete.
   - [ ] **v0.1.8.7**: Calibrated Per-Channel & Per-Group MSE-Optimal Scale Search (`src/exporter/calibration.rs`):
     - Computes row-wise and group-wise scale vectors minimizing L2 reconstruction error.
     - *Pipeline Impact*: Maximizes representation fidelity of exported 1.58-bit models.

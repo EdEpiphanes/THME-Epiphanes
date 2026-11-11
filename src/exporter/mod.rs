@@ -7,11 +7,13 @@ pub mod bitnet_pack;
 pub mod gguf_writer;
 pub mod metadata;
 pub mod safetensors_writer;
+pub mod streaming_writer;
 
 pub use bitnet_pack::{BitNetPacker, PackedBitNetTensor};
 pub use gguf_writer::{GgufTensor, GgufWriter};
 pub use metadata::GgufMetadataSynchronizer;
 pub use safetensors_writer::{SafeTensorsEntryHeader, SafeTensorsTensor, SafeTensorsWriter};
+pub use streaming_writer::{copy_reader, StreamingChunkWriter, STREAM_CHUNK_SIZE};
 
 use anyhow::{Context, Result};
 use std::fs::File;
