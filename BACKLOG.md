@@ -244,7 +244,7 @@
 
 ## Sprint 7: Binary Quantization Exporter (Milestone v0.1.8) [ACTIVE]
 
-### [THME-701] Vectorized BitNet b1.58 Ternary Bitstream Packer
+### [THME-701] Vectorized BitNet b1.58 Ternary Bitstream Packer (Done)
 - **Component**: `thme::exporter::bitnet_pack` (`src/exporter/bitnet_pack.rs`)
 - **Problem**: Storing 1.58-bit ternary weights ($\{-1, 0, +1\}$) requires dense 2-bit packing (4 weights per byte) with SIMD acceleration to minimize export latency.
 - **Acceptance Criteria**:
@@ -255,7 +255,7 @@
 - **Production Pipeline / CI/CD Impact**: Core serialization kernel ensuring fast export times in CI packaging jobs.
 - **Done Means**: `cargo test test_bitnet_vectorized_packer` passes, verifying exact bitwise round-trip packing fidelity.
 
-### [THME-702] Vectorized Ternary Bitstream Unpacker with FP16 Scale Product
+### [THME-702] Vectorized Ternary Bitstream Unpacker with FP16 Scale Product (Done)
 - **Component**: `thme::exporter::bitnet_pack` (`src/exporter/bitnet_pack.rs`)
 - **Problem**: Export verification and downstream decoding require high-speed unpacking of 2-bit representations back into floating-point tensors with scale restoration.
 - **Acceptance Criteria**:
@@ -265,7 +265,7 @@
 - **Production Pipeline / CI/CD Impact**: Used by CI verification harnesses to validate exported artifacts before deployment.
 - **Done Means**: `cargo test test_ternary_unpacker_fidelity` passes across 100,000 randomized weight matrices.
 
-### [THME-703] Direct Pure Rust GGUF v3 Binary Writer & 32-Byte Alignment
+### [THME-703] Direct Pure Rust GGUF v3 Binary Writer & 32-Byte Alignment (Done)
 - **Component**: `thme::exporter::gguf_writer` (`src/exporter/gguf_writer.rs`)
 - **Problem**: Deploying models to `llama.cpp` and Ollama requires writing compliant GGUF v3 binary files from pure Rust without external runtime dependencies.
 - **Acceptance Criteria**:

@@ -4,8 +4,10 @@
 //! binary artifacts (GGUF v3 and SafeTensors) with BitNet b1.58 ternary packed weights.
 
 pub mod bitnet_pack;
+pub mod gguf_writer;
 
 pub use bitnet_pack::{BitNetPacker, PackedBitNetTensor};
+pub use gguf_writer::{GgufTensor, GgufWriter};
 
 use std::path::PathBuf;
 

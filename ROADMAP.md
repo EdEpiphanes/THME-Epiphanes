@@ -46,9 +46,9 @@ $$v0.1.x.0 \longrightarrow \left[ v0.1.x.1, v0.1.x.2, v0.1.x.3, v0.1.x.4, v0.1.x
 |     |-> [v0.1.7.1 - v0.1.7.9] Hardware DB, Intensity Math, Cache Sim, Eviction, Ceilings, TDP, CLI, MCP, Tab 4 Deck  |
 |                                                                                                                    |
 | [ ] v0.1.8.0 Binary Quantization Exporter Baseline (ACTIVE)                                                       |
-|     |-> [v0.1.8.1] Vectorized BitNet b1.58 Ternary Bitstream Packer (4 weights/byte)                       [ACTIVE] |
-|     |-> [v0.1.8.2] Vectorized Ternary Bitstream Unpacker with FP16 Scale Product                           [ACTIVE] |
-|     |-> [v0.1.8.3] Direct Pure Rust GGUF v3 Binary Writer & 32-Byte Alignment                              [ACTIVE] |
+|     |-> [v0.1.8.1] Vectorized BitNet b1.58 Ternary Bitstream Packer (4 weights/byte)                       [COMPLETED] |
+|     |-> [v0.1.8.2] Vectorized Ternary Bitstream Unpacker with FP16 Scale Product                           [COMPLETED] |
+|     |-> [v0.1.8.3] Direct Pure Rust GGUF v3 Binary Writer & 32-Byte Alignment                              [COMPLETED] |
 |     |-> [v0.1.8.4] GGUF Metadata Key-Value Reconstitution & Synchronization Engine                         [ACTIVE] |
 |     |-> [v0.1.8.5] Direct Pure Rust SafeTensors Binary Serializer & 8-Byte Prefix                          [ACTIVE] |
 |     |-> [v0.1.8.6] Low-Memory Streaming Chunked File Writer Engine                                         [ACTIVE] |
@@ -251,13 +251,13 @@ Enables direct binary disk serialization of modified and distilled models into d
     $$\alpha_i^* = \arg\min_{\alpha} \sum_{j=1}^m \left( W_{ij} - \alpha \cdot \text{Round}\left(\text{Clip}\left(\frac{W_{ij}}{\alpha}, -1, 1\right)\right) \right)^2$$
 
 - **Parallel Sub-Milestone Breakdown [v0.1.8.1 - v0.1.8.9]**:
-  - [ ] **v0.1.8.1**: Vectorized BitNet b1.58 Ternary Bitstream Packer (`src/exporter/bitnet_pack.rs`):
+  - [x] **v0.1.8.1**: Vectorized BitNet b1.58 Ternary Bitstream Packer (`src/exporter/bitnet_pack.rs`):
     - SIMD-accelerated packing converting slices of ternary values into packed `u8` buffers (4 weights per byte).
     - *Pipeline Impact*: Delivers $8.0\times$ weight compression directly in pure Rust.
-  - [ ] **v0.1.8.2**: Vectorized Ternary Bitstream Unpacker with FP16 Scale Product:
+  - [x] **v0.1.8.2**: Vectorized Ternary Bitstream Unpacker with FP16 Scale Product:
     - Zero-allocation unpacker de-quantizing 2-bit representations into floating point registers with scale multiplication.
     - *Pipeline Impact*: Supports rapid validation of exported ternary matrices.
-  - [ ] **v0.1.8.3**: Direct Pure Rust GGUF v3 Binary Writer & 32-Byte Alignment (`src/exporter/gguf_writer.rs`):
+  - [x] **v0.1.8.3**: Direct Pure Rust GGUF v3 Binary Writer & 32-Byte Alignment (`src/exporter/gguf_writer.rs`):
     - Writes GGUF magic header (`0x46554747`), version 3, tensor metadata, and 32-byte memory-aligned payloads.
     - *Pipeline Impact*: Produces native GGUF files loadable by `llama.cpp` without Python runtimes.
   - [ ] **v0.1.8.4**: GGUF Metadata Key-Value Reconstitution & Synchronization Engine:
