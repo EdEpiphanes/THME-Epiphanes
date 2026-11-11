@@ -56,6 +56,9 @@ pub struct UniversalModel {
     pub total_parameters: u64,
     pub layers: Vec<LayerNode>,
     pub tensors: Vec<TensorInfo>,
+    /// Original file-backed tensors, retained for exact source exports.
+    #[serde(skip)]
+    pub source_model: Option<crate::ir::ModelIR>,
 }
 
 #[derive(Clone, Debug)]
@@ -328,6 +331,7 @@ impl UniversalModel {
             total_parameters,
             layers,
             tensors,
+            source_model: None,
         }
     }
 
@@ -348,6 +352,12 @@ impl UniversalModel {
     }
 
     pub fn from_model_ir(model_ir: crate::ir::ModelIR, format_name: &str) -> Self {
+        let source_model = (!model_ir.tensors.is_empty()
+            && model_ir
+                .tensors
+                .iter()
+                .all(|tensor| tensor.source.is_some()))
+        .then(|| model_ir.clone());
         let num_layers = model_ir.num_layers.max(1);
         let cp_idx = (num_layers as f32 * 0.30).round() as usize;
 
@@ -410,6 +420,7 @@ impl UniversalModel {
             total_parameters: (model_ir.num_parameters as u64).max(10_000_000),
             layers,
             tensors,
+            source_model,
         }
     }
 
@@ -649,6 +660,8 @@ pub struct THMEApp {
     // Export & Surgery
     export_path: String,
     export_format: String,
+    export_quant: crate::exporter::ExportQuantType,
+    export_checksum: bool,
     tweak_recipe_text: String,
     surgery_diff: Option<crate::surgery::SurgeryDiff>,
 
@@ -793,6 +806,8 @@ impl THMEApp {
             audit_search_query: String::new(),
             export_path: "models/exported_tuned_model.safetensors".to_string(),
             export_format: "SafeTensors".to_string(),
+            export_quant: crate::exporter::ExportQuantType::FP16,
+            export_checksum: true,
             tweak_recipe_text: default_recipe_json,
             surgery_diff: None,
 
@@ -4507,9 +4522,29 @@ impl THMEApp {
                         .show_ui(ui, |ui| {
                             ui.selectable_value(&mut self.export_format, "SafeTensors".to_string(), "SafeTensors (.safetensors)");
                             ui.selectable_value(&mut self.export_format, "GGUF".to_string(), "GGUF (.gguf)");
-                            ui.selectable_value(&mut self.export_format, "THME".to_string(), "THME Bundle (.thme)");
                         });
                 });
+
+                if self.export_format == "GGUF" {
+                    ui.horizontal(|ui| {
+                        ui.label("Weight Format:");
+                        egui::ComboBox::from_id_salt("export_quant_cb")
+                            .selected_text(match self.export_quant {
+                                crate::exporter::ExportQuantType::FP16 => "FP16",
+                                crate::exporter::ExportQuantType::Q8_0 => "Q8_0",
+                                crate::exporter::ExportQuantType::TQ1_0 => "TQ1_0 (ternary)",
+                                crate::exporter::ExportQuantType::BitNetB158 => "Unsupported BitNet legacy",
+                            })
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut self.export_quant, crate::exporter::ExportQuantType::FP16, "FP16 (same-dtype)");
+                                ui.selectable_value(&mut self.export_quant, crate::exporter::ExportQuantType::Q8_0, "Q8_0");
+                                ui.selectable_value(&mut self.export_quant, crate::exporter::ExportQuantType::TQ1_0, "TQ1_0 (ternary)");
+                            });
+                    });
+                } else {
+                    self.export_quant = crate::exporter::ExportQuantType::FP16;
+                    ui.label(egui::RichText::new("SafeTensors export preserves same-dtype F16 weights.").size(9.0).color(p.text_muted));
+                }
 
                 ui.add_space(10.0);
                 ui.horizontal(|ui| {
@@ -4519,7 +4554,6 @@ impl THMEApp {
                         if let Some(dest) = rfd::FileDialog::new()
                             .add_filter("SafeTensors", &["safetensors"])
                             .add_filter("GGUF", &["gguf"])
-                            .add_filter("THME", &["thme"])
                             .save_file()
                         {
                             self.export_path = dest.to_string_lossy().to_string();
@@ -4527,18 +4561,47 @@ impl THMEApp {
                     }
                 });
 
+                if let Some(source) = &self.model().source_model {
+                    ui.label(egui::RichText::new(format!(
+                        "Source weights loaded: {}. Export writes source weights; GUI-only surgery settings are not applied to tensor data.",
+                        source.name
+                    )).size(9.0).color(p.text_muted));
+                } else {
+                    ui.label(egui::RichText::new("Load a file-backed GGUF or SafeTensors model to export real tensor weights.").size(9.0).color(p.danger));
+                }
+
+                ui.checkbox(&mut self.export_checksum, "Compute SHA-256 checksum");
+
                 ui.add_space(16.0);
-                if ui.button(egui::RichText::new("Export Optimized Model Package").strong().color(Color32::WHITE)).clicked() {
-                    let export_info = serde_json::to_string_pretty(self.model()).unwrap_or_default();
-                    match std::fs::write(&self.export_path, export_info) {
-                        Ok(_) => {
-                            let m_name = self.model().name.clone();
-                            self.log_audit("INFO", "Export", &format!("Exported model to: {}", self.export_path), &m_name);
-                            self.status_msg = f!("Model successfully exported to: {}", self.export_path);
+                if ui.button(egui::RichText::new("Export Source Model").strong().color(Color32::WHITE)).clicked() {
+                    let source_model = self.model().source_model.clone();
+                    let output_path = std::path::PathBuf::from(&self.export_path);
+                    let output_name = output_path.file_name().and_then(|name| name.to_str()).unwrap_or("output").to_string();
+                    let config = crate::exporter::ExportConfig {
+                        format: if self.export_format == "GGUF" {
+                            crate::exporter::ExportFormat::GGUFv3
+                        } else {
+                            crate::exporter::ExportFormat::SafeTensors
+                        },
+                        quant_type: self.export_quant,
+                        output_path,
+                        compute_checksum: self.export_checksum,
+                    };
+
+                    if let Some(source_model) = source_model {
+                        match crate::exporter::ModelExporter::export(&source_model, &config) {
+                            Ok(report) => {
+                                let checksum = report.sha256_checksum.as_deref().map(|value| format!(" SHA-256 {value}")).unwrap_or_default();
+                                let message = format!("Exported {} tensors to {output_name} ({} bytes).{checksum}", report.total_tensors, report.exported_bytes);
+                                self.log_audit("INFO", "Export", &message, &source_model.name);
+                                self.status_msg = message;
+                            }
+                            Err(err) => {
+                                self.status_msg = format!("Export failed: {err:#}");
+                            }
                         }
-                        Err(err) => {
-                            self.status_msg = f!("Export failed: {}", err);
-                        }
+                    } else {
+                        self.status_msg = "Export failed: load a file-backed model before exporting tensor weights".to_string();
                     }
                 }
 
@@ -5524,4 +5587,42 @@ fn tab_button(
     p: &ThemePalette,
 ) {
     theme::draw_tab_button(ui, title, tab_idx, active_tab, p);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn loaded_models_retain_file_sources_without_serializing_paths() {
+        let mut tensor = crate::ir::TensorIR::new("weights".into(), vec![4], "F16".into(), 8);
+        tensor.source = Some(crate::ir::tensor::TensorSource {
+            path: std::path::PathBuf::from("model.safetensors"),
+            byte_offset: 32,
+            byte_len: 8,
+        });
+        let model_ir = crate::ir::ModelIR::new(
+            "loaded".into(),
+            crate::ir::ModelArchitecture::Llama,
+            1,
+            4,
+            1,
+            1,
+            4,
+            128,
+            vec![tensor],
+        );
+
+        let model = UniversalModel::from_model_ir(model_ir, "SafeTensors");
+        assert_eq!(
+            model.source_model.as_ref().unwrap().tensors[0]
+                .source
+                .as_ref()
+                .unwrap()
+                .path,
+            std::path::PathBuf::from("model.safetensors")
+        );
+        let serialized = serde_json::to_string(&model).expect("serialize GUI model");
+        assert!(!serialized.contains("model.safetensors"));
+    }
 }

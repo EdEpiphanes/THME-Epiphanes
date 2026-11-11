@@ -242,7 +242,7 @@
 
 ---
 
-## Sprint 7: Binary Quantization Exporter (Milestone v0.1.8) [ACTIVE]
+## Sprint 7: Binary Quantization Exporter (Milestone v0.1.8) [COMPLETED]
 
 ### [THME-701] Vectorized BitNet b1.58 Ternary Bitstream Packer (Done)
 - **Component**: `thme::exporter::bitnet_pack` (`src/exporter/bitnet_pack.rs`)
@@ -297,7 +297,7 @@
 - **Production Pipeline / CI/CD Impact**: Supplies standard model weights directly to Hugging Face Hub upload pipelines.
 - **Done Means**: `cargo test test_safetensors_serializer` passes, and exported files load successfully via the standard `safetensors` crate.
 
-### [THME-706] Low-Memory Streaming Chunked File Writer Engine
+### [THME-706] Low-Memory Streaming Chunked File Writer Engine (Done)
 - **Component**: `thme::exporter::streaming` (`src/exporter/streaming.rs`)
 - **Problem**: Exporting multi-billion parameter models (e.g. 8B to 70B) in one in-memory buffer causes Out-Of-Memory (OOM) crashes on developer workstations.
 - **Acceptance Criteria**:
@@ -308,7 +308,7 @@
 - **Production Pipeline / CI/CD Impact**: Allows resource-constrained CI runners (7 GB RAM) to export large model weights reliably.
 - **Done Means**: `cargo test test_streaming_chunked_writer` exports an 8B synthetic model without exceeding 64 MB of resident memory.
 
-### [THME-707] Calibrated Per-Channel & Per-Group MSE-Optimal Scale Search
+### [THME-707] Calibrated Per-Channel & Per-Group MSE-Optimal Scale Search (Done)
 - **Component**: `thme::exporter::calibration` (`src/exporter/calibration.rs`)
 - **Problem**: Standard absmean scale factors ($\alpha = \frac{1}{N}\|W\|_1$) can cause significant quantization error on outlier distributions; MSE optimization is needed.
 - **Acceptance Criteria**:
@@ -318,7 +318,7 @@
 - **Production Pipeline / CI/CD Impact**: Improves representation fidelity of exported 1.58-bit models, reducing perplexity penalty by up to 0.35 points.
 - **Done Means**: `cargo test test_mse_scale_calibration` passes, demonstrating lower Frobenius reconstruction error than baseline absmean.
 
-### [THME-708] CLI Subcommand `thme export` & Desktop Studio Tab 1 Exporter Wizard
+### [THME-708] CLI Subcommand `thme export` & Desktop Studio Tab 1 Exporter Wizard (Done)
 - **Component**: `thme::cli::export` (`src/cli/export.rs`), `thme::gui::app` (`src/gui/app.rs`)
 - **Problem**: Users need intuitive CLI and graphical controls to export models with chosen formats, bit-widths, and destination paths.
 - **Acceptance Criteria**:
@@ -328,7 +328,7 @@
 - **Production Pipeline / CI/CD Impact**: Standard entry point for model deployment automation in production CI/CD workflows.
 - **Done Means**: `thme export --help` displays clean options, and unit tests verify CLI argument parsing and GUI modal state.
 
-### [THME-709] Downstream Runtime Compatibility Testbed
+### [THME-709] Downstream Runtime Compatibility Testbed (Done)
 - **Component**: `tests/test_exporter_compatibility.rs`
 - **Problem**: Exported binary artifacts must be validated against downstream runtimes (`llama.cpp`, Ollama, vLLM) to prevent shipping unparseable models.
 - **Acceptance Criteria**:
@@ -340,7 +340,7 @@
 
 ---
 
-## Sprint 8: Closed-Loop Teacher-Student Co-Surgery (Milestone v0.1.9) [PLANNED]
+## Sprint 8: Closed-Loop Teacher-Student Co-Surgery (Milestone v0.1.9) [ACTIVE]
 
 ### [THME-801] Co-Surgery Closed-Loop State Machine & Controller
 - **Component**: `thme::surgery::closed_loop` (`src/surgery/closed_loop.rs`)

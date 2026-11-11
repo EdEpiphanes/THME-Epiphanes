@@ -8,8 +8,11 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs::File;
-use std::io::Write;
+use std::io::{BufWriter, Seek, SeekFrom, Write};
 use std::path::Path;
+
+use crate::exporter::streaming_writer::StreamingChunkWriter;
+use crate::ir::tensor::TensorSource;
 
 /// Tensor entry descriptor for SafeTensors JSON header
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -50,6 +53,7 @@ impl SafeTensorsTensor {
 pub struct SafeTensorsWriter {
     metadata: BTreeMap<String, String>,
     tensors: Vec<SafeTensorsTensor>,
+    tensor_sources: Vec<Option<TensorSource>>,
 }
 
 impl SafeTensorsWriter {
@@ -58,6 +62,7 @@ impl SafeTensorsWriter {
         Self {
             metadata: BTreeMap::new(),
             tensors: Vec::new(),
+            tensor_sources: Vec::new(),
         }
     }
 
@@ -77,6 +82,21 @@ impl SafeTensorsWriter {
     ) -> &mut Self {
         self.tensors
             .push(SafeTensorsTensor::new(name, dtype, shape, data));
+        self.tensor_sources.push(None);
+        self
+    }
+
+    /// Registers a tensor whose unchanged payload will be copied from a source file in chunks.
+    pub fn add_tensor_source(
+        &mut self,
+        name: impl Into<String>,
+        dtype: impl Into<String>,
+        shape: Vec<usize>,
+        source: TensorSource,
+    ) -> &mut Self {
+        self.tensors
+            .push(SafeTensorsTensor::new(name, dtype, shape, Vec::new()));
+        self.tensor_sources.push(Some(source));
         self
     }
 
@@ -87,81 +107,155 @@ impl SafeTensorsWriter {
 
     /// Total bytes of raw tensor payloads
     pub fn payload_byte_size(&self) -> usize {
-        self.tensors.iter().map(|t| t.data.len()).sum()
+        self.tensors
+            .iter()
+            .zip(&self.tensor_sources)
+            .fold(0usize, |total, (tensor, source)| {
+                let size = match source {
+                    Some(source) => usize::try_from(source.byte_len).unwrap_or(usize::MAX),
+                    None => tensor.data.len(),
+                };
+                total.saturating_add(size)
+            })
     }
 
     /// Serializes all registered metadata and tensor buffers into standard SafeTensors binary bytes
     pub fn write_to_bytes(&self) -> Result<Vec<u8>> {
-        if self.tensors.is_empty() && self.metadata.is_empty() {
-            bail!("Cannot write empty SafeTensors: no tensors or metadata registered");
+        if self.tensor_sources.iter().any(Option::is_some) {
+            bail!("Source-backed SafeTensors must be written with write_to_file");
         }
-
-        let mut header_map = serde_json::Map::new();
-
-        // 1. Add __metadata__ block if present
-        if !self.metadata.is_empty() {
-            let meta_json = serde_json::to_value(&self.metadata)
-                .context("Failed to serialize SafeTensors __metadata__ block")?;
-            header_map.insert("__metadata__".to_string(), meta_json);
-        }
-
-        // 2. Compute data offsets and populate tensor header entries
-        let mut current_offset: usize = 0;
-        for tensor in &self.tensors {
-            let start = current_offset;
-            let end = start + tensor.data.len();
-            current_offset = end;
-
-            let entry = SafeTensorsEntryHeader {
-                dtype: tensor.dtype.clone(),
-                shape: tensor.shape.clone(),
-                data_offsets: [start, end],
-            };
-
-            let entry_val = serde_json::to_value(&entry).with_context(|| {
-                format!("Failed to serialize header entry for '{}'", tensor.name)
-            })?;
-            header_map.insert(tensor.name.clone(), entry_val);
-        }
-
-        // 3. Serialize JSON header
-        let header_str = serde_json::to_string(&header_map)
-            .context("Failed to serialize SafeTensors header map to JSON")?;
-        let header_bytes = header_str.as_bytes();
-        let header_len = header_bytes.len() as u64;
-
-        // 4. Construct contiguous binary payload: [8-byte len][header_bytes][tensor_data]
-        let total_size = 8 + header_bytes.len() + current_offset;
+        let (header_bytes, payload_size) = self.build_header()?;
+        let header_len = u64::try_from(header_bytes.len())?;
+        let total_size = 8usize
+            .checked_add(header_bytes.len())
+            .and_then(|size| size.checked_add(payload_size))
+            .context("SafeTensors output size overflows")?;
         let mut out = Vec::with_capacity(total_size);
 
-        // 8-byte little-endian header length
         out.extend_from_slice(&header_len.to_le_bytes());
-        // JSON header
-        out.extend_from_slice(header_bytes);
-        // Tensor data payloads
         for tensor in &self.tensors {
             out.extend_from_slice(&tensor.data);
         }
 
+        let header_start = 8;
+        out.splice(header_start..header_start, header_bytes);
+
         Ok(out)
     }
 
-    /// Writes the serialized SafeTensors container directly to disk
+    /// Writes tensor sources in bounded chunks and buffers only the JSON header.
     pub fn write_to_file<P: AsRef<Path>>(&self, path: P) -> Result<usize> {
-        let bytes = self.write_to_bytes()?;
+        let (header_bytes, _) = self.build_header()?;
         let path_ref = path.as_ref();
         if let Some(parent) = path_ref.parent() {
             std::fs::create_dir_all(parent)
                 .with_context(|| format!("Failed to create directory: {:?}", parent))?;
         }
 
-        let mut file = File::create(path_ref)
+        let file = File::create(path_ref)
             .with_context(|| format!("Failed to create SafeTensors file: {:?}", path_ref))?;
-        file.write_all(&bytes)
-            .with_context(|| format!("Failed to write SafeTensors bytes to {:?}", path_ref))?;
+        let mut file = BufWriter::new(file);
+        let header_len = u64::try_from(header_bytes.len())?;
+        let mut total_written = 0usize;
+        file.write_all(&header_len.to_le_bytes())?;
+        file.write_all(&header_bytes)?;
+        total_written += 8 + header_bytes.len();
 
-        Ok(bytes.len())
+        for (tensor, source) in self.tensors.iter().zip(&self.tensor_sources) {
+            if let Some(source) = source {
+                let mut source_file = File::open(&source.path)
+                    .map_err(|_| anyhow::anyhow!("Failed to open SafeTensors source payload"))?;
+                source_file
+                    .seek(SeekFrom::Start(source.byte_offset))
+                    .map_err(|_| anyhow::anyhow!("Failed to seek to SafeTensors source payload"))?;
+                let mut chunk_writer = StreamingChunkWriter::new(&mut file);
+                total_written +=
+                    usize::try_from(chunk_writer.write_reader(&mut source_file, source.byte_len)?)?;
+            } else {
+                file.write_all(&tensor.data)?;
+                total_written += tensor.data.len();
+            }
+        }
+        file.flush()?;
+
+        Ok(total_written)
     }
+
+    fn build_header(&self) -> Result<(Vec<u8>, usize)> {
+        if self.tensors.is_empty() && self.metadata.is_empty() {
+            bail!("Cannot write empty SafeTensors: no tensors or metadata registered");
+        }
+        if self.tensors.len() != self.tensor_sources.len() {
+            bail!("SafeTensors tensor source table is inconsistent");
+        }
+
+        let mut header_map = serde_json::Map::new();
+        if !self.metadata.is_empty() {
+            let meta_json = serde_json::to_value(&self.metadata)
+                .context("Failed to serialize SafeTensors __metadata__ block")?;
+            header_map.insert("__metadata__".to_string(), meta_json);
+        }
+
+        let mut current_offset = 0usize;
+        for (tensor, source) in self.tensors.iter().zip(&self.tensor_sources) {
+            let payload_len = match source {
+                Some(source) => usize::try_from(source.byte_len)
+                    .map_err(|_| anyhow::anyhow!("SafeTensors payload exceeds addressable size"))?,
+                None => tensor.data.len(),
+            };
+            if source.is_some() {
+                validate_source_payload(tensor, payload_len)?;
+            }
+            let end = current_offset
+                .checked_add(payload_len)
+                .context("SafeTensors payload offsets overflow")?;
+            let entry = SafeTensorsEntryHeader {
+                dtype: tensor.dtype.clone(),
+                shape: tensor.shape.clone(),
+                data_offsets: [current_offset, end],
+            };
+            let value = serde_json::to_value(&entry).with_context(|| {
+                format!("Failed to serialize header entry for '{}'", tensor.name)
+            })?;
+            header_map.insert(tensor.name.clone(), value);
+            current_offset = end;
+        }
+
+        let header = serde_json::to_vec(&header_map)
+            .context("Failed to serialize SafeTensors header map to JSON")?;
+        Ok((header, current_offset))
+    }
+}
+
+fn validate_source_payload(tensor: &SafeTensorsTensor, payload_len: usize) -> Result<()> {
+    let dtype: safetensors::Dtype = serde_json::from_value(serde_json::Value::String(
+        tensor.dtype.clone(),
+    ))
+    .with_context(|| {
+        format!(
+            "Unsupported SafeTensors dtype '{}' for tensor '{}'",
+            tensor.dtype, tensor.name
+        )
+    })?;
+    let element_count = tensor
+        .shape
+        .iter()
+        .try_fold(1usize, |count, &dimension| count.checked_mul(dimension))
+        .with_context(|| format!("SafeTensors tensor '{}' shape overflows", tensor.name))?;
+    let expected_len = element_count
+        .checked_mul(dtype.size())
+        .with_context(|| format!("SafeTensors tensor '{}' byte size overflows", tensor.name))?;
+    if payload_len != expected_len {
+        bail!(
+            "SafeTensors tensor '{}' source range has {} bytes, but dtype {} and shape {:?} require {} bytes",
+            tensor.name,
+            payload_len,
+            tensor.dtype,
+            tensor.shape,
+            expected_len
+        );
+    }
+    Ok(())
 }
 
 #[cfg(test)]

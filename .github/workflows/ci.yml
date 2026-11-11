@@ -53,3 +53,15 @@ jobs:
 
       - name: Run Test Suite
         run: cargo test --verbose
+
+      - name: Verify exporter compatibility consumers
+        run: cargo test --test test_exporter_compatibility --test test_export_cli --test test_exporter_e2e
+
+      - name: Verify configured llama.cpp and Ollama runtimes
+        if: ${{ vars.THME_COMPAT_MODEL != '' && vars.THME_LLAMA_CPP != '' && vars.THME_OLLAMA != '' }}
+        env:
+          THME_COMPAT_MODEL: ${{ vars.THME_COMPAT_MODEL }}
+          THME_LLAMA_CPP: ${{ vars.THME_LLAMA_CPP }}
+          THME_OLLAMA: ${{ vars.THME_OLLAMA }}
+          THME_REQUIRE_RUNTIME_COMPAT: "1"
+        run: cargo test --test test_exporter_compatibility exported_gguf_runs_in_configured_llama_cpp_and_ollama -- --exact

@@ -4,6 +4,8 @@
 //! binary artifacts (GGUF v3 and SafeTensors) with BitNet b1.58 ternary packed weights.
 
 pub mod bitnet_pack;
+pub mod calibration;
+pub mod conversion;
 pub mod gguf_writer;
 pub mod metadata;
 pub mod safetensors_writer;
@@ -17,7 +19,7 @@ pub use streaming_writer::{copy_reader, StreamingChunkWriter, STREAM_CHUNK_SIZE}
 
 use anyhow::{Context, Result};
 use std::fs::File;
-use std::io::Read;
+use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 
 use crate::ir::ModelIR;
@@ -54,6 +56,8 @@ pub enum ExportQuantType {
     BitNetB158,
     /// 8-bit integer quantization with per-block FP16 scale
     Q8_0,
+    /// Standard GGML 256-value ternary block format
+    TQ1_0,
     /// Full 16-bit floating point weights
     FP16,
 }
@@ -67,6 +71,7 @@ impl std::str::FromStr for ExportQuantType {
                 Ok(ExportQuantType::BitNetB158)
             }
             "q8" | "q8_0" | "int8" => Ok(ExportQuantType::Q8_0),
+            "tq1" | "tq1_0" => Ok(ExportQuantType::TQ1_0),
             "fp16" | "f16" => Ok(ExportQuantType::FP16),
             other => Err(format!(
                 "Unknown export quant type '{}'. Supported: bitnet-b1.58, q8_0, fp16",
@@ -105,9 +110,20 @@ impl ModelExporter {
     pub fn export(model: &ModelIR, config: &ExportConfig) -> Result<ExportReport> {
         let total_tensors = model.tensors.len();
         let original_bytes = model.original_byte_size as u64;
+        if model.tensors.is_empty() {
+            anyhow::bail!("Cannot export a model with no tensors");
+        }
 
         match config.format {
             ExportFormat::GGUFv3 => {
+                let target_type = match config.quant_type {
+                    ExportQuantType::FP16 => ("F16", GgmlType::F16),
+                    ExportQuantType::Q8_0 => ("Q8_0", GgmlType::Q8_0),
+                    ExportQuantType::TQ1_0 => ("TQ1_0", GgmlType::TQ1_0),
+                    ExportQuantType::BitNetB158 => anyhow::bail!(
+                        "BitNet conversion is not available for source-backed export; choose a matching FP16 or Q8_0 source"
+                    ),
+                };
                 let mut writer = GgufWriter::new();
                 GgufMetadataSynchronizer::synchronize_into_writer(
                     &mut writer,
@@ -116,22 +132,50 @@ impl ModelExporter {
                 );
 
                 for tensor in &model.tensors {
-                    let (ggml_type, data) = match config.quant_type {
-                        ExportQuantType::FP16 => {
-                            let size = tensor.numel * 2;
-                            (GgmlType::F16, vec![0u8; size])
+                    let source = tensor.source.clone().with_context(|| format!(
+                        "Tensor '{}' has no file-backed payload; parse a model from disk before exporting", tensor.name
+                    ))?;
+                    if tensor.original_dtype == target_type.0 {
+                        ensure_source_dtype(tensor, target_type.0)?;
+                        writer.add_tensor_source(
+                            &tensor.name,
+                            tensor.shape.clone(),
+                            target_type.1,
+                            source,
+                        );
+                    } else if matches!(
+                        config.quant_type,
+                        ExportQuantType::Q8_0 | ExportQuantType::TQ1_0
+                    ) && matches!(tensor.original_dtype.as_str(), "F16" | "F32")
+                    {
+                        let row_width = tensor.shape.last().copied().unwrap_or(1);
+                        if !row_width.is_multiple_of(target_type.1.block_size()) {
+                            anyhow::bail!(
+                                "Tensor '{}' row width {} must be divisible by {} for {}",
+                                tensor.name,
+                                row_width,
+                                target_type.1.block_size(),
+                                target_type.0
+                            );
                         }
-                        ExportQuantType::Q8_0 => {
-                            let blocks = tensor.numel.div_ceil(32);
-                            let size = blocks * 34;
-                            (GgmlType::Q8_0, vec![0u8; size])
+                        if source.byte_len != u64::try_from(tensor.byte_size)? {
+                            anyhow::bail!("Tensor '{}' source payload length does not match recorded byte size", tensor.name);
                         }
-                        ExportQuantType::BitNetB158 => {
-                            let packed_bytes = tensor.numel.div_ceil(4);
-                            (GgmlType::I8, vec![0x1B; packed_bytes])
-                        }
-                    };
-                    writer.add_tensor(&tensor.name, tensor.shape.clone(), ggml_type, data);
+                        writer.add_converted_tensor_source(
+                            &tensor.name,
+                            tensor.shape.clone(),
+                            target_type.1,
+                            source,
+                            tensor.original_dtype.clone(),
+                        );
+                    } else {
+                        anyhow::bail!(
+                            "Tensor '{}' has source dtype {}, cannot export as {}",
+                            tensor.name,
+                            tensor.original_dtype,
+                            target_type.0
+                        );
+                    }
                 }
 
                 writer
@@ -139,24 +183,27 @@ impl ModelExporter {
                     .with_context(|| format!("Failed writing GGUF to {:?}", config.output_path))?;
             }
             ExportFormat::SafeTensors => {
+                if config.quant_type != ExportQuantType::FP16 {
+                    anyhow::bail!(
+                        "SafeTensors source-backed export currently supports same-dtype FP16 only; quantization conversions are not available"
+                    );
+                }
                 let mut writer = SafeTensorsWriter::new();
                 writer.add_metadata("general.architecture", model.architecture.display_name());
                 writer.add_metadata("model.name", &model.name);
                 writer.add_metadata("format", "safetensors");
 
                 for tensor in &model.tensors {
-                    let (dtype, data) = match config.quant_type {
-                        ExportQuantType::FP16 => ("F16", vec![0u8; tensor.numel * 2]),
-                        ExportQuantType::Q8_0 => {
-                            let blocks = tensor.numel.div_ceil(32);
-                            ("I8", vec![0u8; blocks * 34])
-                        }
-                        ExportQuantType::BitNetB158 => {
-                            let packed_bytes = tensor.numel.div_ceil(4);
-                            ("U8", vec![0x1B; packed_bytes])
-                        }
-                    };
-                    writer.add_tensor(&tensor.name, dtype, tensor.shape.clone(), data);
+                    ensure_source_dtype(tensor, "F16")?;
+                    writer.add_tensor_source(
+                        &tensor.name,
+                        "F16",
+                        tensor.shape.clone(),
+                        tensor
+                            .source
+                            .clone()
+                            .context("Tensor source validation unexpectedly failed")?,
+                    );
                 }
 
                 writer.write_to_file(&config.output_path).with_context(|| {
@@ -193,19 +240,131 @@ impl ModelExporter {
     }
 }
 
+fn ensure_source_dtype(tensor: &crate::ir::TensorIR, expected_dtype: &str) -> Result<()> {
+    let source = tensor.source.as_ref().with_context(|| {
+        format!(
+            "Tensor '{}' has no file-backed payload; parse a model from disk before exporting",
+            tensor.name
+        )
+    })?;
+    if tensor.original_dtype != expected_dtype {
+        anyhow::bail!(
+            "Tensor '{}' has source dtype {}, but requested output dtype {}; cross-dtype conversion is not available",
+            tensor.name,
+            tensor.original_dtype,
+            expected_dtype
+        );
+    }
+    if source.byte_len != u64::try_from(tensor.byte_size)? {
+        anyhow::bail!(
+            "Tensor '{}' source payload length {} does not match recorded byte size {}",
+            tensor.name,
+            source.byte_len,
+            tensor.byte_size
+        );
+    }
+    Ok(())
+}
+
 /// Computes the SHA-256 hex digest of a file using pure Rust (FIPS 180-4)
 pub fn compute_file_sha256<P: AsRef<Path>>(path: P) -> Result<String> {
     let mut file = File::open(path.as_ref())
         .with_context(|| format!("Failed to open file for SHA-256: {:?}", path.as_ref()))?;
-    let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer)?;
-    Ok(compute_sha256(&buffer))
+    let mut reader = BufReader::new(&mut file);
+    let mut hasher = Sha256::new();
+    let mut buffer = [0u8; STREAM_CHUNK_SIZE];
+    loop {
+        let read = reader
+            .read(&mut buffer)
+            .context("Failed reading file for SHA-256")?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(hasher.finish())
 }
 
 /// Pure Rust SHA-256 implementation (zero external crate dependencies)
-#[allow(clippy::chunks_exact_to_as_chunks)]
 pub fn compute_sha256(data: &[u8]) -> String {
-    let k: [u32; 64] = [
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    hasher.finish()
+}
+
+struct Sha256 {
+    state: [u32; 8],
+    length: u64,
+    buffer: [u8; 64],
+    buffered: usize,
+}
+
+impl Sha256 {
+    fn new() -> Self {
+        Self {
+            state: [
+                0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
+                0x5be0cd19,
+            ],
+            length: 0,
+            buffer: [0; 64],
+            buffered: 0,
+        }
+    }
+
+    #[allow(clippy::chunks_exact_to_as_chunks)]
+    fn update(&mut self, mut data: &[u8]) {
+        self.length = self.length.wrapping_add(data.len() as u64);
+
+        if self.buffered > 0 {
+            let take = (64 - self.buffered).min(data.len());
+            self.buffer[self.buffered..self.buffered + take].copy_from_slice(&data[..take]);
+            self.buffered += take;
+            data = &data[take..];
+            if self.buffered < 64 {
+                return;
+            }
+            compress_sha256_block(&mut self.state, &self.buffer);
+            self.buffered = 0;
+        }
+
+        let mut blocks = data.chunks_exact(64);
+        for block in &mut blocks {
+            let block: &[u8; 64] = block.try_into().expect("chunks_exact returns 64 bytes");
+            compress_sha256_block(&mut self.state, block);
+        }
+        let tail = blocks.remainder();
+        self.buffer[..tail.len()].copy_from_slice(tail);
+        self.buffered = tail.len();
+    }
+
+    fn finish(mut self) -> String {
+        let bit_len = self.length.wrapping_mul(8);
+        self.buffer[self.buffered] = 0x80;
+        self.buffered += 1;
+
+        if self.buffered > 56 {
+            self.buffer[self.buffered..].fill(0);
+            compress_sha256_block(&mut self.state, &self.buffer);
+            self.buffer = [0; 64];
+        } else {
+            self.buffer[self.buffered..56].fill(0);
+        }
+        self.buffer[56..].copy_from_slice(&bit_len.to_be_bytes());
+        compress_sha256_block(&mut self.state, &self.buffer);
+
+        let mut result = String::with_capacity(64);
+        for word in self.state {
+            use std::fmt::Write;
+            let _ = write!(&mut result, "{word:08x}");
+        }
+        result
+    }
+}
+
+#[allow(clippy::chunks_exact_to_as_chunks)]
+fn compress_sha256_block(state: &mut [u32; 8], block: &[u8; 64]) {
+    const K: [u32; 64] = [
         0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
         0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
         0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
@@ -217,86 +376,59 @@ pub fn compute_sha256(data: &[u8]) -> String {
         0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
         0xc67178f2,
     ];
-
-    let mut h: [u32; 8] = [
-        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
-        0x5be0cd19,
-    ];
-
-    let bit_len = (data.len() as u64) * 8;
-    let mut msg = data.to_vec();
-    msg.push(0x80);
-    while (msg.len() % 64) != 56 {
-        msg.push(0x00);
+    let mut schedule = [0u32; 64];
+    for (index, bytes) in block.chunks_exact(4).enumerate() {
+        schedule[index] = u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
     }
-    msg.extend_from_slice(&bit_len.to_be_bytes());
-
-    for chunk in msg.chunks_exact(64) {
-        let mut w = [0u32; 64];
-        for (i, part) in chunk.chunks_exact(4).enumerate() {
-            w[i] = u32::from_be_bytes([part[0], part[1], part[2], part[3]]);
-        }
-        for i in 16..64 {
-            let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
-            let s1 = w[i - 2].rotate_right(17) ^ w[i - 2].rotate_right(19) ^ (w[i - 2] >> 10);
-            w[i] = w[i - 16]
-                .wrapping_add(s0)
-                .wrapping_add(w[i - 7])
-                .wrapping_add(s1);
-        }
-
-        let mut a = h[0];
-        let mut b = h[1];
-        let mut c = h[2];
-        let mut d = h[3];
-        let mut e = h[4];
-        let mut f = h[5];
-        let mut g = h[6];
-        let mut h_var = h[7];
-
-        for i in 0..64 {
-            let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
-            let ch = (e & f) ^ ((!e) & g);
-            let temp1 = h_var
-                .wrapping_add(s1)
-                .wrapping_add(ch)
-                .wrapping_add(k[i])
-                .wrapping_add(w[i]);
-            let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
-            let maj = (a & b) ^ (a & c) ^ (b & c);
-            let temp2 = s0.wrapping_add(maj);
-
-            h_var = g;
-            g = f;
-            f = e;
-            e = d.wrapping_add(temp1);
-            d = c;
-            c = b;
-            b = a;
-            a = temp1.wrapping_add(temp2);
-        }
-
-        h[0] = h[0].wrapping_add(a);
-        h[1] = h[1].wrapping_add(b);
-        h[2] = h[2].wrapping_add(c);
-        h[3] = h[3].wrapping_add(d);
-        h[4] = h[4].wrapping_add(e);
-        h[5] = h[5].wrapping_add(f);
-        h[6] = h[6].wrapping_add(g);
-        h[7] = h[7].wrapping_add(h_var);
+    for i in 16..64 {
+        let s0 = schedule[i - 15].rotate_right(7)
+            ^ schedule[i - 15].rotate_right(18)
+            ^ (schedule[i - 15] >> 3);
+        let s1 = schedule[i - 2].rotate_right(17)
+            ^ schedule[i - 2].rotate_right(19)
+            ^ (schedule[i - 2] >> 10);
+        schedule[i] = schedule[i - 16]
+            .wrapping_add(s0)
+            .wrapping_add(schedule[i - 7])
+            .wrapping_add(s1);
     }
 
-    let mut result = String::with_capacity(64);
-    for val in h {
-        use std::fmt::Write;
-        let _ = write!(&mut result, "{:08x}", val);
+    let [mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut h] = *state;
+    for i in 0..64 {
+        let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
+        let ch = (e & f) ^ ((!e) & g);
+        let temp1 = h
+            .wrapping_add(s1)
+            .wrapping_add(ch)
+            .wrapping_add(K[i])
+            .wrapping_add(schedule[i]);
+        let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
+        let maj = (a & b) ^ (a & c) ^ (b & c);
+        let temp2 = s0.wrapping_add(maj);
+
+        h = g;
+        g = f;
+        f = e;
+        e = d.wrapping_add(temp1);
+        d = c;
+        c = b;
+        b = a;
+        a = temp1.wrapping_add(temp2);
     }
-    result
+    state[0] = state[0].wrapping_add(a);
+    state[1] = state[1].wrapping_add(b);
+    state[2] = state[2].wrapping_add(c);
+    state[3] = state[3].wrapping_add(d);
+    state[4] = state[4].wrapping_add(e);
+    state[5] = state[5].wrapping_add(f);
+    state[6] = state[6].wrapping_add(g);
+    state[7] = state[7].wrapping_add(h);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
 
     #[test]
     fn test_sha256_known_vectors() {
@@ -308,5 +440,35 @@ mod tests {
             compute_sha256(b"abc"),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
+    }
+
+    #[test]
+    fn test_file_sha256_streams_across_chunk_boundaries() {
+        let bytes = (0..(STREAM_CHUNK_SIZE * 2 + 91))
+            .map(|index| (index % 251) as u8)
+            .collect::<Vec<_>>();
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("large-payload.bin");
+        std::fs::File::create(&path)
+            .expect("create payload")
+            .write_all(&bytes)
+            .expect("write payload");
+
+        assert_eq!(
+            compute_file_sha256(path).expect("hash file"),
+            compute_sha256(&bytes)
+        );
+    }
+
+    #[test]
+    fn test_sha256_incremental_updates_keep_partial_blocks() {
+        let bytes = (0..257).map(|index| index as u8).collect::<Vec<_>>();
+        let mut hasher = Sha256::new();
+        hasher.update(&bytes[..3]);
+        hasher.update(&bytes[3..31]);
+        hasher.update(&bytes[31..130]);
+        hasher.update(&bytes[130..]);
+
+        assert_eq!(hasher.finish(), compute_sha256(&bytes));
     }
 }

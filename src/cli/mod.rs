@@ -1,4 +1,5 @@
 pub mod convert;
+pub mod export;
 pub mod inspect;
 pub mod interop;
 pub mod mcp;
@@ -61,9 +62,11 @@ pub enum Commands {
     /// Profile model layers against empirical hardware roofline ceilings and cache hierarchy
     Roofline(roofline::RooflineArgs),
 
-    /// Export PyTorch / CUDA fine-tuning script or Hugging Face configurations
-    #[command(alias = "interop")]
-    Export(interop::InteropArgs),
+    /// Export a source-backed model as GGUF or SafeTensors
+    Export(export::ExportArgs),
+
+    /// Generate PyTorch / CUDA fine-tuning scripts or Hugging Face configurations
+    Interop(interop::InteropArgs),
 
     /// Run Model Context Protocol (MCP) server for VS Code, Copilot & AI agents
     #[command(alias = "daemon")]
@@ -83,7 +86,8 @@ pub fn run() -> Result<()> {
         Commands::Convert(args) => convert::execute(args),
         Commands::Speculate(args) => speculate::execute(args),
         Commands::Roofline(args) => roofline::execute(args),
-        Commands::Export(args) => interop::execute(args),
+        Commands::Export(args) => export::execute(args),
+        Commands::Interop(args) => interop::execute(args),
         Commands::Mcp(args) => mcp::execute(args),
     }
 }

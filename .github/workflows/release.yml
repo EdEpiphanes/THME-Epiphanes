@@ -35,18 +35,42 @@ jobs:
       - name: Build Release Binaries
         run: cargo build --release --target ${{ matrix.target }}
 
+      - name: Validate release binaries and size limits
+        shell: bash
+        run: |
+          set -euo pipefail
+          cli="target/${{ matrix.target }}/release/${{ matrix.binary_name }}"
+          gui="target/${{ matrix.target }}/release/${{ matrix.gui_name }}"
+          test -s "$cli"
+          test -s "$gui"
+          cli_bytes=$(wc -c < "$cli")
+          gui_bytes=$(wc -c < "$gui")
+          test "$cli_bytes" -le $((10 * 1024 * 1024)) || { echo "CLI binary exceeds 10 MiB: ${cli_bytes} bytes"; exit 1; }
+          test "$gui_bytes" -le $((15 * 1024 * 1024)) || { echo "GUI binary exceeds 15 MiB: ${gui_bytes} bytes"; exit 1; }
+
       - name: Package Distributables
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p dist
-          cp target/${{ matrix.target }}/release/${{ matrix.binary_name }} dist/ || true
-          cp target/${{ matrix.target }}/release/${{ matrix.gui_name }} dist/ || true
+          cp "target/${{ matrix.target }}/release/${{ matrix.binary_name }}" dist/
+          cp "target/${{ matrix.target }}/release/${{ matrix.gui_name }}" dist/
           cd dist
-          tar -czvf thme-${{ github.ref_name }}-${{ matrix.target }}.tar.gz *
+          archive="thme-${{ github.ref_name }}-${{ matrix.target }}.tar.gz"
+          tar -czf "$archive" "${{ matrix.binary_name }}" "${{ matrix.gui_name }}"
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "$archive" > SHA256SUMS
+          else
+            shasum -a 256 "$archive" > SHA256SUMS
+          fi
+          test -s "$archive"
+          test -s SHA256SUMS
 
       - name: Publish Release Assets
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.tar.gz
+          files: |
+            dist/*.tar.gz
+            dist/SHA256SUMS
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

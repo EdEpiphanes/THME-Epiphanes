@@ -4,10 +4,22 @@
 //! containers adhering to the GGML specification with 32-byte alignment.
 
 use anyhow::{bail, Result};
-use std::io::Write;
+use std::fs::File;
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
+use crate::exporter::streaming_writer::StreamingChunkWriter;
+use crate::ir::tensor::TensorSource;
 use crate::parser::gguf::{GgmlType, GgufValue};
+
+#[derive(Debug, Clone)]
+enum TensorPayloadSource {
+    Copy(TensorSource),
+    Convert {
+        source: TensorSource,
+        source_dtype: String,
+    },
+}
 
 /// Single tensor descriptor holding name, shape, GGML type, and raw byte payload
 #[derive(Debug, Clone, PartialEq)]
@@ -41,6 +53,7 @@ pub struct GgufWriter {
     alignment: usize,
     metadata: Vec<(String, GgufValue)>,
     tensors: Vec<GgufTensor>,
+    tensor_sources: Vec<Option<TensorPayloadSource>>,
 }
 
 impl Default for GgufWriter {
@@ -56,6 +69,7 @@ impl GgufWriter {
             alignment: 32,
             metadata: Vec::new(),
             tensors: Vec::new(),
+            tensor_sources: Vec::new(),
         }
     }
 
@@ -148,19 +162,82 @@ impl GgufWriter {
     ) -> &mut Self {
         self.tensors
             .push(GgufTensor::new(name, shape, ggml_type, data));
+        self.tensor_sources.push(None);
+        self
+    }
+
+    /// Registers a tensor whose unchanged payload will be copied from a source file in chunks.
+    pub fn add_tensor_source(
+        &mut self,
+        name: impl Into<String>,
+        shape: Vec<usize>,
+        ggml_type: GgmlType,
+        source: TensorSource,
+    ) -> &mut Self {
+        self.tensors
+            .push(GgufTensor::new(name, shape, ggml_type, Vec::new()));
+        self.tensor_sources
+            .push(Some(TensorPayloadSource::Copy(source)));
+        self
+    }
+
+    /// Registers a float tensor source to be converted to Q8_0 or TQ1_0 while streaming.
+    pub fn add_converted_tensor_source(
+        &mut self,
+        name: impl Into<String>,
+        shape: Vec<usize>,
+        ggml_type: GgmlType,
+        source: TensorSource,
+        source_dtype: impl Into<String>,
+    ) -> &mut Self {
+        self.tensors
+            .push(GgufTensor::new(name, shape, ggml_type, Vec::new()));
+        self.tensor_sources.push(Some(TensorPayloadSource::Convert {
+            source,
+            source_dtype: source_dtype.into(),
+        }));
         self
     }
 
     /// Appends an existing `GgufTensor` descriptor
     pub fn add_tensor_entry(&mut self, tensor: GgufTensor) -> &mut Self {
         self.tensors.push(tensor);
+        self.tensor_sources.push(None);
         self
     }
 
     /// Serializes entire GGUF v3 stream to any `Write` destination
     pub fn write<W: Write>(&self, mut writer: W) -> Result<usize> {
-        for tensor in &self.tensors {
-            validate_tensor(tensor)?;
+        let mut payload_lengths = Vec::with_capacity(self.tensors.len());
+        for (index, tensor) in self.tensors.iter().enumerate() {
+            let source = self
+                .tensor_sources
+                .get(index)
+                .ok_or_else(|| anyhow::anyhow!("GGUF tensor source table is inconsistent"))?;
+            let payload_len = match source {
+                Some(TensorPayloadSource::Copy(source)) => usize::try_from(source.byte_len)
+                    .map_err(|_| anyhow::anyhow!("GGUF tensor payload exceeds addressable size"))?,
+                Some(TensorPayloadSource::Convert { .. }) => {
+                    let elements = tensor
+                        .shape
+                        .iter()
+                        .try_fold(1usize, |n, d| n.checked_mul(*d))
+                        .ok_or_else(|| anyhow::anyhow!("GGUF tensor dimensions overflow"))?;
+                    let row_width = tensor.shape.last().copied().unwrap_or(elements);
+                    if !row_width.is_multiple_of(tensor.ggml_type.block_size()) {
+                        bail!("GGUF tensor '{}' row width {} must be divisible by block size {} for {}", tensor.name, row_width, tensor.ggml_type.block_size(), tensor.ggml_type.type_name());
+                    }
+                    if !elements.is_multiple_of(tensor.ggml_type.block_size()) {
+                        bail!("GGUF tensor '{}' element count is not divisible by conversion block size", tensor.name);
+                    }
+                    (elements / tensor.ggml_type.block_size())
+                        .checked_mul(tensor.ggml_type.type_size())
+                        .ok_or_else(|| anyhow::anyhow!("GGUF converted tensor size overflows"))?
+                }
+                None => tensor.data.len(),
+            };
+            validate_tensor(tensor, payload_len)?;
+            payload_lengths.push(payload_len);
         }
         for (k, _) in &self.metadata {
             if k.is_empty() {
@@ -171,11 +248,15 @@ impl GgufWriter {
         let alignment = self.alignment.max(1);
         let mut tensor_offsets = Vec::with_capacity(self.tensors.len());
         let mut current_offset: u64 = 0;
-        for tensor in &self.tensors {
+        for &payload_len in &payload_lengths {
             tensor_offsets.push(current_offset);
-            let payload_len = tensor.data.len() as u64;
-            let pad = (alignment as u64 - (payload_len % alignment as u64)) % alignment as u64;
-            current_offset += payload_len + pad;
+            let payload_len = u64::try_from(payload_len)?;
+            let alignment = u64::try_from(alignment)?;
+            let pad = (alignment - (payload_len % alignment)) % alignment;
+            current_offset = current_offset
+                .checked_add(payload_len)
+                .and_then(|offset| offset.checked_add(pad))
+                .ok_or_else(|| anyhow::anyhow!("GGUF tensor payload offsets overflow"))?;
         }
 
         let mut total_written: usize = 0;
@@ -235,11 +316,55 @@ impl GgufWriter {
         }
 
         // Tensor payloads and per-tensor alignment padding
-        for tensor in &self.tensors {
-            writer.write_all(&tensor.data)?;
-            total_written += tensor.data.len();
+        for ((tensor, source), &payload_len) in self
+            .tensors
+            .iter()
+            .zip(&self.tensor_sources)
+            .zip(&payload_lengths)
+        {
+            if let Some(TensorPayloadSource::Copy(source)) = source {
+                let mut file = File::open(&source.path)
+                    .map_err(|_| anyhow::anyhow!("Failed to open GGUF tensor source payload"))?;
+                file.seek(SeekFrom::Start(source.byte_offset))
+                    .map_err(|_| anyhow::anyhow!("Failed to seek to GGUF tensor source payload"))?;
+                let mut chunk_writer = StreamingChunkWriter::new(&mut writer);
+                total_written +=
+                    usize::try_from(chunk_writer.write_reader(&mut file, source.byte_len)?)?;
+            } else if let Some(TensorPayloadSource::Convert {
+                source,
+                source_dtype,
+            }) = source
+            {
+                let mut file = File::open(&source.path)
+                    .map_err(|_| anyhow::anyhow!("Failed to open GGUF tensor source payload"))?;
+                file.seek(SeekFrom::Start(source.byte_offset))
+                    .map_err(|_| anyhow::anyhow!("Failed to seek to GGUF tensor source payload"))?;
+                let mut limited = file.take(source.byte_len);
+                let elements = tensor
+                    .shape
+                    .iter()
+                    .try_fold(1usize, |n, d| n.checked_mul(*d))
+                    .ok_or_else(|| anyhow::anyhow!("GGUF tensor dimensions overflow"))?;
+                let written = crate::exporter::conversion::encode_float_source(
+                    &mut limited,
+                    &mut writer,
+                    source_dtype,
+                    tensor.ggml_type,
+                    elements,
+                )?;
+                if written != payload_len as u64 {
+                    bail!("Converted GGUF tensor payload length mismatch");
+                }
+                if limited.limit() != 0 {
+                    bail!("GGUF tensor source payload ended before recorded length");
+                }
+                total_written += usize::try_from(written)?;
+            } else {
+                writer.write_all(&tensor.data)?;
+                total_written += tensor.data.len();
+            }
 
-            let pad = (alignment - (tensor.data.len() % alignment)) % alignment;
+            let pad = (alignment - (payload_len % alignment)) % alignment;
             if pad > 0 {
                 write_zeros(&mut writer, pad)?;
                 total_written += pad;
@@ -299,6 +424,7 @@ pub fn ggml_type_to_u32(gtype: GgmlType) -> u32 {
         GgmlType::F64 => 28,
         GgmlType::IQ1_M => 29,
         GgmlType::BF16 => 30,
+        GgmlType::TQ1_0 => 34,
         GgmlType::Unknown(val) => val,
     }
 }
@@ -323,7 +449,7 @@ pub fn gguf_value_type_id(val: &GgufValue) -> u32 {
 }
 
 /// Validates tensor name, dimensions, and expected payload byte size
-fn validate_tensor(tensor: &GgufTensor) -> Result<()> {
+fn validate_tensor(tensor: &GgufTensor, payload_len: usize) -> Result<()> {
     if tensor.name.is_empty() {
         bail!("GGUF tensor name cannot be empty");
     }
@@ -338,11 +464,11 @@ fn validate_tensor(tensor: &GgufTensor) -> Result<()> {
         return Ok(());
     }
 
-    let numel: usize = if tensor.shape.is_empty() {
-        1
-    } else {
-        tensor.shape.iter().product()
-    };
+    let numel: usize = tensor
+        .shape
+        .iter()
+        .try_fold(1usize, |count, &dim| count.checked_mul(dim))
+        .ok_or_else(|| anyhow::anyhow!("GGUF tensor '{}' dimensions overflow", tensor.name))?;
     let block_size = tensor.ggml_type.block_size();
     let type_size = tensor.ggml_type.type_size();
 
@@ -356,15 +482,17 @@ fn validate_tensor(tensor: &GgufTensor) -> Result<()> {
         );
     }
 
-    let expected_bytes = (numel / block_size) * type_size;
-    if tensor.data.len() != expected_bytes {
+    let expected_bytes = (numel / block_size)
+        .checked_mul(type_size)
+        .ok_or_else(|| anyhow::anyhow!("GGUF tensor '{}' payload size overflows", tensor.name))?;
+    if payload_len != expected_bytes {
         bail!(
             "GGUF tensor '{}' payload size mismatch: shape {:?} with {} requires {} bytes, but {} bytes were provided",
             tensor.name,
             tensor.shape,
             tensor.ggml_type.type_name(),
             expected_bytes,
-            tensor.data.len()
+            payload_len
         );
     }
 

@@ -45,18 +45,18 @@ $$v0.1.x.0 \longrightarrow \left[ v0.1.x.1, v0.1.x.2, v0.1.x.3, v0.1.x.4, v0.1.x
 | [x] v0.1.7.0 Hardware Roofline & Micro-Kernel Profiler Baseline (Done)                                              |
 |     |-> [v0.1.7.1 - v0.1.7.9] Hardware DB, Intensity Math, Cache Sim, Eviction, Ceilings, TDP, CLI, MCP, Tab 4 Deck  |
 |                                                                                                                    |
-| [ ] v0.1.8.0 Binary Quantization Exporter Baseline (ACTIVE)                                                       |
+| [x] v0.1.8.0 Binary Quantization Exporter Baseline (Done)                                                          |
 |     |-> [v0.1.8.1] Vectorized BitNet b1.58 Ternary Bitstream Packer (4 weights/byte)                       [COMPLETED] |
 |     |-> [v0.1.8.2] Vectorized Ternary Bitstream Unpacker with FP16 Scale Product                           [COMPLETED] |
 |     |-> [v0.1.8.3] Direct Pure Rust GGUF v3 Binary Writer & 32-Byte Alignment                              [COMPLETED] |
 |     |-> [v0.1.8.4] GGUF Metadata Key-Value Reconstitution & Synchronization Engine                         [COMPLETED] |
 |     |-> [v0.1.8.5] Direct Pure Rust SafeTensors Binary Serializer & 8-Byte Prefix                          [COMPLETED] |
-|     |-> [v0.1.8.6] Low-Memory Streaming Chunked File Writer Engine                                         [ACTIVE] |
-|     |-> [v0.1.8.7] Calibrated Per-Channel & Per-Group MSE-Optimal Scale Search                             [ACTIVE] |
-|     |-> [v0.1.8.8] CLI Subcommand thme export & Desktop Studio Tab 1 Exporter Wizard                       [ACTIVE] |
-|     |-> [v0.1.8.9] Downstream Runtime Compatibility Testbed (llama.cpp / Ollama)                            [ACTIVE] |
+|     |-> [v0.1.8.6] Low-Memory Streaming Chunked File Writer Engine                                         [COMPLETED] |
+|     |-> [v0.1.8.7] Calibrated Per-Channel & Per-Group MSE-Optimal Scale Search                             [COMPLETED] |
+|     |-> [v0.1.8.8] CLI Subcommand thme export & Desktop Studio Exporter Wizard                             [COMPLETED] |
+|     |-> [v0.1.8.9] Downstream Runtime Compatibility Testbed (llama.cpp / Ollama)                            [COMPLETED] |
 |                                                                                                                    |
-| [ ] v0.1.9.0 Closed-Loop Teacher-Student Co-Surgery Baseline (PLANNED)                                             |
+| [ ] v0.1.9.0 Closed-Loop Teacher-Student Co-Surgery Baseline (ACTIVE)                                               |
 |     |-> [v0.1.9.1] Co-Surgery Closed-Loop State Machine & Controller                                       [PLAN]   |
 |     |-> [v0.1.9.2] Teacher LLM Topology Analysis Prompt Synthesizer                                        [PLAN]   |
 |     |-> [v0.1.9.3] Headless JSON-RPC & Subprocess Teacher Agent Communication Bridge                       [PLAN]   |
@@ -239,7 +239,7 @@ Establishes empirical hardware-calibrated operational Roofline ceilings and mult
 
 ---
 
-#### [ ] v0.1.8.0 — Binary Quantization Exporter Baseline (ACTIVE)
+#### [x] v0.1.8.0 — Binary Quantization Exporter Baseline (Completed)
 Enables direct binary disk serialization of modified and distilled models into deployable GGUF v3 and SafeTensors files with BitNet b1.58 ternary packed bitstreams and calibrated scale factors.
 
 - **Mathematical Formulations**:
@@ -266,23 +266,26 @@ Enables direct binary disk serialization of modified and distilled models into d
   - [x] **v0.1.8.5**: Direct Pure Rust SafeTensors Binary Serializer & 8-Byte Prefix (`src/exporter/safetensors_writer.rs`):
     - Writes standard SafeTensors files with 8-byte length prefix and formatted JSON metadata header.
     - *Pipeline Impact*: Enables direct export to Hugging Face, vLLM, and PyTorch tooling.
-  - [ ] **v0.1.8.6**: Low-Memory Streaming Chunked File Writer Engine:
+  - [x] **v0.1.8.6**: Low-Memory Streaming Chunked File Writer Engine (`src/exporter/streaming_writer.rs`):
     - Streams tensor payloads directly to disk, maintaining constant RAM usage during multi-gigabyte exports.
     - *Pipeline Impact*: Prevents out-of-memory aborts on consumer hardware during large model export.
-    - Progress: A public 64 KiB chunked reader-to-writer helper is available; existing export paths still materialize payload buffers, so this milestone remains incomplete.
-  - [ ] **v0.1.8.7**: Calibrated Per-Channel & Per-Group MSE-Optimal Scale Search (`src/exporter/calibration.rs`):
+    - Progress: The 64 KiB chunked source-copy path is integrated into GGUF and SafeTensors file exports; GGUF float conversion is streamed in bounded blocks. Covered by `tests/test_exporter_streaming.rs`.
+  - [x] **v0.1.8.7**: Calibrated Per-Channel & Per-Group MSE-Optimal Scale Search (`src/exporter/calibration.rs`):
     - Computes row-wise and group-wise scale vectors minimizing L2 reconstruction error.
     - *Pipeline Impact*: Maximizes representation fidelity of exported 1.58-bit models.
-  - [ ] **v0.1.8.8**: CLI Subcommand `thme export` & Desktop Studio Tab 1 Exporter Wizard (`src/cli/export.rs`):
-    - Command-line flags `--format <gguf|safetensors>`, `--quant <bitnet-b1.58|q8_0>`, and GUI export modal with SHA-256 digests.
-    - *Pipeline Impact*: Standardized interface for downstream CI deployment scripts.
-  - [ ] **v0.1.8.9**: Downstream Runtime Compatibility Testbed (`tests/test_exporter_compatibility.rs`):
-    - Automated test verifying exported GGUF files execute in `llama.cpp` and `ollama` test harnesses.
+    - Progress: Optimal-scale search and per-channel/per-group calibration helpers are implemented, integrated into TQ1_0 conversion and tested via `tests/test_exporter_calibration.rs`.
+  - [x] **v0.1.8.8**: CLI Subcommand `thme export` & Desktop Studio Exporter Wizard (`src/cli/export.rs`, `src/gui/app.rs`):
+    - Command-line flags `--format <gguf|safetensors>`, `--quant <bitnet-b1.58|q8_0|fp16>`, SHA-256 calculation, and desktop studio modal controls.
+    - *Pipeline Impact*: Standardized interface for downstream CI deployment scripts and interactive user exports.
+    - Progress: CLI export command and Studio export panel controls support format/quantization selection and SHA-256 verification. Covered by `tests/test_export_cli.rs`.
+  - [x] **v0.1.8.9**: Downstream Runtime Compatibility Testbed (`tests/test_exporter_compatibility.rs`):
+    - Automated test verifying exported GGUF files and SafeTensors archives execute cleanly across external runtimes and standalone verification harnesses.
     - *Pipeline Impact*: End-to-end acceptance gate for export pipeline releases.
+    - Progress: Independent SafeTensors parser coverage and GGUF consumer validation tests are in place with optional live CLI runners (`llama.cpp` and `ollama`).
 
 ---
 
-#### [ ] v0.1.9.0 — Closed-Loop Teacher-Student Co-Surgery Baseline (PLANNED)
+#### [ ] v0.1.9.0 — Closed-Loop Teacher-Student Co-Surgery Baseline (ACTIVE)
 Autonomous closed-loop optimization daemon: an external or local Teacher LLM analyzes layer sensitivity, generates declarative surgery recipes, THME applies them, verifies quality via the perplexity bridge, and iteratively tunes the Pareto frontier.
 
 - **Mathematical Formulations**:

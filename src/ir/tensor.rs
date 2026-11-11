@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 /// Representation precision formats for weights
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -131,6 +132,17 @@ pub struct TensorIR {
     pub selected_format: TensorFormat,
     pub metadata: HashMap<String, String>,
     pub weight_profile: Option<WeightProfile>,
+    /// Runtime-only location of the original payload for zero-copy export.
+    #[serde(skip)]
+    pub source: Option<TensorSource>,
+}
+
+/// Byte range of a tensor payload in its original model file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TensorSource {
+    pub path: PathBuf,
+    pub byte_offset: u64,
+    pub byte_len: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -197,6 +209,7 @@ impl TensorIR {
             selected_format: TensorFormat::FP16,
             metadata: HashMap::new(),
             weight_profile: None,
+            source: None,
         }
     }
 
@@ -228,4 +241,22 @@ pub fn extract_layer_index(name: &str) -> Option<usize> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn source_path_is_not_serialized() {
+        let mut tensor = TensorIR::new("weights".into(), vec![1], "U8".into(), 1);
+        tensor.source = Some(TensorSource {
+            path: PathBuf::from("local-model.safetensors"),
+            byte_offset: 16,
+            byte_len: 1,
+        });
+
+        let value = serde_json::to_value(tensor).expect("serialize tensor metadata");
+        assert!(value.get("source").is_none());
+    }
 }

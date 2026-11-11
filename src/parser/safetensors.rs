@@ -5,6 +5,7 @@ use std::collections::HashSet;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
+use crate::ir::tensor::TensorSource;
 use crate::ir::TensorIR;
 
 pub struct SafetensorsScanner;
@@ -100,6 +101,12 @@ impl SafetensorsScanner {
 
         // SAFETY: File descriptor is open and unmodified during the lifetime of this read-only memory map.
         let mmap = unsafe { Mmap::map(&file)? };
+        let source_path = path.as_ref().canonicalize().with_context(|| {
+            format!(
+                "Failed to resolve safetensors source path: {:?}",
+                path.as_ref()
+            )
+        })?;
         let safetensors = SafeTensors::deserialize(&mmap).with_context(|| {
             format!(
                 "Failed to parse safetensors header from {:?}",
@@ -114,6 +121,27 @@ impl SafetensorsScanner {
             let byte_size = view.data().len();
 
             let mut tensor_ir = TensorIR::new(name, shape, dtype.clone(), byte_size);
+            let source_offset = (view.data().as_ptr() as usize)
+                .checked_sub(mmap.as_ptr() as usize)
+                .with_context(|| {
+                    format!("Invalid payload offset for tensor '{}'", tensor_ir.name)
+                })?;
+            let source_end = source_offset
+                .checked_add(byte_size)
+                .filter(|&end| end <= mmap.len())
+                .with_context(|| {
+                    format!(
+                        "Payload range exceeds source file for tensor '{}'",
+                        tensor_ir.name
+                    )
+                })?;
+            tensor_ir.source = Some(TensorSource {
+                path: source_path.clone(),
+                byte_offset: u64::try_from(source_offset)
+                    .context("SafeTensors source offset exceeds u64")?,
+                byte_len: u64::try_from(source_end - source_offset)
+                    .context("SafeTensors source length exceeds u64")?,
+            });
             tensor_ir.weight_profile = Some(crate::profiling::WeightAnalyzer::profile_tensor(
                 view.data(),
                 &dtype,
@@ -138,5 +166,36 @@ impl SafetensorsScanner {
         }
 
         Ok(all_tensors)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::exporter::safetensors_writer::SafeTensorsWriter;
+    use std::io::{Read, Seek, SeekFrom};
+
+    #[test]
+    fn file_parse_retains_tensor_payload_range() {
+        let payload = vec![1u8, 4, 9, 16, 25];
+        let mut writer = SafeTensorsWriter::new();
+        writer.add_tensor("weights", "U8", vec![5], payload.clone());
+
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("source.safetensors");
+        writer.write_to_file(&path).expect("write SafeTensors");
+
+        let tensors =
+            SafetensorsScanner::parse_metadata_from_file(&path).expect("parse SafeTensors file");
+        let source = tensors[0].source.as_ref().expect("source range");
+        assert_eq!(source.path, path.canonicalize().expect("canonical path"));
+        assert_eq!(source.byte_len, payload.len() as u64);
+
+        let mut file = File::open(&source.path).expect("open source");
+        file.seek(SeekFrom::Start(source.byte_offset))
+            .expect("seek to payload");
+        let mut actual = vec![0; payload.len()];
+        file.read_exact(&mut actual).expect("read payload");
+        assert_eq!(actual, payload);
     }
 }

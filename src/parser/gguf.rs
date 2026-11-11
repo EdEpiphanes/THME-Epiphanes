@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
 
+use crate::ir::model::ModelMetadataValue;
+use crate::ir::tensor::TensorSource;
 use crate::ir::{ModelArchitecture, ModelIR, TensorIR};
 use crate::profiling::WeightAnalyzer;
 
@@ -41,6 +43,7 @@ pub enum GgmlType {
     F64 = 28,
     IQ1_M = 29,
     BF16 = 30,
+    TQ1_0 = 34,
     Unknown(u32),
 }
 
@@ -76,6 +79,7 @@ impl GgmlType {
             28 => Self::F64,
             29 => Self::IQ1_M,
             30 => Self::BF16,
+            34 => Self::TQ1_0,
             other => Self::Unknown(other),
         }
     }
@@ -111,6 +115,7 @@ impl GgmlType {
             Self::F64 => "F64",
             Self::IQ1_M => "IQ1_M",
             Self::BF16 => "BF16",
+            Self::TQ1_0 => "TQ1_0",
             Self::Unknown(_) => "QUANT_OTHER",
         }
     }
@@ -146,6 +151,7 @@ impl GgmlType {
             | Self::IQ2_S
             | Self::IQ4_XS
             | Self::IQ1_M => 256,
+            Self::TQ1_0 => 256,
             Self::Unknown(_) => 1,
         }
     }
@@ -176,6 +182,7 @@ impl GgmlType {
             Self::IQ2_S => 82,
             Self::IQ4_XS => 136,
             Self::IQ1_M => 56,
+            Self::TQ1_0 => 54,
             Self::Unknown(_) => 1,
         }
     }
@@ -212,6 +219,36 @@ pub fn ggml_type_bytes_per_elem(t: u32) -> f64 {
 pub struct GgufBlockDecoder;
 
 impl GgufBlockDecoder {
+    /// Unpacks one standard 256-value TQ1_0 block (54 bytes).
+    pub fn unpack_tq1_0(block: &[u8]) -> Result<[f32; 256]> {
+        if block.len() < 54 {
+            bail!("TQ1_0 block requires 54 bytes, got {}", block.len());
+        }
+        let scale = crate::profiling::f16_to_f32(u16::from_le_bytes([block[52], block[53]]));
+        let mut out = [0.0; 256];
+        let powers = [1u16, 3, 9, 27, 81];
+        for (j, byte) in block[..48].iter().copied().enumerate() {
+            let (base, stride, offset) = if j < 32 {
+                (j, 32, 0)
+            } else {
+                (j - 32, 16, 160)
+            };
+            for n in 0..5 {
+                let wrapped = byte.wrapping_mul(powers[n] as u8);
+                let trit = ((u16::from(wrapped) * 3) >> 8) as i16 - 1;
+                out[offset + base + n * stride] = trit as f32 * scale;
+            }
+        }
+        for (j, byte) in block[48..52].iter().copied().enumerate() {
+            for n in 0..4 {
+                let wrapped = byte.wrapping_mul(powers[n] as u8);
+                let trit = ((u16::from(wrapped) * 3) >> 8) as i16 - 1;
+                out[240 + n * 4 + j] = trit as f32 * scale;
+            }
+        }
+        Ok(out)
+    }
+
     /// Unpacks 32 weights from a Q8_0 block (34 bytes: 2 bytes f16 delta + 32 signed int8s)
     pub fn unpack_q8_0(block: &[u8]) -> Result<[f32; 32]> {
         if block.len() < 34 {
@@ -298,6 +335,48 @@ pub enum GgufValue {
     Uint64(u64),
     Int64(i64),
     Float64(f64),
+}
+
+impl From<GgufValue> for ModelMetadataValue {
+    fn from(value: GgufValue) -> Self {
+        match value {
+            GgufValue::Uint8(value) => Self::Uint8(value),
+            GgufValue::Int8(value) => Self::Int8(value),
+            GgufValue::Uint16(value) => Self::Uint16(value),
+            GgufValue::Int16(value) => Self::Int16(value),
+            GgufValue::Uint32(value) => Self::Uint32(value),
+            GgufValue::Int32(value) => Self::Int32(value),
+            GgufValue::Float32(value) => Self::Float32(value),
+            GgufValue::Bool(value) => Self::Bool(value),
+            GgufValue::String(value) => Self::String(value),
+            GgufValue::Array(values) => Self::Array(values.into_iter().map(Self::from).collect()),
+            GgufValue::Uint64(value) => Self::Uint64(value),
+            GgufValue::Int64(value) => Self::Int64(value),
+            GgufValue::Float64(value) => Self::Float64(value),
+        }
+    }
+}
+
+impl From<ModelMetadataValue> for GgufValue {
+    fn from(value: ModelMetadataValue) -> Self {
+        match value {
+            ModelMetadataValue::Uint8(value) => Self::Uint8(value),
+            ModelMetadataValue::Int8(value) => Self::Int8(value),
+            ModelMetadataValue::Uint16(value) => Self::Uint16(value),
+            ModelMetadataValue::Int16(value) => Self::Int16(value),
+            ModelMetadataValue::Uint32(value) => Self::Uint32(value),
+            ModelMetadataValue::Int32(value) => Self::Int32(value),
+            ModelMetadataValue::Float32(value) => Self::Float32(value),
+            ModelMetadataValue::Bool(value) => Self::Bool(value),
+            ModelMetadataValue::String(value) => Self::String(value),
+            ModelMetadataValue::Array(values) => {
+                Self::Array(values.into_iter().map(Self::from).collect())
+            }
+            ModelMetadataValue::Uint64(value) => Self::Uint64(value),
+            ModelMetadataValue::Int64(value) => Self::Int64(value),
+            ModelMetadataValue::Float64(value) => Self::Float64(value),
+        }
+    }
 }
 
 impl GgufValue {
@@ -455,6 +534,23 @@ impl<'a> GgufReader<'a> {
     }
 
     pub fn read_value(&mut self, val_type: u32) -> Result<GgufValue> {
+        self.read_value_internal(val_type, 1024, false)
+    }
+
+    pub fn read_value_with_array_limit(
+        &mut self,
+        val_type: u32,
+        max_array_items: usize,
+    ) -> Result<GgufValue> {
+        self.read_value_internal(val_type, max_array_items, true)
+    }
+
+    fn read_value_internal(
+        &mut self,
+        val_type: u32,
+        max_array_items: usize,
+        reject_oversized_arrays: bool,
+    ) -> Result<GgufValue> {
         match val_type {
             0 => Ok(GgufValue::Uint8(self.read_u8()?)),
             1 => Ok(GgufValue::Int8(self.read_i8()?)),
@@ -467,10 +563,20 @@ impl<'a> GgufReader<'a> {
             8 => Ok(GgufValue::String(self.read_string()?)),
             9 => {
                 let elem_type = self.read_u32()?;
-                let count = self.read_u64()? as usize;
+                let count = usize::try_from(self.read_u64()?)
+                    .context("GGUF array count exceeds platform limits")?;
                 // Safety bound on array size to prevent OOM on corrupt streams
-                let max_collect = count.min(1024);
-                let mut arr = Vec::with_capacity(max_collect);
+                if reject_oversized_arrays && count > max_array_items {
+                    bail!(
+                        "GGUF array has {} elements, exceeding configured limit {}",
+                        count,
+                        max_array_items
+                    );
+                }
+                let max_collect = count.min(max_array_items);
+                let mut arr = Vec::new();
+                arr.try_reserve_exact(max_collect)
+                    .context("Unable to allocate GGUF metadata array")?;
                 for i in 0..count {
                     if i < max_collect {
                         let v = self.read_value(elem_type)?;
@@ -505,11 +611,23 @@ impl GgufParser {
 
         // SAFETY: File descriptor is open and unmodified during the lifetime of this read-only memory map.
         let mmap = unsafe { Mmap::map(&file)? };
+        let source_path = path
+            .as_ref()
+            .canonicalize()
+            .with_context(|| format!("Failed to resolve GGUF source path: {:?}", path.as_ref()))?;
 
-        Self::parse_from_bytes(&mmap, path.as_ref())
+        Self::parse_from_bytes_with_source(&mmap, path.as_ref(), Some(&source_path))
     }
 
     pub fn parse_from_bytes(data: &[u8], path: &Path) -> Result<ModelIR> {
+        Self::parse_from_bytes_with_source(data, path, None)
+    }
+
+    fn parse_from_bytes_with_source(
+        data: &[u8],
+        path: &Path,
+        source_path: Option<&Path>,
+    ) -> Result<ModelIR> {
         if data.len() < 24 {
             bail!(
                 "GGUF buffer truncated: {} bytes provided (minimum header requires 24 bytes)",
@@ -555,7 +673,8 @@ impl GgufParser {
         for _ in 0..metadata_kv_count {
             let key = reader.read_string()?;
             let val_type = reader.read_u32()?;
-            let val = reader.read_value(val_type)?;
+            const MAX_METADATA_ARRAY_ITEMS: usize = 1_000_000;
+            let val = reader.read_value_with_array_limit(val_type, MAX_METADATA_ARRAY_ITEMS)?;
             metadata.insert(key, val);
         }
 
@@ -590,16 +709,40 @@ impl GgufParser {
         for raw in raw_tensors {
             let gtype = GgmlType::from_u32(raw.ggml_type);
             let dtype = gtype.type_name().to_string();
-            let numel: usize = raw.shape.iter().product();
-            let byte_size = (numel as f64 * gtype.bytes_per_weight()).ceil() as usize;
+            let numel = raw
+                .shape
+                .iter()
+                .try_fold(1usize, |count, &dim| count.checked_mul(dim))
+                .with_context(|| format!("GGUF tensor '{}' dimensions overflow", raw.name))?;
+            let byte_size = numel
+                .div_ceil(gtype.block_size())
+                .checked_mul(gtype.type_size())
+                .with_context(|| format!("GGUF tensor '{}' byte size overflows", raw.name))?;
 
             let mut tensor_ir = TensorIR::new(raw.name, raw.shape, dtype.clone(), byte_size);
 
             // Extract weight profile if data is within bounds
-            let tensor_byte_offset = data_start.saturating_add(raw.offset as usize);
-            if tensor_byte_offset.saturating_add(byte_size) <= data.len() {
-                let slice = &data[tensor_byte_offset..tensor_byte_offset + byte_size];
+            let tensor_byte_offset = usize::try_from(raw.offset)
+                .ok()
+                .and_then(|offset| data_start.checked_add(offset));
+            let tensor_range = tensor_byte_offset.and_then(|start| {
+                start
+                    .checked_add(byte_size)
+                    .filter(|&end| end <= data.len())
+                    .map(|end| start..end)
+            });
+            if let Some(range) = tensor_range {
+                let slice = &data[range.clone()];
                 tensor_ir.weight_profile = Some(WeightAnalyzer::profile_tensor(slice, &dtype));
+                if let Some(source_path) = source_path {
+                    tensor_ir.source = Some(TensorSource {
+                        path: source_path.to_path_buf(),
+                        byte_offset: u64::try_from(range.start)
+                            .context("GGUF tensor source offset exceeds u64")?,
+                        byte_len: u64::try_from(range.len())
+                            .context("GGUF tensor source length exceeds u64")?,
+                    });
+                }
             } else {
                 tensor_ir.weight_profile = Some(crate::ir::WeightProfile::default());
             }
@@ -667,7 +810,11 @@ impl GgufParser {
             .unwrap_or("gguf_model")
             .to_string();
 
-        let model_ir = ModelIR::new(
+        let source_gguf_metadata = metadata
+            .iter()
+            .map(|(key, value)| (key.clone(), ModelMetadataValue::from(value.clone())))
+            .collect();
+        let mut model_ir = ModelIR::new(
             model_name,
             architecture,
             num_layers,
@@ -678,6 +825,7 @@ impl GgufParser {
             max_position_embeddings,
             tensors,
         );
+        model_ir.source_gguf_metadata = source_gguf_metadata;
 
         Ok(model_ir)
     }
@@ -747,6 +895,50 @@ mod tests {
         assert_eq!(ir.tensors.len(), 1);
         assert_eq!(ir.tensors[0].name, "blk.0.attn_q.weight");
         assert_eq!(ir.tensors[0].shape, vec![128, 64]);
+        assert!(ir.tensors[0].source.is_none());
+    }
+
+    #[test]
+    fn test_gguf_file_parse_retains_tensor_payload_range() {
+        use crate::exporter::gguf_writer::GgufWriter;
+        use std::io::{Read, Seek, SeekFrom};
+
+        let payload = [1.0f32, -2.0, 3.5, 0.25]
+            .into_iter()
+            .flat_map(f32::to_le_bytes)
+            .collect::<Vec<_>>();
+        let q8_payload = vec![0u8; 34];
+        let mut writer = GgufWriter::new();
+        writer.add_tensor("weights", vec![4], GgmlType::F32, payload.clone());
+        writer.add_tensor("quantized", vec![32], GgmlType::Q8_0, q8_payload.clone());
+
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("source.gguf");
+        writer.write_to_file(&path).expect("write GGUF");
+
+        let model = GgufParser::parse_from_file(&path).expect("parse GGUF file");
+        let source = model.tensors[0].source.as_ref().expect("source range");
+        assert_eq!(source.path, path.canonicalize().expect("canonical path"));
+        assert_eq!(source.byte_len, payload.len() as u64);
+        let quantized_source = model.tensors[1]
+            .source
+            .as_ref()
+            .expect("quantized source range");
+        assert_eq!(quantized_source.byte_len, q8_payload.len() as u64);
+
+        let mut file = File::open(&source.path).expect("open source");
+        file.seek(SeekFrom::Start(source.byte_offset))
+            .expect("seek to payload");
+        let mut actual = vec![0; payload.len()];
+        file.read_exact(&mut actual).expect("read payload");
+        assert_eq!(actual, payload);
+
+        file.seek(SeekFrom::Start(quantized_source.byte_offset))
+            .expect("seek to quantized payload");
+        let mut actual_quantized = vec![0; q8_payload.len()];
+        file.read_exact(&mut actual_quantized)
+            .expect("read quantized payload");
+        assert_eq!(actual_quantized, q8_payload);
     }
 
     #[test]

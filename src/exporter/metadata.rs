@@ -36,6 +36,7 @@ impl GgufMetadataSynchronizer {
         match quant_type {
             ExportQuantType::FP16 => 1,       // ALL_F16
             ExportQuantType::Q8_0 => 7,       // MOSTLY_Q8_0
+            ExportQuantType::TQ1_0 => 36,     // MOSTLY_TQ1_0
             ExportQuantType::BitNetB158 => 0, // ALL_F32 / Custom experimental
         }
     }
@@ -119,10 +120,15 @@ impl GgufMetadataSynchronizer {
 
         // 5. Vocabulary metadata
         if model.vocab_size > 0 {
-            meta.push((
-                "tokenizer.ggml.model".to_string(),
-                GgufValue::String("llama".to_string()),
-            ));
+            if !model
+                .source_gguf_metadata
+                .contains_key("tokenizer.ggml.model")
+            {
+                meta.push((
+                    "tokenizer.ggml.model".to_string(),
+                    GgufValue::String("llama".to_string()),
+                ));
+            }
             meta.push((
                 format!("{arch}.vocab_size"),
                 GgufValue::Uint32(model.vocab_size as u32),
@@ -138,6 +144,12 @@ impl GgufMetadataSynchronizer {
         model: &ModelIR,
         quant_type: ExportQuantType,
     ) {
+        for (key, value) in &model.source_gguf_metadata {
+            writer.add_metadata(
+                key.clone(),
+                crate::parser::gguf::GgufValue::from(value.clone()),
+            );
+        }
         let metadata = Self::build_metadata(model, quant_type);
         for (key, value) in metadata {
             writer.add_metadata(key, value);

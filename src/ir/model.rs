@@ -1,6 +1,23 @@
 use super::tensor::{TensorIR, TensorRole};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ModelMetadataValue {
+    Uint8(u8),
+    Int8(i8),
+    Uint16(u16),
+    Int16(i16),
+    Uint32(u32),
+    Int32(i32),
+    Float32(f32),
+    Bool(bool),
+    String(String),
+    Array(Vec<ModelMetadataValue>),
+    Uint64(u64),
+    Int64(i64),
+    Float64(f64),
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ModelArchitecture {
@@ -57,6 +74,8 @@ pub struct ModelIR {
     pub vocab_size: usize,
     pub max_position_embeddings: usize,
     pub tensors: Vec<TensorIR>,
+    #[serde(skip)]
+    pub source_gguf_metadata: BTreeMap<String, ModelMetadataValue>,
 }
 
 impl ModelIR {
@@ -89,6 +108,7 @@ impl ModelIR {
             vocab_size,
             max_position_embeddings,
             tensors,
+            source_gguf_metadata: BTreeMap::new(),
         }
     }
 
