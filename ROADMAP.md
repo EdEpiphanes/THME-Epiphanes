@@ -42,27 +42,19 @@ $$v0.1.x.0 \longrightarrow \left[ v0.1.x.1, v0.1.x.2, v0.1.x.3, v0.1.x.4, v0.1.x
 | [x] v0.1.6.0 Speculative Decoding Synthesizer Baseline (Done)                                                      |
 |     |-> [v0.1.6.1 - v0.1.6.9] Prefix Manifold, Strided, BitNet Draft, Rejection Sampling, Speedup Math, Tree Mask   |
 |                                                                                                                    |
-| [ ] v0.1.7.0 Hardware Roofline & Micro-Kernel Profiler Baseline (ACTIVE)                                           |
-|     |-> [v0.1.7.1] Hardware Target Specifications & Machine Balance DB                                     [ACTIVE] |
-|     |-> [v0.1.7.2] Linear Projection & Attention Arithmetic Intensity Math                                 [ACTIVE] |
-|     |-> [v0.1.7.3] SwiGLU FFN & FlashAttention-2 Arithmetic Intensity Models                               [ACTIVE] |
-|     |-> [v0.1.7.4] 4-Tier Memory Hierarchy Cache Simulator (L1/L2/L3/DRAM)                                 [ACTIVE] |
-|     |-> [v0.1.7.5] Working Set Size & Cache Eviction Latency Degradation Model                             [ACTIVE] |
-|     |-> [v0.1.7.6] Empirical Roofline Boundary Curve & Memory/Compute Classifier                           [ACTIVE] |
-|     |-> [v0.1.7.7] Dynamic TDP Power & Thermal Throttling Projection Engine                                [ACTIVE] |
-|     |-> [v0.1.7.8] CLI Subcommand thme roofline & MCP Tool thme_profile_roofline                           [ACTIVE] |
-|     |-> [v0.1.7.9] Desktop Studio Tab 4 Interactive SVG/egui Roofline Deck                                 [ACTIVE] |
+| [x] v0.1.7.0 Hardware Roofline & Micro-Kernel Profiler Baseline (Done)                                              |
+|     |-> [v0.1.7.1 - v0.1.7.9] Hardware DB, Intensity Math, Cache Sim, Eviction, Ceilings, TDP, CLI, MCP, Tab 4 Deck  |
 |                                                                                                                    |
-| [ ] v0.1.8.0 Binary Quantization Exporter Baseline (PLANNED)                                                       |
-|     |-> [v0.1.8.1] Vectorized BitNet b1.58 Ternary Bitstream Packer (4 weights/byte)                       [PLAN]   |
-|     |-> [v0.1.8.2] Vectorized Ternary Bitstream Unpacker with FP16 Scale Product                           [PLAN]   |
-|     |-> [v0.1.8.3] Direct Pure Rust GGUF v3 Binary Writer & 32-Byte Alignment                              [PLAN]   |
-|     |-> [v0.1.8.4] GGUF Metadata Key-Value Reconstitution & Synchronization Engine                         [PLAN]   |
-|     |-> [v0.1.8.5] Direct Pure Rust SafeTensors Binary Serializer & 8-Byte Prefix                          [PLAN]   |
-|     |-> [v0.1.8.6] Low-Memory Streaming Chunked File Writer Engine                                         [PLAN]   |
-|     |-> [v0.1.8.7] Calibrated Per-Channel & Per-Group MSE-Optimal Scale Search                             [PLAN]   |
-|     |-> [v0.1.8.8] CLI Subcommand thme export & Desktop Studio Tab 1 Exporter Wizard                       [PLAN]   |
-|     |-> [v0.1.8.9] Downstream Runtime Compatibility Testbed (llama.cpp / Ollama)                            [PLAN]   |
+| [ ] v0.1.8.0 Binary Quantization Exporter Baseline (ACTIVE)                                                       |
+|     |-> [v0.1.8.1] Vectorized BitNet b1.58 Ternary Bitstream Packer (4 weights/byte)                       [ACTIVE] |
+|     |-> [v0.1.8.2] Vectorized Ternary Bitstream Unpacker with FP16 Scale Product                           [ACTIVE] |
+|     |-> [v0.1.8.3] Direct Pure Rust GGUF v3 Binary Writer & 32-Byte Alignment                              [ACTIVE] |
+|     |-> [v0.1.8.4] GGUF Metadata Key-Value Reconstitution & Synchronization Engine                         [ACTIVE] |
+|     |-> [v0.1.8.5] Direct Pure Rust SafeTensors Binary Serializer & 8-Byte Prefix                          [ACTIVE] |
+|     |-> [v0.1.8.6] Low-Memory Streaming Chunked File Writer Engine                                         [ACTIVE] |
+|     |-> [v0.1.8.7] Calibrated Per-Channel & Per-Group MSE-Optimal Scale Search                             [ACTIVE] |
+|     |-> [v0.1.8.8] CLI Subcommand thme export & Desktop Studio Tab 1 Exporter Wizard                       [ACTIVE] |
+|     |-> [v0.1.8.9] Downstream Runtime Compatibility Testbed (llama.cpp / Ollama)                            [ACTIVE] |
 |                                                                                                                    |
 | [ ] v0.1.9.0 Closed-Loop Teacher-Student Co-Surgery Baseline (PLANNED)                                             |
 |     |-> [v0.1.9.1] Co-Surgery Closed-Loop State Machine & Controller                                       [PLAN]   |
@@ -200,7 +192,7 @@ $$v0.1.x.0 \longrightarrow \left[ v0.1.x.1, v0.1.x.2, v0.1.x.3, v0.1.x.4, v0.1.x
 
 ### Phase 4: Hardware Profiling, Serialization & Closed-Loop Surgery
 
-#### [ ] v0.1.7.0 — Hardware-Calibrated Roofline & Micro-Kernel Profiler Baseline (ACTIVE)
+#### [x] v0.1.7.0 — Hardware-Calibrated Roofline & Micro-Kernel Profiler Baseline (Completed)
 Establishes empirical hardware-calibrated operational Roofline ceilings and multi-tier memory hierarchy cache simulation to pinpoint memory bandwidth vs compute bottlenecks across diverse target hardware.
 
 - **Mathematical Formulations**:
@@ -214,40 +206,40 @@ Establishes empirical hardware-calibrated operational Roofline ceilings and mult
     $$T_{\text{layer}} = \sum_{k \in \{\text{L1}, \text{L2}, \text{L3}, \text{DRAM}\}} \left( M_k \cdot \text{Latency}_k + \frac{\text{Volume}_k}{\text{Bandwidth}_k} \right)$$
 
 - **Parallel Sub-Milestone Breakdown [v0.1.7.1 - v0.1.7.9]**:
-  - [ ] **v0.1.7.1**: Hardware Target Specifications & Machine Balance Database (`src/profiling/hardware.rs`):
+  - [x] **v0.1.7.1**: Hardware Target Specifications & Machine Balance Database (`src/profiling/hardware.rs`):
     - Profiles for NVIDIA H100 SXM5, RTX 4090, Apple M3 Max, Apple M2 Ultra, AMD MI300X, Intel Xeon Platinum 8490H (AVX-512).
     - Custom hardware JSON configuration loader (`--hardware-config <path>`).
     - *Pipeline Impact*: Provides reference ceilings for CI regression benchmarks.
-  - [ ] **v0.1.7.2**: Linear Projection & Attention Operational Arithmetic Intensity Profiler (`src/profiling/intensity.rs`):
+  - [x] **v0.1.7.2**: Linear Projection & Attention Operational Arithmetic Intensity Profiler (`src/profiling/intensity.rs`):
     - Exact FLOP counts and memory transfer bytes for Linear ($Q, K, V, O$) and Scaled Dot-Product Attention.
     - Autoregressive decode ($B=1$, memory-bound $I \approx 1.0$) vs prefill ($B \ge 64$, compute-bound $I \gg I^*$).
     - *Pipeline Impact*: Feeds automated layer bottleneck classification.
-  - [ ] **v0.1.7.3**: SwiGLU FFN & FlashAttention-2 Arithmetic Intensity Mathematical Models (`src/profiling/intensity.rs`):
+  - [x] **v0.1.7.3**: SwiGLU FFN & FlashAttention-2 Arithmetic Intensity Mathematical Models (`src/profiling/intensity.rs`):
     - SwiGLU FFN FLOPs ($6 B D D_{\text{ffn}}$) and memory traffic ($3 D D_{\text{ffn}} b_w + B(2D + 2D_{\text{ffn}}) b_{\text{act}}$).
     - FlashAttention-2 SRAM tiling memory traffic reduction model ($\mathcal{O}(BH S^2 d^2 / M)$).
     - *Pipeline Impact*: Informs precision pruning suggestions for feed-forward blocks.
-  - [ ] **v0.1.7.4**: 4-Tier Memory Hierarchy Cache Simulator (`src/profiling/cache_sim.rs`):
+  - [x] **v0.1.7.4**: 4-Tier Memory Hierarchy Cache Simulator (`src/profiling/cache_sim.rs`):
     - Models L1 Data (128 KB, 1 cycle), L2 Cache (4-16 MB, 15 cycles), L3/SLC (32-96 MB, 50 cycles), and Main Memory (HBM3/GDDR6/DDR5, 200 cycles).
     - *Pipeline Impact*: Simulates hardware latency penalties without requiring physical host access.
-  - [ ] **v0.1.7.5**: Working Set Size & Cache Eviction Latency Degradation Model:
+  - [x] **v0.1.7.5**: Working Set Size & Cache Eviction Latency Degradation Model:
     - Calculates active tensor working set size per layer and estimates cache line eviction rates.
     - *Pipeline Impact*: Detects layers that spill out of on-chip SRAM into high-latency memory.
-  - [ ] **v0.1.7.6**: Empirical Roofline Boundary Curve & Memory/Compute Classifier (`src/profiling/roofline.rs`):
+  - [x] **v0.1.7.6**: Empirical Roofline Boundary Curve & Memory/Compute Classifier (`src/profiling/roofline.rs`):
     - Generates log-log Roofline plot coordinates and assigns `MemoryBound` vs `ComputeBound` labels per layer.
     - *Pipeline Impact*: Generates automated optimization advisories for surgery recipes.
-  - [ ] **v0.1.7.7**: Dynamic TDP Power & Thermal Throttling Projection Engine (`src/profiling/thermal.rs`):
+  - [x] **v0.1.7.7**: Dynamic TDP Power & Thermal Throttling Projection Engine (`src/profiling/thermal.rs`):
     - Models dynamic power dissipation ($P_{\text{dyn}} = C V^2 f \alpha$) and predicts sustained vs burst token throttling.
     - *Pipeline Impact*: Evaluates energy efficiency in edge and mobile deployment scenarios.
-  - [ ] **v0.1.7.8**: CLI Subcommand `thme roofline` & MCP Tool `thme_profile_roofline` (`src/cli/roofline.rs`):
+  - [x] **v0.1.7.8**: CLI Subcommand `thme roofline` & MCP Tool `thme_profile_roofline` (`src/cli/roofline.rs`):
     - CLI command rendering ASCII Roofline charts and structured JSON outputs for agent integration.
     - *Pipeline Impact*: Exposes profiling directly to CI terminal runners and MCP agents.
-  - [ ] **v0.1.7.9**: Desktop Studio Tab 4 Interactive SVG/egui Roofline Deck (`src/gui/app.rs`):
+  - [x] **v0.1.7.9**: Desktop Studio Tab 4 Interactive SVG/egui Roofline Deck (`src/gui/app.rs`):
     - Interactive log-log Roofline plot with hover diagnostics, hardware selector, and batch size sliders.
     - *Pipeline Impact*: Interactive visualization for desktop developers and researchers.
 
 ---
 
-#### [ ] v0.1.8.0 — Binary Quantization Exporter Baseline (PLANNED)
+#### [ ] v0.1.8.0 — Binary Quantization Exporter Baseline (ACTIVE)
 Enables direct binary disk serialization of modified and distilled models into deployable GGUF v3 and SafeTensors files with BitNet b1.58 ternary packed bitstreams and calibrated scale factors.
 
 - **Mathematical Formulations**:

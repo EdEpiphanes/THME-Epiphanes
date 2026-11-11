@@ -2,6 +2,7 @@ pub mod allocator;
 pub mod cli;
 pub mod dataset;
 pub mod experiment;
+pub mod exporter;
 pub mod gui;
 pub mod interop;
 pub mod ir;
@@ -17,6 +18,9 @@ pub mod transform;
 pub use allocator::{AllocationPlan, ParetoAllocator};
 pub use dataset::{Dataset, DatasetFormat, DatasetSample, DatasetSummary};
 pub use experiment::{ExperimentLab, ExperimentMetrics, ExperimentTechnique};
+pub use exporter::{
+    BitNetPacker, ExportConfig, ExportFormat, ExportQuantType, ExportReport, PackedBitNetTensor,
+};
 pub use gui::{launch_gui, THMEApp};
 pub use interop::{
     HuggingFaceConfigGenerator, PeftLoraAdapter, PyTorchCUDATrainingStrategy, PyTorchInteropConfig,

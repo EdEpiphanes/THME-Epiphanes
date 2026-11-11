@@ -143,9 +143,9 @@
 
 ---
 
-## Sprint 6: Hardware-Calibrated Roofline & Micro-Kernel Profiler (Milestone v0.1.7) [ACTIVE]
+## Sprint 6: Hardware-Calibrated Roofline & Micro-Kernel Profiler (Milestone v0.1.7) [COMPLETED]
 
-### [THME-601] Hardware Target Specifications & Machine Balance Database
+### [THME-601] Hardware Target Specifications & Machine Balance Database (Done)
 - **Component**: `thme::profiling::hardware` (`src/profiling/hardware.rs`)
 - **Problem**: Calculating Roofline boundaries requires calibrated peak compute (TFLOP/s) and peak memory bandwidth (GB/s) parameters across heterogeneous hardware platforms (NVIDIA, Apple Silicon, AMD, Intel).
 - **Acceptance Criteria**:
@@ -155,7 +155,7 @@
 - **Production Pipeline / CI/CD Impact**: Establishes authoritative reference ceilings for automated benchmark regression gates and multi-hardware CI target profiling.
 - **Done Means**: `cargo test test_hardware_database` passes and validates specs, units, and knee values across all 6 predefined hardware profiles.
 
-### [THME-602] Linear Projection & Attention Operational Arithmetic Intensity Profiler
+### [THME-602] Linear Projection & Attention Operational Arithmetic Intensity Profiler (Done)
 - **Component**: `thme::profiling::intensity` (`src/profiling/intensity.rs`)
 - **Problem**: Determining whether attention projections and matrix multiplications are memory-bandwidth-bound or compute-bound requires tracking exact FLOPs and byte transfers across decode and prefill phases.
 - **Acceptance Criteria**:
@@ -166,7 +166,7 @@
 - **Production Pipeline / CI/CD Impact**: Feeds layer classification into the Pareto optimizer to prevent over-optimizing compute-bound layers while neglecting memory-bound bottlenecks.
 - **Done Means**: `cargo test test_linear_attention_intensity` passes, confirming exact FLOP and byte calculations for attention layers of LLaMA and Mistral models.
 
-### [THME-603] SwiGLU FFN & FlashAttention-2 Arithmetic Intensity Mathematical Models
+### [THME-603] SwiGLU FFN & FlashAttention-2 Arithmetic Intensity Mathematical Models (Done)
 - **Component**: `thme::profiling::intensity` (`src/profiling/intensity.rs`)
 - **Problem**: Modern LLMs rely heavily on SwiGLU feed-forward networks (accounting for ~65% of total parameters) and tiled FlashAttention-2, which require specialized non-linear intensity models.
 - **Acceptance Criteria**:
@@ -176,7 +176,7 @@
 - **Production Pipeline / CI/CD Impact**: Informs precision pruning suggestions for feed-forward blocks in automated surgery recipes and benchmark reports.
 - **Done Means**: `cargo test test_swiglu_flashattn_intensity` passes, verifying correct intensity curves for SwiGLU FFN across various hidden dimensions.
 
-### [THME-604] 4-Tier Memory Hierarchy Cache Simulator (L1/L2/L3/DRAM)
+### [THME-604] 4-Tier Memory Hierarchy Cache Simulator (L1/L2/L3/DRAM) (Done)
 - **Component**: `thme::profiling::cache_sim` (`src/profiling/cache_sim.rs`)
 - **Problem**: Transformer layers exhibit distinct tensor working set sizes that fit into or spill out of on-chip caches, introducing multi-cycle latency penalties not captured by simple DRAM bandwidth equations.
 - **Acceptance Criteria**:
@@ -186,7 +186,7 @@
 - **Production Pipeline / CI/CD Impact**: Provides synthetic cache hit/miss latency projections in headless CI environments without requiring physical hardware performance counters.
 - **Done Means**: `cargo test test_cache_simulator_hierarchy` passes and demonstrates stepped latency degradation when tensor footprints exceed L1, L2, and L3 boundaries.
 
-### [THME-605] Working Set Size & Cache Eviction Latency Degradation Model
+### [THME-605] Working Set Size & Cache Eviction Latency Degradation Model (Done)
 - **Component**: `thme::profiling::cache_sim` (`src/profiling/cache_sim.rs`)
 - **Problem**: Transformer layers with large intermediate activations cause cache thrashing, evicting KV cache pages and model weights, leading to unpredictable latency spikes.
 - **Acceptance Criteria**:
@@ -196,7 +196,7 @@
 - **Production Pipeline / CI/CD Impact**: Enables surgery recipes to identify layers that can fit completely into L2/L3 cache upon BitNet b1.58 ternary quantization.
 - **Done Means**: `cargo test test_working_set_eviction_model` validates that quantizing a layer below L2 cache capacity reduces simulated memory stalls by $\ge 60\%$.
 
-### [THME-606] Empirical Roofline Boundary Curve & Memory/Compute Classifier
+### [THME-606] Empirical Roofline Boundary Curve & Memory/Compute Classifier (Done)
 - **Component**: `thme::profiling::roofline` (`src/profiling/roofline.rs`)
 - **Problem**: Practitioners need automated, mathematical classification of each model layer to determine whether precision reduction or kernel fusion is the appropriate optimization.
 - **Acceptance Criteria**:
@@ -207,7 +207,7 @@
 - **Production Pipeline / CI/CD Impact**: Enforces automated profiling quality gates, preventing optimizations that target the wrong hardware bottleneck.
 - **Done Means**: `cargo test test_roofline_classifier` passes, correctly labeling decode vs prefill across all 32 layers of LLaMA-8B.
 
-### [THME-607] Dynamic TDP Power & Thermal Throttling Projection Engine
+### [THME-607] Dynamic TDP Power & Thermal Throttling Projection Engine (Done)
 - **Component**: `thme::profiling::thermal` (`src/profiling/thermal.rs`)
 - **Problem**: Sustained compute-bound operations trigger thermal throttling and TDP power clamping, degrading sustained token throughput compared to burst performance.
 - **Acceptance Criteria**:
@@ -218,7 +218,7 @@
 - **Production Pipeline / CI/CD Impact**: Integrates thermal and energy constraints into mobile and edge deployment verification benchmarks.
 - **Done Means**: `cargo test test_thermal_throttling_model` passes, verifying simulated frequency back-off under sustained high-TDP workloads.
 
-### [THME-608] CLI Subcommand `thme roofline` & MCP Tool `thme_profile_roofline`
+### [THME-608] CLI Subcommand `thme roofline` & MCP Tool `thme_profile_roofline` (Done)
 - **Component**: `thme::cli::roofline` (`src/cli/roofline.rs`), `thme::cli::mcp` (`src/cli/mcp.rs`)
 - **Problem**: Terminal users and autonomous MCP agents need seamless programmatic access to Roofline profiling and JSON reports.
 - **Acceptance Criteria**:
@@ -229,7 +229,7 @@
 - **Production Pipeline / CI/CD Impact**: Enables CI pipelines to capture Roofline telemetry artifacts and agents to inspect model bottlenecks via JSON-RPC.
 - **Done Means**: `thme roofline --help` executes cleanly, and unit tests in `tests/test_roofline_profiler.rs` verify CLI and MCP outputs.
 
-### [THME-609] Desktop Studio Tab 4 Interactive SVG/egui Roofline Deck
+### [THME-609] Desktop Studio Tab 4 Interactive SVG/egui Roofline Deck (Done)
 - **Component**: `thme::gui::app` (`src/gui/app.rs`)
 - **Problem**: Visual studio users require an interactive, real-time graphical representation of the Roofline model with dynamic parameter manipulation.
 - **Acceptance Criteria**:
@@ -242,7 +242,7 @@
 
 ---
 
-## Sprint 7: Binary Quantization Exporter (Milestone v0.1.8) [PLANNED]
+## Sprint 7: Binary Quantization Exporter (Milestone v0.1.8) [ACTIVE]
 
 ### [THME-701] Vectorized BitNet b1.58 Ternary Bitstream Packer
 - **Component**: `thme::exporter::bitnet_pack` (`src/exporter/bitnet_pack.rs`)
