@@ -49,8 +49,8 @@ $$v0.1.x.0 \longrightarrow \left[ v0.1.x.1, v0.1.x.2, v0.1.x.3, v0.1.x.4, v0.1.x
 |     |-> [v0.1.8.1] Vectorized BitNet b1.58 Ternary Bitstream Packer (4 weights/byte)                       [COMPLETED] |
 |     |-> [v0.1.8.2] Vectorized Ternary Bitstream Unpacker with FP16 Scale Product                           [COMPLETED] |
 |     |-> [v0.1.8.3] Direct Pure Rust GGUF v3 Binary Writer & 32-Byte Alignment                              [COMPLETED] |
-|     |-> [v0.1.8.4] GGUF Metadata Key-Value Reconstitution & Synchronization Engine                         [ACTIVE] |
-|     |-> [v0.1.8.5] Direct Pure Rust SafeTensors Binary Serializer & 8-Byte Prefix                          [ACTIVE] |
+|     |-> [v0.1.8.4] GGUF Metadata Key-Value Reconstitution & Synchronization Engine                         [COMPLETED] |
+|     |-> [v0.1.8.5] Direct Pure Rust SafeTensors Binary Serializer & 8-Byte Prefix                          [COMPLETED] |
 |     |-> [v0.1.8.6] Low-Memory Streaming Chunked File Writer Engine                                         [ACTIVE] |
 |     |-> [v0.1.8.7] Calibrated Per-Channel & Per-Group MSE-Optimal Scale Search                             [ACTIVE] |
 |     |-> [v0.1.8.8] CLI Subcommand thme export & Desktop Studio Tab 1 Exporter Wizard                       [ACTIVE] |
@@ -260,10 +260,10 @@ Enables direct binary disk serialization of modified and distilled models into d
   - [x] **v0.1.8.3**: Direct Pure Rust GGUF v3 Binary Writer & 32-Byte Alignment (`src/exporter/gguf_writer.rs`):
     - Writes GGUF magic header (`0x46554747`), version 3, tensor metadata, and 32-byte memory-aligned payloads.
     - *Pipeline Impact*: Produces native GGUF files loadable by `llama.cpp` without Python runtimes.
-  - [ ] **v0.1.8.4**: GGUF Metadata Key-Value Reconstitution & Synchronization Engine:
+  - [x] **v0.1.8.4**: GGUF Metadata Key-Value Reconstitution & Synchronization Engine (`src/exporter/metadata.rs`):
     - Reconstitutes architecture key-values (`general.architecture`, `llama.block_count`, `llama.context_length`, etc.).
     - *Pipeline Impact*: Prevents model metadata corruption during format conversion.
-  - [ ] **v0.1.8.5**: Direct Pure Rust SafeTensors Binary Serializer & 8-Byte Prefix (`src/exporter/safetensors_writer.rs`):
+  - [x] **v0.1.8.5**: Direct Pure Rust SafeTensors Binary Serializer & 8-Byte Prefix (`src/exporter/safetensors_writer.rs`):
     - Writes standard SafeTensors files with 8-byte length prefix and formatted JSON metadata header.
     - *Pipeline Impact*: Enables direct export to Hugging Face, vLLM, and PyTorch tooling.
   - [ ] **v0.1.8.6**: Low-Memory Streaming Chunked File Writer Engine:

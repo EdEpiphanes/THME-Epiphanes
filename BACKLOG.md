@@ -276,7 +276,7 @@
 - **Production Pipeline / CI/CD Impact**: Enables THME to produce first-class deployable GGUF files in CI release workflows.
 - **Done Means**: `cargo test test_gguf_v3_writer` passes, and output files pass GGUF header parser validation.
 
-### [THME-704] GGUF Metadata Key-Value Reconstitution & Synchronization Engine
+### [THME-704] GGUF Metadata Key-Value Reconstitution & Synchronization Engine (Done)
 - **Component**: `thme::exporter::metadata` (`src/exporter/metadata.rs`)
 - **Problem**: Restructuring layers or modifying precision alters model architecture metadata, which must be synchronized into the GGUF header to prevent downstream runtime crashes.
 - **Acceptance Criteria**:
@@ -286,7 +286,7 @@
 - **Production Pipeline / CI/CD Impact**: Prevents metadata drift and corrupt model configurations in published model checkpoints.
 - **Done Means**: `cargo test test_gguf_metadata_sync` passes, confirming metadata integrity across all 8 paradigm architectures.
 
-### [THME-705] Direct Pure Rust SafeTensors Binary Serializer & 8-Byte Prefix
+### [THME-705] Direct Pure Rust SafeTensors Binary Serializer & 8-Byte Prefix (Done)
 - **Component**: `thme::exporter::safetensors_writer` (`src/exporter/safetensors_writer.rs`)
 - **Problem**: Exporting to PyTorch, Hugging Face `transformers`, and vLLM requires writing compliant SafeTensors binary archives.
 - **Acceptance Criteria**:

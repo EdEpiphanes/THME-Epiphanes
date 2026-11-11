@@ -19,8 +19,9 @@ pub use allocator::{AllocationPlan, ParetoAllocator};
 pub use dataset::{Dataset, DatasetFormat, DatasetSample, DatasetSummary};
 pub use experiment::{ExperimentLab, ExperimentMetrics, ExperimentTechnique};
 pub use exporter::{
-    BitNetPacker, ExportConfig, ExportFormat, ExportQuantType, ExportReport, GgufTensor,
-    GgufWriter, PackedBitNetTensor,
+    compute_sha256, BitNetPacker, ExportConfig, ExportFormat, ExportQuantType, ExportReport,
+    GgufMetadataSynchronizer, GgufTensor, GgufWriter, ModelExporter, PackedBitNetTensor,
+    SafeTensorsEntryHeader, SafeTensorsTensor, SafeTensorsWriter,
 };
 pub use gui::{launch_gui, THMEApp};
 pub use interop::{
