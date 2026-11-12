@@ -8,6 +8,9 @@
 *.dylib
 *.pdb
 
+# Local model checkpoints (weights and configs stay on the developer machine)
+models/*/
+
 # Model weight files and binary formats
 *.gguf
 *.safetensors
