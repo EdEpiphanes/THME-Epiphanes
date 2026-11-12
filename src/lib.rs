@@ -4,6 +4,7 @@ pub mod dataset;
 pub mod experiment;
 pub mod exporter;
 pub mod gui;
+pub mod inference;
 pub mod interop;
 pub mod ir;
 pub mod parser;

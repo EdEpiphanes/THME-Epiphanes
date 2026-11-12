@@ -1,0 +1,291 @@
+{
+  "context_len": 1024,
+  "corpus": {
+    "corpus": "WikiText-2 (raw) test split",
+    "corpus_bytes": 1290590,
+    "corpus_member": "wikitext-2-raw/wiki.test.raw",
+    "corpus_sha256": "173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08",
+    "corpus_source": "https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip",
+    "special_tokens_added": false,
+    "token_count": 303415,
+    "token_file_sha256": "18e663b61dd00f49796c8a6ae498b7dbe009cac4a2eaf3c67fa7d81baf47d945",
+    "tokenizer_repo": "HuggingFaceTB/SmolLM-135M",
+    "tokenizer_sha256": "9ca9acddb6525a194ec8ac7a87f24fbba7232a9a15ffa1af0c1224fcd888e47c",
+    "tokenizer_source": "https://huggingface.co/HuggingFaceTB/SmolLM-135M/resolve/main/tokenizer.json"
+  },
+  "corpus_tokens_used": 16384,
+  "exit_readout": [
+    {
+      "layers_applied": 0,
+      "perplexity": 5.3575358662535296e+45,
+      "settled_fraction": 0.0,
+      "top1_accuracy": 0.022910557184750734,
+      "top1_agrees_with_final": 0.023521505376344086
+    },
+    {
+      "layers_applied": 1,
+      "perplexity": 1329823.198536453,
+      "settled_fraction": 0.005742913000977517,
+      "top1_accuracy": 0.01179130009775171,
+      "top1_agrees_with_final": 0.029814271749755622
+    },
+    {
+      "layers_applied": 2,
+      "perplexity": 829178.9724481478,
+      "settled_fraction": 0.00739247311827957,
+      "top1_accuracy": 0.014723851417399805,
+      "top1_agrees_with_final": 0.034396383186705765
+    },
+    {
+      "layers_applied": 3,
+      "perplexity": 847859.1736122796,
+      "settled_fraction": 0.007575757575757576,
+      "top1_accuracy": 0.014846041055718476,
+      "top1_agrees_with_final": 0.036779081133919846
+    },
+    {
+      "layers_applied": 4,
+      "perplexity": 853296.7990988463,
+      "settled_fraction": 0.008003421309872923,
+      "top1_accuracy": 0.016739980449657868,
+      "top1_agrees_with_final": 0.039100684261974585
+    },
+    {
+      "layers_applied": 5,
+      "perplexity": 891500.6196593946,
+      "settled_fraction": 0.00855327468230694,
+      "top1_accuracy": 0.016678885630498533,
+      "top1_agrees_with_final": 0.03763440860215054
+    },
+    {
+      "layers_applied": 6,
+      "perplexity": 871742.3102813411,
+      "settled_fraction": 0.00959188660801564,
+      "top1_accuracy": 0.018206256109481917,
+      "top1_agrees_with_final": 0.040505865102639295
+    },
+    {
+      "layers_applied": 7,
+      "perplexity": 925407.2224072336,
+      "settled_fraction": 0.010935972629521017,
+      "top1_accuracy": 0.02113880742913001,
+      "top1_agrees_with_final": 0.04246089931573802
+    },
+    {
+      "layers_applied": 8,
+      "perplexity": 600438.5357977225,
+      "settled_fraction": 0.01270772238514174,
+      "top1_accuracy": 0.018511730205278593,
+      "top1_agrees_with_final": 0.04081133919843597
+    },
+    {
+      "layers_applied": 9,
+      "perplexity": 495119.77653166995,
+      "settled_fraction": 0.016251221896383186,
+      "top1_accuracy": 0.02462121212121212,
+      "top1_agrees_with_final": 0.04783724340175953
+    },
+    {
+      "layers_applied": 10,
+      "perplexity": 506038.59480126697,
+      "settled_fraction": 0.02126099706744868,
+      "top1_accuracy": 0.02761485826001955,
+      "top1_agrees_with_final": 0.04997556207233626
+    },
+    {
+      "layers_applied": 11,
+      "perplexity": 427494.75695739355,
+      "settled_fraction": 0.025232160312805473,
+      "top1_accuracy": 0.033602150537634407,
+      "top1_agrees_with_final": 0.057612414467253174
+    },
+    {
+      "layers_applied": 12,
+      "perplexity": 389916.7451001726,
+      "settled_fraction": 0.03268572825024438,
+      "top1_accuracy": 0.04264418377321603,
+      "top1_agrees_with_final": 0.07086999022482894
+    },
+    {
+      "layers_applied": 13,
+      "perplexity": 291757.07867226633,
+      "settled_fraction": 0.04105571847507331,
+      "top1_accuracy": 0.05199169110459433,
+      "top1_agrees_with_final": 0.0811950146627566
+    },
+    {
+      "layers_applied": 14,
+      "perplexity": 336698.2281711306,
+      "settled_fraction": 0.0456989247311828,
+      "top1_accuracy": 0.05461876832844575,
+      "top1_agrees_with_final": 0.08461632453567937
+    },
+    {
+      "layers_applied": 15,
+      "perplexity": 209999.661494133,
+      "settled_fraction": 0.056207233626588464,
+      "top1_accuracy": 0.07038123167155426,
+      "top1_agrees_with_final": 0.10813782991202346
+    },
+    {
+      "layers_applied": 16,
+      "perplexity": 210503.3862493059,
+      "settled_fraction": 0.061522482893450636,
+      "top1_accuracy": 0.07160312805474096,
+      "top1_agrees_with_final": 0.11076490713587488
+    },
+    {
+      "layers_applied": 17,
+      "perplexity": 169671.90978516298,
+      "settled_fraction": 0.06940371456500488,
+      "top1_accuracy": 0.07423020527859238,
+      "top1_agrees_with_final": 0.114613880742913
+    },
+    {
+      "layers_applied": 18,
+      "perplexity": 152494.77624057885,
+      "settled_fraction": 0.08125610948191593,
+      "top1_accuracy": 0.08101173020527859,
+      "top1_agrees_with_final": 0.11999022482893451
+    },
+    {
+      "layers_applied": 19,
+      "perplexity": 51169.377870865275,
+      "settled_fraction": 0.12017350928641252,
+      "top1_accuracy": 0.12237292277614858,
+      "top1_agrees_with_final": 0.17460899315738027
+    },
+    {
+      "layers_applied": 20,
+      "perplexity": 36100.02773880375,
+      "settled_fraction": 0.13483626588465297,
+      "top1_accuracy": 0.12713831867057673,
+      "top1_agrees_with_final": 0.1897605083088954
+    },
+    {
+      "layers_applied": 21,
+      "perplexity": 31240.491835596033,
+      "settled_fraction": 0.15829667644183773,
+      "top1_accuracy": 0.14980449657869013,
+      "top1_agrees_with_final": 0.2244012707722385
+    },
+    {
+      "layers_applied": 22,
+      "perplexity": 22707.532860379244,
+      "settled_fraction": 0.17876344086021506,
+      "top1_accuracy": 0.15793010752688172,
+      "top1_agrees_with_final": 0.23973607038123168
+    },
+    {
+      "layers_applied": 23,
+      "perplexity": 9167.32908802149,
+      "settled_fraction": 0.22049120234604105,
+      "top1_accuracy": 0.1885386119257087,
+      "top1_agrees_with_final": 0.3004032258064516
+    },
+    {
+      "layers_applied": 24,
+      "perplexity": 953.5449506480874,
+      "settled_fraction": 0.2873900293255132,
+      "top1_accuracy": 0.26173020527859236,
+      "top1_agrees_with_final": 0.4101295210166178
+    },
+    {
+      "layers_applied": 25,
+      "perplexity": 496.3495292027649,
+      "settled_fraction": 0.33394428152492667,
+      "top1_accuracy": 0.2840298142717498,
+      "top1_agrees_with_final": 0.45149071358748777
+    },
+    {
+      "layers_applied": 26,
+      "perplexity": 253.76281904833104,
+      "settled_fraction": 0.39332844574780057,
+      "top1_accuracy": 0.31867057673509286,
+      "top1_agrees_with_final": 0.5069648093841642
+    },
+    {
+      "layers_applied": 27,
+      "perplexity": 105.3282524531409,
+      "settled_fraction": 0.44709188660801563,
+      "top1_accuracy": 0.3446358748778104,
+      "top1_agrees_with_final": 0.5456378299120235
+    },
+    {
+      "layers_applied": 28,
+      "perplexity": 78.27973531416902,
+      "settled_fraction": 0.5095307917888563,
+      "top1_accuracy": 0.35551075268817206,
+      "top1_agrees_with_final": 0.5789956011730205
+    },
+    {
+      "layers_applied": 29,
+      "perplexity": 43.60339911978445,
+      "settled_fraction": 0.6293377321603129,
+      "top1_accuracy": 0.3754887585532747,
+      "top1_agrees_with_final": 0.6293377321603129
+    },
+    {
+      "layers_applied": 30,
+      "perplexity": 17.972970760754322,
+      "settled_fraction": 1.0,
+      "top1_accuracy": 0.44489247311827956,
+      "top1_agrees_with_final": 1.0
+    }
+  ],
+  "generated_unix_secs": 1794494877,
+  "model_name": "SmolLM-135M",
+  "notes": [
+    "Measured with the THME reference CPU forward pass on stored weights; no retraining.",
+    "Intermediate readouts apply the model's own final norm and output head to the state at that depth.",
+    "The model was not trained for early exit or looping; these are diagnostics, not the behaviour of a model trained for either.",
+    "settled_fraction: share of tokens whose top prediction equals the full-depth top prediction at this depth and every later depth."
+  ],
+  "num_layers": 30,
+  "schedule_experiments": [
+    {
+      "delta_ppl": 0.0,
+      "description": "Every layer once (reference)",
+      "id": "plain",
+      "layer_applications": 30,
+      "perplexity": 17.972970760754322
+    },
+    {
+      "delta_ppl": 37.33767728799097,
+      "description": "Layers 7..23 applied twice",
+      "id": "loop_middle_block_x2",
+      "layer_applications": 46,
+      "perplexity": 55.31064804874529
+    },
+    {
+      "delta_ppl": 316.79514144906915,
+      "description": "Layers 7..23 applied three times",
+      "id": "loop_middle_block_x3",
+      "layer_applications": 62,
+      "perplexity": 334.76811220982347
+    },
+    {
+      "delta_ppl": 1.2443427510110325,
+      "description": "Layer 15 applied twice",
+      "id": "repeat_single_layer",
+      "layer_applications": 31,
+      "perplexity": 19.217313511765354
+    },
+    {
+      "delta_ppl": 2.0835376617903094,
+      "description": "Layer 15 skipped",
+      "id": "skip_single_layer",
+      "layer_applications": 29,
+      "perplexity": 20.05650842254463
+    },
+    {
+      "delta_ppl": 30775.044816177076,
+      "description": "Layers 7..23 skipped",
+      "id": "skip_middle_block",
+      "layer_applications": 14,
+      "perplexity": 30793.01778693783
+    }
+  ],
+  "scored_tokens": 16368,
+  "thme_version": "0.1.9"
+}

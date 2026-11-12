@@ -78,7 +78,7 @@ pub fn encode_float_source<R: Read, W: Write>(
     Ok(written)
 }
 
-fn encode_q8_block(values: &[f32], out: &mut Vec<u8>) -> Result<()> {
+pub(crate) fn encode_q8_block(values: &[f32], out: &mut Vec<u8>) -> Result<()> {
     let amax = values
         .iter()
         .fold(0.0f32, |max, value| max.max(value.abs()));
@@ -102,7 +102,7 @@ fn encode_q8_block(values: &[f32], out: &mut Vec<u8>) -> Result<()> {
     Ok(())
 }
 
-fn encode_tq1_block(values: &[f32], out: &mut Vec<u8>) -> Result<()> {
+pub(crate) fn encode_tq1_block(values: &[f32], out: &mut Vec<u8>) -> Result<()> {
     let scale = optimal_ternary_scale(values)?.scale;
     let half_scale = f32_to_f16(scale);
     if !crate::profiling::f16_to_f32(half_scale).is_finite() {
@@ -141,7 +141,7 @@ fn encode_tq1_block(values: &[f32], out: &mut Vec<u8>) -> Result<()> {
     Ok(())
 }
 
-fn f32_to_f16(value: f32) -> u16 {
+pub(crate) fn f32_to_f16(value: f32) -> u16 {
     let bits = value.to_bits();
     let sign = ((bits >> 16) & 0x8000) as u16;
     let exponent = ((bits >> 23) & 0xff) as i32 - 127 + 15;

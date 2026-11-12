@@ -1,0 +1,22 @@
+{
+  "name": "paradigm-convert-to-slm",
+  "author": "THME Paradigm Synthesizer",
+  "target_model": "model",
+  "version": "0.1.5",
+  "description": "Declarative cross-paradigm surgery recipe converting LLM to SLM",
+  "operations": [
+    {
+      "type": "ConvertParadigm",
+      "params": {
+        "target_paradigm": "SLM",
+        "num_experts": 4,
+        "top_k": 2,
+        "target_hidden_size": null,
+        "target_layers": null,
+        "apply_bitnet": true
+      }
+    }
+  ],
+  "expected_speedup": 1.35,
+  "expected_memory_savings_pct": 4.380537
+}

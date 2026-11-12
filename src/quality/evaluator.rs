@@ -1,6 +1,8 @@
-//! Empirical Quality Gate Evaluation & Perplexity Verification Bridge
+//! Quality Gate Decision Logic, Analytic Perplexity Proxy & External Evaluation Bridge
 //!
-//! Provides empirical evaluation of model representation degradation on standard benchmark corpora:
+//! ModelEvaluator::evaluate_weights is an analytic proxy: it never runs a forward pass and its
+//! output is always flagged `is_simulated`. Measured perplexity comes from `crate::inference`
+//! or from an external evaluator. This module provides:
 //! - Benchmark Corpora: WikiText-2, C4, Penn Treebank (PTB), and Synthetic Calibration.
 //! - Perplexity Calculation: Analytical $PPL = \exp\left(\frac{1}{N} \sum_{i=1}^N \mathcal{L}_i\right)$.
 //! - Automated Rollback Gate: Asserts $\Delta PPL = PPL_{\text{candidate}} - PPL_{\text{baseline}} \le \epsilon$.
@@ -51,7 +53,7 @@ impl Default for EvaluatorConfig {
     }
 }
 
-/// Outcome metrics of an empirical perplexity evaluation
+/// Outcome metrics of a perplexity evaluation; `is_simulated` distinguishes proxy from measurement
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PerplexityMetrics {
     pub corpus: EvaluationCorpus,
@@ -83,11 +85,14 @@ pub struct PerplexityGateResult {
     pub recommended_action: String,
 }
 
-/// Empirical Model Evaluator and Quality Verification Engine
+/// Quality gate logic, analytic perplexity proxy, and external evaluator bridge
 pub struct ModelEvaluator;
 
 impl ModelEvaluator {
-    /// Evaluates model weights against an evaluation corpus analytically
+    /// Analytic proxy, NOT a measurement: derives a perplexity-like score from weight
+    /// statistics and a fixed per-corpus constant. No tokens are read and no forward pass
+    /// is run; the result is flagged `is_simulated` and must be labelled as simulated
+    /// wherever it is shown. Use `crate::inference::evaluate_perplexity` for measured values.
     pub fn evaluate_weights(
         corpus: &EvaluationCorpus,
         weights: &[f32],

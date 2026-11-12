@@ -1,28 +1,40 @@
 //! Production Open-Weights End-to-End Verification Pipeline (Milestone v0.2.0.1 / v0.2.0.2).
 //!
-//! Demonstrates full-lifecycle verification across real open-weights models:
-//! - SmolLM-135M (30 layers, hidden dim 576, intermediate size 1536)
-//! - LLaMA-3.2-1B (16 layers, hidden dim 2048, intermediate size 8192)
-//!
 //! Pipeline Stages:
 //! 1. Ingestion / zero-copy memory mapping
 //! 2. Layerwise topological sensitivity analysis (SVD decay, condition numbers)
-//! 3. Heterogeneous precision surgery (BitNet b1.58 ternary, Q8_0, FP16)
-//! 4. Binary export (GGUF v3 32-byte aligned & SafeTensors)
-//! 5. Perplexity quality gate validation (ΔPPL <= 0.45)
+//! 3. Heterogeneous precision surgery recipe (Ternary, Q8_0, FP16 labels on the IR)
+//! 4. Binary export (GGUF v3, 32-byte aligned)
+//! 5. Measured perplexity quality gate (real forward pass over a tokenized corpus)
+//!
+//! Stage 5 only runs when on-disk weights and a token file are supplied:
+//!
+//! ```text
+//! py -3 scripts/prepare_eval_tokens.py
+//! cargo run --release --example production_verification -- \
+//!     --model-path models/SmolLM-135M \
+//!     --tokens target/eval/wikitext2_test.SmolLM-135M.u32
+//! ```
+//!
+//! Without them the gate is reported as NOT EVALUATED. No perplexity figure is
+//! ever estimated or synthesized by this pipeline.
 
 use anyhow::{Context, Result};
 use clap::{Parser, ValueEnum};
-use std::path::PathBuf;
+use serde_json::{json, Value};
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 use thme::exporter::{ExportConfig, ExportFormat, ExportQuantType, ModelExporter};
+use thme::inference::{
+    evaluate_perplexity, read_token_file, LlamaConfig, LlamaModel, PerplexityConfig,
+    PerplexityReport, WeightPrecision,
+};
 use thme::ir::rebuilder::{ArchitectureBlueprint, ModelRebuilder};
 use thme::ir::{ModelIR, TensorFormat, TensorRole};
 use thme::parser::ModelImporter;
 use thme::profiling::SensitivityProfiler;
-use thme::quality::evaluator::{
-    EvaluationCorpus, EvaluatorConfig, ModelEvaluator, PerplexityGateDecision,
-};
+use thme::quality::evaluator::{EvaluationCorpus, ModelEvaluator, PerplexityGateDecision};
 use thme::surgery::recipe::{SurgeryEngine, TweakOperation, TweakRecipe};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -58,17 +70,39 @@ pub struct VerificationArgs {
     /// Dry run mode (profiling and recipe generation only, skip writing files)
     #[arg(long)]
     pub dry_run: bool,
+
+    /// Token file (little-endian u32 ids) from scripts/prepare_eval_tokens.py; enables the measured gate
+    #[arg(long)]
+    pub tokens: Option<PathBuf>,
+
+    /// Tokens per forward pass during perplexity evaluation
+    #[arg(long, default_value_t = 1024)]
+    pub eval_context: usize,
+
+    /// Evaluate only this many leading corpus tokens (default: the whole corpus)
+    #[arg(long)]
+    pub eval_max_tokens: Option<usize>,
+
+    /// Where to write the machine-readable verification report
+    #[arg(long, default_value = "target/verification_report.json")]
+    pub report_json: PathBuf,
+}
+
+/// One evaluated set of weights and its measured perplexity.
+pub struct EvaluatedVariant {
+    pub id: &'static str,
+    pub description: String,
+    pub report: PerplexityReport,
+    /// `None` for the baseline itself.
+    pub delta_ppl: Option<f64>,
+    pub accepted: Option<bool>,
 }
 
 pub struct ProductionVerificationReport {
     pub target: VerificationTarget,
-    pub original_bytes: usize,
-    pub optimized_bytes: usize,
-    pub reduction_pct: f64,
-    pub baseline_ppl: f64,
-    pub candidate_ppl: f64,
-    pub ppl_delta: f64,
-    pub gate_passed: bool,
+    /// `None` when no forward pass was run.
+    pub gate_passed: Option<bool>,
+    pub variants: Vec<EvaluatedVariant>,
 }
 
 pub fn run_verification(args: &VerificationArgs) -> Result<ProductionVerificationReport> {
@@ -90,13 +124,13 @@ pub fn run_verification(args: &VerificationArgs) -> Result<ProductionVerificatio
             build_target_scaffold(args.target)
         }
     };
-    let original_bytes = model.total_estimated_bytes();
+    let source_payload_bytes = model.original_byte_size;
     println!(
-        "  Loaded model '{}' ({} layers, {} tensors, {:.2} MB)",
+        "  Loaded model '{}' ({} layers, {} tensors, {:.2} MB source payload)",
         model.name,
         model.num_layers,
         model.tensors.len(),
-        original_bytes as f64 / (1024.0 * 1024.0)
+        mib(source_payload_bytes)
     );
 
     // STAGE 2: TOPOLOGICAL SENSITIVITY PROFILING
@@ -108,20 +142,27 @@ pub fn run_verification(args: &VerificationArgs) -> Result<ProductionVerificatio
     println!("\n[3/5] Applying heterogeneous Pareto surgery recipe...");
     let recipe = build_target_surgery_recipe(&model, args.target);
     let diff = SurgeryEngine::apply_recipe(&mut model, &recipe);
-    let optimized_bytes = model.total_estimated_bytes();
-    let reduction_pct = if original_bytes > 0 {
-        (1.0 - (optimized_bytes as f64 / original_bytes as f64)) * 100.0
-    } else {
-        0.0
-    };
+    let recipe_estimated_bytes = model.total_estimated_bytes();
+    let mut format_counts: BTreeMap<String, usize> = BTreeMap::new();
+    for tensor in &model.tensors {
+        *format_counts
+            .entry(tensor.selected_format.display_name().to_string())
+            .or_default() += 1;
+    }
     println!(
-        "  Applied recipe '{}': modified {} tensors. Memory reduction: {:.1}%",
-        recipe.name, diff.modified_tensors_count, reduction_pct
+        "  Applied recipe '{}': relabelled {} tensors.",
+        recipe.name, diff.modified_tensors_count
+    );
+    println!(
+        "  Recipe footprint (estimated from bits/weight, not an artifact size): {:.2} MB",
+        mib(recipe_estimated_bytes)
     );
 
     // STAGE 4: BINARY EXPORT
+    let mut export_json = Value::Null;
+    let mut exported_gguf: Option<PathBuf> = None;
     if !args.dry_run {
-        println!("\n[4/5] Exporting binary artifacts (GGUF & SafeTensors)...");
+        println!("\n[4/5] Exporting binary artifact (GGUF v3)...");
         std::fs::create_dir_all(&args.output_dir)?;
 
         let gguf_dest = args.output_dir.join(format!("{}.gguf", model.name));
@@ -138,76 +179,240 @@ pub fn run_verification(args: &VerificationArgs) -> Result<ProductionVerificatio
             export_rep.exported_bytes,
             export_rep.sha256_checksum.as_deref().unwrap_or("none")
         );
+        println!(
+            "  Note: the exporter writes every tensor as Q8_0; per-tensor recipe formats are not applied to the artifact."
+        );
+        export_json = json!({
+            "container": "GGUF v3",
+            "quant_type": "Q8_0 (uniform, all tensors)",
+            "bytes": export_rep.exported_bytes,
+            "sha256": export_rep.sha256_checksum,
+        });
+        exported_gguf = Some(gguf_dest);
     } else {
         println!("\n[4/5] Skipping file export (dry-run mode active).");
     }
 
-    // STAGE 5: QUALITY GATE VERIFICATION
-    println!("\n[5/5] Evaluating perplexity on WikiText-2 quality gate...");
-    let eval_config = EvaluatorConfig::default();
-    // Collect weights or synthesize sample weights with realistic distribution for scaffold
-    let mut sample_weights = Vec::new();
-    for t in &model.tensors {
-        if let Some(prof) = &t.weight_profile {
-            sample_weights.extend_from_slice(&prof.sample_weights);
+    // STAGE 5: MEASURED QUALITY GATE
+    println!("\n[5/5] Perplexity quality gate...");
+    let has_weights = model.tensors.iter().all(|t| t.source.is_some());
+    let mut variants = Vec::new();
+    let mut gate_passed = None;
+    let mut corpus_provenance = Value::Null;
+
+    match (&args.tokens, &args.model_path) {
+        (Some(token_path), Some(model_path)) if has_weights => {
+            let tokens = read_token_file(token_path)?;
+            corpus_provenance = read_provenance(token_path);
+            let eval = PerplexityConfig {
+                context_len: args.eval_context,
+                max_tokens: args.eval_max_tokens,
+            };
+            let config = LlamaConfig::from_model_ir(&model).with_hf_config(model_path)?;
+            println!(
+                "  Measured forward pass: {} corpus tokens available, context {}, limit {}",
+                tokens.len(),
+                eval.context_len,
+                eval.max_tokens
+                    .map_or_else(|| "none".to_string(), |m| m.to_string())
+            );
+
+            let baseline = measure(
+                "source weights, as stored",
+                &model,
+                &config,
+                WeightPrecision::AsStored,
+                &tokens,
+                &eval,
+            )?;
+            let baseline_metrics = baseline.to_metrics(EvaluationCorpus::WikiText2);
+            variants.push(EvaluatedVariant {
+                id: "baseline",
+                description: "Source weights exactly as stored on disk".to_string(),
+                report: baseline,
+                delta_ppl: None,
+                accepted: None,
+            });
+
+            let mut candidates: Vec<(&'static str, String, PerplexityReport)> = Vec::new();
+            if let Some(gguf) = &exported_gguf {
+                let exported = ModelImporter::import(gguf)
+                    .with_context(|| format!("Failed to re-import exported artifact {gguf:?}"))?;
+                let report = measure(
+                    "exported GGUF artifact",
+                    &exported,
+                    &config,
+                    WeightPrecision::AsStored,
+                    &tokens,
+                    &eval,
+                )?;
+                candidates.push((
+                    "exported_gguf",
+                    "Exported GGUF artifact re-imported and decoded (uniform Q8_0)".to_string(),
+                    report,
+                ));
+            }
+            let report = measure(
+                "surgery recipe applied to weights",
+                &model,
+                &config,
+                WeightPrecision::SelectedFormat,
+                &tokens,
+                &eval,
+            )?;
+            candidates.push((
+                "recipe",
+                format!(
+                    "Recipe '{}' applied in memory: each tensor round-tripped through its selected format",
+                    recipe.name
+                ),
+                report,
+            ));
+
+            let mut all_accepted = true;
+            for (id, description, report) in candidates {
+                let metrics = report.to_metrics(EvaluationCorpus::WikiText2);
+                let gate =
+                    ModelEvaluator::assert_gate(&baseline_metrics, &metrics, args.max_ppl_delta);
+                let accepted = matches!(gate.decision, PerplexityGateDecision::Accept);
+                all_accepted &= accepted;
+                variants.push(EvaluatedVariant {
+                    id,
+                    description,
+                    delta_ppl: Some(report.perplexity - baseline_metrics.perplexity),
+                    report,
+                    accepted: Some(accepted),
+                });
+            }
+            gate_passed = Some(all_accepted);
+
+            println!("\n  Measured perplexity (WikiText-2 raw test):");
+            for variant in &variants {
+                let verdict = match variant.accepted {
+                    None => "baseline".to_string(),
+                    Some(true) => "PASSED [ACCEPT]".to_string(),
+                    Some(false) => "FAILED [ROLLBACK]".to_string(),
+                };
+                let delta = variant
+                    .delta_ppl
+                    .map_or_else(String::new, |d| format!(" (Δ {d:+.4})"));
+                println!(
+                    "    {:<14} PPL {:>12.4}{}  {}",
+                    variant.id, variant.report.perplexity, delta, verdict
+                );
+            }
+        }
+        _ => {
+            println!("  NOT EVALUATED: no forward pass was run, so no perplexity is reported.");
+            println!(
+                "  Supply --model-path with on-disk weights and --tokens (see scripts/prepare_eval_tokens.py)."
+            );
         }
     }
-    if sample_weights.is_empty() {
-        let mut rng_seed = 42u64;
-        sample_weights = (0..4096)
-            .map(|_| {
-                rng_seed = rng_seed.wrapping_mul(6364136223846793005).wrapping_add(1);
-                let val = ((rng_seed >> 33) as f32 / 2147483648.0) - 1.0;
-                val * 0.04
-            })
-            .collect();
+
+    let report_json = json!({
+        "thme_version": env!("CARGO_PKG_VERSION"),
+        "generated_unix_secs": std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0),
+        "target": format!("{:?}", args.target),
+        "model_name": model.name,
+        "num_parameters": model.num_parameters,
+        "source_payload_bytes": source_payload_bytes,
+        "recipe": {
+            "name": recipe.name,
+            "relabelled_tensors": diff.modified_tensors_count,
+            "format_counts": format_counts,
+            "estimated_bytes": recipe_estimated_bytes,
+            "estimated_bytes_note": "Computed from nominal bits per weight; no artifact of this size is written.",
+        },
+        "export": export_json,
+        "evaluation": {
+            "measured": gate_passed.is_some(),
+            "corpus": corpus_provenance,
+            "context_len": args.eval_context,
+            "max_tokens": args.eval_max_tokens,
+            "max_ppl_delta": args.max_ppl_delta,
+            "gate_passed": gate_passed,
+            "variants": variants.iter().map(|v| json!({
+                "id": v.id,
+                "description": v.description,
+                "perplexity": v.report.perplexity,
+                "cross_entropy_nats": v.report.cross_entropy_nats,
+                "scored_tokens": v.report.scored_tokens,
+                "corpus_tokens_used": v.report.corpus_tokens_used,
+                "windows": v.report.windows,
+                "elapsed_secs": v.report.elapsed_secs,
+                "tokens_per_sec": v.report.tokens_per_sec,
+                "delta_ppl": v.delta_ppl,
+                "accepted": v.accepted,
+            })).collect::<Vec<_>>(),
+        },
+        "host": host_info(),
+    });
+    if let Some(parent) = args.report_json.parent() {
+        std::fs::create_dir_all(parent)?;
     }
-
-    let baseline_weights: Vec<f32> = sample_weights.iter().map(|&w| w * 0.998).collect();
-    let baseline_metrics = ModelEvaluator::evaluate_weights(
-        &EvaluationCorpus::WikiText2,
-        &baseline_weights,
-        &eval_config,
+    std::fs::write(
+        &args.report_json,
+        serde_json::to_string_pretty(&report_json)? + "\n",
     )
-    .map_err(|e| anyhow::anyhow!("{e}"))?;
-    let baseline_ppl = baseline_metrics.perplexity;
-
-    let candidate_metrics = ModelEvaluator::evaluate_weights(
-        &EvaluationCorpus::WikiText2,
-        &sample_weights,
-        &eval_config,
-    )
-    .map_err(|e| anyhow::anyhow!("{e}"))?;
-
-    let gate =
-        ModelEvaluator::assert_gate(&baseline_metrics, &candidate_metrics, args.max_ppl_delta);
-    let ppl_delta = candidate_metrics.perplexity - baseline_ppl;
-    let gate_passed = matches!(gate.decision, PerplexityGateDecision::Accept);
-
-    println!("  Baseline PPL : {:.4}", baseline_ppl);
-    println!(
-        "  Candidate PPL: {:.4} (Δ {:+.4})",
-        candidate_metrics.perplexity, ppl_delta
-    );
-    println!(
-        "  Quality Gate : {}",
-        if gate_passed {
-            "PASSED [ACCEPT]"
-        } else {
-            "FAILED [ROLLBACK]"
-        }
-    );
+    .with_context(|| format!("Failed to write report to {:?}", args.report_json))?;
+    println!("\n  Report written to {:?}", args.report_json);
 
     Ok(ProductionVerificationReport {
         target: args.target,
-        original_bytes,
-        optimized_bytes,
-        reduction_pct,
-        baseline_ppl,
-        candidate_ppl: candidate_metrics.perplexity,
-        ppl_delta,
         gate_passed,
+        variants,
     })
+}
+
+fn measure(
+    label: &str,
+    model: &ModelIR,
+    config: &LlamaConfig,
+    precision: WeightPrecision,
+    tokens: &[u32],
+    eval: &PerplexityConfig,
+) -> Result<PerplexityReport> {
+    println!("  Evaluating {label}...");
+    let dense = LlamaModel::load(model, config.clone(), precision)
+        .with_context(|| format!("Failed to load weights for: {label}"))?;
+    let report = evaluate_perplexity(&dense, tokens, eval, |done, total, running| {
+        if done == total || done % 16 == 0 {
+            println!("    window {done}/{total}  running PPL {running:.4}");
+        }
+    })?;
+    println!(
+        "    PPL {:.4} over {} scored tokens ({:.1} tok/s, {:.1} s)",
+        report.perplexity, report.scored_tokens, report.tokens_per_sec, report.elapsed_secs
+    );
+    Ok(report)
+}
+
+/// Loads the provenance sidecar written next to the token file, if present.
+fn read_provenance(token_path: &Path) -> Value {
+    std::fs::read_to_string(token_path.with_extension("json"))
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or(Value::Null)
+}
+
+fn host_info() -> Value {
+    let mut system = sysinfo::System::new();
+    system.refresh_cpu_all();
+    json!({
+        "os": std::env::consts::OS,
+        "arch": std::env::consts::ARCH,
+        "cpu": system.cpus().first().map(|c| c.brand().trim().to_string()),
+        "logical_cpus": std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1),
+        "backend": "THME reference CPU forward pass (f32, multithreaded)",
+    })
+}
+
+fn mib(bytes: usize) -> f64 {
+    bytes as f64 / (1024.0 * 1024.0)
 }
 
 fn build_target_scaffold(target: VerificationTarget) -> ModelIR {
@@ -251,8 +456,8 @@ fn build_target_surgery_recipe(model: &ModelIR, target: VerificationTarget) -> T
         description: format!("Heterogeneous Pareto surgery profile for {:?}", target),
         target_model: model.name.clone(),
         operations,
-        expected_speedup: Some(1.45),
-        expected_memory_savings_pct: Some(45.0),
+        expected_speedup: None,
+        expected_memory_savings_pct: None,
     }
 }
 
@@ -260,13 +465,25 @@ fn main() -> Result<()> {
     let args = VerificationArgs::parse();
     let report = run_verification(&args)?;
 
-    if !report.gate_passed {
-        anyhow::bail!(
-            "Verification quality gate failed: ΔPPL {:+.4} exceeds tolerance {:.4}",
-            report.ppl_delta,
-            args.max_ppl_delta
-        );
+    match report.gate_passed {
+        Some(true) => println!("\nVerification successful for {:?}.", report.target),
+        Some(false) => {
+            let failed: Vec<&str> = report
+                .variants
+                .iter()
+                .filter(|v| v.accepted == Some(false))
+                .map(|v| v.id)
+                .collect();
+            anyhow::bail!(
+                "Verification quality gate failed for [{}]: ΔPPL exceeds tolerance {:.4}",
+                failed.join(", "),
+                args.max_ppl_delta
+            );
+        }
+        None => println!(
+            "\nPipeline stages 1-4 completed for {:?}; quality gate not evaluated.",
+            report.target
+        ),
     }
-    println!("\nVerification successful for {:?}.", report.target);
     Ok(())
 }

@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 """
-THME Published Benchmark Dossier Generator (Milestone v0.2.0.4)
-Synthesizes benchmark metrics into publication-grade Markdown & CSV tables
-with verified hardware attribution.
+THME Benchmark Dossier Generator (Milestone v0.2.0.4)
+
+Renders the machine-readable report written by the verification pipeline
+(`examples/production_verification.rs`) into Markdown and CSV.
+
+Every figure in the dossier is read from a report produced by a real forward
+pass. This script contains no benchmark numbers of its own: if a report is
+missing or holds no measured evaluation, generation fails instead of emitting
+placeholder values.
 """
 
 import argparse
@@ -10,134 +16,352 @@ import csv
 import json
 import os
 import sys
+import time
 
-HARDWARE_PROFILES = [
-    {
-        "device": "NVIDIA H100 SXM5 (80GB HBM3)",
-        "bandwidth_gbps": 3350,
-        "peak_tflops": 989.4,
-        "baseline_tok_s": 128.4,
-        "thme_tok_s": 298.6,
-        "speedup": "2.33x",
-        "energy_mj_tok": 14.2,
-        "vram_gb": "18.4 (vs 44.0)",
-    },
-    {
-        "device": "NVIDIA GeForce RTX 4090 (24GB GDDR6X)",
-        "bandwidth_gbps": 1008,
-        "peak_tflops": 330.3,
-        "baseline_tok_s": 42.1,
-        "thme_tok_s": 98.7,
-        "speedup": "2.34x",
-        "energy_mj_tok": 18.6,
-        "vram_gb": "6.8 (vs 16.2)",
-    },
-    {
-        "device": "Apple M3 Max (128GB Unified LPDDR5X)",
-        "bandwidth_gbps": 400,
-        "peak_tflops": 104.0,
-        "baseline_tok_s": 19.8,
-        "thme_tok_s": 47.3,
-        "speedup": "2.39x",
-        "energy_mj_tok": 8.1,
-        "vram_gb": "6.8 (vs 16.2)",
-    },
-    {
-        "device": "AMD Instinct MI300X (192GB HBM3)",
-        "bandwidth_gbps": 5300,
-        "peak_tflops": 1307.4,
-        "baseline_tok_s": 184.2,
-        "thme_tok_s": 441.5,
-        "speedup": "2.40x",
-        "energy_mj_tok": 12.8,
-        "vram_gb": "18.4 (vs 44.0)",
-    },
-    {
-        "device": "Intel Xeon Platinum 8480+ (DDR5 8-Channel)",
-        "bandwidth_gbps": 307.2,
-        "peak_tflops": 35.0,
-        "baseline_tok_s": 8.4,
-        "thme_tok_s": 21.2,
-        "speedup": "2.52x",
-        "energy_mj_tok": 29.4,
-        "vram_gb": "6.8 (vs 16.2)",
-    },
-]
 
-def generate_markdown(output_md, input_json=None):
-    measured = {}
-    if input_json and os.path.exists(input_json):
-        with open(input_json, "r", encoding="utf-8") as f:
-            measured = json.load(f)
+def load_reports(paths):
+    reports = []
+    for path in paths:
+        if not os.path.exists(path):
+            raise SystemExit(
+                f"error: report not found: {path}\n"
+                "Run the verification pipeline with --model-path and --tokens first."
+            )
+        with open(path, "r", encoding="utf-8") as f:
+            report = json.load(f)
+        if not report.get("evaluation", {}).get("measured"):
+            raise SystemExit(
+                f"error: {path} contains no measured evaluation; refusing to generate a dossier from it."
+            )
+        reports.append(report)
+    return reports
 
+
+def mib(n):
+    return f"{n / (1024 * 1024):.1f} MiB"
+
+
+def verdict(variant):
+    if variant["accepted"] is None:
+        return "baseline"
+    return "PASSED [ACCEPT]" if variant["accepted"] else "FAILED [ROLLBACK]"
+
+
+def sweep_section(sweep, heading):
+    """Renders the measured precision sweep (examples/precision_sweep.rs)."""
+    rows = sweep["variants"]
+    by_group = {}
+    for row in rows:
+        by_group.setdefault(row["group"], []).append(row)
+    base = by_group["baseline"][0]
     lines = [
-        "# THME Empirical Benchmark Dossier",
+        heading,
         "",
-        "> Official Hardware Benchmark Matrix for THME (Topological Heterogeneous Manifold Engine) v0.2.0 Production Release.",
+        f"Model: {sweep['model_name']}. Each row is a separate real forward pass over the first "
+        f"{sweep['corpus_tokens_used']:,} corpus tokens (context {sweep['context_len']}), so absolute values differ "
+        "from the full-split figures in section 1. Tensors a row does not name keep their stored values. "
+        "No retraining or calibration is applied. Bits per weight are nominal arithmetic, not artifact sizes.",
         "",
-        "## 1. Hardware Attribution Matrix (SmolLM-135M & LLaMA-3.2-1B)",
+        f"Baseline perplexity on this subset: {base['perplexity']:.4f}",
         "",
-        "| Hardware Architecture | Memory Bandwidth | Peak FP16 Compute | Baseline tok/s | THME tok/s | Speedup | Energy (mJ/tok) | VRAM Footprint |",
-        "| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |",
     ]
 
-    for p in HARDWARE_PROFILES:
+    def table(title, group_rows):
+        out = [
+            f"**{title}**",
+            "",
+            "| Variant | Perplexity | Δ PPL | Parameters changed | Nominal bits/weight |",
+            "| :--- | ---: | ---: | ---: | ---: |",
+        ]
+        for r in group_rows:
+            out.append(
+                f"| {r['description']} | {fmt_ppl(r['perplexity'])} | {r['delta_ppl']:+,.4f} | "
+                f"{100 * r['targeted_param_fraction']:.1f}% | {r['nominal_bits_per_weight']:.2f} |"
+            )
+        out.append("")
+        return out
+
+    if "uniform" in by_group:
+        lines += table("Uniform formats", by_group["uniform"])
+    if "role" in by_group:
+        lines += table("One tensor role ternarized at a time", sorted(by_group["role"], key=lambda r: r["delta_ppl"]))
+    if "recipe" in by_group and "random" in by_group:
+        recipe = by_group["recipe"][0]
+        randoms = by_group["random"]
+        lines += table("Recipe versus random placement with the same tensor counts and shapes", [recipe] + randoms)
+        deltas = [r["delta_ppl"] for r in randoms]
+        mean = sum(deltas) / len(deltas)
+        if recipe["delta_ppl"] < min(deltas):
+            outcome = "The recipe is better than every random placement tested."
+        elif recipe["delta_ppl"] > max(deltas):
+            outcome = "The recipe is worse than every random placement tested."
+        else:
+            outcome = "The recipe falls inside the range of the random placements tested."
+        lines += [
+            f"Recipe Δ {recipe['delta_ppl']:+.4f}; random placements Δ mean {mean:+.4f} "
+            f"(min {min(deltas):+.4f}, max {max(deltas):+.4f}, n={len(deltas)}). {outcome} "
+            f"With n={len(deltas)} this is exploratory, not a statistical claim.",
+            "",
+        ]
+    if "layer" in by_group:
+        lines += [
+            "**All linear tensors of one layer ternarized at a time**",
+            "",
+            "| Layer | Perplexity | Δ PPL |",
+            "| ---: | ---: | ---: |",
+        ]
+        for r in by_group["layer"]:
+            lines.append(f"| {int(r['id'].rsplit('_', 1)[1])} | {fmt_ppl(r['perplexity'])} | {r['delta_ppl']:+,.4f} |")
+        lines.append("")
+        uniform = next((r for r in by_group.get("uniform", []) if r["id"] == "uniform_ternary_linear"), None)
+        if uniform:
+            additive = sum(r["delta_ppl"] for r in by_group["layer"])
+            lines += [
+                f"Additivity check: the per-layer deltas sum to {additive:+,.1f}, while ternarizing all of those "
+                f"layers together measures {uniform['delta_ppl']:+,.1f}. Per-layer effects do not add.",
+                "",
+            ]
+    return lines
+
+
+def fmt_ppl(value):
+    return f"{value:.2e}" if value >= 1e7 else f"{value:,.3f}"
+
+
+def depth_section(probe, heading):
+    """Renders the measured depth probe (examples/depth_probe.rs)."""
+    rows = probe["exit_readout"]
+    depth = probe["num_layers"]
+    lines = [
+        heading,
+        "",
+        f"Model: {probe['model_name']} ({depth} layers), first {probe['corpus_tokens_used']:,} corpus tokens, "
+        f"{probe['scored_tokens']:,} scored. Stored weights, no retraining.",
+        "",
+        "**Readout after each layer.** The model's own final norm and output head are applied to the state at "
+        "that depth. The model was not trained to be read early, so this is a diagnostic of the stored weights, "
+        "not the behaviour of a model trained with exit heads.",
+        "",
+        "| Layers applied | Perplexity | Top prediction equals full-depth | Top prediction correct | Settled |",
+        "| ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for r in rows:
         lines.append(
-            f"| **{p['device']}** | {p['bandwidth_gbps']} GB/s | {p['peak_tflops']} TFLOPS | "
-            f"{p['baseline_tok_s']} | **{p['thme_tok_s']}** | **{p['speedup']}** | {p['energy_mj_tok']} mJ | {p['vram_gb']} |"
+            f"| {r['layers_applied']} | {fmt_ppl(r['perplexity'])} | {100 * r['top1_agrees_with_final']:.1f}% | "
+            f"{100 * r['top1_accuracy']:.1f}% | {100 * r['settled_fraction']:.1f}% |"
         )
+    lines += [
+        "",
+        "\"Settled\" is the share of tokens whose top prediction equals the full-depth top prediction at this "
+        "depth and at every later depth.",
+        "",
+        "**Layer schedule changes.** Layers repeated or skipped, read out at the end.",
+        "",
+        "| Schedule | Layer applications | Perplexity | Δ PPL |",
+        "| :--- | ---: | ---: | ---: |",
+    ]
+    for r in probe["schedule_experiments"]:
+        lines.append(
+            f"| {r['description']} | {r['layer_applications']} | {fmt_ppl(r['perplexity'])} | {r['delta_ppl']:+,.3f} |"
+        )
+    lines.append("")
+    return lines
+
+
+def generate_markdown(reports, output_md, sweep=None, probe=None):
+    section = iter(range(1, 100))
+
+    def h(title):
+        return f"## {next(section)}. {title}"
+
+    lines = [
+        "# THME Benchmark Dossier",
+        "",
+        "> Measured results for THME (Topological Heterogeneous Manifold Engine).",
+        "> Every number below was produced by a real forward pass on the host listed under Provenance.",
+        "> Nothing in this document is simulated, projected, or estimated unless the row says so.",
+        "",
+        h("Perplexity Quality Gate"),
+        "",
+    ]
+
+    for report in reports:
+        ev = report["evaluation"]
+        corpus = ev.get("corpus") or {}
+        first = ev["variants"][0]
+        full = corpus.get("token_count") == first["corpus_tokens_used"]
+        coverage = (
+            "complete split"
+            if full
+            else f"first {first['corpus_tokens_used']:,} tokens of the split (partial run)"
+        )
+        lines.extend([
+            f"### {report['model_name']}",
+            "",
+            f"- Corpus: {corpus.get('corpus', 'unrecorded')}, {coverage}",
+            f"- Scored tokens: {first['scored_tokens']:,} in {first['windows']} windows of {ev['context_len']}",
+            f"- Gate tolerance: ΔPPL <= {ev['max_ppl_delta']}",
+            "",
+            "| Weights | Perplexity | Δ PPL | Cross-entropy (nats) | Gate |",
+            "| :--- | ---: | ---: | ---: | :--- |",
+        ])
+        for v in ev["variants"]:
+            delta = "" if v["delta_ppl"] is None else f"{v['delta_ppl']:+.4f}"
+            lines.append(
+                f"| {v['description']} | {v['perplexity']:.4f} | {delta} | "
+                f"{v['cross_entropy_nats']:.4f} | {verdict(v)} |"
+            )
+        lines.append("")
+
+    if sweep:
+        lines.extend(sweep_section(sweep, h("Measured Precision Sensitivity")))
+    if probe:
+        lines.extend(depth_section(probe, h("Measured Depth Behaviour")))
+
+    lines.extend([h("Sizes"), ""])
+    for report in reports:
+        export = report.get("export")
+        recipe = report["recipe"]
+        lines.extend([
+            f"### {report['model_name']}",
+            "",
+            "| Item | Size | Basis |",
+            "| :--- | ---: | :--- |",
+            f"| Source tensor payload | {mib(report['source_payload_bytes'])} | measured (bytes on disk) |",
+        ])
+        if export:
+            lines.append(
+                f"| Exported {export['container']}, {export['quant_type']} | {mib(export['bytes'])} | "
+                f"measured (file size, sha256 `{(export.get('sha256') or 'n/a')[:16]}…`) |"
+            )
+        counts = ", ".join(f"{n} × {name}" for name, n in sorted(recipe["format_counts"].items()))
+        lines.extend([
+            f"| Recipe `{recipe['name']}` ({counts}) | {mib(recipe['estimated_bytes'])} | "
+            "**estimate** from nominal bits per weight; no artifact of this size is written |",
+            "",
+        ])
 
     lines.extend([
+        h("Method"),
         "",
-        "## 2. Quality Gate Invariants (WikiText-2 Perplexity)",
+        "- Forward pass: THME reference CPU implementation (`src/inference/`), dense f32 arithmetic,",
+        "  RMSNorm, rotary position embeddings, grouped-query causal attention, SwiGLU MLP, tied output head.",
+        "- The corpus is tokenized once with the model's own tokenizer, without special tokens",
+        "  (`scripts/prepare_eval_tokens.py`), then cut into consecutive non-overlapping windows.",
+        "- Every token except the first of each window is scored given the earlier tokens of that window.",
+        "  Perplexity is exp(mean negative log-likelihood) over all scored tokens.",
+        "- This differs from overlapping sliding-window protocols, which give each token more context",
+        "  and therefore report lower perplexity. Figures are comparable to each other, not to other protocols.",
+        "- \"Exported artifact\" rows decode the written file back to f32 and run the same forward pass.",
+        "- \"Recipe\" rows round-trip each tensor through its selected format in memory",
+        "  (Q8_0: GGML 32-value blocks; Ternary: GGML TQ1_0 256-value blocks with MSE-optimal scale)",
+        "  with no retraining or calibration.",
         "",
-        "| Model | Baseline PPL | THME Pareto PPL | Δ PPL | Quality Gate (τ <= 0.45) | Model Size Reduction |",
-        "| :--- | :--- | :--- | :--- | :--- | :--- |",
-        "| **SmolLM-135M** | 5.842 | 5.981 | +0.139 | **PASSED [ACCEPT]** | **58.2%** (528 MB -> 221 MB) |",
-        "| **LLaMA-3.2-1B** | 6.124 | 6.308 | +0.184 | **PASSED [ACCEPT]** | **52.4%** (2.66 GB -> 1.27 GB) |",
+        h("Provenance"),
         "",
-        "## 3. Methodology & Reproducibility",
+    ])
+    for report in reports:
+        ev = report["evaluation"]
+        corpus = ev.get("corpus") or {}
+        host = report.get("host", {})
+        stamp = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(report.get("generated_unix_secs", 0)))
+        elapsed = sum(v["elapsed_secs"] for v in ev["variants"])
+        rate = ev["variants"][0]["tokens_per_sec"]
+        lines.extend([
+            f"### {report['model_name']}",
+            "",
+            f"- THME version: {report['thme_version']}; run completed {stamp}",
+            f"- Host: {host.get('cpu', 'unknown CPU')} ({host.get('logical_cpus', '?')} logical CPUs), "
+            f"{host.get('os', '?')}/{host.get('arch', '?')}",
+            f"- Backend: {host.get('backend', 'unrecorded')}",
+            f"- Evaluation wall time: {elapsed / 60:.1f} min total; baseline scored at {rate:.0f} tokens/s "
+            "(reference implementation on a machine in normal use; not a performance benchmark)",
+            f"- Corpus source: {corpus.get('corpus_source', 'unrecorded')} (`{corpus.get('corpus_member', '')}`)",
+            f"- Corpus sha256: `{corpus.get('corpus_sha256', 'unrecorded')}`",
+            f"- Tokenizer: {corpus.get('tokenizer_repo', 'unrecorded')}, sha256 `{corpus.get('tokenizer_sha256', 'unrecorded')}`",
+            f"- Token file: {corpus.get('token_count', 0):,} tokens, sha256 `{corpus.get('token_file_sha256', 'unrecorded')}`",
+            "",
+        ])
+
+    lines.extend([
+        h("Not Measured"),
         "",
-        "- All measurements collected via `scripts/benchmark_suite.py` with zero Python runtime dependencies.",
-        "- Perplexity evaluated using standard stride-512 sliding window on the complete WikiText-2 test set.",
-        "- Memory reduction computed on exported 32-byte memory-aligned GGUF v3 archives.",
+        "The following have no measurements and are deliberately absent from this dossier:",
+        "",
+        "- Inference throughput, energy, or memory on any GPU or accelerator.",
+        "- Any speedup of THME-processed models over a baseline runtime.",
+        "- Models other than those listed in section 1.",
+        "- Any effect of retraining, distillation, or calibration on the quantized variants.",
+        "",
+        h("Reproduce"),
+        "",
+        "```bash",
+        "pip install tokenizers",
+        "python scripts/prepare_eval_tokens.py",
+        "cargo run --release --example production_verification -- \\",
+        "    --model-path models/SmolLM-135M \\",
+        "    --tokens target/eval/wikitext2_test.SmolLM-135M.u32",
+        "cargo run --release --example depth_probe -- \\",
+        "    --model-path models/SmolLM-135M \\",
+        "    --tokens target/eval/wikitext2_test.SmolLM-135M.u32",
+        "cargo run --release --example precision_sweep -- \\",
+        "    --model-path models/SmolLM-135M \\",
+        "    --tokens target/eval/wikitext2_test.SmolLM-135M.u32 --layer-scan",
+        "python scripts/generate_dossier.py",
+        "```",
     ])
 
-    if measured:
-        lines.extend([
-            "",
-            "## 4. Local Host Verification Telemetry",
-            "",
-            f"- **OS**: {measured.get('telemetry', {}).get('os', 'N/A')}",
-            f"- **Architecture**: {measured.get('telemetry', {}).get('arch', 'N/A')}",
-            f"- **Processor**: {measured.get('telemetry', {}).get('processor', 'N/A')}",
-            f"- **Measured Pipelines**:",
-        ])
-        for k, v in measured.get("benchmarks", {}).items():
-            lines.append(f"  - `{k}`: {v} ms")
-
-    with open(output_md, "w", encoding="utf-8") as f:
+    with open(output_md, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines) + "\n")
     print(f"Generated Markdown dossier: {output_md}")
 
-def generate_csv(output_csv):
+
+def generate_csv(reports, output_csv):
     with open(output_csv, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["device", "bandwidth_gbps", "peak_tflops", "baseline_tok_s", "thme_tok_s", "speedup", "energy_mj_tok", "vram_gb"])
-        for p in HARDWARE_PROFILES:
-            writer.writerow([p["device"], p["bandwidth_gbps"], p["peak_tflops"], p["baseline_tok_s"], p["thme_tok_s"], p["speedup"], p["energy_mj_tok"], p["vram_gb"]])
+        writer = csv.writer(f, lineterminator="\n")
+        writer.writerow([
+            "model", "variant", "perplexity", "delta_ppl", "cross_entropy_nats",
+            "scored_tokens", "context_len", "accepted", "tokens_per_sec",
+        ])
+        for report in reports:
+            ev = report["evaluation"]
+            for v in ev["variants"]:
+                writer.writerow([
+                    report["model_name"], v["id"], f"{v['perplexity']:.6f}",
+                    "" if v["delta_ppl"] is None else f"{v['delta_ppl']:.6f}",
+                    f"{v['cross_entropy_nats']:.6f}", v['scored_tokens'], ev['context_len'],
+                    "" if v["accepted"] is None else str(v["accepted"]).lower(),
+                    f"{v['tokens_per_sec']:.1f}",
+                ])
     print(f"Generated CSV dossier: {output_csv}")
+
 
 def main():
     parser = argparse.ArgumentParser(description="THME Benchmark Dossier Generator")
-    parser.add_argument("--input", default="target/benchmark_results.json", help="Input benchmark results JSON")
+    parser.add_argument("--input", nargs="+", default=["target/verification_report.json"],
+                        help="Verification report JSON file(s) from production_verification")
+    parser.add_argument("--sweep", default="target/precision_sweep.json",
+                        help="Precision sweep JSON from precision_sweep (included when the file exists)")
+    parser.add_argument("--depth", default="target/depth_probe.json",
+                        help="Depth probe JSON from depth_probe (included when the file exists)")
     parser.add_argument("--output-md", default="docs/benchmark_dossier.md", help="Output Markdown file")
     parser.add_argument("--output-csv", default="docs/benchmark_dossier.csv", help="Output CSV file")
     args = parser.parse_args()
 
+    reports = load_reports(args.input)
     os.makedirs(os.path.dirname(args.output_md) or ".", exist_ok=True)
-    generate_markdown(args.output_md, args.input)
-    generate_csv(args.output_csv)
+    sweep = None
+    if args.sweep and os.path.exists(args.sweep):
+        with open(args.sweep, "r", encoding="utf-8") as f:
+            sweep = json.load(f)
+    probe = None
+    if args.depth and os.path.exists(args.depth):
+        with open(args.depth, "r", encoding="utf-8") as f:
+            probe = json.load(f)
+    generate_markdown(reports, args.output_md, sweep, probe)
+    generate_csv(reports, args.output_csv)
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
