@@ -120,7 +120,7 @@ impl LiveFlowSimulator {
         checkpoint_layer: usize,
         exit_probability: f32,
     ) -> Self {
-        let words: Vec<String> = prompt.split_whitespace().map(|w| w.to_string()).collect();
+        let words: Vec<String> = prompt.split_whitespace().map(ToString::to_string).collect();
         let prompt_tokens = if words.is_empty() {
             vec![
                 "<bos>".to_string(),

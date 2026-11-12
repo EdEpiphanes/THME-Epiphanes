@@ -116,7 +116,6 @@ impl BitNetPacker {
 
                 let code = match ternary {
                     -1 => CODE_NEG_ONE,
-                    0 => CODE_ZERO,
                     1 => CODE_POS_ONE,
                     _ => CODE_ZERO,
                 };
@@ -175,7 +174,6 @@ impl BitNetPacker {
             for &t in row_slice {
                 let code = match t {
                     -1 => CODE_NEG_ONE,
-                    0 => CODE_ZERO,
                     1 => CODE_POS_ONE,
                     _ => CODE_ZERO,
                 };
@@ -236,9 +234,8 @@ impl BitNetPacker {
                     let code = (byte_val >> shift) & 0b11;
                     let ternary_val = match code {
                         CODE_NEG_ONE => -1.0,
-                        CODE_ZERO => 0.0,
                         CODE_POS_ONE => 1.0,
-                        _ => 0.0, // CODE_PADDING or invalid
+                        _ => 0.0, // CODE_ZERO, CODE_PADDING, or invalid
                     };
 
                     unpacked.push(ternary_val * scale);
@@ -276,7 +273,6 @@ impl BitNetPacker {
                     let code = (byte_val >> shift) & 0b11;
                     let val = match code {
                         CODE_NEG_ONE => -1,
-                        CODE_ZERO => 0,
                         CODE_POS_ONE => 1,
                         _ => 0,
                     };

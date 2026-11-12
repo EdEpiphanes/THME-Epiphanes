@@ -54,7 +54,7 @@ impl ModelImporter {
 
         let arch_str = hf_config
             .as_ref()
-            .map(|c| c.primary_architecture())
+            .map(HfConfig::primary_architecture)
             .unwrap_or_else(|| {
                 // Infer from tensor naming
                 if tensors

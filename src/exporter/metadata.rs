@@ -22,12 +22,11 @@ impl GgufMetadataSynchronizer {
     /// Resolves canonical lowercase architecture prefix used in GGUF keys
     pub fn architecture_prefix(arch: &ModelArchitecture) -> &'static str {
         match arch {
-            ModelArchitecture::Llama => "llama",
+            ModelArchitecture::Llama | ModelArchitecture::Unknown(_) => "llama",
             ModelArchitecture::Mistral => "mistral",
             ModelArchitecture::Qwen => "qwen2",
             ModelArchitecture::DeepSeek => "deepseek2",
             ModelArchitecture::Gemma => "gemma",
-            ModelArchitecture::Unknown(_) => "llama",
         }
     }
 
@@ -239,34 +238,35 @@ mod tests {
         let map: std::collections::HashMap<String, GgufValue> = meta.into_iter().collect();
 
         assert_eq!(
-            map.get("general.architecture").and_then(|v| v.as_str()),
+            map.get("general.architecture").and_then(GgufValue::as_str),
             Some("llama")
         );
         assert_eq!(
-            map.get("llama.block_count").and_then(|v| v.as_u64()),
+            map.get("llama.block_count").and_then(GgufValue::as_u64),
             Some(16)
         );
         assert_eq!(
-            map.get("llama.embedding_length").and_then(|v| v.as_u64()),
+            map.get("llama.embedding_length")
+                .and_then(GgufValue::as_u64),
             Some(2048)
         );
         assert_eq!(
             map.get("llama.feed_forward_length")
-                .and_then(|v| v.as_u64()),
+                .and_then(GgufValue::as_u64),
             Some(5632)
         );
         assert_eq!(
             map.get("llama.attention.head_count")
-                .and_then(|v| v.as_u64()),
+                .and_then(GgufValue::as_u64),
             Some(16)
         );
         assert_eq!(
             map.get("llama.attention.head_count_kv")
-                .and_then(|v| v.as_u64()),
+                .and_then(GgufValue::as_u64),
             Some(4)
         );
         assert_eq!(
-            map.get("general.file_type").and_then(|v| v.as_u64()),
+            map.get("general.file_type").and_then(GgufValue::as_u64),
             Some(7)
         );
     }

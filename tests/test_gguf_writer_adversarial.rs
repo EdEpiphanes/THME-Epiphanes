@@ -235,7 +235,7 @@ fn test_adversarial_magic_and_version_constants() {
     let res = GgufParser::parse_from_bytes(&bad_magic, Path::new("bad_magic.gguf"));
     assert!(res.is_err(), "Parser must reject invalid magic b'THME'");
 
-    let mut bad_version = bytes.clone();
+    let mut bad_version = bytes;
     bad_version[4..8].copy_from_slice(&4u32.to_le_bytes());
     let res2 = GgufParser::parse_from_bytes(&bad_version, Path::new("bad_version.gguf"));
     assert!(
@@ -379,7 +379,7 @@ fn test_adversarial_all_13_metadata_types_exhaustive() {
         ("test.bool.true", GgufValue::Bool(true)),
         ("test.bool.false", GgufValue::Bool(false)),
         // 8: String
-        ("test.str.empty", GgufValue::String("".into())),
+        ("test.str.empty", GgufValue::String(String::new())),
         (
             "test.str.unicode",
             GgufValue::String("Topological äöü Heterogeneous αβγδε 日本語 Engine ∑∫√".into()),

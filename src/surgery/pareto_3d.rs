@@ -134,8 +134,8 @@ mod tests {
             energy_uj_per_token: 60.0,
         };
 
-        assert!(opt.update(p1.clone()));
-        assert!(opt.update(p2.clone()));
+        assert!(opt.update(p1));
+        assert!(opt.update(p2));
         assert!(!opt.update(p_dominated)); // Should be rejected as dominated by p1 and p2
 
         assert_eq!(opt.frontier().len(), 2);

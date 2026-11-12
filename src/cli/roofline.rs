@@ -141,7 +141,7 @@ pub fn execute(args: RooflineArgs) -> Result<()> {
             mem_bound, mem_pct, comp_bound, comp_pct
         );
 
-        let cache_sim = CacheSimulator4Tier::new(hw.clone());
+        let cache_sim = CacheSimulator4Tier::new(hw);
         let working_set_bytes = (model.hidden_size * model.hidden_size * 2 * 4).max(16_000_000);
         let cache_report = cache_sim.simulate_layer_working_set(working_set_bytes);
         println!(

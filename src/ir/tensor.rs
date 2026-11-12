@@ -24,12 +24,11 @@ impl TensorFormat {
         match self {
             Self::FP32 => 32.0,
             Self::FP16 | Self::BF16 => 16.0,
-            Self::INT8 | Self::Q8_0 => 8.0,
+            Self::INT8 | Self::Q8_0 | Self::Custom(_) => 8.0,
             Self::Q4_0 | Self::Q4_K => 4.5, // 4-bit plus scale overhead
             Self::Q2_K => 2.56,
             Self::Ternary => 1.585, // log2(3)
             Self::Bit1_5 => 1.5,
-            Self::Custom(_) => 8.0,
         }
     }
 
@@ -111,8 +110,7 @@ impl TensorRole {
             Self::AttentionV => 1.4,
             Self::AttentionOut => 1.2,
             Self::MlpGate | Self::MlpUp => 1.1,
-            Self::MlpDown => 1.0, // Typically most robust to compression
-            Self::Unknown => 1.0,
+            Self::MlpDown | Self::Unknown => 1.0, // Typically most robust to compression
         }
     }
 }

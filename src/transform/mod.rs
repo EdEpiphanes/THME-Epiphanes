@@ -95,14 +95,14 @@ impl MatrixAlgorithm {
                 let r_eff = (*target_rank as f32).max(16.0);
                 (16.0 * (2.0 * r_eff / 2048.0)).clamp(2.0, 14.0)
             }
-            MatrixAlgorithm::HadamardRotation { .. } => 8.0, // Rotated then quantized to INT8
-            MatrixAlgorithm::SmoothQuant { effective_bits, .. } => *effective_bits,
-            MatrixAlgorithm::BitNetTernary { effective_bits, .. } => *effective_bits,
-            MatrixAlgorithm::Structured2to4Pruning { .. } => 8.0, // 50% zero indices + 8-bit values
-            MatrixAlgorithm::FeatureDistillation { .. } => 4.0,   // Distilled compressed student
-            MatrixAlgorithm::FP8Hybrid { .. } => 8.0,
-            MatrixAlgorithm::INT4AWQ { .. } => 4.25, // 4-bit with FP16 scales
-            MatrixAlgorithm::Custom { effective_bits, .. } => *effective_bits,
+            MatrixAlgorithm::HadamardRotation { .. }
+            | MatrixAlgorithm::Structured2to4Pruning { .. }
+            | MatrixAlgorithm::FP8Hybrid { .. } => 8.0,
+            MatrixAlgorithm::SmoothQuant { effective_bits, .. }
+            | MatrixAlgorithm::BitNetTernary { effective_bits, .. }
+            | MatrixAlgorithm::Custom { effective_bits, .. } => *effective_bits,
+            MatrixAlgorithm::FeatureDistillation { .. } => 4.0,
+            MatrixAlgorithm::INT4AWQ { .. } => 4.25,
         }
     }
 

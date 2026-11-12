@@ -107,7 +107,7 @@ pub fn execute(args: ConvertArgs) -> Result<()> {
         let recipe = TweakRecipe {
             name: format!("paradigm-convert-to-{}", target.code().to_lowercase()),
             author: "THME Paradigm Synthesizer".to_string(),
-            target_model: model_ir.name.clone(),
+            target_model: model_ir.name,
             version: "0.1.5".to_string(),
             description: format!(
                 "Declarative cross-paradigm surgery recipe converting {} to {}",

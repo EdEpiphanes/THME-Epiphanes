@@ -88,7 +88,7 @@ impl Dataset {
             DatasetFormat::PlainText => {
                 let paragraphs: Vec<&str> = content
                     .split("\n\n")
-                    .map(|p| p.trim())
+                    .map(str::trim)
                     .filter(|p| !p.is_empty())
                     .collect();
 

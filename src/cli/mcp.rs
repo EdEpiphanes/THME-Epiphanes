@@ -373,7 +373,7 @@ fn tool_inspect_model(
     let model_path = args
         .get("model_path")
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
+        .map(ToString::to_string)
         .or_else(|| active_model_path.clone());
 
     if let Some(path_str) = model_path {
@@ -419,7 +419,7 @@ fn tool_inspect_model(
 fn tool_auto_decide(args: &Value, _active_model_path: &Option<String>) -> Result<String, String> {
     let tol = args
         .get("quality_tolerance")
-        .and_then(|v| v.as_f64())
+        .and_then(Value::as_f64)
         .unwrap_or(0.025) as f32;
 
     let registry = crate::transform::byoa::AlgorithmRegistry::new();
@@ -496,15 +496,15 @@ fn tool_apply_surgery(args: &Value) -> Result<String, String> {
 fn tool_validate_quality(args: &Value) -> Result<String, String> {
     let base_ppl = args
         .get("baseline_ppl")
-        .and_then(|v| v.as_f64())
+        .and_then(Value::as_f64)
         .ok_or("Missing baseline_ppl")?;
     let cand_ppl = args
         .get("candidate_ppl")
-        .and_then(|v| v.as_f64())
+        .and_then(Value::as_f64)
         .ok_or("Missing candidate_ppl")?;
     let max_delta = args
         .get("max_delta_ppl")
-        .and_then(|v| v.as_f64())
+        .and_then(Value::as_f64)
         .unwrap_or(0.25);
 
     let corpus_str = args
@@ -568,13 +568,10 @@ fn tool_simulate_token_flow(args: &Value) -> Result<String, String> {
         .get("prompt")
         .and_then(|v| v.as_str())
         .unwrap_or("Hello from Copilot");
-    let tokens = args
-        .get("num_tokens")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(48) as usize;
+    let tokens = args.get("num_tokens").and_then(Value::as_u64).unwrap_or(48) as usize;
     let ratio = args
         .get("early_exit_ratio")
-        .and_then(|v| v.as_f64())
+        .and_then(Value::as_f64)
         .unwrap_or(0.80) as f32;
 
     let mut sim = crate::profiling::LiveFlowSimulator::new(prompt, tokens, 12, 2048, 4, ratio);
@@ -612,7 +609,7 @@ fn tool_run_experiment(args: &Value) -> Result<String, String> {
         .ok_or("Missing technique")?;
     let param = args
         .get("parameter")
-        .and_then(|v| v.as_f64())
+        .and_then(Value::as_f64)
         .unwrap_or(0.05) as f32;
 
     let technique = match tech_name {
@@ -667,9 +664,9 @@ fn tool_micro_train(args: &Value) -> Result<String, String> {
         .unwrap_or("adamw");
     let lr = args
         .get("learning_rate")
-        .and_then(|v| v.as_f64())
+        .and_then(Value::as_f64)
         .unwrap_or(0.001) as f32;
-    let steps = args.get("steps").and_then(|v| v.as_u64()).unwrap_or(5) as usize;
+    let steps = args.get("steps").and_then(Value::as_u64).unwrap_or(5) as usize;
 
     let loss_type = match loss_type_str {
         "distillation" => crate::trainer::TrainingLossType::KnowledgeDistillation,
@@ -750,7 +747,7 @@ fn tool_convert_paradigm(
     let path_opt = args
         .get("model_path")
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
+        .map(ToString::to_string)
         .or_else(|| active_model_path.clone());
 
     let model_ir = if let Some(ref path) = path_opt {
@@ -764,19 +761,19 @@ fn tool_convert_paradigm(
     let source = crate::ir::ParadigmConverter::detect_paradigm(&model_ir);
 
     let mut config = crate::ir::ParadigmConversionConfig::new(target);
-    if let Some(experts) = args.get("num_experts").and_then(|v| v.as_u64()) {
+    if let Some(experts) = args.get("num_experts").and_then(Value::as_u64) {
         config.num_experts = experts as usize;
     }
-    if let Some(top_k) = args.get("top_k").and_then(|v| v.as_u64()) {
+    if let Some(top_k) = args.get("top_k").and_then(Value::as_u64) {
         config.top_k = top_k as usize;
     }
-    if let Some(hidden) = args.get("target_hidden_size").and_then(|v| v.as_u64()) {
+    if let Some(hidden) = args.get("target_hidden_size").and_then(Value::as_u64) {
         config.target_hidden_size = Some(hidden as usize);
     }
-    if let Some(layers) = args.get("target_layers").and_then(|v| v.as_u64()) {
+    if let Some(layers) = args.get("target_layers").and_then(Value::as_u64) {
         config.target_layers = Some(layers as usize);
     }
-    if let Some(bitnet) = args.get("apply_bitnet").and_then(|v| v.as_bool()) {
+    if let Some(bitnet) = args.get("apply_bitnet").and_then(Value::as_bool) {
         config.apply_bitnet = bitnet;
     }
 
@@ -815,7 +812,7 @@ fn tool_simulate_speculative_decoding(
     let path_opt = args
         .get("model_path")
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
+        .map(ToString::to_string)
         .or_else(|| active_model_path.clone());
 
     let target_model = if let Some(ref path) = path_opt {
@@ -828,19 +825,19 @@ fn tool_simulate_speculative_decoding(
 
     let draft_layers = args
         .get("draft_layers")
-        .and_then(|v| v.as_u64())
+        .and_then(Value::as_u64)
         .unwrap_or(4) as usize;
     let horizon = args
         .get("lookahead_horizon")
-        .and_then(|v| v.as_u64())
+        .and_then(Value::as_u64)
         .unwrap_or(5) as usize;
     let temperature = args
         .get("temperature")
-        .and_then(|v| v.as_f64())
+        .and_then(Value::as_f64)
         .unwrap_or(0.7) as f32;
     let apply_bitnet = args
         .get("apply_bitnet")
-        .and_then(|v| v.as_bool())
+        .and_then(Value::as_bool)
         .unwrap_or(false);
 
     let draft_cfg = crate::speculative::DraftExtractionConfig {
@@ -908,7 +905,7 @@ fn tool_profile_roofline(
     let path_opt = args
         .get("model_path")
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
+        .map(ToString::to_string)
         .or_else(|| active_model_path.clone());
 
     let model = if let Some(ref path) = path_opt {
@@ -923,19 +920,19 @@ fn tool_profile_roofline(
         .get("hardware")
         .and_then(|v| v.as_str())
         .unwrap_or("h100");
-    let batch_size = args.get("batch_size").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
-    let seq_len = args.get("seq_len").and_then(|v| v.as_u64()).unwrap_or(2048) as usize;
+    let batch_size = args.get("batch_size").and_then(Value::as_u64).unwrap_or(1) as usize;
+    let seq_len = args.get("seq_len").and_then(Value::as_u64).unwrap_or(2048) as usize;
     let enable_flash_attn = args
         .get("enable_flash_attention")
-        .and_then(|v| v.as_bool())
+        .and_then(Value::as_bool)
         .unwrap_or(true);
     let thermal_sim = args
         .get("thermal_throttling")
-        .and_then(|v| v.as_bool())
+        .and_then(Value::as_bool)
         .unwrap_or(false);
     let temp_c = args
         .get("temperature_c")
-        .and_then(|v| v.as_f64())
+        .and_then(Value::as_f64)
         .map(|f| f as f32);
 
     let hw = std::str::FromStr::from_str(hw_str)

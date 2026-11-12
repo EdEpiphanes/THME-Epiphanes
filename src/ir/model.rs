@@ -114,7 +114,7 @@ impl ModelIR {
 
     /// Total memory bytes after currently selected tensor precisions
     pub fn total_estimated_bytes(&self) -> usize {
-        self.tensors.iter().map(|t| t.estimated_bytes()).sum()
+        self.tensors.iter().map(TensorIR::estimated_bytes).sum()
     }
 
     /// Global model compression ratio (original / compressed)

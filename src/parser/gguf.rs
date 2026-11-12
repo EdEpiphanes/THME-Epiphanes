@@ -129,7 +129,8 @@ impl GgmlType {
             | Self::I16
             | Self::I32
             | Self::I64
-            | Self::F64 => 1,
+            | Self::F64
+            | Self::Unknown(_) => 1,
             Self::Q4_0
             | Self::Q4_1
             | Self::Q5_0
@@ -150,9 +151,8 @@ impl GgmlType {
             | Self::IQ3_S
             | Self::IQ2_S
             | Self::IQ4_XS
-            | Self::IQ1_M => 256,
-            Self::TQ1_0 => 256,
-            Self::Unknown(_) => 1,
+            | Self::IQ1_M
+            | Self::TQ1_0 => 256,
         }
     }
 
@@ -160,7 +160,7 @@ impl GgmlType {
         match self {
             Self::F32 | Self::I32 => 4,
             Self::F16 | Self::BF16 | Self::I16 => 2,
-            Self::I8 => 1,
+            Self::I8 | Self::Unknown(_) => 1,
             Self::I64 | Self::F64 => 8,
             Self::Q4_0 | Self::IQ4_NL => 18,
             Self::Q4_1 => 20,
@@ -169,7 +169,7 @@ impl GgmlType {
             Self::Q8_0 => 34,
             Self::Q8_1 => 40,
             Self::Q2_K => 84,
-            Self::Q3_K => 110,
+            Self::Q3_K | Self::IQ3_S => 110,
             Self::Q4_K => 144,
             Self::Q5_K => 176,
             Self::Q6_K => 210,
@@ -178,12 +178,10 @@ impl GgmlType {
             Self::IQ2_XS => 74,
             Self::IQ3_XXS => 98,
             Self::IQ1_S => 48,
-            Self::IQ3_S => 110,
             Self::IQ2_S => 82,
             Self::IQ4_XS => 136,
             Self::IQ1_M => 56,
             Self::TQ1_0 => 54,
-            Self::Unknown(_) => 1,
         }
     }
 
@@ -680,7 +678,7 @@ impl GgufParser {
 
         let alignment = metadata
             .get("general.alignment")
-            .and_then(|v| v.as_u64())
+            .and_then(GgufValue::as_u64)
             .unwrap_or(32)
             .max(1) as usize;
 
@@ -760,7 +758,7 @@ impl GgufParser {
         let num_layers = metadata
             .get(&format!("{}.block_count", arch_str))
             .or_else(|| metadata.get(&format!("{}.layer_count", arch_str)))
-            .and_then(|v| v.as_u64())
+            .and_then(GgufValue::as_u64)
             .map(|v| v as usize)
             .unwrap_or_else(|| {
                 let mut max_l = 0;
@@ -776,31 +774,31 @@ impl GgufParser {
 
         let hidden_size = metadata
             .get(&format!("{}.embedding_length", arch_str))
-            .and_then(|v| v.as_u64())
+            .and_then(GgufValue::as_u64)
             .map(|v| v as usize)
             .unwrap_or(4096);
 
         let num_attention_heads = metadata
             .get(&format!("{}.attention.head_count", arch_str))
-            .and_then(|v| v.as_u64())
+            .and_then(GgufValue::as_u64)
             .map(|v| v as usize)
             .unwrap_or(32);
 
         let num_key_value_heads = metadata
             .get(&format!("{}.attention.head_count_kv", arch_str))
-            .and_then(|v| v.as_u64())
+            .and_then(GgufValue::as_u64)
             .map(|v| v as usize)
             .unwrap_or(num_attention_heads);
 
         let max_position_embeddings = metadata
             .get(&format!("{}.context_length", arch_str))
-            .and_then(|v| v.as_u64())
+            .and_then(GgufValue::as_u64)
             .map(|v| v as usize)
             .unwrap_or(4096);
 
         let vocab_size = metadata
             .get(&format!("{}.vocab_size", arch_str))
-            .and_then(|v| v.as_u64())
+            .and_then(GgufValue::as_u64)
             .map(|v| v as usize)
             .unwrap_or(32000);
 

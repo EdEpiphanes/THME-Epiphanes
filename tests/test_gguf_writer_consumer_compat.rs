@@ -256,10 +256,10 @@ fn test_adversarial_bitnet_pack_multi_row_export_and_unpack() {
     assert_eq!(extracted_packed, &packed.packed_data[..]);
 
     let recovered_packed = thme::exporter::bitnet_pack::PackedBitNetTensor {
-        name: packed.name.clone(),
+        name: packed.name,
         rows,
         cols,
-        row_scales: packed.row_scales.clone(),
+        row_scales: packed.row_scales,
         packed_data: extracted_packed.to_vec(),
     };
 
