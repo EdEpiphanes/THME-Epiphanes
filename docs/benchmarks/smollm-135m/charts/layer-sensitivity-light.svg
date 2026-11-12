@@ -3,7 +3,7 @@
 <desc>Per-layer increase in perplexity when that layer alone is ternarized. Layer 0 is far more sensitive.</desc>
 <rect x="0.5" y="0.5" width="759" height="359" rx="8" fill="#fcfcfb" stroke="#e1e0d9"/>
 <text x="24.0" y="34.0" font-size="16" font-weight="600" fill="#0b0b0b" text-anchor="start">Perplexity cost of ternarizing one layer at a time</text>
-<text x="24.0" y="54.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">Δ perplexity vs baseline 17.97 · all seven linear tensors of the layer · log scale · no retraining</text>
+<text x="24.0" y="54.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">Δ perplexity vs baseline 17.97 · all 7 linear tensors of the layer · log scale · no retraining</text>
 <line x1="64.0" y1="263.8" x2="736.0" y2="263.8" stroke="#e1e0d9" stroke-width="1"/>
 <text x="56.0" y="267.8" font-size="11" font-weight="400" fill="#898781" text-anchor="end">+1</text>
 <line x1="64.0" y1="212.1" x2="736.0" y2="212.1" stroke="#e1e0d9" stroke-width="1"/>
@@ -52,7 +52,7 @@
 <circle cx="679.3" cy="252.5" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
 <circle cx="701.7" cy="234.5" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
 <circle cx="724.0" cy="206.1" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<text x="86.0" y="104.7" font-size="11" font-weight="400" fill="#52514e" text-anchor="start">Layer 0: +1,429</text>
+<text x="72.0" y="88.7" font-size="11" font-weight="400" fill="#52514e" text-anchor="start">Layer 0: +1,429</text>
 <text x="210.1" y="285.8" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">Layer 6: +0.9</text>
 <text x="366.5" y="208.7" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">Layer 13: +6.8</text>
 <text x="728.0" y="194.1" font-size="11" font-weight="400" fill="#52514e" text-anchor="end">Layer 29: +13.1</text>

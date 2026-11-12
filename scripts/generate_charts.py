@@ -36,7 +36,7 @@ THEMES = {
 
 ROLE_NAMES = {
     "attention_q": "Attention Q", "attention_k": "Attention K", "attention_v": "Attention V",
-    "attention_out": "Attention out", "mlp_gate": "MLP gate", "mlp_up": "MLP up", "mlp_down": "MLP down",
+    "attention_out": "Attention out", "attention_qkv": "Attention QKV (fused)", "mlp_gate": "MLP gate", "mlp_up": "MLP up", "mlp_down": "MLP down",
 }
 
 
@@ -164,7 +164,7 @@ def chart_layers(sweep, theme):
     svg = Svg(
         760, 360, theme,
         "Perplexity cost of ternarizing one layer at a time",
-        f"Δ perplexity vs baseline {base['perplexity']:.2f} · all seven linear tensors of the layer · "
+        f"Δ perplexity vs baseline {base['perplexity']:.2f} · all {rows[0]['targeted_tensors']} linear tensors of the layer · "
         "log scale · no retraining",
         "Per-layer increase in perplexity when that layer alone is ternarized. Layer 0 is far more sensitive.",
     )
@@ -181,7 +181,7 @@ def chart_layers(sweep, theme):
         x = left + 12 + i * step
         y = log_scale(max(r["delta_ppl"], lo), lo, hi, bottom, top)
         points.append((x, y, r["delta_ppl"]))
-        if i % 5 == 0 or i == len(rows) - 1:
+        if len(rows) <= 10 or i % 5 == 0 or i == len(rows) - 1:
             svg.text(x, bottom + 18, str(i), size=11, color=theme["muted"], anchor="middle")
     svg.text((left + right) / 2, bottom + 40, "Layer", size=12, color=theme["ink2"], anchor="middle")
     svg.polyline([(x, y) for x, y, _ in points], theme["s1"])
@@ -194,8 +194,8 @@ def chart_layers(sweep, theme):
         x, y, d = points[i]
         text = f"Layer {i}: +{d:,.0f}" if d >= 100 else f"Layer {i}: +{d:.1f}"
         anchor = "start" if i == 0 else ("end" if i == len(points) - 1 else "middle")
-        dx = 10 if i == 0 else (0 if anchor == "middle" else 4)
-        dy = 4 if i == 0 else (-12 if d != min(inner) else 20)
+        dx = -4 if i == 0 else (0 if anchor == "middle" else 4)
+        dy = -12 if d != min(inner) else 20
         svg.text(x + dx, y + dy, text, size=11, color=theme["ink2"], anchor=anchor)
     return svg
 
@@ -308,8 +308,8 @@ def load(path):
 
 def main():
     parser = argparse.ArgumentParser(description="THME benchmark chart generator")
-    parser.add_argument("--data-dir", default="docs/benchmarks/data", help="Directory holding the measured reports")
-    parser.add_argument("--out-dir", default="docs/benchmarks/charts", help="Directory for generated SVG charts")
+    parser.add_argument("--data-dir", default="docs/benchmarks/smollm-135m/data", help="Directory holding the measured reports")
+    parser.add_argument("--out-dir", default="docs/benchmarks/smollm-135m/charts", help="Directory for generated SVG charts")
     args = parser.parse_args()
 
     report = load(os.path.join(args.data_dir, "verification_report.json"))

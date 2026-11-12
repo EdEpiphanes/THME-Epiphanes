@@ -542,7 +542,7 @@ fn tool_validate_quality(args: &Value) -> Result<String, String> {
         crate::quality::ModelEvaluator::assert_gate(&base_metrics, &cand_metrics, max_delta);
 
     Ok(format!(
-        "### Empirical Quality Gate Outcome\n\
+        "### Quality Gate Outcome (caller-supplied perplexities; not measured by THME)\n\
         - **Corpus**: {}\n\
         - **Baseline PPL**: {:.4}\n\
         - **Candidate PPL**: {:.4}\n\

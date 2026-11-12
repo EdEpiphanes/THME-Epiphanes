@@ -18,7 +18,19 @@
 | Exported GGUF artifact re-imported and decoded (uniform Q8_0) | 19.8326 | +0.0341 | 2.9873 | PASSED [ACCEPT] |
 | Recipe 'Production-Pareto-Smollm135m' applied in memory: each tensor round-tripped through its selected format | 48.7059 | +28.9075 | 3.8858 | FAILED [ROLLBACK] |
 
-## 2. Measured Precision Sensitivity
+### Pythia-14M
+
+- Corpus: WikiText-2 (raw) test split, complete split
+- Scored tokens: 286,878 in 281 windows of 1024
+- Gate tolerance: ΔPPL <= 0.45
+
+| Weights | Perplexity | Δ PPL | Cross-entropy (nats) | Gate |
+| :--- | ---: | ---: | ---: | :--- |
+| Source weights exactly as stored on disk | 114.2862 |  | 4.7387 | baseline |
+| Exported GGUF artifact re-imported and decoded (uniform Q8_0) | 115.1197 | +0.8335 | 4.7460 | FAILED [ROLLBACK] |
+| Recipe 'Production-Pareto-Pythia-14M' applied in memory: each tensor round-tripped through its selected format | 618.5311 | +504.2449 | 6.4273 | FAILED [ROLLBACK] |
+
+## 2. Measured Precision Sensitivity: SmolLM-135M
 
 Model: SmolLM-135M. Each row is a separate real forward pass over the first 16,384 corpus tokens (context 1024), so absolute values differ from the full-split figures in section 1. Tensors a row does not name keep their stored values. No retraining or calibration is applied. Bits per weight are nominal arithmetic, not artifact sizes.
 
@@ -92,7 +104,56 @@ Recipe Δ +25.4578; random placements Δ mean +102.9430 (min +53.3058, max +173.
 
 Additivity check: the per-layer deltas sum to +1,509.2, while ternarizing all of those layers together measures +15,877,276.1. Per-layer effects do not add.
 
-## 3. Measured Depth Behaviour
+## 3. Measured Precision Sensitivity: Pythia-14M
+
+Model: Pythia-14M. Each row is a separate real forward pass over the first 65,536 corpus tokens (context 1024), so absolute values differ from the full-split figures in section 1. Tensors a row does not name keep their stored values. No retraining or calibration is applied. Bits per weight are nominal arithmetic, not artifact sizes.
+
+Baseline perplexity on this subset: 113.6962
+
+**Uniform formats**
+
+| Variant | Perplexity | Δ PPL | Parameters changed | Nominal bits/weight |
+| :--- | ---: | ---: | ---: | ---: |
+| Every tensor as FP16 | 113.696 | +0.0000 | 100.0% | 16.00 |
+| Every linear tensor as Q8_0 | 114.237 | +0.5410 | 8.4% | 15.33 |
+| Every linear tensor as Q4_0 | 187.702 | +74.0057 | 8.4% | 15.04 |
+| MLP tensors as Q4_0, attention as Q8_0 | 144.738 | +31.0413 | 8.4% | 15.13 |
+| Every linear tensor as ternary (TQ1_0) | 36,768.846 | +36,655.1495 | 8.4% | 14.79 |
+
+**One tensor role ternarized at a time**
+
+| Variant | Perplexity | Δ PPL | Parameters changed | Nominal bits/weight |
+| :--- | ---: | ---: | ---: | ---: |
+| Only attention_out tensors ternary, all layers | 271.630 | +157.9341 | 0.7% | 15.90 |
+| Only attention_qkv tensors ternary, all layers | 1,711.237 | +1,597.5403 | 2.1% | 15.70 |
+| Only mlp_down tensors ternary, all layers | 2,015.965 | +1,902.2684 | 2.8% | 15.60 |
+| Only mlp_up tensors ternary, all layers | 2,271.613 | +2,157.9172 | 2.8% | 15.60 |
+
+**Recipe versus random placement with the same tensor counts and shapes**
+
+| Variant | Perplexity | Δ PPL | Parameters changed | Nominal bits/weight |
+| :--- | ---: | ---: | ---: | ---: |
+| Production recipe: mlp_down ternary and attention_q Q8_0 in layers 1..=4 | 622.031 | +508.3350 | 1.9% | 15.73 |
+| 4 ternary and 0 Q8_0 tensors of the recipe's shapes, placed at random (seed 1) | 865.749 | +752.0527 | 1.9% | 15.73 |
+| 4 ternary and 0 Q8_0 tensors of the recipe's shapes, placed at random (seed 2) | 701.243 | +587.5467 | 1.9% | 15.73 |
+| 4 ternary and 0 Q8_0 tensors of the recipe's shapes, placed at random (seed 3) | 701.243 | +587.5467 | 1.9% | 15.73 |
+
+Recipe Δ +508.3350; random placements Δ mean +642.3820 (min +587.5467, max +752.0527, n=3). The recipe is better than every random placement tested. With n=3 this is exploratory, not a statistical claim.
+
+**All linear tensors of one layer ternarized at a time**
+
+| Layer | Perplexity | Δ PPL |
+| ---: | ---: | ---: |
+| 0 | 581.568 | +467.8716 |
+| 1 | 368.143 | +254.4471 |
+| 2 | 580.590 | +466.8941 |
+| 3 | 1,322.207 | +1,208.5110 |
+| 4 | 320.640 | +206.9442 |
+| 5 | 360.501 | +246.8044 |
+
+Additivity check: the per-layer deltas sum to +2,851.5, while ternarizing all of those layers together measures +36,655.1. Per-layer effects do not add.
+
+## 4. Measured Depth Behaviour: SmolLM-135M
 
 Model: SmolLM-135M (30 layers), first 16,384 corpus tokens, 16,368 scored. Stored weights, no retraining.
 
@@ -145,7 +206,36 @@ Model: SmolLM-135M (30 layers), first 16,384 corpus tokens, 16,368 scored. Store
 | Layer 15 skipped | 29 | 20.057 | +2.084 |
 | Layers 7..23 skipped | 14 | 30,793.018 | +30,775.045 |
 
-## 4. Sizes
+## 5. Measured Depth Behaviour: Pythia-14M
+
+Model: Pythia-14M (6 layers), first 65,536 corpus tokens, 65,472 scored. Stored weights, no retraining.
+
+**Readout after each layer.** The model's own final norm and output head are applied to the state at that depth. The model was not trained to be read early, so this is a diagnostic of the stored weights, not the behaviour of a model trained with exit heads.
+
+| Layers applied | Perplexity | Top prediction equals full-depth | Top prediction correct | Settled |
+| ---: | ---: | ---: | ---: | ---: |
+| 0 | 1.39e+07 | 0.5% | 0.4% | 0.0% |
+| 1 | 649,809.201 | 2.9% | 0.5% | 0.0% |
+| 2 | 626,973.117 | 10.8% | 3.3% | 1.1% |
+| 3 | 215,484.559 | 8.5% | 2.8% | 1.5% |
+| 4 | 40,554.222 | 14.0% | 5.6% | 4.9% |
+| 5 | 1,825.296 | 16.4% | 8.8% | 16.4% |
+| 6 | 113.696 | 100.0% | 27.3% | 100.0% |
+
+"Settled" is the share of tokens whose top prediction equals the full-depth top prediction at this depth and at every later depth.
+
+**Layer schedule changes.** Layers repeated or skipped, read out at the end.
+
+| Schedule | Layer applications | Perplexity | Δ PPL |
+| :--- | ---: | ---: | ---: |
+| Every layer once (reference) | 6 | 113.696 | +0.000 |
+| Layers 1..5 applied twice | 10 | 5,495.029 | +5,381.333 |
+| Layers 1..5 applied three times | 14 | 18,741.066 | +18,627.370 |
+| Layer 3 applied twice | 7 | 3,242.319 | +3,128.623 |
+| Layer 3 skipped | 5 | 22,017.665 | +21,903.969 |
+| Layers 1..5 skipped | 2 | 102,082.335 | +101,968.639 |
+
+## 6. Sizes
 
 ### SmolLM-135M
 
@@ -155,12 +245,23 @@ Model: SmolLM-135M (30 layers), first 16,384 corpus tokens, 16,368 scored. Store
 | Exported GGUF v3, Q8_0 (uniform, all tensors) | 136.3 MiB | measured (file size, sha256 `b57a94cc9e93112f…`) |
 | Recipe `Production-Pareto-Smollm135m` (216 × FP16, 28 × Q8_0, 28 × Ternary (1.58b)) | 205.1 MiB | **estimate** from nominal bits per weight; no artifact of this size is written |
 
-## 5. Method
+### Pythia-14M
+
+| Item | Size | Basis |
+| :--- | ---: | :--- |
+| Source tensor payload | 26.8 MiB | measured (bytes on disk) |
+| Exported GGUF v3, Q8_0 (uniform, all tensors) | 14.3 MiB | measured (file size, sha256 `b1a9bacb0964698e…`) |
+| Recipe `Production-Pareto-Pythia-14M` (68 × FP16, 8 × Ternary (1.58b)) | 26.4 MiB | **estimate** from nominal bits per weight; no artifact of this size is written |
+
+## 7. Method
 
 - Forward pass: THME reference CPU implementation (`src/inference/`), dense f32 arithmetic,
   RMSNorm, rotary position embeddings, grouped-query causal attention, SwiGLU MLP, tied output head.
 - The corpus is tokenized once with the model's own tokenizer, without special tokens
   (`scripts/prepare_eval_tokens.py`), then cut into consecutive non-overlapping windows.
+- Supported architectures: LLaMA family and GPT-NeoX (Pythia). The forward pass is unit-tested
+  (causality, kernels, format round trips) but has not yet been cross-checked against the
+  Hugging Face reference implementation; that check is an open roadmap item.
 - Every token except the first of each window is scored given the earlier tokens of that window.
   Perplexity is exp(mean negative log-likelihood) over all scored tokens.
 - This differs from overlapping sliding-window protocols, which give each token more context
@@ -170,7 +271,7 @@ Model: SmolLM-135M (30 layers), first 16,384 corpus tokens, 16,368 scored. Store
   (Q8_0: GGML 32-value blocks; Ternary: GGML TQ1_0 256-value blocks with MSE-optimal scale)
   with no retraining or calibration.
 
-## 6. Provenance
+## 8. Provenance
 
 ### SmolLM-135M
 
@@ -183,7 +284,18 @@ Model: SmolLM-135M (30 layers), first 16,384 corpus tokens, 16,368 scored. Store
 - Tokenizer: HuggingFaceTB/SmolLM-135M, sha256 `9ca9acddb6525a194ec8ac7a87f24fbba7232a9a15ffa1af0c1224fcd888e47c`
 - Token file: 303,415 tokens, sha256 `18e663b61dd00f49796c8a6ae498b7dbe009cac4a2eaf3c67fa7d81baf47d945`
 
-## 7. Not Measured
+### Pythia-14M
+
+- THME version: 0.1.9; run completed 2026-11-12 18:52 UTC
+- Host: 12th Gen Intel(R) Core(TM) i5-12400F (12 logical CPUs), windows/x86_64
+- Backend: THME reference CPU forward pass (f32, multithreaded)
+- Evaluation wall time: 2.6 min total; baseline scored at 5669 tokens/s (reference implementation on a machine in normal use; not a performance benchmark)
+- Corpus source: https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip (`wikitext-2-raw/wiki.test.raw`)
+- Corpus sha256: `173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08`
+- Tokenizer: EleutherAI/pythia-14m, sha256 `870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2`
+- Token file: 287,159 tokens, sha256 `973595d9c7c580360a39eedde7297ec050f362a521940f7527eca4a00ea85278`
+
+## 9. Not Measured
 
 The following have no measurements and are deliberately absent from this dossier:
 
@@ -192,7 +304,7 @@ The following have no measurements and are deliberately absent from this dossier
 - Models other than those listed in section 1.
 - Any effect of retraining, distillation, or calibration on the quantized variants.
 
-## 8. Reproduce
+## 10. Reproduce
 
 ```bash
 pip install tokenizers
@@ -207,4 +319,5 @@ cargo run --release --example precision_sweep -- \
     --model-path models/SmolLM-135M \
     --tokens target/eval/wikitext2_test.SmolLM-135M.u32 --layer-scan
 python scripts/generate_dossier.py
+python scripts/generate_charts.py --data-dir docs/benchmarks/<model>/data --out-dir docs/benchmarks/<model>/charts
 ```

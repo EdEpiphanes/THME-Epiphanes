@@ -24,8 +24,7 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 
 use thme::inference::{
-    evaluate_perplexity, read_token_file, LlamaConfig, LlamaModel, PerplexityConfig,
-    WeightPrecision,
+    evaluate_perplexity, read_token_file, ArchConfig, PerplexityConfig, WeightPrecision,
 };
 use thme::ir::{ModelIR, TensorFormat, TensorIR, TensorRole};
 use thme::parser::ModelImporter;
@@ -65,8 +64,9 @@ struct Args {
     report_json: PathBuf,
 }
 
-const LINEAR_ROLES: [(TensorRole, &str); 7] = [
+const LINEAR_ROLES: [(TensorRole, &str); 8] = [
     (TensorRole::AttentionQ, "attention_q"),
+    (TensorRole::AttentionQkv, "attention_qkv"),
     (TensorRole::AttentionK, "attention_k"),
     (TensorRole::AttentionV, "attention_v"),
     (TensorRole::AttentionOut, "attention_out"),
@@ -121,8 +121,8 @@ fn build_variants(model: &ModelIR, args: &Args) -> Vec<Variant> {
     let last_inner = model.num_layers.saturating_sub(2);
     let in_recipe_range = |t: &TensorIR| t.layer_index.is_some_and(|l| l >= 1 && l <= last_inner);
     let recipe_pick = |t: &TensorIR| match t.role {
-        TensorRole::MlpDown if in_recipe_range(t) => Some(TensorFormat::Ternary),
-        TensorRole::AttentionQ if in_recipe_range(t) => Some(TensorFormat::Q8_0),
+        TensorRole::MlpDown if is_linear(t) && in_recipe_range(t) => Some(TensorFormat::Ternary),
+        TensorRole::AttentionQ if is_linear(t) && in_recipe_range(t) => Some(TensorFormat::Q8_0),
         _ => None,
     };
 
@@ -150,6 +150,26 @@ fn build_variants(model: &ModelIR, args: &Args) -> Vec<Variant> {
         ),
         variant(
             model,
+            "uniform_q4_0_linear",
+            "uniform",
+            "Every linear tensor as Q4_0",
+            |t| is_linear(t).then_some(TensorFormat::Q4_0),
+        ),
+        variant(
+            model,
+            "q4_0_mlp_only",
+            "uniform",
+            "MLP tensors as Q4_0, attention as Q8_0",
+            |t| match t.role {
+                TensorRole::MlpGate | TensorRole::MlpUp | TensorRole::MlpDown if is_linear(t) => {
+                    Some(TensorFormat::Q4_0)
+                }
+                _ if is_linear(t) => Some(TensorFormat::Q8_0),
+                _ => None,
+            },
+        ),
+        variant(
+            model,
             "uniform_ternary_linear",
             "uniform",
             "Every linear tensor as ternary (TQ1_0)",
@@ -158,6 +178,9 @@ fn build_variants(model: &ModelIR, args: &Args) -> Vec<Variant> {
     ];
 
     for (role, name) in LINEAR_ROLES {
+        if !model.tensors.iter().any(|t| is_linear(t) && t.role == role) {
+            continue;
+        }
         variants.push(variant(
             model,
             format!("role_ternary_{name}"),
@@ -251,7 +274,7 @@ fn main() -> Result<()> {
         context_len: args.eval_context,
         max_tokens: Some(args.eval_max_tokens),
     };
-    let config = LlamaConfig::from_model_ir(&source).with_hf_config(&args.model_path)?;
+    let config = ArchConfig::detect(&source, &args.model_path)?;
     let variants = build_variants(&source, &args);
     println!(
         "Precision sweep on '{}': {} variants, first {} of {} corpus tokens, context {}",
@@ -283,9 +306,10 @@ fn main() -> Result<()> {
                     .as_ref()
                     .map_or(stored_bits, TensorFormat::bits_per_weight);
         }
-        let dense = LlamaModel::load(&model, config.clone(), WeightPrecision::SelectedFormat)
+        let dense = config
+            .load(&model, WeightPrecision::SelectedFormat)
             .with_context(|| format!("Failed to materialize variant '{}'", v.id))?;
-        let report = evaluate_perplexity(&dense, &tokens, &eval, |_, _, _| {})?;
+        let report = evaluate_perplexity(&*dense, &tokens, &eval, |_, _, _| {})?;
         let base = *baseline_ppl.get_or_insert(report.perplexity);
         let delta = report.perplexity - base;
         println!(

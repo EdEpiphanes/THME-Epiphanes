@@ -10,7 +10,7 @@ use serde::Serialize;
 use std::path::Path;
 use std::time::Instant;
 
-use super::llama::LlamaModel;
+use super::arch::CausalLm;
 use crate::quality::{EvaluationCorpus, PerplexityMetrics};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,7 +69,7 @@ pub fn read_token_file(path: &Path) -> Result<Vec<u32>> {
 
 /// Evaluates perplexity, calling `progress(windows_done, windows_total, running_ppl)` per window.
 pub fn evaluate_perplexity(
-    model: &LlamaModel,
+    model: &dyn CausalLm,
     tokens: &[u32],
     config: &PerplexityConfig,
     mut progress: impl FnMut(usize, usize, f64),

@@ -25,6 +25,7 @@ All agents and contributors must uphold these rules without exception:
 
 2. **No Unverified Empirical Claims**:
    - Never present simulated numbers or synthetic benchmarks as measured hardware results.
+   - Published figures must regenerate from a committed report under `docs/benchmarks/` (see `scripts/generate_dossier.py`).
    - Any synthetic telemetry or simulated token flow must be explicitly labeled as simulated or benchmark projections.
 
 3. **Zero Committed Binaries or Model Weights**:
@@ -77,7 +78,7 @@ cargo test
 
 ---
 
-## 5. Versioning & Production Roadmap (v0.1 to v0.2)
+## 5. Versioning & Production Roadmap (v0.1 to v0.3)
 
 ### 5.1 Sub-Milestone Execution Architecture
 Every major release milestone $v0.1.x$ is governed by a 4-level sub-milestone decomposition:
@@ -94,14 +95,15 @@ $$v0.1.x.0 \longrightarrow \left[ v0.1.x.1, v0.1.x.2, v0.1.x.3, \dots, v0.1.x.9 
 | **v0.1.1.0** | Path Hygiene & CI | [v0.1.1.1 - v0.1.1.9] Rebranding, AGENTS.md governance, 3-OS CI matrix, path-leak guard, tag release pipeline, zero warnings, recipe schema, alias, symbol stripping. | Completed |
 | **v0.1.2.0** | Format Correctness | [v0.1.2.1 - v0.1.2.9] 28 GGML quant types, zero-alloc decoders, header recovery, crate modularization, 1k fuzz suite, SafeTensors fuzzing, crates.io prep, diagnostic errors. | Completed |
 | **v0.1.3.0** | BYOA & REA-LLM Engine | [v0.1.3.1 - v0.1.3.9] Algorithm registry, JSON import/export, architecture rebuilder, open-weights remapping, EWHA reach profile, memory metric, energy model, layer anatomy, SIMD benches. | Completed |
-| **v0.1.4.0** | Empirical Quality Gate | [v0.1.4.1 - v0.1.4.9] External PPL bridge, WikiText-2 harness, C4/PTB corpora, delta-PPL math, automated rollback, Pareto degradation, CLI validate, JSON audit, studio telemetry. | Completed |
+| **v0.1.4.0** | Quality Gate (analytic) | [v0.1.4.1 - v0.1.4.9] Gate decision logic, external evaluator bridge, delta-PPL math, rollback, CLI validate, JSON audit, studio telemetry. Built-in perplexity was an analytic proxy; superseded by the measured gate in v0.2.0. | Completed (Tested) |
 | **v0.1.5.0** | Surgery Daemon & 8 Models | [v0.1.5.1 - v0.1.5.9] MCP JSON-RPC server, VS Code .vsix, Copilot LM tools, train_cuda.py, HF config generator, PEFT LoRA merger, 8 model paradigms, sparse upcycling, SLM BitNet. | Completed |
 | **v0.1.6.0** | Speculative Decoding | [v0.1.6.1 - v0.1.6.9] Prefix manifold extractor, strided sampler, BitNet draft, rejection sampling, Leviathan speedup math, horizon search, tree topology, 2D attention mask, CLI speculate. | Completed |
 | **v0.1.7.0** | Roofline & Kernel Profiler | [v0.1.7.1 - v0.1.7.9] Hardware DB, linear/attn intensity, SwiGLU math, 4-tier cache sim, eviction latency model, roofline boundary, thermal TDP, CLI roofline, Tab 4 deck. | Completed |
 | **v0.1.8.0** | Quantization Exporter | [v0.1.8.1 - v0.1.8.9] BitNet packer, ternary unpacker, pure GGUF v3 writer, metadata sync, SafeTensors writer, streaming chunk I/O, MSE scale search, CLI export, downstream testbed. | Completed |
 | **v0.1.9.0** | Closed-Loop Co-Surgery | [v0.1.9.1 - v0.1.9.9] Co-surgery state machine, prompt synthesizer, agent bridge, 3D Pareto optimizer, hypervolume indicator, self-healing relaxation, rollback watchdog, CLI co-surgery, Tab 2 dashboard. | Completed |
-| **v0.2.0.0** | Production Core Release | [v0.2.0.1 - v0.2.0.9] SmolLM-135M pipeline, LLaMA-3.2-1B pipeline, reproducible script, benchmark dossier, multi-platform LTO, Minisign/GPG signing, SHA-256 manifest, manual/man pages, verification harness. | Active |
-| **v0.2.1.0** | Direct GPU Driver Engine | [v0.2.1.1 - v0.2.1.9] HAL traits, CUDA Driver API (cudarc), Vulkan 1.3 SPIR-V, Apple Metal 3, fused BitNet GEMM, fused RMSNorm, fused SwiGLU, fused RoPE, CLI run. | Scheduled |
-| **v0.2.2.0** | Out-of-Core NVMe Streaming | [v0.2.2.1 - v0.2.2.9] Linux io_uring, Windows Overlapped I/O, double-buffered prefetch, pinned memory staging, REA-LLM tiered allocation, VRAM accountant, 70B in 8GB testbed, sequential dealloc, saturation monitor. | Scheduled |
-| **v0.2.3.0** | Heterogeneous Clustering | [v0.2.3.1 - v0.2.3.9] Intra-node TP, inter-node PP, 1F1B schedule, pure Rust async TCP ring all-reduce, RDMA/RoCE fallback, mDNS discovery, 100ms heartbeat, automated re-sharding, CLI cluster. | Scheduled |
-| **v0.2.4.0** | Universal Agentic Gateway | [v0.2.4.1 - v0.2.4.9] WebSocket daemon, JSON-RPC router, HMAC-SHA256 attestation, CLI agent adapter, CI/CD harness adapter, Desktop GUI connector, IDE/Copilot bridge, real-time telemetry, CLI daemon. | Scheduled |
+| **v0.2.0.0** | Measured Core | [v0.2.0.1 - v0.2.0.9] Reference forward pass (LLaMA, GPT-NeoX), WikiText-2 tokenization with hashes, measured gate, report-driven dossier and charts, precision sweep and depth probe, HF reference cross-check, retire analytic proxy, real Studio screenshots and GUI fixes, release engineering. | Active |
+| **v0.2.1.0** | Recipe & BYOA Lab | [v0.2.1.1 - v0.2.1.9] `thme evaluate --recipe`, BYOA encode/decode contracts, measured cost table, greedy allocator on measured costs, global refinement, automatic random controls, measured Pareto front, calibration/validation/test split, Studio recipe workbench. | Scheduled |
+| **v0.2.2.0** | Formats & Calibration | [v0.2.2.1 - v0.2.2.9] Per-tensor GGUF formats, Q4_K/Q5_K/Q6_K, calibration activations, AWQ-style scaling, GPTQ-style rounding, Hadamard rotation, SmoothQuant migration, llama.cpp compatibility, measured artifact size. | Scheduled |
+| **v0.2.3.0** | Recovery & Distillation | [v0.2.3.1 - v0.2.3.9] Backward pass or trainer bridge, quantization-aware distillation, LoRA recovery, teacher calibration data, loop and early-exit objectives, exit heads, recovery cost accounting, overfitting guard, recovered-candidate reports. | Scheduled |
+| **v0.2.4.0** | Runtime, Speed & KV Cache | [v0.2.4.1 - v0.2.4.9] Incremental decoding, KV bytes vs context, CPU throughput, quantized kernels, peak memory, KV quantization, calibrated roofline, measured speculative decoding, energy where measurable. | Scheduled |
+| **v0.3.x** | GPU, Streaming, Clustering, Gateway, New Architectures | Former v0.2.1 - v0.2.4 plans (CUDA/Vulkan/Metal, NVMe streaming, multi-node, agentic gateway) and trained v3.0 architecture research. | Deferred |

@@ -4,13 +4,16 @@ use anyhow::{bail, Context, Result};
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 
-use crate::exporter::conversion::{encode_q8_block, encode_tq1_block, f32_to_f16};
+use crate::exporter::conversion::{
+    encode_q4_0_block, encode_q8_block, encode_tq1_block, f32_to_f16,
+};
 use crate::ir::{TensorFormat, TensorIR};
 use crate::parser::gguf::GgufBlockDecoder;
 use crate::profiling::{bf16_to_f32, f16_to_f32};
 
 const Q8_BLOCK_VALUES: usize = 32;
 const Q8_BLOCK_BYTES: usize = 34;
+const Q4_BLOCK_BYTES: usize = 18;
 const TQ1_BLOCK_VALUES: usize = 256;
 const TQ1_BLOCK_BYTES: usize = 54;
 
@@ -130,6 +133,20 @@ pub fn fake_quantize(values: &mut [f32], format: &TensorFormat) -> Result<()> {
                 chunk.copy_from_slice(&GgufBlockDecoder::unpack_q8_0(&encoded)?);
             }
         }
+        TensorFormat::Q4_0 => {
+            if !values.len().is_multiple_of(Q8_BLOCK_VALUES) {
+                bail!(
+                    "Q4_0 requires an element count divisible by {Q8_BLOCK_VALUES}, found {}",
+                    values.len()
+                );
+            }
+            let mut encoded = Vec::with_capacity(Q4_BLOCK_BYTES);
+            for chunk in values.chunks_exact_mut(Q8_BLOCK_VALUES) {
+                encoded.clear();
+                encode_q4_0_block(chunk, &mut encoded)?;
+                chunk.copy_from_slice(&GgufBlockDecoder::unpack_q4_0(&encoded)?);
+            }
+        }
         TensorFormat::Ternary => {
             if !values.len().is_multiple_of(TQ1_BLOCK_VALUES) {
                 bail!(
@@ -186,6 +203,35 @@ mod tests {
     }
 
     #[test]
+    fn q4_0_round_trip_uses_sixteen_levels_and_keeps_the_extreme() {
+        let original = ramp(64);
+        let mut values = original.clone();
+        fake_quantize(&mut values, &TensorFormat::Q4_0).unwrap();
+        for (block, quantized) in original.chunks(32).zip(values.chunks(32)) {
+            let extreme = block
+                .iter()
+                .fold(0.0f32, |m, &v| if v.abs() > m.abs() { v } else { m });
+            let step = extreme.abs() / 8.0;
+            let mut levels: Vec<i32> = quantized
+                .iter()
+                .map(|q| (q / step).round() as i32)
+                .collect();
+            levels.sort_unstable();
+            levels.dedup();
+            assert!(levels.len() <= 16);
+            // The extreme maps exactly (code 0); values of the opposite sign can only
+            // reach +7 steps, so their error is at most one step. Everything else rounds.
+            let at_extreme = block.iter().position(|&v| v == extreme).unwrap();
+            assert!((quantized[at_extreme] - extreme).abs() <= extreme.abs() * 1e-3);
+            for (a, b) in block.iter().zip(quantized) {
+                let same_side = a.signum() == extreme.signum() || *a == 0.0;
+                let bound = if same_side { step * 0.51 } else { step * 1.01 };
+                assert!((a - b).abs() <= bound + 1e-4, "{a} vs {b}");
+            }
+        }
+    }
+
+    #[test]
     fn ternary_round_trip_leaves_three_levels_per_block() {
         let mut values = ramp(512);
         fake_quantize(&mut values, &TensorFormat::Ternary).unwrap();
@@ -204,6 +250,7 @@ mod tests {
         assert!(fake_quantize(&mut values, &TensorFormat::Q8_0).is_err());
         assert!(fake_quantize(&mut values, &TensorFormat::Ternary).is_err());
         assert!(fake_quantize(&mut values, &TensorFormat::Q4_K).is_err());
+        assert!(fake_quantize(&mut values, &TensorFormat::Q4_0).is_err());
         fake_quantize(&mut values, &TensorFormat::FP16).unwrap();
     }
 }

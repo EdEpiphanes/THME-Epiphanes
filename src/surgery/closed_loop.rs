@@ -2,9 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ir::ModelIR;
 use crate::profiling::SensitivityProfiler;
-use crate::quality::evaluator::{
-    EvaluationCorpus, EvaluatorConfig, ModelEvaluator, PerplexityGateDecision,
-};
+use crate::quality::evaluator::{EvaluationCorpus, EvaluatorConfig, ModelEvaluator};
 use crate::surgery::recipe::{SurgeryEngine, TweakRecipe};
 
 /// Discrete states in the autonomous co-surgery closed loop.
@@ -84,6 +82,55 @@ pub struct CoSurgeryReport {
     pub final_bytes: usize,
     pub final_reduction_ratio: f64,
     pub history: Vec<CoSurgeryCheckpoint>,
+    /// Where the perplexity figures came from: `measured` or `simulated (analytic proxy)`.
+    #[serde(default)]
+    pub quality_source: String,
+}
+
+/// Scores model candidates for the co-surgery loop.
+///
+/// The loop is agnostic to how perplexity is obtained: `AnalyticProxyEvaluator` keeps the
+/// original weight-statistics proxy (simulated), and `crate::inference::MeasuredEvaluator`
+/// runs the reference forward pass on real tokens.
+pub trait QualityEvaluator: Send {
+    /// Perplexity of the untouched model.
+    fn baseline_perplexity(&mut self, model: &ModelIR) -> Result<f64, String>;
+    /// Perplexity of a candidate whose tensors carry their recipe-selected formats.
+    fn candidate_perplexity(&mut self, model: &ModelIR) -> Result<f64, String>;
+    /// True when figures come from a real forward pass.
+    fn is_measured(&self) -> bool;
+}
+
+/// The original analytic proxy. Its figures are simulated and labelled as such.
+pub struct AnalyticProxyEvaluator;
+
+impl QualityEvaluator for AnalyticProxyEvaluator {
+    fn baseline_perplexity(&mut self, _model: &ModelIR) -> Result<f64, String> {
+        // Fixed placeholder baseline used since v0.1.9; simulated, not measured.
+        Ok(5.84)
+    }
+
+    fn candidate_perplexity(&mut self, model: &ModelIR) -> Result<f64, String> {
+        let mut weights = Vec::new();
+        for t in &model.tensors {
+            if let Some(prof) = &t.weight_profile {
+                weights.extend_from_slice(&prof.sample_weights);
+            }
+        }
+        if weights.is_empty() {
+            weights = vec![0.1; 4096];
+        }
+        ModelEvaluator::evaluate_weights(
+            &EvaluationCorpus::WikiText2,
+            &weights,
+            &EvaluatorConfig::default(),
+        )
+        .map(|metrics| metrics.perplexity)
+    }
+
+    fn is_measured(&self) -> bool {
+        false
+    }
 }
 
 /// Autonomous Closed-Loop Co-Surgery Controller.
@@ -101,14 +148,40 @@ pub struct CoSurgeryController {
     total_commits: usize,
     total_rollbacks: usize,
     total_relaxations: usize,
+    evaluator: Box<dyn QualityEvaluator>,
 }
 
 impl CoSurgeryController {
     /// Creates a new Co-Surgery Controller initialized with baseline model and budget.
-    pub fn new(mut model: ModelIR, budget: CoSurgeryBudget) -> Self {
+    /// Uses the analytic proxy, so quality figures are simulated.
+    pub fn new(model: ModelIR, budget: CoSurgeryBudget) -> Self {
+        let mut evaluator = AnalyticProxyEvaluator;
+        let baseline_ppl = evaluator.baseline_perplexity(&model).unwrap_or(5.84);
+        Self::build(model, budget, Box::new(evaluator), baseline_ppl)
+    }
+
+    /// Creates a controller that scores candidates with `evaluator` and measures the baseline first.
+    pub fn with_evaluator(
+        model: ModelIR,
+        budget: CoSurgeryBudget,
+        mut evaluator: Box<dyn QualityEvaluator>,
+    ) -> Result<Self, String> {
+        let baseline_ppl = evaluator.baseline_perplexity(&model)?;
+        Ok(Self::build(model, budget, evaluator, baseline_ppl))
+    }
+
+    /// True when quality figures come from a real forward pass.
+    pub fn is_measured(&self) -> bool {
+        self.evaluator.is_measured()
+    }
+
+    fn build(
+        mut model: ModelIR,
+        budget: CoSurgeryBudget,
+        evaluator: Box<dyn QualityEvaluator>,
+        baseline_ppl: f64,
+    ) -> Self {
         SensitivityProfiler::profile_model(&mut model);
-        let _initial_bytes = model.total_estimated_bytes();
-        let baseline_ppl = 5.84; // Canonical mock or estimated baseline
         Self {
             budget,
             state: CoSurgeryState::Idle,
@@ -123,6 +196,7 @@ impl CoSurgeryController {
             total_commits: 0,
             total_rollbacks: 0,
             total_relaxations: 0,
+            evaluator,
         }
     }
 
@@ -207,49 +281,18 @@ impl CoSurgeryController {
                 true
             }
             CoSurgeryState::ValidateQuality => {
-                let candidate = self.candidate_model.as_ref().unwrap();
-                let config = EvaluatorConfig::default();
-                let mut weights = Vec::new();
-                for t in &candidate.tensors {
-                    if let Some(prof) = &t.weight_profile {
-                        weights.extend_from_slice(&prof.sample_weights);
-                    }
-                }
-                if weights.is_empty() {
-                    weights = vec![0.1; 4096];
-                }
-                let eval_result = ModelEvaluator::evaluate_weights(
-                    &EvaluationCorpus::WikiText2,
-                    &weights,
-                    &config,
-                );
-
-                match eval_result {
-                    Ok(candidate_metrics) => {
-                        let baseline_metrics = crate::quality::evaluator::PerplexityMetrics {
-                            corpus: EvaluationCorpus::WikiText2,
-                            total_tokens: candidate_metrics.total_tokens,
-                            cross_entropy_loss: 1.76,
-                            perplexity: self.baseline_ppl,
-                            latency_ms: 10.0,
-                            tokens_per_sec: 100.0,
-                            is_simulated: true,
+                let Some(candidate) = self.candidate_model.as_ref() else {
+                    self.state = CoSurgeryState::Rollback;
+                    return true;
+                };
+                match self.evaluator.candidate_perplexity(candidate) {
+                    Ok(ppl) => {
+                        self.current_ppl = ppl;
+                        self.state = if ppl - self.baseline_ppl <= self.budget.max_ppl_delta {
+                            CoSurgeryState::EvaluatePareto
+                        } else {
+                            CoSurgeryState::SelfHealingRelaxation
                         };
-                        let gate_result = ModelEvaluator::assert_gate(
-                            &baseline_metrics,
-                            &candidate_metrics,
-                            self.budget.max_ppl_delta,
-                        );
-                        self.current_ppl = candidate_metrics.perplexity;
-
-                        match gate_result.decision {
-                            PerplexityGateDecision::Accept => {
-                                self.state = CoSurgeryState::EvaluatePareto;
-                            }
-                            PerplexityGateDecision::RollbackRequired => {
-                                self.state = CoSurgeryState::SelfHealingRelaxation;
-                            }
-                        }
                     }
                     Err(_) => {
                         self.state = CoSurgeryState::Rollback;
@@ -380,6 +423,11 @@ impl CoSurgeryController {
             final_bytes,
             final_reduction_ratio: reduction,
             history: self.checkpoints.clone(),
+            quality_source: if self.evaluator.is_measured() {
+                "measured".to_string()
+            } else {
+                "simulated (analytic proxy)".to_string()
+            },
         }
     }
 }

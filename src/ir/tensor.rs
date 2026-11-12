@@ -53,6 +53,8 @@ impl TensorFormat {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TensorRole {
     AttentionQ,
+    /// Fused query/key/value projection (GPT-NeoX `query_key_value`).
+    AttentionQkv,
     AttentionK,
     AttentionV,
     AttentionOut,
@@ -69,10 +71,15 @@ pub enum TensorRole {
 impl TensorRole {
     pub fn detect(name: &str) -> Self {
         let lower = name.to_lowercase();
-        if lower.contains("embed") || lower.contains("wte") {
-            Self::Embedding
-        } else if lower.contains("lm_head") || lower.contains("output.weight") {
+        if lower.contains("lm_head")
+            || lower.contains("output.weight")
+            || lower.contains("embed_out")
+        {
             Self::OutputHead
+        } else if lower.contains("embed") || lower.contains("wte") {
+            Self::Embedding
+        } else if lower.contains("query_key_value") {
+            Self::AttentionQkv
         } else if lower.contains("q_proj") || lower.contains("query") {
             Self::AttentionQ
         } else if lower.contains("k_proj") || lower.contains("key") {
@@ -82,8 +89,13 @@ impl TensorRole {
         } else if lower.contains("o_proj")
             || lower.contains("out_proj")
             || lower.contains("dense") && lower.contains("attn")
+            || lower.contains("attention.dense")
         {
             Self::AttentionOut
+        } else if lower.contains("dense_h_to_4h") {
+            Self::MlpUp
+        } else if lower.contains("dense_4h_to_h") {
+            Self::MlpDown
         } else if lower.contains("gate_proj") || lower.contains("w1") {
             Self::MlpGate
         } else if lower.contains("up_proj") || lower.contains("w3") {
@@ -106,7 +118,7 @@ impl TensorRole {
         match self {
             Self::Embedding | Self::OutputHead => 2.5, // Embeddings & Heads directly dictate logit output
             Self::FinalNorm | Self::LayerNorm => 3.0, // Normalization parameters should stay high precision
-            Self::AttentionQ | Self::AttentionK => 1.8, // Q & K preserve attention routing topology
+            Self::AttentionQ | Self::AttentionQkv | Self::AttentionK => 1.8, // Q & K preserve attention routing topology
             Self::AttentionV => 1.4,
             Self::AttentionOut => 1.2,
             Self::MlpGate | Self::MlpUp => 1.1,

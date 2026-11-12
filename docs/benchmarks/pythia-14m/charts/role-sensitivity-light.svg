@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 232" width="760" height="232" role="img" font-family='system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>
+<title>Perplexity cost of ternarizing one tensor role across all layers</title>
+<desc>Ranked bars of perplexity increase per tensor role when that role is ternarized in every layer.</desc>
+<rect x="0.5" y="0.5" width="759" height="231" rx="8" fill="#fcfcfb" stroke="#e1e0d9"/>
+<text x="24.0" y="34.0" font-size="16" font-weight="600" fill="#0b0b0b" text-anchor="start">Perplexity cost of ternarizing one tensor role across all layers</text>
+<text x="24.0" y="54.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">Δ perplexity vs baseline 113.70 · share of model weights in parentheses · no retraining</text>
+<line x1="232.0" y1="74.0" x2="232.0" y2="204.0" stroke="#c3c2b7" stroke-width="1"/>
+<text x="220.0" y="93.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="end">MLP up</text>
+<text x="122.0" y="93.0" font-size="11" font-weight="400" fill="#898781" text-anchor="end">(2.8%)</text>
+<path d="M232.0,80.0 h424.0 a4,4 0 0 1 4,4 v10.0 a4,4 0 0 1 -4,4 h-424.0 z" fill="#2a78d6"/>
+<text x="668.0" y="93.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">+2157.9</text>
+<text x="220.0" y="127.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="end">MLP down</text>
+<text x="122.0" y="127.0" font-size="11" font-weight="400" fill="#898781" text-anchor="end">(2.8%)</text>
+<path d="M232.0,114.0 h373.3 a4,4 0 0 1 4,4 v10.0 a4,4 0 0 1 -4,4 h-373.3 z" fill="#2a78d6"/>
+<text x="617.3" y="127.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">+1902.3</text>
+<text x="220.0" y="161.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="end">Attention QKV (fused)</text>
+<text x="122.0" y="161.0" font-size="11" font-weight="400" fill="#898781" text-anchor="end">(2.1%)</text>
+<path d="M232.0,148.0 h312.9 a4,4 0 0 1 4,4 v10.0 a4,4 0 0 1 -4,4 h-312.9 z" fill="#2a78d6"/>
+<text x="556.9" y="161.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">+1597.5</text>
+<text x="220.0" y="195.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="end">Attention out</text>
+<text x="122.0" y="195.0" font-size="11" font-weight="400" fill="#898781" text-anchor="end">(0.7%)</text>
+<path d="M232.0,182.0 h27.3 a4,4 0 0 1 4,4 v10.0 a4,4 0 0 1 -4,4 h-27.3 z" fill="#2a78d6"/>
+<text x="271.3" y="195.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">+157.9</text>
+</svg>

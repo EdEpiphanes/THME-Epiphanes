@@ -25,7 +25,7 @@ use clap::Parser;
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
-use thme::inference::{read_token_file, LlamaConfig, LlamaModel, WeightPrecision};
+use thme::inference::{read_token_file, ArchConfig, WeightPrecision};
 use thme::parser::ModelImporter;
 
 #[derive(Parser, Debug)]
@@ -71,8 +71,8 @@ fn main() -> Result<()> {
     let source = ModelImporter::import(&args.model_path)
         .with_context(|| format!("Failed to import model from {:?}", args.model_path))?;
     let tokens = read_token_file(&args.tokens)?;
-    let config = LlamaConfig::from_model_ir(&source).with_hf_config(&args.model_path)?;
-    let model = LlamaModel::load(&source, config, WeightPrecision::AsStored)?;
+    let config = ArchConfig::detect(&source, &args.model_path)?;
+    let model = config.load(&source, WeightPrecision::AsStored)?;
     let depth = model.num_layers();
     let windows = windows(&tokens, &args);
     if windows.is_empty() {

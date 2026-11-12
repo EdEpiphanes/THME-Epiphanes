@@ -27,8 +27,8 @@ use std::path::{Path, PathBuf};
 
 use thme::exporter::{ExportConfig, ExportFormat, ExportQuantType, ModelExporter};
 use thme::inference::{
-    evaluate_perplexity, read_token_file, LlamaConfig, LlamaModel, PerplexityConfig,
-    PerplexityReport, WeightPrecision,
+    evaluate_perplexity, read_token_file, ArchConfig, PerplexityConfig, PerplexityReport,
+    WeightPrecision,
 };
 use thme::ir::rebuilder::{ArchitectureBlueprint, ModelRebuilder};
 use thme::ir::{ModelIR, TensorFormat, TensorRole};
@@ -208,7 +208,7 @@ pub fn run_verification(args: &VerificationArgs) -> Result<ProductionVerificatio
                 context_len: args.eval_context,
                 max_tokens: args.eval_max_tokens,
             };
-            let config = LlamaConfig::from_model_ir(&model).with_hf_config(model_path)?;
+            let config = ArchConfig::detect(&model, model_path)?;
             println!(
                 "  Measured forward pass: {} corpus tokens available, context {}, limit {}",
                 tokens.len(),
@@ -371,15 +371,16 @@ pub fn run_verification(args: &VerificationArgs) -> Result<ProductionVerificatio
 fn measure(
     label: &str,
     model: &ModelIR,
-    config: &LlamaConfig,
+    config: &ArchConfig,
     precision: WeightPrecision,
     tokens: &[u32],
     eval: &PerplexityConfig,
 ) -> Result<PerplexityReport> {
     println!("  Evaluating {label}...");
-    let dense = LlamaModel::load(model, config.clone(), precision)
+    let dense = config
+        .load(model, precision)
         .with_context(|| format!("Failed to load weights for: {label}"))?;
-    let report = evaluate_perplexity(&dense, tokens, eval, |done, total, running| {
+    let report = evaluate_perplexity(&*dense, tokens, eval, |done, total, running| {
         if done == total || done % 16 == 0 {
             println!("    window {done}/{total}  running PPL {running:.4}");
         }
@@ -450,7 +451,7 @@ fn build_target_surgery_recipe(model: &ModelIR, target: VerificationTarget) -> T
     }
 
     TweakRecipe {
-        name: format!("Production-Pareto-{:?}", target),
+        name: format!("Production-Pareto-{}", model.name),
         version: "0.2.0".to_string(),
         author: "THME Production Gate".to_string(),
         description: format!("Heterogeneous Pareto surgery profile for {:?}", target),

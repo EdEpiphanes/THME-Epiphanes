@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use clap::Args;
 use std::path::PathBuf;
 
+use crate::inference::{read_token_file, ArchConfig, MeasuredEvaluator, PerplexityConfig};
 use crate::ir::rebuilder::{ArchitectureBlueprint, ModelRebuilder};
 use crate::parser::ModelImporter;
 use crate::surgery::{AgentBridgeConfig, CoSurgeryBudget, CoSurgeryController, CoSurgeryState};
@@ -27,6 +28,19 @@ pub struct CoSurgeryArgs {
     /// External Teacher LLM command for subprocess bridge (e.g. "ollama run llama3")
     #[arg(long, value_name = "CMD")]
     pub agent_command: Option<String>,
+
+    /// Token file (little-endian u32) from scripts/prepare_eval_tokens.py. With MODEL_PATH,
+    /// candidates are scored by the reference forward pass instead of the analytic proxy.
+    #[arg(long, value_name = "PATH")]
+    pub tokens: Option<PathBuf>,
+
+    /// Leading corpus tokens per measured evaluation
+    #[arg(long, default_value_t = 16384)]
+    pub eval_max_tokens: usize,
+
+    /// Tokens per forward pass during measured evaluation
+    #[arg(long, default_value_t = 1024)]
+    pub eval_context: usize,
 
     /// Emit final report as compact JSON instead of formatted table
     #[arg(long)]
@@ -72,7 +86,27 @@ pub fn execute(args: CoSurgeryArgs) -> Result<()> {
         budget.target_reduction_ratio * 100.0,
     );
 
-    let mut controller = CoSurgeryController::new(model, budget);
+    let mut controller = match (&args.model, &args.tokens) {
+        (Some(path), Some(tokens)) => {
+            let arch = ArchConfig::detect(&model, path)?;
+            let evaluator = MeasuredEvaluator::new(
+                arch,
+                read_token_file(tokens)?,
+                PerplexityConfig {
+                    context_len: args.eval_context,
+                    max_tokens: Some(args.eval_max_tokens),
+                },
+            );
+            eprintln!("[co-surgery] Quality source: measured (reference forward pass)");
+            CoSurgeryController::with_evaluator(model, budget, Box::new(evaluator))
+                .map_err(|error| anyhow::anyhow!("Baseline evaluation failed: {error}"))?
+        }
+        (_, Some(_)) => anyhow::bail!("--tokens requires MODEL_PATH with on-disk weights"),
+        _ => {
+            eprintln!("[co-surgery] Quality source: SIMULATED analytic proxy. Pass MODEL_PATH and --tokens for measured perplexity.");
+            CoSurgeryController::new(model, budget)
+        }
+    };
 
     // Run step-by-step so we can emit per-state telemetry to stderr.
     loop {
@@ -112,6 +146,7 @@ pub fn execute(args: CoSurgeryArgs) -> Result<()> {
             report.final_reduction_ratio * 100.0
         );
         println!("  Final state     : {:?}", report.final_state);
+        println!("  Quality source  : {}", report.quality_source);
         println!("───────────────────────────────────────────────────");
     }
 

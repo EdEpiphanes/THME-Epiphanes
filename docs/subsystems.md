@@ -3,8 +3,9 @@
 > **Evidence notice.** This document describes what each subsystem is designed to do.
 > Unless a figure links to the [benchmark dossier](benchmark_dossier.md), it is a
 > design target, a nominal bit-width calculation, or the output of an analytic model.
-> It is **not a measurement**. The Studio animations show synthetic telemetry.
+> It is **not a measurement**.
 > Measured results live in the dossier and are summarised in the [README](../README.md).
+> Real Studio screenshots are in [`assets/screenshots/`](../assets/screenshots/).
 
 ---
 ---
@@ -12,10 +13,6 @@
 ### 1. Analytical Cockpit and Pareto Precision AutoDecider
 
 `Subsystems: Model Ingestion • Layer Sensitivity • SVD Spectral Decay • Dynamic Programming Allocator`
-
-<p align="center">
-  <img src="../assets/showcase_cockpit_autodecider.gif" alt="THME Analytical Cockpit - Layer Sensitivity and Pareto AutoDecider" width="920" />
-</p>
 
 > **Architectural Highlight**: Ingests GGUF v2/v3 and SafeTensors weights via OS memory mapping (`memmap2`) without full-memory copy overhead. Automatically profiles layer sensitivity curves $s(l)$ and solves a multi-constraint knapsack problem to construct a Pareto-optimal precision plan that maximizes memory savings under strict quality bounds ($\Delta PPL \le \epsilon$).
 
@@ -31,10 +28,6 @@
 ### 2. Roofline and Micro-Kernel Profiler
 
 `Subsystems: Operational Arithmetic Intensity • 4-Tier Cache Hierarchy • Hardware Ceilings • Thermal Throttling`
-
-<p align="center">
-  <img src="../assets/showcase_roofline_profiler.gif" alt="THME Roofline Profiler - Operational Arithmetic Intensity and Cache Hierarchy Telemetry" width="920" />
-</p>
 
 > **Architectural Highlight**: Evaluates operational arithmetic intensity ($I = \text{FLOPs/byte}$) across transformer kernel projections against hardware ceilings taken from published specifications. Classifies each layer projection as Memory-Bound or Compute-Bound, simulates working-set eviction stalls across a 4-tier cache hierarchy (L1, L2, L3, DRAM), and models dynamic TDP thermal throttling.
 
@@ -53,10 +46,6 @@
 
 `Subsystems: Manifold Extraction • Ternary BitNet Draft • Rejection Sampling • Leviathan Speedup`
 
-<p align="center">
-  <img src="../assets/showcase_speculative_decoding.gif" alt="THME Speculative Decoding Synthesizer - Multi-Token Tree Branching and Rejection Sampling" width="920" />
-</p>
-
 > **Architectural Highlight**: Extracts a lightweight sub-manifold draft model directly from the target weights using prefix layer selection and BitNet b1.58 ternary discretization (76.8% draft VRAM reduction). Executes multi-token speculative autoregression verified in a single parallel target forward pass, utilizing speculative rejection sampling and 2D causal tree masks with speedups projected by the Leviathan formula (not measured).
 
 | Metric / Dimension | Production Engineering Specification |
@@ -74,10 +63,6 @@
 
 `Subsystems: Topological Cross-Remapping • Sparse MoE Upcycling • BitNet b1.58 SLM • Recipe AST`
 
-<p align="center">
-  <img src="../assets/showcase_paradigm_converter.gif" alt="THME Paradigm Converter - Sparse MoE Upcycling and BitNet SLM Compaction" width="920" />
-</p>
-
 > **Architectural Highlight**: Cross-converts model intermediate representations across 8 specialized AI paradigms. Demonstrates in-place sparse upcycling of dense MLP feed-forward blocks into an 8-expert Sparse Mixture of Experts (MoE) with dynamic Top-2 router gating (75.1% active parameter reduction), and compacts large architectures into ternary Small Language Models (SLMs) with 81.9% memory savings.
 
 | Metric / Dimension | Production Engineering Specification |
@@ -94,10 +79,6 @@
 ### 5. PyTorch, CUDA and PEFT LoRA Interoperability Bridge
 
 `Subsystems: LoRA Zero-Copy Fusion • train_cuda.py Generation • QLoRA Configs • HF Serializer`
-
-<p align="center">
-  <img src="../assets/showcase_pytorch_cuda_bridge.gif" alt="THME PyTorch and CUDA Bridge - LoRA Adapter Fusion and Training Script Generation" width="920" />
-</p>
 
 > **Architectural Highlight**: Bridges pure Rust high-performance engine execution with the PyTorch and CUDA training ecosystem. Directly merges low-rank PEFT LoRA adapters ($W_{\text{eff}} = W_0 + \frac{\alpha}{r} B \times A$) in pure Rust without Python runtime overhead, exports complete standalone `train_cuda.py` training harnesses, and generates Hugging Face compatible configurations.
 

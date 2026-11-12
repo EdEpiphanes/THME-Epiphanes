@@ -213,10 +213,10 @@ def generate_markdown(reports, output_md, sweep=None, probe=None):
             )
         lines.append("")
 
-    if sweep:
-        lines.extend(sweep_section(sweep, h("Measured Precision Sensitivity")))
-    if probe:
-        lines.extend(depth_section(probe, h("Measured Depth Behaviour")))
+    for s in sweep or []:
+        lines.extend(sweep_section(s, h(f"Measured Precision Sensitivity: {s['model_name']}")))
+    for d in probe or []:
+        lines.extend(depth_section(d, h(f"Measured Depth Behaviour: {d['model_name']}")))
 
     lines.extend([h("Sizes"), ""])
     for report in reports:
@@ -248,6 +248,9 @@ def generate_markdown(reports, output_md, sweep=None, probe=None):
         "  RMSNorm, rotary position embeddings, grouped-query causal attention, SwiGLU MLP, tied output head.",
         "- The corpus is tokenized once with the model's own tokenizer, without special tokens",
         "  (`scripts/prepare_eval_tokens.py`), then cut into consecutive non-overlapping windows.",
+        "- Supported architectures: LLaMA family and GPT-NeoX (Pythia). The forward pass is unit-tested",
+        "  (causality, kernels, format round trips) but has not yet been cross-checked against the",
+        "  Hugging Face reference implementation; that check is an open roadmap item.",
         "- Every token except the first of each window is scored given the earlier tokens of that window.",
         "  Perplexity is exp(mean negative log-likelihood) over all scored tokens.",
         "- This differs from overlapping sliding-window protocols, which give each token more context",
@@ -308,6 +311,7 @@ def generate_markdown(reports, output_md, sweep=None, probe=None):
         "    --model-path models/SmolLM-135M \\",
         "    --tokens target/eval/wikitext2_test.SmolLM-135M.u32 --layer-scan",
         "python scripts/generate_dossier.py",
+        "python scripts/generate_charts.py --data-dir docs/benchmarks/<model>/data --out-dir docs/benchmarks/<model>/charts",
         "```",
     ])
 
@@ -338,11 +342,20 @@ def generate_csv(reports, output_csv):
 
 def main():
     parser = argparse.ArgumentParser(description="THME Benchmark Dossier Generator")
-    parser.add_argument("--input", nargs="+", default=["target/verification_report.json"],
+    parser.add_argument("--input", nargs="+", default=[
+        "docs/benchmarks/smollm-135m/data/verification_report.json",
+        "docs/benchmarks/pythia-14m/data/verification_report.json",
+    ],
                         help="Verification report JSON file(s) from production_verification")
-    parser.add_argument("--sweep", default="target/precision_sweep.json",
+    parser.add_argument("--sweep", nargs="*", default=[
+        "docs/benchmarks/smollm-135m/data/precision_sweep.json",
+        "docs/benchmarks/pythia-14m/data/precision_sweep.json",
+    ],
                         help="Precision sweep JSON from precision_sweep (included when the file exists)")
-    parser.add_argument("--depth", default="target/depth_probe.json",
+    parser.add_argument("--depth", nargs="*", default=[
+        "docs/benchmarks/smollm-135m/data/depth_probe.json",
+        "docs/benchmarks/pythia-14m/data/depth_probe.json",
+    ],
                         help="Depth probe JSON from depth_probe (included when the file exists)")
     parser.add_argument("--output-md", default="docs/benchmark_dossier.md", help="Output Markdown file")
     parser.add_argument("--output-csv", default="docs/benchmark_dossier.csv", help="Output CSV file")
@@ -350,14 +363,16 @@ def main():
 
     reports = load_reports(args.input)
     os.makedirs(os.path.dirname(args.output_md) or ".", exist_ok=True)
-    sweep = None
-    if args.sweep and os.path.exists(args.sweep):
-        with open(args.sweep, "r", encoding="utf-8") as f:
-            sweep = json.load(f)
-    probe = None
-    if args.depth and os.path.exists(args.depth):
-        with open(args.depth, "r", encoding="utf-8") as f:
-            probe = json.load(f)
+    def load_all(paths):
+        found = []
+        for path in paths or []:
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    found.append(json.load(f))
+        return found
+
+    sweep = load_all(args.sweep)
+    probe = load_all(args.depth)
     generate_markdown(reports, args.output_md, sweep, probe)
     generate_csv(reports, args.output_csv)
     return 0

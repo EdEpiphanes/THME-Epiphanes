@@ -8,7 +8,8 @@ pub mod watchdog;
 
 pub use agent_bridge::{AgentBridge, AgentBridgeConfig};
 pub use closed_loop::{
-    CoSurgeryBudget, CoSurgeryCheckpoint, CoSurgeryController, CoSurgeryReport, CoSurgeryState,
+    AnalyticProxyEvaluator, CoSurgeryBudget, CoSurgeryCheckpoint, CoSurgeryController,
+    CoSurgeryReport, CoSurgeryState, QualityEvaluator,
 };
 pub use pareto_3d::{ParetoOptimizer3D, ParetoPoint3D};
 pub use prompt_synth::{PromptSynthesizer, TeacherPromptPayload};

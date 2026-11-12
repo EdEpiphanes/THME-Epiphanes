@@ -608,6 +608,10 @@ pub struct THMEApp {
     // 8: Dev Lab & Training
     // 9: Closed-Loop Co-Surgery (v0.1.9)
     active_tab: usize,
+    /// Documentation capture mode (`THME_GUI_CAPTURE_DIR`); `None` in normal use.
+    capture: Option<super::capture::CaptureState>,
+    /// Live 3D model view (tab 10).
+    live: super::live::LiveView,
 
     // Closed-Loop Co-Surgery Dashboard (v0.1.9)
     cosurgery_budget_iterations: usize,
@@ -779,6 +783,8 @@ impl THMEApp {
             models: vec![initial_model],
             active_model_idx: 0,
             active_tab: 0,
+            capture: super::capture::CaptureState::from_env(),
+            live: super::live::LiveView::default(),
             status_msg: "THME Master Engine initialized. System ready.".to_string(),
             start_instant,
             exit_ratio_pct: 80.0,
@@ -1395,6 +1401,9 @@ impl THMEApp {
 
 impl eframe::App for THMEApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if let Some(capture) = self.capture.as_mut() {
+            self.active_tab = capture.step(ctx);
+        }
         if self.auto_tune_running && self.auto_step_mode {
             self.tune_timer += ctx.input(|i| i.stable_dt);
             if self.tune_timer >= 0.08 {
@@ -1605,7 +1614,7 @@ impl eframe::App for THMEApp {
                     );
                     render_stat_box(
                         &mut cols[3],
-                        "DEPTH (f̄)",
+                        "DEPTH (MEAN)",
                         f!("{:.0}%", f_bar * 100.0),
                         p.warning,
                         &p,
@@ -1686,6 +1695,7 @@ impl eframe::App for THMEApp {
                 tab_button(ui, "Surgery & Export", 7, &mut self.active_tab, &p);
                 tab_button(ui, "Dev Lab & Training", 8, &mut self.active_tab, &p);
                 tab_button(ui, "Co-Surgery", 9, &mut self.active_tab, &p);
+                tab_button(ui, "Live 3D", 10, &mut self.active_tab, &p);
             });
 
             ui.separator();
@@ -1702,6 +1712,10 @@ impl eframe::App for THMEApp {
                 7 => self.render_tab_export(ui),
                 8 => self.render_tab_developer_lab(ui),
                 9 => self.render_tab_cosurgery(ui),
+                10 => {
+                    let p = self.palette();
+                    self.live.ui(ui, &p);
+                }
                 _ => {}
             }
         });
@@ -1726,7 +1740,7 @@ impl THMEApp {
                             ui.horizontal(|ui| {
                                 ui.label(egui::RichText::new("MODELS REPOSITORY").strong().color(p.primary));
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    if ui.small_button("Manage →").clicked() {
+                                    if ui.small_button("Manage ->").clicked() {
                                         self.active_tab = 1;
                                     }
                                 });
@@ -1750,7 +1764,7 @@ impl THMEApp {
                             ui.horizontal(|ui| {
                                 ui.label(egui::RichText::new("MATRIX ENGINE").strong().color(p.success));
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    if ui.small_button("Engine →").clicked() {
+                                    if ui.small_button("Engine ->").clicked() {
                                         self.active_tab = 3;
                                     }
                                 });
@@ -1777,7 +1791,7 @@ impl THMEApp {
                             ui.horizontal(|ui| {
                                 ui.label(egui::RichText::new("REA-LLM / EWHA").strong().color(p.accent));
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    if ui.small_button("Metrics →").clicked() {
+                                    if ui.small_button("Metrics ->").clicked() {
                                         self.active_tab = 4;
                                     }
                                 });
@@ -1801,7 +1815,7 @@ impl THMEApp {
                             ui.horizontal(|ui| {
                                 ui.label(egui::RichText::new("FLOW TELEMETRY").strong().color(p.secondary));
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    if ui.small_button("Flow →").clicked() {
+                                    if ui.small_button("Flow ->").clicked() {
                                         self.active_tab = 4;
                                     }
                                 });
@@ -1907,7 +1921,7 @@ impl THMEApp {
                     ui.horizontal(|ui| {
                         ui.label(egui::RichText::new("RECENT HISTORY CHECKPOINTS").strong().color(p.text_main));
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.small_button("All Checkpoints →").clicked() {
+                            if ui.small_button("All Checkpoints ->").clicked() {
                                 self.active_tab = 5;
                             }
                         });
@@ -1926,7 +1940,7 @@ impl THMEApp {
                     ui.horizontal(|ui| {
                         ui.label(egui::RichText::new("LIVE AUDIT EVENT STREAM").strong().color(p.text_main));
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.small_button("Full Audit Log →").clicked() {
+                            if ui.small_button("Full Audit Log ->").clicked() {
                                 self.active_tab = 6;
                             }
                         });
@@ -2430,66 +2444,69 @@ impl THMEApp {
                                     ))
                                     .inner_margin(egui::Margin::same(8))
                                     .show(ui, |ui| {
-                                        ui.set_width(170.0);
-                                        ui.horizontal(|ui| {
-                                            ui.label(
-                                                egui::RichText::new("1. INPUT NORM")
-                                                    .strong()
-                                                    .color(p.primary)
-                                                    .size(9.0),
-                                            );
-                                            if ui
-                                                .small_button(if is_sel {
-                                                    "Active"
-                                                } else {
-                                                    "Select"
-                                                })
-                                                .clicked()
-                                            {
-                                                self.selected_subblock =
-                                                    Some(crate::ir::SubBlockCategory::InputNorm);
-                                            }
-                                        });
-                                        ui.label(
-                                            egui::RichText::new("RMSNorm (Variance Scale)")
-                                                .size(8.0)
-                                                .color(p.text_muted),
-                                        );
-                                        ui.separator();
-                                        for t in &norm.tensors {
+                                        ui.vertical(|ui| {
+                                            ui.set_width(170.0);
                                             ui.horizontal(|ui| {
                                                 ui.label(
-                                                    egui::RichText::new("γ (Scale)")
-                                                        .size(8.0)
-                                                        .color(p.text_main),
+                                                    egui::RichText::new("1. INPUT NORM")
+                                                        .strong()
+                                                        .color(p.primary)
+                                                        .size(9.0),
                                                 );
-                                                ui.label(
-                                                    egui::RichText::new(f!("{:?}", t.shape))
-                                                        .size(7.0)
-                                                        .monospace(),
-                                                );
-                                                if ui.small_button("View").clicked() {
-                                                    focused_tensor_name = Some(t.name.clone());
+                                                if ui
+                                                    .small_button(if is_sel {
+                                                        "Active"
+                                                    } else {
+                                                        "Select"
+                                                    })
+                                                    .clicked()
+                                                {
                                                     self.selected_subblock = Some(
                                                         crate::ir::SubBlockCategory::InputNorm,
                                                     );
                                                 }
                                             });
-                                        }
-                                        ui.add_space(4.0);
-                                        ui.label(
-                                            egui::RichText::new("Routing Target:")
-                                                .size(7.0)
-                                                .color(p.text_muted),
-                                        );
-                                        ui.label(
-                                            egui::RichText::new("→ Sequence Mixer")
-                                                .size(8.0)
-                                                .color(p.secondary),
-                                        );
+                                            ui.label(
+                                                egui::RichText::new("RMSNorm (Variance Scale)")
+                                                    .size(8.0)
+                                                    .color(p.text_muted),
+                                            );
+                                            ui.separator();
+                                            for t in &norm.tensors {
+                                                ui.horizontal(|ui| {
+                                                    ui.label(
+                                                        egui::RichText::new("γ (Scale)")
+                                                            .size(8.0)
+                                                            .color(p.text_main),
+                                                    );
+                                                    ui.label(
+                                                        egui::RichText::new(f!("{:?}", t.shape))
+                                                            .size(7.0)
+                                                            .monospace(),
+                                                    );
+                                                    if ui.small_button("View").clicked() {
+                                                        focused_tensor_name = Some(t.name.clone());
+                                                        self.selected_subblock = Some(
+                                                            crate::ir::SubBlockCategory::InputNorm,
+                                                        );
+                                                    }
+                                                });
+                                            }
+                                            ui.add_space(4.0);
+                                            ui.label(
+                                                egui::RichText::new("Routing Target:")
+                                                    .size(7.0)
+                                                    .color(p.text_muted),
+                                            );
+                                            ui.label(
+                                                egui::RichText::new("-> Sequence Mixer")
+                                                    .size(8.0)
+                                                    .color(p.secondary),
+                                            );
+                                        });
                                     });
 
-                                ui.label(egui::RichText::new("──►").size(14.0).color(p.primary));
+                                ui.label(egui::RichText::new("-->").size(14.0).color(p.primary));
                             }
 
                             // Sub-Block 2: Sequence Mixer
@@ -2503,93 +2520,97 @@ impl THMEApp {
                                 ))
                                 .inner_margin(egui::Margin::same(8))
                                 .show(ui, |ui| {
-                                    ui.set_width(220.0);
-                                    ui.horizontal(|ui| {
-                                        ui.label(
-                                            egui::RichText::new(f!(
-                                                "2. MIXER [{}]",
-                                                l_mixer.to_uppercase()
-                                            ))
-                                            .strong()
-                                            .color(p.primary)
-                                            .size(9.0),
-                                        );
-                                        if ui
-                                            .small_button(if is_sel_mix {
-                                                "Active"
-                                            } else {
-                                                "Select"
-                                            })
-                                            .clicked()
-                                        {
-                                            self.selected_subblock =
-                                                Some(crate::ir::SubBlockCategory::SequenceMixer);
-                                        }
-                                        ui.with_layout(
-                                            egui::Layout::right_to_left(egui::Align::Center),
-                                            |ui| {
-                                                ui.label(
-                                                    egui::RichText::new(f!(
-                                                        "{:.1}M",
-                                                        decomp.mixer_block.total_parameters as f32
-                                                            / 1_000_000.0
-                                                    ))
-                                                    .size(8.0)
-                                                    .color(p.text_muted),
-                                                );
-                                            },
-                                        );
-                                    });
-                                    ui.label(
-                                        egui::RichText::new("Token sequence correlation")
-                                            .size(8.0)
-                                            .color(p.text_muted),
-                                    );
-                                    ui.separator();
-                                    for t in &decomp.mixer_block.tensors {
+                                    ui.vertical(|ui| {
+                                        ui.set_width(220.0);
                                         ui.horizontal(|ui| {
-                                            let role_str = match t.role {
-                                                crate::ir::TensorRole::AttentionQ => "W_q",
-                                                crate::ir::TensorRole::AttentionK => "W_k",
-                                                crate::ir::TensorRole::AttentionV => "W_v",
-                                                crate::ir::TensorRole::AttentionOut => "W_o",
-                                                _ => "W_mix",
-                                            };
                                             ui.label(
-                                                egui::RichText::new(role_str)
-                                                    .strong()
-                                                    .size(8.0)
-                                                    .color(p.primary),
+                                                egui::RichText::new(f!(
+                                                    "2. MIXER [{}]",
+                                                    l_mixer.to_uppercase()
+                                                ))
+                                                .strong()
+                                                .color(p.primary)
+                                                .size(9.0),
                                             );
-                                            ui.label(
-                                                egui::RichText::new(f!("{:?}", t.shape))
-                                                    .size(7.0)
-                                                    .monospace(),
-                                            );
-                                            ui.label(
-                                                egui::RichText::new(&t.selected_format)
-                                                    .size(7.0)
-                                                    .color(p.success),
-                                            );
-                                            if ui.small_button("View").clicked() {
-                                                focused_tensor_name = Some(t.name.clone());
+                                            if ui
+                                                .small_button(if is_sel_mix {
+                                                    "Active"
+                                                } else {
+                                                    "Select"
+                                                })
+                                                .clicked()
+                                            {
                                                 self.selected_subblock = Some(
                                                     crate::ir::SubBlockCategory::SequenceMixer,
                                                 );
                                             }
+                                            ui.with_layout(
+                                                egui::Layout::right_to_left(egui::Align::Center),
+                                                |ui| {
+                                                    ui.label(
+                                                        egui::RichText::new(f!(
+                                                            "{:.1}M",
+                                                            decomp.mixer_block.total_parameters
+                                                                as f32
+                                                                / 1_000_000.0
+                                                        ))
+                                                        .size(8.0)
+                                                        .color(p.text_muted),
+                                                    );
+                                                },
+                                            );
                                         });
-                                    }
-                                    ui.add_space(4.0);
-                                    ui.label(
-                                        egui::RichText::new("Routing Target:")
-                                            .size(7.0)
-                                            .color(p.text_muted),
-                                    );
-                                    ui.label(
-                                        egui::RichText::new("-> Residual Highway 1 (Add)")
-                                            .size(8.0)
-                                            .color(p.secondary),
-                                    );
+                                        ui.label(
+                                            egui::RichText::new("Token sequence correlation")
+                                                .size(8.0)
+                                                .color(p.text_muted),
+                                        );
+                                        ui.separator();
+                                        for t in &decomp.mixer_block.tensors {
+                                            ui.horizontal(|ui| {
+                                                let role_str = match t.role {
+                                                    crate::ir::TensorRole::AttentionQ => "W_q",
+                                                    crate::ir::TensorRole::AttentionK => "W_k",
+                                                    crate::ir::TensorRole::AttentionV => "W_v",
+                                                    crate::ir::TensorRole::AttentionOut => "W_o",
+                                                    _ => "W_mix",
+                                                };
+                                                ui.label(
+                                                    egui::RichText::new(role_str)
+                                                        .strong()
+                                                        .size(8.0)
+                                                        .color(p.primary),
+                                                );
+                                                ui.label(
+                                                    egui::RichText::new(f!("{:?}", t.shape))
+                                                        .size(7.0)
+                                                        .monospace(),
+                                                );
+                                                ui.label(
+                                                    egui::RichText::new(&t.selected_format)
+                                                        .size(7.0)
+                                                        .color(p.success),
+                                                );
+                                                if ui.small_button("View").clicked() {
+                                                    focused_tensor_name = Some(t.name.clone());
+                                                    self.selected_subblock = Some(
+                                                        crate::ir::SubBlockCategory::SequenceMixer,
+                                                    );
+                                                }
+                                            });
+                                        }
+                                        ui.add_space(4.0);
+                                        ui.label(
+                                            egui::RichText::new("Routing Target:")
+                                                .size(7.0)
+                                                .color(p.text_muted),
+                                        );
+                                        ui.label(
+                                            egui::RichText::new("-> Residual Highway 1 (Add)")
+                                                .size(8.0)
+                                                .color(p.secondary),
+                                        );
+                                    });
                                 });
 
                             ui.label(egui::RichText::new("-->").size(14.0).color(p.primary));
@@ -2600,29 +2621,31 @@ impl THMEApp {
                                 .stroke(Stroke::new(1.0_f32, p.border))
                                 .inner_margin(egui::Margin::same(8))
                                 .show(ui, |ui| {
-                                    ui.set_width(120.0);
-                                    ui.label(
-                                        egui::RichText::new("3. RESIDUAL 1")
-                                            .strong()
-                                            .color(p.accent)
-                                            .size(9.0),
-                                    );
-                                    ui.label(
-                                        egui::RichText::new("Identity Add")
-                                            .size(8.0)
-                                            .color(p.text_muted),
-                                    );
-                                    ui.separator();
-                                    ui.label(
-                                        egui::RichText::new("x = x + Mixer(x)")
-                                            .size(8.0)
-                                            .monospace(),
-                                    );
-                                    ui.label(
-                                        egui::RichText::new("Zero latency skip")
-                                            .size(7.0)
-                                            .color(p.text_muted),
-                                    );
+                                    ui.vertical(|ui| {
+                                        ui.set_width(120.0);
+                                        ui.label(
+                                            egui::RichText::new("3. RESIDUAL 1")
+                                                .strong()
+                                                .color(p.accent)
+                                                .size(9.0),
+                                        );
+                                        ui.label(
+                                            egui::RichText::new("Identity Add")
+                                                .size(8.0)
+                                                .color(p.text_muted),
+                                        );
+                                        ui.separator();
+                                        ui.label(
+                                            egui::RichText::new("x = x + Mixer(x)")
+                                                .size(8.0)
+                                                .monospace(),
+                                        );
+                                        ui.label(
+                                            egui::RichText::new("Zero latency skip")
+                                                .size(7.0)
+                                                .color(p.text_muted),
+                                        );
+                                    });
                                 });
 
                             ui.label(egui::RichText::new("-->").size(14.0).color(p.primary));
@@ -2639,62 +2662,64 @@ impl THMEApp {
                                     ))
                                     .inner_margin(egui::Margin::same(8))
                                     .show(ui, |ui| {
-                                        ui.set_width(160.0);
-                                        ui.horizontal(|ui| {
-                                            ui.label(
-                                                egui::RichText::new("4. POST-MIX NORM")
-                                                    .strong()
-                                                    .color(p.primary)
-                                                    .size(9.0),
-                                            );
-                                            if ui
-                                                .small_button(if is_sel_post {
-                                                    "Active"
-                                                } else {
-                                                    "Select"
-                                                })
-                                                .clicked()
-                                            {
-                                                self.selected_subblock = Some(
-                                                    crate::ir::SubBlockCategory::PostMixerNorm,
-                                                );
-                                            }
-                                        });
-                                        ui.label(
-                                            egui::RichText::new("RMSNorm (Variance Scale)")
-                                                .size(8.0)
-                                                .color(p.text_muted),
-                                        );
-                                        ui.separator();
-                                        for t in &post_norm.tensors {
+                                        ui.vertical(|ui| {
+                                            ui.set_width(160.0);
                                             ui.horizontal(|ui| {
                                                 ui.label(
-                                                    egui::RichText::new("γ (Scale)").size(8.0),
+                                                    egui::RichText::new("4. POST-MIX NORM")
+                                                        .strong()
+                                                        .color(p.primary)
+                                                        .size(9.0),
                                                 );
-                                                ui.label(
-                                                    egui::RichText::new(f!("{:?}", t.shape))
-                                                        .size(7.0)
-                                                        .monospace(),
-                                                );
-                                                if ui.small_button("View").clicked() {
-                                                    focused_tensor_name = Some(t.name.clone());
+                                                if ui
+                                                    .small_button(if is_sel_post {
+                                                        "Active"
+                                                    } else {
+                                                        "Select"
+                                                    })
+                                                    .clicked()
+                                                {
                                                     self.selected_subblock = Some(
                                                         crate::ir::SubBlockCategory::PostMixerNorm,
                                                     );
                                                 }
                                             });
-                                        }
-                                        ui.add_space(4.0);
-                                        ui.label(
-                                            egui::RichText::new("Routing Target:")
-                                                .size(7.0)
-                                                .color(p.text_muted),
-                                        );
-                                        ui.label(
-                                            egui::RichText::new("-> SwiGLU MLP")
-                                                .size(8.0)
-                                                .color(p.secondary),
-                                        );
+                                            ui.label(
+                                                egui::RichText::new("RMSNorm (Variance Scale)")
+                                                    .size(8.0)
+                                                    .color(p.text_muted),
+                                            );
+                                            ui.separator();
+                                            for t in &post_norm.tensors {
+                                                ui.horizontal(|ui| {
+                                                    ui.label(
+                                                        egui::RichText::new("γ (Scale)").size(8.0),
+                                                    );
+                                                    ui.label(
+                                                        egui::RichText::new(f!("{:?}", t.shape))
+                                                            .size(7.0)
+                                                            .monospace(),
+                                                    );
+                                                    if ui.small_button("View").clicked() {
+                                                        focused_tensor_name = Some(t.name.clone());
+                                                        self.selected_subblock = Some(
+                                                        crate::ir::SubBlockCategory::PostMixerNorm,
+                                                    );
+                                                    }
+                                                });
+                                            }
+                                            ui.add_space(4.0);
+                                            ui.label(
+                                                egui::RichText::new("Routing Target:")
+                                                    .size(7.0)
+                                                    .color(p.text_muted),
+                                            );
+                                            ui.label(
+                                                egui::RichText::new("-> SwiGLU MLP")
+                                                    .size(8.0)
+                                                    .color(p.secondary),
+                                            );
+                                        });
                                     });
 
                                 ui.label(egui::RichText::new("-->").size(14.0).color(p.primary));
@@ -2712,125 +2737,133 @@ impl THMEApp {
                                     ))
                                     .inner_margin(egui::Margin::same(8))
                                     .show(ui, |ui| {
-                                        ui.set_width(220.0);
-                                        ui.horizontal(|ui| {
-                                            ui.label(
-                                                egui::RichText::new("5. SWIGLU MLP")
-                                                    .strong()
-                                                    .color(p.primary)
-                                                    .size(9.0),
-                                            );
-                                            if ui
-                                                .small_button(if is_sel_ffn {
-                                                    "Active"
-                                                } else {
-                                                    "Select"
-                                                })
-                                                .clicked()
-                                            {
-                                                self.selected_subblock = Some(
-                                                    crate::ir::SubBlockCategory::FeedForwardMlp,
-                                                );
-                                            }
-                                            ui.with_layout(
-                                                egui::Layout::right_to_left(egui::Align::Center),
-                                                |ui| {
-                                                    ui.label(
-                                                        egui::RichText::new(f!(
-                                                            "{:.1}M",
-                                                            ffn.total_parameters as f32
-                                                                / 1_000_000.0
-                                                        ))
-                                                        .size(8.0)
-                                                        .color(p.text_muted),
-                                                    );
-                                                },
-                                            );
-                                        });
-                                        ui.label(
-                                            egui::RichText::new("Non-linear channel expansion")
-                                                .size(8.0)
-                                                .color(p.text_muted),
-                                        );
-                                        ui.separator();
-                                        for t in &ffn.tensors {
+                                        ui.vertical(|ui| {
+                                            ui.set_width(220.0);
                                             ui.horizontal(|ui| {
-                                                let role_str = match t.role {
-                                                    crate::ir::TensorRole::MlpGate => "W_gate",
-                                                    crate::ir::TensorRole::MlpUp => "W_up",
-                                                    crate::ir::TensorRole::MlpDown => "W_down",
-                                                    _ => "W_mlp",
-                                                };
                                                 ui.label(
-                                                    egui::RichText::new(role_str)
+                                                    egui::RichText::new("5. SWIGLU MLP")
                                                         .strong()
-                                                        .size(8.0)
-                                                        .color(p.warning),
+                                                        .color(p.primary)
+                                                        .size(9.0),
                                                 );
-                                                ui.label(
-                                                    egui::RichText::new(f!("{:?}", t.shape))
-                                                        .size(7.0)
-                                                        .monospace(),
-                                                );
-                                                ui.label(
-                                                    egui::RichText::new(&t.selected_format)
-                                                        .size(7.0)
-                                                        .color(p.success),
-                                                );
-                                                if ui.small_button("View").clicked() {
-                                                    focused_tensor_name = Some(t.name.clone());
+                                                if ui
+                                                    .small_button(if is_sel_ffn {
+                                                        "Active"
+                                                    } else {
+                                                        "Select"
+                                                    })
+                                                    .clicked()
+                                                {
                                                     self.selected_subblock = Some(
                                                         crate::ir::SubBlockCategory::FeedForwardMlp,
                                                     );
                                                 }
+                                                ui.with_layout(
+                                                    egui::Layout::right_to_left(
+                                                        egui::Align::Center,
+                                                    ),
+                                                    |ui| {
+                                                        ui.label(
+                                                            egui::RichText::new(f!(
+                                                                "{:.1}M",
+                                                                ffn.total_parameters as f32
+                                                                    / 1_000_000.0
+                                                            ))
+                                                            .size(8.0)
+                                                            .color(p.text_muted),
+                                                        );
+                                                    },
+                                                );
                                             });
-                                        }
-                                        ui.add_space(4.0);
-                                        ui.label(
-                                            egui::RichText::new("Routing Target:")
-                                                .size(7.0)
-                                                .color(p.text_muted),
-                                        );
-                                        ui.label(
-                                            egui::RichText::new("→ Residual Highway 2 (⊕)")
-                                                .size(8.0)
-                                                .color(p.secondary),
-                                        );
+                                            ui.label(
+                                                egui::RichText::new("Non-linear channel expansion")
+                                                    .size(8.0)
+                                                    .color(p.text_muted),
+                                            );
+                                            ui.separator();
+                                            for t in &ffn.tensors {
+                                                ui.horizontal(|ui| {
+                                                    let role_str = match t.role {
+                                                        crate::ir::TensorRole::MlpGate => "W_gate",
+                                                        crate::ir::TensorRole::MlpUp => "W_up",
+                                                        crate::ir::TensorRole::MlpDown => "W_down",
+                                                        _ => "W_mlp",
+                                                    };
+                                                    ui.label(
+                                                        egui::RichText::new(role_str)
+                                                            .strong()
+                                                            .size(8.0)
+                                                            .color(p.warning),
+                                                    );
+                                                    ui.label(
+                                                        egui::RichText::new(f!("{:?}", t.shape))
+                                                            .size(7.0)
+                                                            .monospace(),
+                                                    );
+                                                    ui.label(
+                                                        egui::RichText::new(&t.selected_format)
+                                                            .size(7.0)
+                                                            .color(p.success),
+                                                    );
+                                                    if ui.small_button("View").clicked() {
+                                                        focused_tensor_name = Some(t.name.clone());
+                                                        self.selected_subblock = Some(
+                                                        crate::ir::SubBlockCategory::FeedForwardMlp,
+                                                    );
+                                                    }
+                                                });
+                                            }
+                                            ui.add_space(4.0);
+                                            ui.label(
+                                                egui::RichText::new("Routing Target:")
+                                                    .size(7.0)
+                                                    .color(p.text_muted),
+                                            );
+                                            ui.label(
+                                                egui::RichText::new("-> Residual Highway 2 (+)")
+                                                    .size(8.0)
+                                                    .color(p.secondary),
+                                            );
+                                        });
                                     });
 
-                                ui.label(egui::RichText::new("──►").size(14.0).color(p.primary));
+                                ui.label(egui::RichText::new("-->").size(14.0).color(p.primary));
                             }
 
-                            // Sub-Block 6: Residual Highway 2 (⊕ Add)
+                            // Sub-Block 6: Residual Highway 2 (+ Add)
                             egui::Frame::NONE
                                 .fill(p.bg_card)
                                 .stroke(Stroke::new(1.0_f32, p.border))
                                 .inner_margin(egui::Margin::same(8))
                                 .show(ui, |ui| {
-                                    ui.set_width(120.0);
-                                    ui.label(
-                                        egui::RichText::new("6. RESIDUAL 2")
-                                            .strong()
-                                            .color(p.accent)
-                                            .size(9.0),
-                                    );
-                                    ui.label(
-                                        egui::RichText::new("⊕ Identity Add")
-                                            .size(8.0)
-                                            .color(p.text_muted),
-                                    );
-                                    ui.separator();
-                                    ui.label(
-                                        egui::RichText::new("x = x + MLP(x)").size(8.0).monospace(),
-                                    );
-                                    ui.label(
-                                        egui::RichText::new("Output collector")
-                                            .size(7.0)
-                                            .color(p.text_muted),
-                                    );
+                                    ui.vertical(|ui| {
+                                        ui.set_width(120.0);
+                                        ui.label(
+                                            egui::RichText::new("6. RESIDUAL 2")
+                                                .strong()
+                                                .color(p.accent)
+                                                .size(9.0),
+                                        );
+                                        ui.label(
+                                            egui::RichText::new("+ Identity Add")
+                                                .size(8.0)
+                                                .color(p.text_muted),
+                                        );
+                                        ui.separator();
+                                        ui.label(
+                                            egui::RichText::new("x = x + MLP(x)")
+                                                .size(8.0)
+                                                .monospace(),
+                                        );
+                                        ui.label(
+                                            egui::RichText::new("Output collector")
+                                                .size(7.0)
+                                                .color(p.text_muted),
+                                        );
+                                    });
                                 });
 
-                            ui.label(egui::RichText::new("──►").size(14.0).color(p.primary));
+                            ui.label(egui::RichText::new("-->").size(14.0).color(p.primary));
 
                             // Sub-Block 7: Routing Gateway
                             egui::Frame::NONE
@@ -4346,7 +4379,7 @@ impl THMEApp {
                                 .color(p.text_muted),
                         );
 
-                        if ui.button("↩ Restore").clicked() {
+                        if ui.button("<- Restore").clicked() {
                             restore_idx = Some(idx);
                         }
                         ui.end_row();
@@ -5581,6 +5614,14 @@ impl THMEApp {
             .size(10.0)
             .color(p.text_muted),
         );
+        ui.label(
+            egui::RichText::new(
+                "SIMULATED: perplexity figures in this tab come from the analytic proxy. For measured figures run `thme co-surgery <MODEL_PATH> --tokens <TOKENS>`.",
+            )
+            .size(10.0)
+            .strong()
+            .color(p.warning),
+        );
         ui.add_space(8.0);
 
         egui::ScrollArea::vertical().show(ui, |ui| {
@@ -5602,7 +5643,7 @@ impl THMEApp {
                     }
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button(egui::RichText::new("▶ Run Autonomous Co-Surgery").color(Color32::WHITE)).clicked() {
+                        if ui.button(egui::RichText::new("> Run Autonomous Co-Surgery").color(Color32::WHITE)).clicked() {
                             let mut model_ir = self.model().source_model.clone().unwrap_or_else(|| self.model().to_model_ir());
                             if model_ir.tensors.is_empty() {
                                 let bp = crate::ir::rebuilder::ArchitectureBlueprint::new_hybrid_llama("scaffold", 2, 128, 1);

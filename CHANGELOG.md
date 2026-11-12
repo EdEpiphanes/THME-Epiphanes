@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased] - v0.2.0 Measured Core
+
+### Added
+- Reference CPU forward pass (`src/inference/`): LLaMA family and GPT-NeoX (Pythia), AVX2/FMA
+  kernels with a portable fallback, layer schedules and per-depth readouts.
+- Measured precision round trips for FP16, BF16, Q8_0, Q4_0 and ternary (TQ1_0), using the
+  exporter's own block encoders and the parser's decoders.
+- `scripts/prepare_eval_tokens.py`: WikiText-2 test tokenization with corpus, tokenizer and
+  token-file hashes.
+- `examples/precision_sweep.rs` (uniform, per-role, per-layer, recipe and random-placement
+  variants) and `examples/depth_probe.rs` (exit readouts, repeated and skipped layers).
+- `scripts/generate_charts.py`: light and dark SVG charts rendered only from measured reports.
+- `thme validate --report <verification_report.json>` gates a measured report.
+- Pluggable co-surgery quality evaluation (`QualityEvaluator`): `thme co-surgery MODEL --tokens`
+  uses `MeasuredEvaluator` (reference forward pass); the analytic proxy remains the labelled fallback.
+- Studio **Live 3D** tab (`src/gui/live.rs`): real-time 3D view of any LLaMA-family or GPT-NeoX
+  model during evaluation, driven by a forward-pass probe (`src/inference/probe.rs`) that records
+  per-tensor output activity, residual updates, dead MLP units and non-finite values. Includes a
+  software 3D renderer (orbit, zoom, hover inspection) and a labelled synthetic demo model.
+- Studio capture mode (`THME_GUI_CAPTURE_DIR`) and `scripts/capture_studio.ps1`: real
+  screenshots of every Studio tab under `assets/screenshots/`.
+- Measured reports for SmolLM-135M and Pythia-14M under `docs/benchmarks/`.
+- `docs/research/THME_measured_findings_2026-11.md` and `docs/subsystems.md`.
+
+### Changed
+- `examples/production_verification.rs` runs a real perplexity gate on the source weights, the
+  re-imported GGUF export and the surgery recipe. Without weights and tokens it reports
+  NOT EVALUATED instead of a number, and it exits non-zero when a candidate fails.
+- `scripts/generate_dossier.py` renders committed reports only and refuses to run without a
+  measured evaluation.
+- README rewritten around measured results, an evidence table and real screenshots.
+- ROADMAP restructured: v0.2.0 Measured core, v0.2.1 Recipe and BYOA lab, v0.2.2 Formats and
+  calibration, v0.2.3 Recovery, v0.2.4 Runtime. GPU, streaming, clustering and gateway move to v0.3.
+- Tensor role detection recognises GPT-NeoX names and a fused `AttentionQkv` role.
+- `ModelEvaluator::evaluate_weights` documented as an analytic proxy.
+- `thme validate` and the MCP quality tool label supplied perplexities as not measured by THME.
+
+### Removed
+- Hand-written benchmark figures (H100, RTX 4090, M3 Max, MI300X, Xeon tables and the
+  LLaMA-3.2-1B row); none were measured.
+- Drawn showcase GIFs and their generators (`examples/generate_showcase_gifs.rs`,
+  `scripts/generate_showcase_gifs.py`, `scripts/generate_live_benchmark_gif.py`); they did not
+  depict the application.
+
+### Fixed
+- The previous quality gate compared a weight sample with a scaled copy of itself, so it could
+  not fail.
+- Studio: glyphs the font cannot render (arrows, combining marks) replaced; Layer Tweaker dataflow
+  cards no longer overlap their own labels; the co-surgery state machine no longer unwraps.
+
+---
 ## [0.1.9] - 2026-11-11
 
 ### Added

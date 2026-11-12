@@ -102,6 +102,34 @@ pub(crate) fn encode_q8_block(values: &[f32], out: &mut Vec<u8>) -> Result<()> {
     Ok(())
 }
 
+/// Encodes 32 values as a GGML Q4_0 block: an FP16 scale `d` and 4-bit codes `q`
+/// with `value ≈ d * (q - 8)`. Follows the GGML reference: `d` is the signed value of
+/// largest magnitude divided by -8, so that extreme maps exactly to code 0.
+pub(crate) fn encode_q4_0_block(values: &[f32], out: &mut Vec<u8>) -> Result<()> {
+    if values.len() != 32 {
+        bail!("Q4_0 block requires 32 values, got {}", values.len());
+    }
+    let extreme = values
+        .iter()
+        .fold(0.0f32, |m, &v| if v.abs() > m.abs() { v } else { m });
+    let scale = extreme / -8.0;
+    let half_scale = f32_to_f16(scale);
+    let stored = crate::profiling::f16_to_f32(half_scale);
+    if !stored.is_finite() {
+        bail!("Q4_0 scale exceeds finite FP16 range");
+    }
+    if scale != 0.0 && half_scale & 0x7fff == 0 {
+        bail!("Q4_0 scale underflows to zero in FP16");
+    }
+    let inv = if scale == 0.0 { 0.0 } else { 1.0 / scale };
+    let code = |v: f32| -> u8 { ((v * inv + 8.5) as i32).clamp(0, 15) as u8 };
+    out.extend_from_slice(&half_scale.to_le_bytes());
+    for i in 0..16 {
+        out.push(code(values[i]) | (code(values[i + 16]) << 4));
+    }
+    Ok(())
+}
+
 pub(crate) fn encode_tq1_block(values: &[f32], out: &mut Vec<u8>) -> Result<()> {
     let scale = optimal_ternary_scale(values)?.scale;
     let half_scale = f32_to_f16(scale);

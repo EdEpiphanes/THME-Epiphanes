@@ -7,8 +7,9 @@
 use anyhow::{bail, Context, Result};
 use std::path::Path;
 
+use super::probe::{dead_fraction, rms, update_ratio, ForwardTrace, LayerTrace, TensorActivity};
 use super::weights::{fake_quantize, read_tensor_f32};
-use crate::ir::{ModelIR, TensorIR};
+use crate::ir::{ModelIR, TensorFormat, TensorIR};
 
 /// Positions processed together per weight row, so each row is streamed once per block.
 const BLOCK: usize = 8;
@@ -110,7 +111,7 @@ pub struct LlamaModel {
     pub(crate) lm_head: Option<Vec<f32>>,
 }
 
-fn find_tensor<'a>(model: &'a ModelIR, name: &str) -> Option<&'a TensorIR> {
+pub(crate) fn find_tensor<'a>(model: &'a ModelIR, name: &str) -> Option<&'a TensorIR> {
     let dotted = format!(".{name}");
     model
         .tensors
@@ -118,7 +119,11 @@ fn find_tensor<'a>(model: &'a ModelIR, name: &str) -> Option<&'a TensorIR> {
         .find(|t| t.name == name || t.name.ends_with(&dotted))
 }
 
-fn load_tensor(tensor: &TensorIR, expected: usize, precision: WeightPrecision) -> Result<Vec<f32>> {
+pub(crate) fn load_tensor(
+    tensor: &TensorIR,
+    expected: usize,
+    precision: WeightPrecision,
+) -> Result<Vec<f32>> {
     let mut values = read_tensor_f32(tensor)?;
     if values.len() != expected {
         bail!(
@@ -127,7 +132,9 @@ fn load_tensor(tensor: &TensorIR, expected: usize, precision: WeightPrecision) -
             values.len()
         );
     }
-    if precision == WeightPrecision::SelectedFormat {
+    // Block formats apply to weight matrices; 1-D tensors (norms, biases) stay as stored,
+    // as GGML-style exporters keep them.
+    if precision == WeightPrecision::SelectedFormat && tensor.shape.len() >= 2 {
         fake_quantize(&mut values, &tensor.selected_format).with_context(|| {
             format!(
                 "Failed to apply {} to tensor '{}'",
@@ -259,6 +266,29 @@ impl LlamaModel {
         schedule: &[usize],
         exits: &[usize],
     ) -> Result<Vec<DepthExit>> {
+        self.validate(tokens, schedule, exits)?;
+        Ok(self.run(tokens, schedule, exits, None))
+    }
+
+    /// Runs `schedule` once, recording a [`ForwardTrace`], and reads out at the end.
+    pub fn forward_traced(
+        &self,
+        tokens: &[u32],
+        schedule: &[usize],
+    ) -> Result<(DepthExit, ForwardTrace)> {
+        self.validate(tokens, schedule, &[schedule.len()])?;
+        let mut trace = ForwardTrace {
+            tokens: tokens.len(),
+            layers: Vec::with_capacity(schedule.len()),
+        };
+        let exit = self
+            .run(tokens, schedule, &[schedule.len()], Some(&mut trace))
+            .pop()
+            .context("Forward pass produced no readout")?;
+        Ok((exit, trace))
+    }
+
+    fn validate(&self, tokens: &[u32], schedule: &[usize], exits: &[usize]) -> Result<()> {
         let t_len = tokens.len();
         if t_len < 2 {
             bail!("A forward pass needs at least 2 tokens, received {t_len}");
@@ -281,7 +311,17 @@ impl LlamaModel {
                 schedule.len()
             );
         }
+        Ok(())
+    }
 
+    fn run(
+        &self,
+        tokens: &[u32],
+        schedule: &[usize],
+        exits: &[usize],
+        mut trace: Option<&mut ForwardTrace>,
+    ) -> Vec<DepthExit> {
+        let t_len = tokens.len();
         let d = self.config.hidden_size;
         let head_dim = d / self.config.num_heads;
         let mut x = vec![0.0f32; t_len * d];
@@ -289,7 +329,7 @@ impl LlamaModel {
             let start = token as usize * d;
             row.copy_from_slice(&self.embed[start..start + d]);
         }
-        let rope = RopeTable::new(t_len, head_dim, self.config.rope_theta);
+        let rope = RopeTable::new(t_len, head_dim, head_dim, self.config.rope_theta);
         let mut normed = vec![0.0f32; t_len * d];
 
         let mut out = Vec::with_capacity(exits.len());
@@ -297,25 +337,60 @@ impl LlamaModel {
             out.push(self.read_out(0, &x, &mut normed, tokens));
         }
         for (step, &index) in schedule.iter().enumerate() {
-            self.apply_layer(&self.layers[index], &mut x, &mut normed, &rope);
+            match trace.as_deref_mut() {
+                Some(trace) => {
+                    let before = x.clone();
+                    let mut layer_trace = LayerTrace {
+                        layer: index,
+                        resid_rms_in: rms(&before),
+                        ..Default::default()
+                    };
+                    self.apply_layer(
+                        &self.layers[index],
+                        &mut x,
+                        &mut normed,
+                        &rope,
+                        Some(&mut layer_trace),
+                    );
+                    layer_trace.resid_rms_out = rms(&x);
+                    layer_trace.update_ratio = update_ratio(&before, &x);
+                    trace.layers.push(layer_trace);
+                }
+                None => self.apply_layer(&self.layers[index], &mut x, &mut normed, &rope, None),
+            }
             if exits.contains(&(step + 1)) {
                 out.push(self.read_out(step + 1, &x, &mut normed, tokens));
             }
         }
-        Ok(out)
+        out
     }
 
-    fn apply_layer(&self, layer: &LlamaLayer, x: &mut [f32], normed: &mut [f32], rope: &RopeTable) {
+    fn apply_layer(
+        &self,
+        layer: &LlamaLayer,
+        x: &mut [f32],
+        normed: &mut [f32],
+        rope: &RopeTable,
+        mut trace: Option<&mut LayerTrace>,
+    ) {
         let cfg = &self.config;
         let d = cfg.hidden_size;
         let head_dim = d / cfg.num_heads;
         let kv_dim = head_dim * cfg.num_kv_heads;
         let inter = self.intermediate_size;
+        let mut record = |name: &'static str, y: &[f32], out_dim: usize| {
+            if let Some(t) = trace.as_deref_mut() {
+                t.tensors.push(TensorActivity::measure(name, y, out_dim));
+            }
+        };
 
         rms_norm(x, &layer.attn_norm, cfg.rms_norm_eps, normed);
         let mut q = linear(normed, &layer.q, d, d);
         let mut k = linear(normed, &layer.k, d, kv_dim);
         let v = linear(normed, &layer.v, d, kv_dim);
+        record("q", &q, d);
+        record("k", &k, kv_dim);
+        record("v", &v, kv_dim);
         rope.apply(&mut q);
         rope.apply(&mut k);
         let mixed = attention(&AttentionInputs {
@@ -327,15 +402,22 @@ impl LlamaModel {
             head_dim,
         });
         let attn_out = linear(&mixed, &layer.o, d, d);
+        record("o", &attn_out, d);
         add_in_place(x, &attn_out);
 
         rms_norm(x, &layer.mlp_norm, cfg.rms_norm_eps, normed);
         let mut hidden = linear(normed, &layer.gate, d, inter);
         let up = linear(normed, &layer.up, d, inter);
+        record("gate", &hidden, inter);
+        record("up", &up, inter);
         for (g, u) in hidden.iter_mut().zip(&up) {
             *g = *g / (1.0 + (-*g).exp()) * u;
         }
         let mlp_out = linear(&hidden, &layer.down, inter, d);
+        record("down", &mlp_out, d);
+        if let Some(t) = trace {
+            t.mlp_dead_fraction = dead_fraction(&hidden);
+        }
         add_in_place(x, &mlp_out);
     }
 
@@ -347,54 +429,65 @@ impl LlamaModel {
         tokens: &[u32],
     ) -> DepthExit {
         rms_norm(x, &self.final_norm, self.config.rms_norm_eps, normed);
-        let scores = self.head_scores(normed, tokens);
-        DepthExit {
-            layers_applied,
-            nll: scores.chunks_exact(2).map(|s| s[0]).collect(),
-            top1: scores.chunks_exact(2).map(|s| s[1] as u32).collect(),
-        }
-    }
-
-    /// Per scored position: `[negative log-likelihood of the true next token, argmax token id]`.
-    fn head_scores(&self, normed: &[f32], tokens: &[u32]) -> Vec<f32> {
-        let d = self.config.hidden_size;
-        let vocab = self.vocab_size;
         let head = self.lm_head.as_deref().unwrap_or(&self.embed);
-        let mut scores = vec![0.0f32; 2 * (tokens.len() - 1)];
-        par_row_ranges(&mut scores, 2, |first, chunk| {
-            let mut logits = vec![0.0f32; BLOCK * vocab];
-            for (block_index, out) in chunk.chunks_mut(2 * BLOCK).enumerate() {
-                let start = first + block_index * BLOCK;
-                let rows = out.len() / 2;
-                matmul(
-                    head,
-                    &normed[start * d..(start + rows) * d],
-                    &mut logits[..rows * vocab],
-                    d,
-                    vocab,
-                );
-                for (r, slot) in out.chunks_exact_mut(2).enumerate() {
-                    let row = &logits[r * vocab..(r + 1) * vocab];
-                    let target = tokens[start + r + 1] as usize;
-                    let mut max = f32::NEG_INFINITY;
-                    let mut best = 0usize;
-                    for (i, &l) in row.iter().enumerate() {
-                        if l > max {
-                            max = l;
-                            best = i;
-                        }
-                    }
-                    let sum: f64 = row.iter().map(|&l| f64::from((l - max).exp())).sum();
-                    slot[0] = (f64::from(max - row[target]) + sum.ln()) as f32;
-                    // Token ids are far below 2^24, so the f32 round-trip is exact.
-                    slot[1] = best as f32;
-                }
-            }
-        });
-        scores
+        score_head(
+            head,
+            self.config.hidden_size,
+            self.vocab_size,
+            normed,
+            tokens,
+            layers_applied,
+        )
     }
 }
 
+/// Applies an output head of shape `[vocab, d]` to normalized states and scores each
+/// position against the next token: negative log-likelihood and most likely token.
+pub(crate) fn score_head(
+    head: &[f32],
+    d: usize,
+    vocab: usize,
+    normed: &[f32],
+    tokens: &[u32],
+    layers_applied: usize,
+) -> DepthExit {
+    let mut scores = vec![0.0f32; 2 * (tokens.len() - 1)];
+    par_row_ranges(&mut scores, 2, |first, chunk| {
+        let mut logits = vec![0.0f32; BLOCK * vocab];
+        for (block_index, out) in chunk.chunks_mut(2 * BLOCK).enumerate() {
+            let start = first + block_index * BLOCK;
+            let rows = out.len() / 2;
+            matmul(
+                head,
+                &normed[start * d..(start + rows) * d],
+                &mut logits[..rows * vocab],
+                d,
+                vocab,
+            );
+            for (r, slot) in out.chunks_exact_mut(2).enumerate() {
+                let row = &logits[r * vocab..(r + 1) * vocab];
+                let target = tokens[start + r + 1] as usize;
+                let mut max = f32::NEG_INFINITY;
+                let mut best = 0usize;
+                for (i, &l) in row.iter().enumerate() {
+                    if l > max {
+                        max = l;
+                        best = i;
+                    }
+                }
+                let sum: f64 = row.iter().map(|&l| f64::from((l - max).exp())).sum();
+                slot[0] = (f64::from(max - row[target]) + sum.ln()) as f32;
+                // Token ids are far below 2^24, so the f32 round-trip is exact.
+                slot[1] = best as f32;
+            }
+        }
+    });
+    DepthExit {
+        layers_applied,
+        nll: scores.chunks_exact(2).map(|s| s[0]).collect(),
+        top1: scores.chunks_exact(2).map(|s| s[1] as u32).collect(),
+    }
+}
 /// Splits `out` into contiguous row ranges and runs `f(first_row, rows)` on each in parallel.
 fn par_row_ranges<F>(out: &mut [f32], row_len: usize, f: F)
 where
@@ -420,7 +513,7 @@ where
 }
 
 /// `y[t] = W · x[t]` for a row-major `W` of shape `[out_dim, in_dim]`.
-fn linear(x: &[f32], w: &[f32], in_dim: usize, out_dim: usize) -> Vec<f32> {
+pub(crate) fn linear(x: &[f32], w: &[f32], in_dim: usize, out_dim: usize) -> Vec<f32> {
     let rows = x.len() / in_dim;
     let mut y = vec![0.0f32; rows * out_dim];
     par_row_ranges(&mut y, out_dim, |first, chunk| {
@@ -656,7 +749,7 @@ fn dot(a: &[f32], b: &[f32]) -> f32 {
     sum + acc.iter().sum::<f32>()
 }
 
-fn add_in_place(x: &mut [f32], delta: &[f32]) {
+pub(crate) fn add_in_place(x: &mut [f32], delta: &[f32]) {
     for (a, b) in x.iter_mut().zip(delta) {
         *a += b;
     }
@@ -674,38 +767,49 @@ fn rms_norm(x: &[f32], weight: &[f32], eps: f32, out: &mut [f32]) {
 }
 
 /// Rotary position table in the Hugging Face `rotate_half` convention.
-struct RopeTable {
+pub(crate) struct RopeTable {
     cos: Vec<f32>,
     sin: Vec<f32>,
     head_dim: usize,
+    /// Leading dimensions of each head that are rotated (GPT-NeoX rotates only part of each head).
+    rotary_dims: usize,
 }
 
 impl RopeTable {
-    fn new(t_len: usize, head_dim: usize, theta: f32) -> Self {
-        let half = head_dim / 2;
+    pub(crate) fn new(t_len: usize, head_dim: usize, rotary_dims: usize, theta: f32) -> Self {
+        let rotary_dims = rotary_dims.min(head_dim) / 2 * 2;
+        let half = rotary_dims / 2;
         let mut cos = Vec::with_capacity(t_len * half);
         let mut sin = Vec::with_capacity(t_len * half);
         for t in 0..t_len {
             for j in 0..half {
-                let inv_freq = f64::from(theta).powf(-((2 * j) as f64) / head_dim as f64);
+                let inv_freq = f64::from(theta).powf(-((2 * j) as f64) / rotary_dims as f64);
                 let angle = t as f64 * inv_freq;
                 cos.push(angle.cos() as f32);
                 sin.push(angle.sin() as f32);
             }
         }
-        Self { cos, sin, head_dim }
+        Self {
+            cos,
+            sin,
+            head_dim,
+            rotary_dims,
+        }
     }
 
     /// Rotates every head of every position in place; `x` rows are whole positions.
-    fn apply(&self, x: &mut [f32]) {
-        let half = self.head_dim / 2;
+    pub(crate) fn apply(&self, x: &mut [f32]) {
+        let half = self.rotary_dims / 2;
+        if half == 0 {
+            return;
+        }
         let positions = self.cos.len() / half;
         let row_len = x.len() / positions;
         for (t, row) in x.chunks_exact_mut(row_len).enumerate() {
             let cos = &self.cos[t * half..(t + 1) * half];
             let sin = &self.sin[t * half..(t + 1) * half];
             for head in row.chunks_exact_mut(self.head_dim) {
-                let (first, second) = head.split_at_mut(half);
+                let (first, second) = head[..self.rotary_dims].split_at_mut(half);
                 for (((a, b), c), s) in first.iter_mut().zip(second.iter_mut()).zip(cos).zip(sin) {
                     let (x1, x2) = (*a, *b);
                     *a = x1 * c - x2 * s;
@@ -716,17 +820,17 @@ impl RopeTable {
     }
 }
 
-struct AttentionInputs<'a> {
-    q: &'a [f32],
-    k: &'a [f32],
-    v: &'a [f32],
-    num_heads: usize,
-    num_kv_heads: usize,
-    head_dim: usize,
+pub(crate) struct AttentionInputs<'a> {
+    pub(crate) q: &'a [f32],
+    pub(crate) k: &'a [f32],
+    pub(crate) v: &'a [f32],
+    pub(crate) num_heads: usize,
+    pub(crate) num_kv_heads: usize,
+    pub(crate) head_dim: usize,
 }
 
 /// Causal grouped-query attention; returns the per-position concatenation of head outputs.
-fn attention(inputs: &AttentionInputs<'_>) -> Vec<f32> {
+pub(crate) fn attention(inputs: &AttentionInputs<'_>) -> Vec<f32> {
     let d = inputs.num_heads * inputs.head_dim;
     let t_len = inputs.q.len() / d;
     let mut out = vec![0.0f32; t_len * d];
@@ -803,6 +907,84 @@ fn attention_rows(
     }
 }
 
+/// Builds a small LLaMA-shaped model with pseudo-random weights for the Studio's live view.
+///
+/// Some tensors are round-tripped through low-bit formats so its layers have a mixed
+/// composition to display. Its predictions are meaningless: it exists so the visual
+/// pipeline can run without a downloaded checkpoint, and the GUI labels it as synthetic.
+pub fn synthetic_demo(seed: u64) -> (LlamaModel, Vec<Vec<(&'static str, TensorFormat)>>) {
+    let (layers_n, d, heads, kv_heads, inter, vocab) =
+        (8usize, 64usize, 4usize, 2usize, 128usize, 256usize);
+    let kv_dim = d / heads * kv_heads;
+    let mut state = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+    let mut rand = |len: usize, scale: f32| -> Vec<f32> {
+        (0..len)
+            .map(|_| {
+                state = state
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(1442695040888963407);
+                (((state >> 33) as f32 / 2_147_483_648.0) - 1.0) * scale
+            })
+            .collect()
+    };
+    let attn_formats = [TensorFormat::Q8_0, TensorFormat::FP16];
+    let gate_formats = [
+        TensorFormat::Ternary,
+        TensorFormat::Q4_0,
+        TensorFormat::FP16,
+    ];
+    let down_formats = [TensorFormat::FP16, TensorFormat::Q8_0, TensorFormat::Q4_0];
+    let mut composition = Vec::with_capacity(layers_n);
+    let mut layers = Vec::with_capacity(layers_n);
+    for i in 0..layers_n {
+        let attn = attn_formats[i % 2].clone();
+        let mlp = gate_formats[i % 3].clone();
+        let down = down_formats[i % 3].clone();
+        let mut make = |len: usize, format: &TensorFormat| -> Vec<f32> {
+            let mut w = rand(len, 0.2);
+            // Shapes are chosen so every format's block size divides them.
+            let _ = fake_quantize(&mut w, format);
+            w
+        };
+        layers.push(LlamaLayer {
+            attn_norm: vec![1.0; d],
+            q: make(d * d, &attn),
+            k: make(kv_dim * d, &attn),
+            v: make(kv_dim * d, &attn),
+            o: make(d * d, &attn),
+            mlp_norm: vec![1.0; d],
+            gate: make(inter * d, &mlp),
+            up: make(inter * d, &mlp),
+            down: make(d * inter, &down),
+        });
+        composition.push(vec![
+            ("q", attn.clone()),
+            ("k", attn.clone()),
+            ("v", attn.clone()),
+            ("o", attn),
+            ("gate", mlp.clone()),
+            ("up", mlp),
+            ("down", down),
+        ]);
+    }
+    let model = LlamaModel {
+        config: LlamaConfig {
+            num_layers: layers_n,
+            hidden_size: d,
+            num_heads: heads,
+            num_kv_heads: kv_heads,
+            rms_norm_eps: 1e-5,
+            rope_theta: 10_000.0,
+        },
+        vocab_size: vocab,
+        intermediate_size: inter,
+        embed: rand(vocab * d, 1.0),
+        layers,
+        final_norm: vec![1.0; d],
+        lm_head: None,
+    };
+    (model, composition)
+}
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -922,6 +1104,23 @@ pub(crate) mod tests {
         assert!(model.forward_scheduled(&tokens, &[], &[0]).is_ok());
         assert!(model.forward_scheduled(&tokens, &[2], &[1]).is_err());
         assert!(model.forward_scheduled(&tokens, &[0], &[2]).is_err());
+    }
+
+    #[test]
+    fn traced_forward_matches_plain_forward_and_records_every_tensor() {
+        let (model, composition) = super::synthetic_demo(5);
+        let tokens: Vec<u32> = (0..24).map(|i| (i * 37 % 256) as u32).collect();
+        let schedule: Vec<usize> = (0..8).collect();
+        let plain = model.forward_nll(&tokens).unwrap();
+        let (exit, trace) = model.forward_traced(&tokens, &schedule).unwrap();
+        assert_eq!(exit.nll, plain);
+        assert_eq!(trace.layers.len(), 8);
+        assert_eq!(composition.len(), 8);
+        for layer in &trace.layers {
+            assert_eq!(layer.tensors.len(), 7);
+            assert!(layer.update_ratio > 0.0 && layer.resid_rms_out > 0.0);
+        }
+        assert!(trace.anomalies().is_empty());
     }
 
     #[test]

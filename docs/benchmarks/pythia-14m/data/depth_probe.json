@@ -1,0 +1,123 @@
+{
+  "context_len": 1024,
+  "corpus": {
+    "corpus": "WikiText-2 (raw) test split",
+    "corpus_bytes": 1290590,
+    "corpus_member": "wikitext-2-raw/wiki.test.raw",
+    "corpus_sha256": "173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08",
+    "corpus_source": "https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip",
+    "special_tokens_added": false,
+    "token_count": 287159,
+    "token_file_sha256": "973595d9c7c580360a39eedde7297ec050f362a521940f7527eca4a00ea85278",
+    "tokenizer_repo": "EleutherAI/pythia-14m",
+    "tokenizer_sha256": "870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+    "tokenizer_source": "https://huggingface.co/EleutherAI/pythia-14m/resolve/main/tokenizer.json"
+  },
+  "corpus_tokens_used": 65536,
+  "exit_readout": [
+    {
+      "layers_applied": 0,
+      "perplexity": 13870204.359982803,
+      "settled_fraction": 0.0,
+      "top1_accuracy": 0.0037267839687194527,
+      "top1_agrees_with_final": 0.004719574780058651
+    },
+    {
+      "layers_applied": 1,
+      "perplexity": 649809.2007748694,
+      "settled_fraction": 0.0004734848484848485,
+      "top1_accuracy": 0.005177785923753665,
+      "top1_agrees_with_final": 0.02853128054740958
+    },
+    {
+      "layers_applied": 2,
+      "perplexity": 626973.1167383675,
+      "settled_fraction": 0.01110398338220919,
+      "top1_accuracy": 0.033189760508308894,
+      "top1_agrees_with_final": 0.10757270283479961
+    },
+    {
+      "layers_applied": 3,
+      "perplexity": 215484.55915791402,
+      "settled_fraction": 0.014678030303030304,
+      "top1_accuracy": 0.02833272238514174,
+      "top1_agrees_with_final": 0.08486070381231671
+    },
+    {
+      "layers_applied": 4,
+      "perplexity": 40554.22194959337,
+      "settled_fraction": 0.04872311827956989,
+      "top1_accuracy": 0.05574902248289345,
+      "top1_agrees_with_final": 0.14048753665689148
+    },
+    {
+      "layers_applied": 5,
+      "perplexity": 1825.2962488278272,
+      "settled_fraction": 0.16431451612903225,
+      "top1_accuracy": 0.08799181329423265,
+      "top1_agrees_with_final": 0.16431451612903225
+    },
+    {
+      "layers_applied": 6,
+      "perplexity": 113.69621704630111,
+      "settled_fraction": 1.0,
+      "top1_accuracy": 0.2734298631476051,
+      "top1_agrees_with_final": 1.0
+    }
+  ],
+  "generated_unix_secs": 1794510079,
+  "model_name": "Pythia-14M",
+  "notes": [
+    "Measured with the THME reference CPU forward pass on stored weights; no retraining.",
+    "Intermediate readouts apply the model's own final norm and output head to the state at that depth.",
+    "The model was not trained for early exit or looping; these are diagnostics, not the behaviour of a model trained for either.",
+    "settled_fraction: share of tokens whose top prediction equals the full-depth top prediction at this depth and every later depth."
+  ],
+  "num_layers": 6,
+  "schedule_experiments": [
+    {
+      "delta_ppl": 0.0,
+      "description": "Every layer once (reference)",
+      "id": "plain",
+      "layer_applications": 6,
+      "perplexity": 113.69621704630111
+    },
+    {
+      "delta_ppl": 5381.332609452302,
+      "description": "Layers 1..5 applied twice",
+      "id": "loop_middle_block_x2",
+      "layer_applications": 10,
+      "perplexity": 5495.028826498603
+    },
+    {
+      "delta_ppl": 18627.36954617831,
+      "description": "Layers 1..5 applied three times",
+      "id": "loop_middle_block_x3",
+      "layer_applications": 14,
+      "perplexity": 18741.06576322461
+    },
+    {
+      "delta_ppl": 3128.6228005674934,
+      "description": "Layer 3 applied twice",
+      "id": "repeat_single_layer",
+      "layer_applications": 7,
+      "perplexity": 3242.3190176137946
+    },
+    {
+      "delta_ppl": 21903.96861559101,
+      "description": "Layer 3 skipped",
+      "id": "skip_single_layer",
+      "layer_applications": 5,
+      "perplexity": 22017.66483263731
+    },
+    {
+      "delta_ppl": 101968.6385830025,
+      "description": "Layers 1..5 skipped",
+      "id": "skip_middle_block",
+      "layer_applications": 2,
+      "perplexity": 102082.33480004879
+    }
+  ],
+  "scored_tokens": 65472,
+  "thme_version": "0.1.9"
+}

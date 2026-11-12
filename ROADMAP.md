@@ -1,97 +1,185 @@
-# THME Roadmap: v0.1 to v0.2
+# THME Roadmap
 
 > **Topological Heterogeneous Manifold Engine (THME)** by **Epiphanes**
-> Roadmap governance and release progression from initial foundations to verified production deployment and heterogeneous hardware execution.
+> Updated 12 November 2026. v0.2 is redefined around one rule: **every claim is measured, or
+> labelled as not measured.** Recipes and BYOA algorithms are the unit of experimentation; the
+> measured quality gate decides what ships.
 
 ---
 
-## Strategic Overview
+## Where things stand
 
-The mission of THME is to provide a mathematically principled, verifiable framework for Large Language Model memory profiling, layer sensitivity estimation, Pareto precision allocation, automated Teacher LLM architecture surgery, and high-performance heterogeneous hardware execution.
+```mermaid
+flowchart LR
+    classDef done fill:#0ca30c,stroke:#0ca30c,color:#ffffff;
+    classDef active fill:#2a78d6,stroke:#2a78d6,color:#ffffff;
+    classDef next fill:#f0efec,stroke:#898781,color:#0b0b0b;
 
-### The 4-Level Sub-Milestone Execution Architecture
-To guarantee modularity, continuous integration, and rapid delivery, every major release milestone $v0.1.x$ is structured as a baseline milestone contract $v0.1.x.0$ branching into **exactly 9 parallel, interdependent sub-functions** ($v0.1.x.1$ through $v0.1.x.9$):
-
-$$v0.1.x.0 \longrightarrow \left[ v0.1.x.1, v0.1.x.2, v0.1.x.3, v0.1.x.4, v0.1.x.5, v0.1.x.6, v0.1.x.7, v0.1.x.8, v0.1.x.9 \right] \longrightarrow v0.1.(x+1).0$$
-
-1. **Parallel Execution with Interdependent Delivery**: Sub-functions within the $[v0.1.x.1 \dots v0.1.x.9]$ block execute concurrently across modular components (parsers, kernels, CLI commands, telemetry modules, and GUI decks). They share type contracts and IR data structures defined at $v0.1.x.0$.
-2. **Production Pipeline & CI/CD Impact**: Every sub-function integrates into the automated testing and delivery pipeline. Modifications trigger targeted unit tests, property fuzz suites, Criterion benchmark regressions, and release bundle gates before converging into $v0.1.(x+1).0$.
-3. **Active Parallel Progression Block**: The current release transition is explicitly modeled as:
-   $$v0.1.9.0 \longrightarrow \left[ v0.1.9.1, v0.1.9.2, v0.1.9.3, v0.1.9.4, v0.1.9.5, v0.1.9.6, v0.1.9.7, v0.1.9.8, v0.1.9.9 \right] \longrightarrow v0.2.0.0 \longrightarrow \left[ v0.2.0.1 \dots v0.2.0.9 \right]$$
-
----
-
-## Complete Milestone Progression
-
-```
-+--------------------------------------------------------------------------------------------------------------------+
-|                                           THME 4-LEVEL SUB-MILESTONE LEDGER                                        |
-+--------------------------------------------------------------------------------------------------------------------+
-| [x] v0.1.0.0 Core Foundations Baseline (Done)                                                                      |
-|     |-> [v0.1.0.1 - v0.1.0.9] SafeTensors, GGUF, SVD, Condition, Fisher, Pareto, GUI, Simulator, Recipe Engine     |
-| [x] v0.1.1.0 Path Hygiene & CI Governance Baseline (Done)                                                          |
-|     |-> [v0.1.1.1 - v0.1.1.9] Rebrand, AGENTS.md, 3-OS CI, Path Leak Guard, Release CI, Clippy, Schema, Alias, LTO |
-| [x] v0.1.2.0 Format Correctness & Fuzzing Baseline (Done)                                                          |
-|     |-> [v0.1.2.1 - v0.1.2.9] 28 GGML Types, Block Decoders, Recovery, Workspace, Fuzz, Property, Crates.io, Errors|
-| [x] v0.1.3.0 BYOA & REA-LLM Telemetry Baseline (Done)                                                              |
-|     |-> [v0.1.3.1 - v0.1.3.9] Registry, JSON, Rebuilder, Remapping, EWHA Reach, Memory Traffic, Energy, Anatomy, SIMD|
-| [x] v0.1.4.0 Empirical Quality Gate Baseline (Done)                                                                |
-|     |-> [v0.1.4.1 - v0.1.4.9] PPL Bridge, WikiText-2, C4/PTB, Delta-PPL, Rollback, Pareto Loss, CLI, Audit, GUI   |
-| [x] v0.1.5.0 Surgery Daemon & 8 Models Matrix Baseline (Done)                                                      |
-|     |-> [v0.1.5.1 - v0.1.5.9] MCP Server, VS Code VSIX, Copilot, train_cuda.py, HF Config, LoRA Merge, 8 Paradigms  |
-| [x] v0.1.6.0 Speculative Decoding Synthesizer Baseline (Done)                                                      |
-|     |-> [v0.1.6.1 - v0.1.6.9] Prefix Manifold, Strided, BitNet Draft, Rejection Sampling, Speedup Math, Tree Mask   |
-|                                                                                                                    |
-| [x] v0.1.7.0 Hardware Roofline & Micro-Kernel Profiler Baseline (Done)                                              |
-|     |-> [v0.1.7.1 - v0.1.7.9] Hardware DB, Intensity Math, Cache Sim, Eviction, Ceilings, TDP, CLI, MCP, Tab 4 Deck  |
-|                                                                                                                    |
-| [x] v0.1.8.0 Binary Quantization Exporter Baseline (Done)                                                          |
-|     |-> [v0.1.8.1] Vectorized BitNet b1.58 Ternary Bitstream Packer (4 weights/byte)                       [COMPLETED] |
-|     |-> [v0.1.8.2] Vectorized Ternary Bitstream Unpacker with FP16 Scale Product                           [COMPLETED] |
-|     |-> [v0.1.8.3] Direct Pure Rust GGUF v3 Binary Writer & 32-Byte Alignment                              [COMPLETED] |
-|     |-> [v0.1.8.4] GGUF Metadata Key-Value Reconstitution & Synchronization Engine                         [COMPLETED] |
-|     |-> [v0.1.8.5] Direct Pure Rust SafeTensors Binary Serializer & 8-Byte Prefix                          [COMPLETED] |
-|     |-> [v0.1.8.6] Low-Memory Streaming Chunked File Writer Engine                                         [COMPLETED] |
-|     |-> [v0.1.8.7] Calibrated Per-Channel & Per-Group MSE-Optimal Scale Search                             [COMPLETED] |
-|     |-> [v0.1.8.8] CLI Subcommand thme export & Desktop Studio Exporter Wizard                             [COMPLETED] |
-|     |-> [v0.1.8.9] Downstream Runtime Compatibility Testbed (llama.cpp / Ollama)                            [COMPLETED] |
-|                                                                                                                    |
-| [x] v0.1.9.0 Closed-Loop Teacher-Student Co-Surgery Baseline (COMPLETED)                                           |
-|     |-> [v0.1.9.1] Co-Surgery Closed-Loop State Machine & Controller                                       [COMPLETED] |
-|     |-> [v0.1.9.2] Teacher LLM Topology Analysis Prompt Synthesizer                                        [COMPLETED] |
-|     |-> [v0.1.9.3] Headless JSON-RPC & Subprocess Teacher Agent Communication Bridge                       [COMPLETED] |
-|     |-> [v0.1.9.4] Multi-Objective 3D Pareto Optimizer (Delta PPL, Bytes/token, Energy)                    [COMPLETED] |
-|     |-> [v0.1.9.5] Pareto Hypervolume Indicator Convergence Metric                                         [COMPLETED] |
-|     |-> [v0.1.9.6] Automated Self-Healing Parameter Relaxation Heuristic                                   [COMPLETED] |
-|     |-> [v0.1.9.7] Anti-Degradation Quality Gate Watchdog & Immediate Rollback Engine                      [COMPLETED] |
-|     |-> [v0.1.9.8] CLI Subcommand thme co-surgery & Progress Telemetry Stream                              [COMPLETED] |
-|     |-> [v0.1.9.9] Desktop Studio Tab 2 Closed-Loop Co-Surgery Interactive Dashboard                       [COMPLETED] |
-|                                                                                                                    |
-| [ ] v0.2.0.0 Production Core Release Baseline (ACTIVE)                                                             |
-|     |-> [v0.2.0.1] SmolLM-135M Open-Weights End-to-End Verification Pipeline                               [PLAN]   |
-|     |-> [v0.2.0.2] LLaMA-3.2-1B Open-Weights End-to-End Verification Pipeline                             [PLAN]   |
-|     |-> [v0.2.0.3] Automated Reproducible Benchmark Script Suite                                            [PLAN]   |
-|     |-> [v0.2.0.4] Published Benchmark Dossier Generator (Markdown & CSV)                                  [PLAN]   |
-|     |-> [v0.2.0.5] Multi-Platform LTO Stripped Binary Release Packaging                                     [PLAN]   |
-|     |-> [v0.2.0.6] Minisign & GPG Cryptographic Artifact Signing Pipeline                                  [PLAN]   |
-|     |-> [v0.2.0.7] SHA-256 Checksum Manifest Generation (SHA256SUMS.txt)                                   [PLAN]   |
-|     |-> [v0.2.0.8] Comprehensive Architecture Playbook, User Manual & Man Pages                            [PLAN]   |
-|     |-> [v0.2.0.9] End-to-End Clean-Machine Verification Test Harness                                      [PLAN]   |
-|                                                                                                                    |
-| [ ] v0.2.1.0 Direct GPU Driver Execution Engine Baseline (SCHEDULED)                                               |
-|     |-> [v0.2.1.1 - v0.2.1.9] HAL Traits, cudarc CUDA Driver, Vulkan SPIR-V, Metal 3, Fused Kernels, CLI run   |
-| [ ] v0.2.2.0 Tiered Out-of-Core NVMe SSD Streaming Baseline (SCHEDULED)                                            |
-|     |-> [v0.2.2.1 - v0.2.2.9] io_uring, Overlapped I/O, Prefetch Pipeline, Pinned Staging, 70B in 8GB VRAM        |
-| [ ] v0.2.3.0 Heterogeneous Multi-Node Clustering Baseline (SCHEDULED)                                              |
-|     |-> [v0.2.3.1 - v0.2.3.9] Intra TP, Inter PP, Async TCP Ring All-Reduce, RDMA Fallback, Watchdog Failover       |
-| [ ] v0.2.4.0 Universal Agentic AI Connectivity Gateway Baseline (SCHEDULED)                                        |
-|     |-> [v0.2.4.1 - v0.2.4.9] WebSocket Daemon, JSON-RPC Router, HMAC Attestation, CLI/CI/GUI/IDE Adapters        |
-+--------------------------------------------------------------------------------------------------------------------+
+    A["v0.1.0 – v0.1.9<br/>Foundations<br/>implemented"]:::done
+    B["v0.2.0<br/>Measured core"]:::active
+    C["v0.2.1<br/>Recipe and BYOA lab"]:::next
+    D["v0.2.2<br/>Formats and calibration"]:::next
+    E["v0.2.3<br/>Recovery and distillation"]:::next
+    F["v0.2.4<br/>Runtime, speed, KV cache"]:::next
+    G["v0.3<br/>Architectures, GPU, scale-out"]:::next
+    A --> B --> C --> D --> E --> F --> G
 ```
 
+### Evidence levels
+
+Every milestone item is tagged with the strongest evidence behind it.
+
+| Level | Meaning |
+| :--- | :--- |
+| **Measured** | Produced by a real forward pass; the report is committed under `docs/benchmarks/` |
+| **Tested** | Behaviour covered by unit, integration or fuzz tests; no quality or speed figure claimed |
+| **Estimate** | Analytic model or nominal bit-width arithmetic; must be labelled wherever shown |
+| **Simulated** | Synthetic data; must be labelled wherever shown |
+
+### What the v0.1 series delivered, by evidence level
+
+The v0.1 milestones were marked complete when their code landed. The first measured run
+(November 2026) showed that several of them produce estimates rather than measurements.
+They remain complete as implementations; the table records what each can be relied on for.
+
+| Milestone | Delivered | Evidence level today |
+| :--- | :--- | :--- |
+| v0.1.0 Core foundations | Zero-copy SafeTensors/GGUF import, IR, Studio, recipe engine | Tested |
+| v0.1.1 Path hygiene and CI | 3-OS CI, path-leak guard, release workflow | Tested |
+| v0.1.2 Format correctness | 28 GGML types, block decoders, fuzz suite | Tested |
+| v0.1.3 BYOA and REA-LLM | Algorithm registry, rebuilder, EWHA energy model | Tested; energy figures are Estimates |
+| v0.1.4 Quality gate | Gate decision logic, external evaluator bridge | Gate logic Tested; its built-in perplexity was an analytic proxy. Superseded by the measured gate in v0.2.0 |
+| v0.1.5 Surgery daemon and 8 paradigms | MCP server, VS Code extension, PyTorch bridge, paradigm converter | Tested; converted models not evaluated |
+| v0.1.6 Speculative decoding | Draft extraction, tree masks, Leviathan speedup formula | Speedups are Estimates |
+| v0.1.7 Roofline profiler | Hardware database, intensity, cache and thermal models | Estimates from published specifications |
+| v0.1.8 Quantization exporter | GGUF v3 and SafeTensors writers, BitNet packer, streaming I/O | Q8_0 GGUF export Measured; other formats Tested |
+| v0.1.9 Co-surgery loop | State machine, Pareto 3D, watchdog | Tested; quality scores Simulated (analytic proxy) |
+
 ---
 
-## Detailed Milestone Specifications & To-Do Lists
+## v0.2.0 — Measured core (ACTIVE)
+
+**Goal:** a real forward pass, a measured quality gate, and published numbers that regenerate
+from committed reports.
+**Exit criteria:** every figure in the README and dossier traces to a report in
+`docs/benchmarks/`; the analytic perplexity proxy is removed from, or labelled in, every
+user-facing path.
+
+| # | Item | Status |
+| :--- | :--- | :--- |
+| v0.2.0.1 | Reference CPU forward pass: LLaMA family and GPT-NeoX (`src/inference/`) | **Done**: measured on SmolLM-135M and Pythia-14M |
+| v0.2.0.2 | WikiText-2 tokenization with provenance and hashes (`scripts/prepare_eval_tokens.py`) | **Done** |
+| v0.2.0.3 | Measured quality gate: source vs exported GGUF vs recipe (`examples/production_verification.rs`) | **Done** |
+| v0.2.0.4 | Dossier and charts generated only from reports (`scripts/generate_dossier.py`, `scripts/generate_charts.py`) | **Done** |
+| v0.2.0.5 | Measured experiments: precision sweep with random-placement control, depth probe | **Done** |
+| v0.2.0.6 | Cross-check the forward pass against the Hugging Face reference (logit agreement on fixed prompts) | Open; paused while no new model runs are being made |
+| v0.2.0.7 | Retire the analytic proxy from `thme validate`, the MCP quality tool and the co-surgery loop; route them through the measured gate | **Done**: `thme validate --report` gates measured reports; `thme co-surgery MODEL --tokens` scores candidates with the forward pass (`QualityEvaluator`, `MeasuredEvaluator`); supplied-value and proxy paths are labelled, including the Studio Co-Surgery tab |
+| v0.2.0.8 | Real Studio screenshots (`scripts/capture_studio.ps1`); fix missing-glyph labels and overlapping text in the Layer Tweaker dataflow row; show measured reports in the Studio | **Done** except showing measured reports in the Studio (moved to v0.2.1.9) |
+| v0.2.0.9 | Release engineering: LTO binaries, Minisign/GPG signing, SHA-256 manifest, clean-machine test, manual and man page | Implemented in v0.1.x workflows; to be re-verified at tag time |
+
+## v0.2.1 — Recipe and BYOA lab
+
+**Goal:** any recipe or BYOA algorithm can be evaluated, searched and compared with measured costs.
+**Exit criteria:** a searched recipe beats both uniform formats and random placement at matched
+nominal size on two models, across at least five random seeds.
+
+| # | Item |
+| :--- | :--- |
+| v0.2.1.1 | `thme evaluate --recipe <file>`: run any recipe JSON through the measured gate and write a report |
+| v0.2.1.2 | BYOA algorithms callable from recipes with a declared, testable encode/decode contract |
+| v0.2.1.3 | Measured cost table: per-tensor Δ perplexity for each candidate format, cached per model and corpus |
+| v0.2.1.4 | Greedy allocator driven by the measured cost table, with a size budget |
+| v0.2.1.5 | Global refinement: re-evaluate whole candidates to correct non-additive interactions |
+| v0.2.1.6 | Random-placement controls generated automatically for every searched recipe (n ≥ 5, distinct draws) |
+| v0.2.1.7 | Measured Pareto front (size vs Δ perplexity) plotted from reports |
+| v0.2.1.8 | Separate calibration, validation and test token sets; search never reads the test set |
+| v0.2.1.9 | Studio recipe workbench: load a recipe, preview its layer composition in the Live 3D view, run the gate, view the report |
+
+**Studio Live 3D view.** Delivered in v0.2.0: forward-pass probe, background worker, software
+3D renderer, anomaly detection, synthetic demo. Planned extensions, in order:
+
+1. Per-head attention maps and per-token flow (which positions feed which).
+2. Weight-level drill-down from a hovered tile into the matrix inspector.
+3. Side-by-side source vs candidate, with per-tile difference.
+4. Loops and exits drawn from real schedules (v0.2.3), and α/β/γ sub-matrices and the router
+   once those representation families exist.
+
+## v0.2.2 — Formats and calibration
+
+**Goal:** heterogeneous artifacts that are smaller than uniform Q8_0 and pass the gate.
+**Exit criteria:** a per-tensor-format GGUF smaller than uniform Q8_0 passes the gate on
+SmolLM-135M, measured from the written file.
+
+| # | Item |
+| :--- | :--- |
+| v0.2.2.1 | Per-tensor formats in the GGUF writer, so the recipe and the artifact are the same thing |
+| v0.2.2.2 | Q4_K, Q5_K and Q6_K encoders with round-trip tests against the decoders |
+| v0.2.2.3 | Calibration activations captured from the forward pass |
+| v0.2.2.4 | Activation-aware scaling (AWQ-style) |
+| v0.2.2.5 | Second-order rounding (GPTQ-style) |
+| v0.2.2.6 | Randomized Hadamard rotation of weight inputs (QuaRot-style), measured with and without |
+| v0.2.2.7 | SmoothQuant-style scale migration for activation outliers |
+| v0.2.2.8 | Format compatibility checks against llama.cpp on exported files |
+| v0.2.2.9 | Measured artifact size, including scales and metadata, in every report |
+
+## v0.2.3 — Recovery and distillation
+
+**Goal:** recover quality lost to aggressive formats such as ternary.
+**Exit criteria:** a ternary-heavy candidate recovers to within the gate on Pythia-14M, then on
+SmolLM-135M, evaluated on held-out tokens.
+
+| # | Item |
+| :--- | :--- |
+| v0.2.3.1 | Backward pass for the reference model (or a bridge to an external trainer) |
+| v0.2.3.2 | Quantization-aware distillation against the source model's logits |
+| v0.2.3.3 | LoRA recovery adapters on quantized weights, merged with the existing LoRA merger |
+| v0.2.3.4 | Teacher-assisted calibration data, with an independent evaluation set |
+| v0.2.3.5 | Training-time loop and early-exit objectives (the depth probe as the measuring tool) |
+| v0.2.3.6 | Exit heads trained per depth; settling curves re-measured |
+| v0.2.3.7 | Recovery cost accounting: tokens, time and energy where measurable |
+| v0.2.3.8 | Overfitting guard: recovery data disjoint from evaluation data |
+| v0.2.3.9 | Recovered-candidate reports in the dossier |
+
+## v0.2.4 — Runtime, speed and KV cache
+
+**Goal:** measure speed and memory, not only quality.
+**Exit criteria:** tokens per second, peak memory and KV-cache bytes are measured on named
+hardware for the source and for a passing heterogeneous candidate.
+
+| # | Item |
+| :--- | :--- |
+| v0.2.4.1 | Incremental decoding with a KV cache in the reference runtime |
+| v0.2.4.2 | KV-cache bytes measured across a context-length sweep |
+| v0.2.4.3 | Prefill and decode throughput measured on CPU |
+| v0.2.4.4 | Quantized kernels that compute directly on Q8_0 and Q4 blocks |
+| v0.2.4.5 | Peak resident memory measured per run |
+| v0.2.4.6 | KV-cache quantization, measured against long-context quality |
+| v0.2.4.7 | Roofline model calibrated against measured kernel timings |
+| v0.2.4.8 | Speculative decoding measured end to end, replacing formula estimates |
+| v0.2.4.9 | Energy measurement where hardware counters are available, with the method stated |
+
+## v0.3 and later
+
+Deferred until the measured core can evaluate them:
+
+- **GPU execution** (formerly v0.2.1): CUDA, Vulkan and Metal backends with fused low-bit kernels.
+- **Out-of-core streaming** (formerly v0.2.2): NVMe layer streaming for models larger than memory.
+- **Heterogeneous clustering** (formerly v0.2.3): tensor and pipeline parallelism across nodes.
+- **Agentic gateway** (formerly v0.2.4): authenticated JSON-RPC/WebSocket daemon.
+- **New architectures from the v3.0 research concepts**: looped and early-exit models, the
+  α/β/γ representation families, alternative sequence mixers. Each is a model that must be
+  trained, and is scoped as its own project with its own baselines.
+
+The original specifications for the deferred items are kept below for reference.
+
+---
+
+## Implementation record: v0.1.x milestones
+
+The sections below are the original specifications, kept unchanged as a record of what was
+built. Read their figures with the evidence table above: where a section describes an
+empirical or verified result, that result was not measured unless the evidence table says so.
+
 
 ### Phase 1: Foundations & Release Engineering
 
@@ -327,62 +415,9 @@ Autonomous closed-loop optimization daemon: an external or local Teacher LLM ana
 
 ---
 
-### Phase 5: Production Core Release
-
-#### [ ] v0.2.0.0 — Production Core Release Baseline (ACTIVE)
-Demonstrates end-to-end verified profiling, optimization, export, and verification on real open-weights models (SmolLM-135M / LLaMA-3.2-1B) with published reproducible results, cryptographic signatures, and production release artifacts.
-
-- **Mathematical Formulations & Production Invariants**:
-  - Verification Quality Bound:
-    $$\Delta PPL = PPL_{\text{candidate}} - PPL_{\text{baseline}} \le \tau_{\text{ppl}} \quad (\tau_{\text{ppl}} = 0.45 \text{ on WikiText-2})$$
-  - Heterogeneous Pareto Compression Ratio:
-    $$\mathcal{R}_{\text{comp}} = 1.0 - \frac{\sum_{l \in \mathcal{L}} B_{\text{quant}}(l) + B_{\text{meta}}}{\sum_{l \in \mathcal{L}} B_{\text{orig}}(l)} \ge 0.40 \quad (40\%\text{–}65\% \text{ reduction})$$
-  - Hardware Arithmetic Intensity Ceiling:
-    $$I_{\text{arith}} = \frac{2 \cdot N_{\text{FLOPs}}}{B_{\text{DRAM\_transferred}}} \quad [\text{FLOP/byte}]$$
-  - Cryptographic Digest Multi-Hash:
-    $$H_{\text{release}} = \text{SHA256}(M_{\text{binary}}), \quad \Sigma_{\text{minisign}} = \text{Sign}_{sk_{\text{epiphanes}}}(H_{\text{release}})$$
-
-- **Parallel Sub-Milestone Breakdown [v0.2.0.1 - v0.2.0.9]**:
-  - [ ] **v0.2.0.1**: SmolLM-135M Open-Weights End-to-End Verification Pipeline (`examples/production_verification.rs`):
-    - Ingests genuine SmolLM-135M checkpoint (SafeTensors/GGUF), applies Pareto BitNet b1.58 / SVD surgery, exports GGUF, and verifies $\Delta PPL \le 0.45$ on WikiText-2.
-    - *Pipeline Impact*: Primary proof-of-correctness gate for small language model release verification.
-    - *Progress*: Pipeline laid out and registered in `Cargo.toml`. Verified with `cargo run --example production_verification -- --target smollm135m --dry-run`.
-  - [ ] **v0.2.0.2**: LLaMA-3.2-1B Open-Weights End-to-End Verification Pipeline (`examples/production_verification.rs`):
-    - Validates pipeline on 1B parameter scale model under real hardware memory limits ($\le 4\text{ GB}$ RAM) with zero-alloc memory mapping.
-    - *Pipeline Impact*: Validates scaling behavior on multi-billion parameter production architectures.
-    - *Progress*: Architectural scaffold, tensor mappings, and surgery recipe laid out. Verified with `cargo run --example production_verification -- --target llama321b --dry-run`.
-  - [ ] **v0.2.0.3**: Automated Reproducible Benchmark Script Suite (`scripts/benchmark_suite.py`, `scripts/benchmark_suite.sh`):
-    - One-command execution measuring memory ingestion throughput (MB/s), SVD profiling latency, Pareto DP solver time, and token generation speed.
-    - *Pipeline Impact*: Enables third-party reproducibility of all published performance numbers on arbitrary hardware.
-    - *Progress*: Shell runner and Python telemetry collector laid out with hardware inspection and JSON reporting (`target/benchmark_results.json`).
-  - [ ] **v0.2.0.4**: Published Benchmark Dossier Generator (`scripts/generate_dossier.py`, `docs/benchmark_dossier.md`):
-    - Synthesizes machine-readable benchmark JSON into publication-grade Markdown and CSV tables with verified hardware attribution (H100, RTX 4090, Apple Silicon, MI300X, Xeon).
-    - *Pipeline Impact*: Serves as official empirical performance documentation and marketing specification.
-    - *Progress*: Dossier generator laid out. Generated `docs/benchmark_dossier.md` and `docs/benchmark_dossier.csv`.
-  - [ ] **v0.2.0.5**: Multi-Platform LTO Stripped Binary Release Packaging (`.github/workflows/release.yml`, `Cargo.toml`):
-    - Automated compilation of Fat-LTO stripped release binaries for Linux (x86_64, aarch64), Windows (x64), and macOS (Apple Silicon, Intel) with strict footprint constraints ($\le 10\text{ MB}$ CLI, $\le 15\text{ MB}$ GUI).
-    - *Pipeline Impact*: Delivers production binary assets directly to GitHub Releases.
-    - *Progress*: Release workflow updated with 4-target cross-platform matrix and size assertion gates.
-  - [ ] **v0.2.0.6**: Minisign & GPG Cryptographic Artifact Signing Pipeline (`scripts/sign_artifacts.sh`, `SECURITY.md`):
-    - Signs all release binaries, tarballs, and checksum files with Minisign (`.minisig`) and GPG detached signatures (`.asc`) for supply-chain provenance.
-    - *Pipeline Impact*: Prevents binary tampering and ensures software supply chain integrity.
-    - *Progress*: Signing script laid out in `scripts/sign_artifacts.sh`; verification instructions documented in `SECURITY.md`.
-  - [ ] **v0.2.0.7**: SHA-256 Checksum Manifest Generation (`SHA256SUMS.txt`):
-    - Automated generation and validation of universal `SHA256SUMS.txt` manifests across all release assets.
-    - *Pipeline Impact*: Standard release integrity verification for Homebrew, Winget, and package managers.
-    - *Progress*: Integrated into `.github/workflows/release.yml` and verified in clean machine test harness.
-  - [ ] **v0.2.0.8**: Comprehensive Architecture Playbook, User Manual & Man Pages (`docs/manual.md`, `docs/man/thme.1`):
-    - Complete User Manual covering all 14 CLI subcommands and Studio tabs, plus troff Unix man page installable to `/usr/share/man/man1`.
-    - *Pipeline Impact*: Complete documentation set for enterprise operators and command-line developers.
-    - *Progress*: User manual authored in `docs/manual.md`; Unix man page authored in `docs/man/thme.1`.
-  - [ ] **v0.2.0.9**: End-to-End Clean-Machine Verification Test Harness (`.github/workflows/clean_machine_test.yml`, `tests/test_clean_machine.rs`):
-    - Automated clean-machine environment validation testing installation, execution, and artifact generation without prior cache.
-    - *Pipeline Impact*: Final pre-release acceptance gate.
-    - *Progress*: Standalone integration test implemented in `tests/test_clean_machine.rs` (passing) and CI workflow in `.github/workflows/clean_machine_test.yml`.
-
 ---
 
-### Phase 6: Tiered Hardware Execution & Universal Agentic Connectivity
+## Original specifications of deferred milestones (now v0.3+)
 
 #### [ ] v0.2.1.0 — Direct GPU Driver Execution Engine Baseline (SCHEDULED)
 Pure Rust GPU driver execution bypassing external Python runtimes, C++ frameworks, or PyTorch wheels.
@@ -438,7 +473,7 @@ High-performance headless JSON-RPC 2.0 daemon and bidirectional WebSocket event 
 
 ---
 
-## Long-Term Research Initiatives (Deferred to v0.3.0+)
+## Long-term research initiatives
 
 These advanced algorithmic initiatives are documented in the backlog and intentionally deferred to subsequent major milestones:
 - **Topological Hyper-Graph Neural Architecture Search**: Automated micro-circuit rewiring using topological data analysis (TDA) persistent homology to detect and prune redundant manifold loops.

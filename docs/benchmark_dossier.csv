@@ -2,3 +2,6 @@ model,variant,perplexity,delta_ppl,cross_entropy_nats,scored_tokens,context_len,
 SmolLM-135M,baseline,19.798460,,2.985604,303118,1024,,519.1
 SmolLM-135M,exported_gguf,19.832576,0.034116,2.987326,303118,1024,true,577.8
 SmolLM-135M,recipe,48.705939,28.907478,3.885801,303118,1024,false,539.7
+Pythia-14M,baseline,114.286208,,4.738706,286878,1024,,5669.3
+Pythia-14M,exported_gguf,115.119721,0.833512,4.745973,286878,1024,false,5471.7
+Pythia-14M,recipe,618.531064,504.244856,6.427347,286878,1024,false,5478.3

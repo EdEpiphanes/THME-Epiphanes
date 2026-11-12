@@ -539,6 +539,7 @@
   3. **Orphaned Example Generator `generate_showcase_gifs.rs` (~2,085 lines)**:
      - *Risk*: Standalone GIF showcase generator is unreferenced in `Cargo.toml` and carries manual font bitmaps and non-standard image encoding loops.
      - *Mitigation*: Promote into `Cargo.toml` under `[[example]]` or transition into a documentation asset utility in `scripts/`.
+     - *Resolved (v0.2.0)*: Removed with the drawn GIFs, which did not depict the application. Real screenshots now come from the Studio's capture mode (`scripts/capture_studio.ps1`).
 - **Done Means**: Tab modularization verified with zero GUI borrow conflicts; zero unhandled errors in release codepaths.
 
 ---

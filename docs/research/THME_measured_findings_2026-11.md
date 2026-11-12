@@ -34,6 +34,29 @@ Rows from "Every linear tensor ternary" down use the first 16,384 corpus tokens
 (baseline 17.97 on that subset). "Ternary" is the GGML TQ1_0 block format with an
 MSE-optimal scale per 256 weights.
 
+### Second model: Pythia-14M (GPT-NeoX)
+
+Added as a fast iteration model: a full-split evaluation takes about 50 seconds instead of
+9 minutes. Embeddings and the output head make up 92% of its parameters, so it is a quality
+probe, not a memory study.
+
+| Experiment | Result |
+| :--- | :--- |
+| Baseline, full test split (286,878 scored tokens) | Perplexity 114.29 |
+| Exported GGUF, uniform Q8_0 | 115.12 (Δ +0.83): **fails** the 0.45 gate, unlike SmolLM-135M |
+| Every linear tensor Q4_0 (65,536-token subset, baseline 113.70) | Δ +74.0 |
+| MLP tensors Q4_0, attention Q8_0 | Δ +31.0 |
+| One layer ternary at a time | Δ +207 to +1,209; no layer is cheap |
+| Recipe vs random placement (4 tensors) | Recipe Δ +508; random Δ +588, +588, +752 (two draws identical) |
+| Repeating or skipping a single layer | Δ +3,129 and +21,904 |
+
+Two lessons. The 0.45 gate is not scale-free: a smaller model with higher baseline perplexity
+loses more in absolute terms under the same format, so the gate should also be stated as a
+relative change. And naive round-to-nearest 4-bit fails on this model too, which makes
+calibration (activation-aware scaling, second-order rounding, rotation) the next requirement
+rather than an optimisation. Claims that Q4_K with these methods stays under Δ 0.2 are plausible
+from the literature but not yet measured here.
+
 ## 3. What this says about the v2.2 hypotheses
 
 | Hypothesis | Status | Basis |
