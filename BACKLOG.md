@@ -526,6 +526,21 @@
 - **Production Pipeline / CI/CD Impact**: Final quality gate certifying production readiness before public release announcement.
 - **Done Means**: Clean machine CI workflow passes 100% across all 3 OS platforms.
 
+### [THME-910] Post-Refactoring Risk Register & Technical Debt Amortization (Pre-Release Gate)
+- **Component**: `src/gui/app.rs`, `examples/generate_showcase_gifs.rs`, `src/exporter/calibration.rs`
+- **Problem**: Large architectural monolithic files and un-sandboxed visual generators deferred during fast prototyping create maintainability and borrow-checker fragility prior to public release.
+- **Risk Assessment & Mitigation Matrix**:
+  1. **Monolithic `src/gui/app.rs` (~5,376 lines)**:
+     - *Risk*: Heavy state coupling across 10 tab renderers; subtle mutable borrow collisions (`&mut self`) during asynchronous telemetry updates.
+     - *Mitigation*: Modularize into discrete tab components under `src/gui/tabs/{dashboard, models, tweaker, export, cosurgery}.rs` with isolated UI state sub-structs before tagged binary freeze.
+  2. **Unchecked Expectations in Exporter Calibration & Test Utilities**:
+     - *Risk*: `calibration.rs` contains `.expect("calibrate exact ternary")` and writer tests use panicking assertions that must never bleed into runtime parser boundaries.
+     - *Mitigation*: Enforce strict `Result<T, QuantError>` propagation across all public exporter entry points; verify against `AGENTS.md` parser infallibility rules.
+  3. **Orphaned Example Generator `generate_showcase_gifs.rs` (~2,085 lines)**:
+     - *Risk*: Standalone GIF showcase generator is unreferenced in `Cargo.toml` and carries manual font bitmaps and non-standard image encoding loops.
+     - *Mitigation*: Promote into `Cargo.toml` under `[[example]]` or transition into a documentation asset utility in `scripts/`.
+- **Done Means**: Tab modularization verified with zero GUI borrow conflicts; zero unhandled errors in release codepaths.
+
 ---
 
 ## Sprint 10: Direct GPU Driver Execution Engine (Milestone v0.2.1) [SCHEDULED]
