@@ -13,31 +13,37 @@ closes it.
 ## Active: v0.2.0 close-out
 
 ### [THME-2001] Cross-check the forward pass against the Hugging Face reference
+
 - **Milestone**: v0.2.0 · **Roadmap**: v0.2.0.6 · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: blocked
 - **Problem**: Measured perplexities rely on THME's own forward pass, which is unit-tested but has never been compared with the reference implementation.
 - **Done means**: A script compares THME and Hugging Face logits on fixed prompts for SmolLM-135M and Pythia-14M; maximum absolute logit difference is reported and below an agreed tolerance. Blocked while new model runs are paused.
 
 ### [THME-2002] Upgrade egui/eframe to clear RUSTSEC-2026-0194/0195
+
 - **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: dependencies · **Type**: chore · **Status**: ready
 - **Problem**: eframe 0.31 pulls quick-xml 0.30 (two advisories, ignored in deny.toml with this ticket) and several unmaintained transitive crates.
 - **Done means**: eframe upgraded; the two `ignore` entries removed from deny.toml; `cargo deny check` passes; all Studio tabs recaptured and visually checked.
 
 ### [THME-2003] Split src/gui/app.rs into tab modules
+
 - **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p2 · **Area**: gui · **Type**: chore · **Status**: done
 - **Problem**: app.rs is about 6,000 lines with ten tab renderers sharing mutable state (supersedes THME-910).
 - **Done means**: Each `render_tab_*` lives in `src/gui/tabs/<name>.rs`; no behaviour change; screenshots identical apart from timestamps.
 
 ### [THME-2004] Publish the first measured recipe search and Pareto chart
+
 - **Milestone**: v0.2.0 · **Roadmap**: v0.2.1.7 · **Priority**: p2 · **Area**: research · **Type**: experiment · **Status**: blocked
 - **Problem**: `thme search` and the Pareto chart exist but no measured search report is committed.
 - **Done means**: `docs/benchmarks/<model>/data/search_report.json` committed for Pythia-14M and SmolLM-135M with five or more random controls; chart and dossier section regenerated. Blocked while new model runs are paused.
 
 ### [THME-2005] Release v0.2.0
+
 - **Milestone**: v0.2.0 · **Roadmap**: v0.2.0.9 · **Priority**: p1 · **Area**: ci · **Type**: chore · **Status**: ready
 - **Problem**: The measured core is complete but unreleased.
 - **Done means**: CHANGELOG section `[0.2.0]`, Cargo version 0.2.0, tag `v0.2.0`; the release workflow publishes four signed archives with checksums.
 
 ### [THME-2006] Configure repository protection and secrets
+
 - **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: ci · **Type**: chore · **Status**: done
 - **Problem**: Branch protection, required checks and the signing key live in GitHub settings.
 - **Progress**: Ruleset on `main` (pull requests, squash only, up-to-date branches, 11 required checks), `MINISIGN_KEY` secret and published public key are in place.
@@ -46,47 +52,56 @@ closes it.
 ## Next: v0.2.2 Formats and calibration
 
 ### [THME-2201] Per-tensor formats in the GGUF writer
+
 - **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.1 · **Priority**: p1 · **Area**: exporter · **Type**: feature · **Status**: done
 - **Problem**: The exporter writes every tensor as one format, so a recipe and its artifact differ.
 - **Done means**: Exporting a recipe writes each tensor in its assigned format; re-importing and evaluating the file reproduces `thme evaluate`'s perplexity for the same recipe.
 
 ### [THME-2202] Q4_K, Q5_K and Q6_K encoders
+
 - **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.2 · **Priority**: p1 · **Area**: exporter · **Type**: feature · **Status**: done
 - **Problem**: Only Q8_0, Q4_0 and TQ1_0 can be encoded; K-quants are the common deployment formats.
 - **Done means**: Round-trip tests against the existing decoders; the formats are usable in recipes and `thme search --formats`.
 
 ### [THME-2203] Capture calibration activations from the forward pass
+
 - **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.3 · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: done
 - **Problem**: Activation-aware methods need per-layer input statistics.
 - **Done means**: A probe records per-linear-tensor input channel statistics on calibration tokens and saves them; unit-tested on the synthetic model.
 
 ### [THME-2204] Activation-aware scaling (AWQ-style)
+
 - **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.4 · **Priority**: p1 · **Area**: byoa · **Type**: feature · **Status**: blocked
 - **Problem**: Round-to-nearest 4-bit fails the gate on Pythia-14M (Δ +31 to +74).
 - **Progress**: Implemented and tested (`thme.awq_q4_0`, `thme.awq_q4_k`, `--calibration`). Blocked on the real-model measurement: the owner has paused model runs.
 - **Done means**: A BYOA rule using captured activations; measured against plain Q4_0 on the same split with random controls.
 
 ### [THME-2205] Second-order rounding (GPTQ-style)
+
 - **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.5 · **Priority**: p2 · **Area**: byoa · **Type**: feature · **Status**: ready
 - **Problem**: Error compensation across columns is the strongest known post-training method.
 - **Done means**: Implemented as a BYOA rule using calibration activations; measured against THME-2204.
 
 ### [THME-2206] Measure Hadamard rotation on real models
+
 - **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.6 · **Priority**: p2 · **Area**: research · **Type**: experiment · **Status**: blocked
 - **Problem**: `RotatedQuantize` lowers rounding error on outlier-heavy weights in tests; its effect on perplexity is unmeasured.
 - **Done means**: `thme.hadamard_int4` and `thme.hadamard_ternary` compared with their unrotated rules via `thme evaluate` on both models; reports committed.
 
 ### [THME-2207] SmoothQuant-style scale migration
+
 - **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.7 · **Priority**: p2 · **Area**: byoa · **Type**: feature · **Status**: done
 - **Problem**: The existing SmoothQuant rule clips weights only; true migration rescales weights and activations together.
 - **Done means**: Migration folded into the preceding norm so the model's function is preserved before quantization; a test confirms unchanged outputs without quantization.
 
 ### [THME-2208] llama.cpp compatibility checks for exported files
+
 - **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.8 · **Priority**: p2 · **Area**: exporter · **Type**: feature · **Status**: ready
 - **Problem**: Exported GGUF files are only re-read by THME itself.
 - **Done means**: The existing optional CI step runs a heterogeneous export through llama.cpp when the runtime is configured.
 
 ### [THME-2209] Measured artifact size in every report
+
 - **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.9 · **Priority**: p1 · **Area**: exporter · **Type**: feature · **Status**: done
 - **Problem**: Recipe and search sizes are nominal bits per weight.
 - **Done means**: Reports include the written file size including scales and metadata alongside the nominal figure.
@@ -94,141 +109,168 @@ closes it.
 ## Later
 
 ### [THME-2101] Live 3D: attention maps, drill-down and side-by-side
+
 - **Milestone**: v0.2.3 · **Roadmap**: v0.2.1.9 extensions · **Priority**: p2 · **Area**: gui · **Type**: feature · **Status**: ready
 - **Problem**: The Live 3D view shows per-tensor activity but not per-head attention, single weights, or source-vs-candidate differences.
 - **Done means**: The four extensions listed in ROADMAP.md under "Studio Live 3D view" are implemented and recaptured.
 
 ### [THME-2300] Epic: Recovery and distillation
+
 - **Milestone**: v0.2.3 · **Roadmap**: v0.2.3.1-v0.2.3.9 · **Priority**: p2 · **Area**: research · **Type**: feature · **Status**: triage
 - **Problem**: Aggressive formats such as ternary fail without retraining.
 - **Done means**: Broken into tickets per ROADMAP.md v0.2.3 when v0.2.2 closes.
 
 ### [THME-2400] Epic: Runtime, speed and KV cache
+
 - **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.1-v0.2.4.9 · **Priority**: p2 · **Area**: inference · **Type**: feature · **Status**: triage
 - **Problem**: No speed, memory or KV-cache figure is measured yet.
 - **Done means**: Broken into tickets per ROADMAP.md v0.2.4 when v0.2.3 closes.
 
-## Proposed: research dossier v3.1 (awaiting owner placement)
+## Engine, format, security and quality tracks (v0.2.5 to v0.2.9)
 
-> From `docs/research/THME_Research_Dossier_v3.1_2026-11-13.pdf` and its review
-> (`docs/research/REVIEW_dossier_v3.1.md`). Milestone left `unplaced` until the owner
-> chooses where the engine work sits in ROADMAP.md; existing milestones are not renumbered.
+> From the research dossier v3.1 (`docs/research/`) and the owner's direction of 13 November 2026.
+> Each ticket names its milestone and sub-milestone in ROADMAP.md.
 
 ### [THME-3000] Consolidate the dossier v3.1 claim register under docs/research/
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: research · **Type**: docs · **Status**: triage
+
+- **Milestone**: v0.2.8 · **Roadmap**: v0.2.8.9 · **Priority**: p1 · **Area**: research · **Type**: docs · **Status**: triage
 - **Problem**: Claims V-01 to V-135 are spread over the appendices of the PDF; citations were written from memory.
 - **Done means**: One register file with unique IDs, status letters and the section each claim lives in; every citation checked or marked unverified.
 
 ### [THME-3001] Engine error module (dossier WP1)
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: engine · **Type**: feature · **Status**: done
+
+- **Milestone**: v0.2.5 · **Roadmap**: v0.2.5.1 · **Priority**: p1 · **Area**: engine · **Type**: feature · **Status**: done
 - **Problem**: Engine primitives need one error type that never panics and never falls back silently.
 - **Done means**: `src/engine/error.rs`: invalid-input, infeasible, no-convergence and non-finite variants plus a finite-value guard, each reached by a test; no behaviour change elsewhere.
 
 ### [THME-3002] Exact dynamic-programming allocator behind `thme search --solver` (dossier WP2)
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: engine · **Type**: feature · **Status**: blocked
+
+- **Milestone**: v0.2.5 · **Roadmap**: v0.2.5.2 · **Priority**: p1 · **Area**: engine · **Type**: feature · **Status**: blocked
 - **Problem**: Docs promised a knapsack solver; `ParetoAllocator` uses sensitivity thresholds and `thme search` is greedy.
 - **Progress**: Implemented: `engine::alloc` (exhaustive-search oracle on 300 instances) and `thme search --solver dp --dp-grid N`; never worse than greedy on predicted cost (200 random tables). Default stays greedy. Blocked on the comparison on real cost tables, which needs model runs (paused).
 - **Done means**: `engine::alloc` matches exhaustive search on small instances and is never worse than greedy at equal budget; default solver unchanged until compared on committed cost tables.
 
 ### [THME-3003] One versioned quality gate; retire the stale 0.25 tolerance (dossier WP20)
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: quality · **Type**: fix · **Status**: triage
+
+- **Milestone**: v0.2.8 · **Roadmap**: v0.2.8.1 · **Priority**: p1 · **Area**: quality · **Type**: fix · **Status**: triage
 - **Problem**: The threshold lives in three places: CLI defaults (0.45), `configs/quality_gates.yaml` (0.25, unread) and evaluator tests (0.25).
 - **Owner decision (2026-11-13)**: thresholds are customizable; a quality gate may hold one criterion or many.
 - **Done means**: A gate is versioned data with a content hash, absolute and relative margins; every report records its gate version; MMLU/GSM8K marked not measured.
 
 ### [THME-3004] Shared basis module: one Walsh-Hadamard transform (dossier WP5)
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: engine · **Type**: refactor · **Status**: done
+
+- **Milestone**: v0.2.5 · **Roadmap**: v0.2.5.5 · **Priority**: p2 · **Area**: engine · **Type**: refactor · **Status**: done
 - **Problem**: Three implementations existed: `MatrixMath::fast_walsh_hadamard_transform`, `byoa::wht_blocks` and an inline copy in the `OrthogonalRotation` rule. Two copies can drift and confound a comparison.
 - **Done means**: `engine::basis` owns the transform; both callers use it with bit-identical results before and after; orthonormality and involution tests.
 
 ### [THME-3005] SPDX headers on every source file
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: ci · **Type**: chore · **Status**: triage
+
+- **Milestone**: v0.2.7 · **Roadmap**: v0.2.7.9 · **Priority**: p2 · **Area**: ci · **Type**: chore · **Status**: triage
 - **Problem**: The dossier's rules assume `SPDX-License-Identifier: AGPL-3.0-only` headers; no file carries one.
 - **Done means**: Every `.rs` and script file has the header; the hygiene CI job fails on a file without it.
 
 ### [THME-3006] Number-format conversions with stated error bounds (dossier WP3)
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: engine · **Type**: feature · **Status**: triage
+
+- **Milestone**: v0.2.5 · **Roadmap**: v0.2.5.3 · **Priority**: p2 · **Area**: engine · **Type**: feature · **Status**: triage
 - **Problem**: Codecs live in the exporter without declared error bounds.
 - **Also**: absmean ternary is written three times (`MatrixMath::discretize_bitnet_ternary`, `BitNetPacker::pack_matrix`, the BYOA `AbsmeanTernary` rule) with different all-zero handling; one shared quantizer.
 - **Progress**: `engine::numfmt` started with the shared absmean-ternary quantizer; the three copies call it. Other formats and error bounds open.
 - **Done means**: `engine::numfmt` covers integer, ternary, binary, codebook, FP16/BF16/FP8 and phase, each with a bound its tests confirm.
 
 ### [THME-3007] Dependency-free SVG visual engine (dossier WP9)
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: engine · **Type**: feature · **Status**: triage
+
+- **Milestone**: v0.2.5 · **Roadmap**: v0.2.5.8 · **Priority**: p2 · **Area**: engine · **Type**: feature · **Status**: triage
 - **Problem**: Charts come from Python scripts; the Studio and dossier cannot share a headless renderer.
 - **Done means**: Deterministic SVG for log-axis traces, heatmaps, scatter with retained-variance label, dataflow graphs and Pareto fronts; NaN or non-positive log values return errors.
 
 ### [THME-3008] Permission and ownership record for reverse-engineering features (dossier WP19)
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: core · **Type**: feature · **Status**: triage
+
+- **Milestone**: v0.2.7 · **Roadmap**: v0.2.7.4 · **Priority**: p1 · **Area**: core · **Type**: feature · **Status**: triage
 - **Problem**: Architecture inference and closed-format analysis must only run on models the user owns or may analyze.
 - **Done means**: Those features refuse to run without a stored basis and purpose statement next to the model hash; wording reviewed by a lawyer.
 
 ### [THME-3009] Versioned schemas under docs/schemas/ (dossier B.6.4)
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: core · **Type**: docs · **Status**: triage
+
+- **Milestone**: v0.2.8 · **Roadmap**: v0.2.8.9 · **Priority**: p2 · **Area**: core · **Type**: docs · **Status**: triage
 - **Problem**: Benchmark task, benchmark result, quality-gate version, plugin protocol and conversion-registry entry have no schema.
 - **Done means**: Each schema carries a version field and validates a fixture in CI.
 
 ### [THME-3010] BYOA rules get calibration through their interface, not tensor metadata
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: byoa · **Type**: refactor · **Status**: done
+
+- **Milestone**: v0.2.2 · **Roadmap**: none · **Priority**: p2 · **Area**: byoa · **Type**: refactor · **Status**: done
 - **Problem**: `ActivationAware` reads statistics from a JSON string in tensor metadata and needs a special case in `apply_selected_format`; each new data-needing rule would add another.
 - **Done means**: A rule receives an apply context (calibration statistics, row width) at one seam; the metadata side channel and special case are gone; AWQ tests unchanged.
+
+
 ### [THME-3011] Measured bits per weight from the written artifact (placeholder)
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p3 · **Area**: exporter · **Type**: feature · **Status**: triage
+
+- **Milestone**: v0.2.6 · **Roadmap**: none · **Priority**: p3 · **Area**: exporter · **Type**: feature · **Status**: triage
 - **Problem**: Reports show nominal bits per weight (format bit-widths averaged over all parameters, unchanged tensors at stored width). `TensorFormat::bits_per_weight` also says 8.0 for Q8_0 and 4.5 for Q4_0, while the stored blocks are 8.5 and 4.5. llama.cpp reports file-level bits per weight (artifact bytes x 8 / parameters), which includes block scales.
 - **Done means**: Every report that writes an artifact also states measured bits per weight from its byte size, next to the nominal figure, each labelled; the nominal definition is kept for unexported candidates. No committed number changes without a new report.
 
 ### [THME-3012] `.epiph` v1.0: open container with full model metadata
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: exporter · **Type**: feature · **Status**: done
+
+- **Milestone**: v0.2.6 · **Roadmap**: v0.2.6.1 · **Priority**: p1 · **Area**: exporter · **Type**: feature · **Status**: done
 - **Problem**: THME had no native format that carries a model with its recipe, provenance, quality results and calibration.
 - **Done means**: Spec `docs/formats/epiph-v1.md`; `src/epiph` reader/writer; `thme epiph pack|verify`; the importer reads `.epiph`; round trip, corruption, truncation and GGUF-conversion tests pass.
 
 ### [THME-3013] `.epiph`: pack tensors in their selected formats
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: exporter · **Type**: feature · **Status**: triage
+
+- **Milestone**: v0.2.6 · **Roadmap**: v0.2.6.3 · **Priority**: p1 · **Area**: exporter · **Type**: feature · **Status**: triage
 - **Problem**: v1.0 stores tensors as stored; a candidate's quantized formats are not packed yet.
 - **Done means**: Packing a recipe candidate stores each tensor in its selected format (reusing the exporter codecs); the forward pass on the packed file equals the in-memory candidate.
 
 ### [THME-3014] `.epiph`: tokenizer and GGUF metadata attachments
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: exporter · **Type**: feature · **Status**: triage
+
+- **Milestone**: v0.2.6 · **Roadmap**: v0.2.6.4 · **Priority**: p2 · **Area**: exporter · **Type**: feature · **Status**: triage
 - **Problem**: GGUF metadata (including the tokenizer) is not serializable yet, so GGUF to .epiph to GGUF loses it.
 - **Done means**: GGUF -> .epiph -> GGUF keeps every metadata key; SafeTensors tokenizer files are attached.
 
 ### [THME-3015] `.epiph`: lossless payload compression
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: exporter · **Type**: feature · **Status**: triage
+
+- **Milestone**: v0.2.6 · **Roadmap**: v0.2.6.6 · **Priority**: p2 · **Area**: exporter · **Type**: feature · **Status**: triage
 - **Problem**: Owner asks for a compressed variant. Quantization already shrinks weights; lossless coding on top needs a pure-Rust codec dependency.
 - **Done means**: Dependency proposed and approved (licence, binary size); per-payload `encoding` field; compression ratio and decode speed reported as measured on the synthetic checkpoint only.
 
 ### [THME-3016] `.epiph`: GPU/CPU placement plan
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: engine · **Type**: feature · **Status**: triage
+
+- **Milestone**: v0.2.6 · **Roadmap**: v0.2.6.7 · **Priority**: p2 · **Area**: engine · **Type**: feature · **Status**: triage
 - **Problem**: Owner asks for files that place their own parameters across GPU and CPU. THME has no GPU backend yet (v0.3).
 - **Done means**: A `placement` section from the exact allocator for a stated memory budget per tier; tested on synthetic budgets; used by the GPU runtime when it exists.
 
 ### [THME-3017] Trademark search and filing for the format name
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: legal · **Type**: chore · **Status**: triage
+
+- **Milestone**: v0.2.6 · **Roadmap**: none · **Priority**: p1 · **Area**: legal · **Type**: chore · **Status**: triage
 - **Problem**: The owner wants the format name protected under Epiphanes. Extensions are not usually registrable; the name is.
 - **Done means**: A lawyer has searched and advised on the name; filing decided by the owner.
 
 ### [THME-3018] Static model security scanner (`thme scan`)
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: security · **Type**: feature · **Status**: done
+
+- **Milestone**: v0.2.7 · **Roadmap**: v0.2.7.1 · **Priority**: p1 · **Area**: security · **Type**: feature · **Status**: done
 - **Problem**: Model files can execute code on load (pickle imports, template injection, trust_remote_code) or hide payloads in unused bytes.
 - **Done means**: `src/scan`: pickle opcode walker (plain and PyTorch zip), GGUF/SafeTensors header and coverage checks, metadata and chat-template rules, code and executable files, `.epiph` verification; `--fail-on` exit code; tests on built fixtures, no file loaded or run.
 
 ### [THME-3019] Signed `.epiph` files
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: security · **Type**: feature · **Status**: done
+
+- **Milestone**: v0.2.6 · **Roadmap**: v0.2.6.2 · **Priority**: p1 · **Area**: security · **Type**: feature · **Status**: done
 - **Problem**: Owner wants files signed by Epiphanes. Third-party converters can read the open format but get plain weights only; signature, provenance, quality evidence and placement are THME features.
 - **Done means**: Optional signature section over the manifest and payload digests; `thme epiph sign` / `verify` check it; key handling documented; a pure-Rust signature dependency proposed and approved first.
 
 ### [THME-3020] Developer sandbox for untrusted code
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: security · **Type**: feature · **Status**: triage
+
+- **Milestone**: v0.2.7 · **Roadmap**: v0.2.7.5 · **Priority**: p1 · **Area**: security · **Type**: feature · **Status**: triage
 - **Problem**: Remote-code models, plugins (dossier L.4) and benchmark code (R.4) need to run isolated.
 - **Done means**: Design doc first: separate process, no network, file access limited to a work folder, time and memory caps, per-OS mechanism; then an implementation with escape tests.
 
 ### [THME-3021] Guardrail detection and evaluation (read-only)
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: security · **Type**: feature · **Status**: triage
+
+- **Milestone**: v0.2.7 · **Roadmap**: v0.2.7.7 · **Priority**: p2 · **Area**: security · **Type**: feature · **Status**: triage
 - **Problem**: Owner asks to find guardrails. Scope: detect safety components (safety classifiers, refusal instructions in chat templates and system prompts) and measure refusal behaviour on a fixed prompt set. Out of scope: any feature that removes or disables a model's safety behaviour.
 - **Done means**: Scan reports safety-related components it finds; an evaluation reports refusal rates with intervals; optional safety layers that THME adds on top of a model can be switched on or off.
 
 ### [THME-3022] Scanner: more formats and compressed pickles
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: security · **Type**: feature · **Status**: triage
+
+- **Milestone**: v0.2.7 · **Roadmap**: v0.2.7.2 · **Priority**: p2 · **Area**: security · **Type**: feature · **Status**: triage
 - **Problem**: v1 does not inspect deflate-compressed pickles, ONNX, Keras Lambda layers or NumPy object arrays.
 - **Done means**: Each format added with fixtures; compressed pickles inspected with a pure-Rust inflate dependency proposed first.
 
@@ -244,6 +286,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 ## Sprint 1: Format Correctness & Fuzzing (Milestone v0.1.2) [COMPLETED]
 
 ### [THME-101] Full GGUF v2/v3 Quantization Type Decoder (Done)
+
 - **Component**: `thme::parser::gguf`
 - **Problem**: Current GGUF reader detects quant type IDs but lacks full block header decoders for `Q4_K_M`, `Q5_K_S`, `Q8_0`, and `IQ4_XS` super-blocks.
 - **Acceptance Criteria**:
@@ -253,6 +296,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_gguf_all_quant_types` passes for synthetic headers representing each GGUF type.
 
 ### [THME-102] Truncated File & Malformed Header Recovery (Done)
+
 - **Component**: `thme::parser`
 - **Problem**: Corrupted downloads or partial transfers can cause premature parser abortion without actionable diagnostic contexts.
 - **Acceptance Criteria**:
@@ -262,6 +306,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: Property test feeding 100,000 random byte mutations to SafeTensors and GGUF parsers yields 0 panics.
 
 ### [THME-103] Workspace Crate Modularization (`thme-core`, `thme-cli`, `thme-gui`) (Done)
+
 - **Component**: Cargo Workspace
 - **Problem**: Monolithic crate structure couples lightweight headless algorithms with heavy `egui`/`eframe` dependencies.
 - **Acceptance Criteria**:
@@ -275,6 +320,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 ## Sprint 2: Real Telemetry & SIMD Vector Kernels (Milestone v0.1.3) [COMPLETED]
 
 ### [THME-201] AVX2 / AVX-512 / ARM NEON Walsh-Hadamard Transform (Done)
+
 - **Component**: `thme::transform::hadamard`
 - **Problem**: Scalar FWHT (Fast Walsh-Hadamard Transform) is single-threaded and CPU-bound for large hidden dimensions ($D=4096$).
 - **Acceptance Criteria**:
@@ -284,6 +330,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: Benchmark shows $\ge 4.5\times$ speedup on 4096-dim vectors with AVX2 enabled.
 
 ### [THME-202] Criterion Micro-Benchmark Suite in CI (Done)
+
 - **Component**: `benches/`
 - **Problem**: Telemetry figures currently rely on simulator estimates rather than empirical hardware benchmarks.
 - **Acceptance Criteria**:
@@ -297,6 +344,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 ## Sprint 3: Empirical Quality Verification (Milestone v0.1.4) [COMPLETED]
 
 ### [THME-301] External Perplexity Evaluation Bridge (Done)
+
 - **Component**: `thme::quality::evaluator`
 - **Problem**: Quality gates require ground-truth perplexity ($PPL$) evaluation on benchmark corpora (WikiText-2, C4).
 - **Acceptance Criteria**:
@@ -306,6 +354,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `thme validate --model <path> --test-set wikitext2` runs end-to-end and outputs structured pass/fail gate verdict.
 
 ### [THME-302] Automated Anti-Degradation Quality Gate (Done)
+
 - **Component**: `thme::quality::gate`
 - **Problem**: Models must automatically reject optimizations that exceed allowable perplexity degradation ($\epsilon = 2.0\%$).
 - **Acceptance Criteria**:
@@ -318,6 +367,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 ## Sprint 4: Surgery Daemon, IDE Extensions & PyTorch Bridge (Milestone v0.1.5) [COMPLETED]
 
 ### [THME-401] Model Context Protocol (MCP) Server (`thme mcp`) (Done)
+
 - **Component**: `thme::cli::mcp`
 - **Problem**: Autonomous agents, IDEs, and Teacher LLMs need standard JSON-RPC tools to inspect model topology and apply surgery.
 - **Acceptance Criteria**:
@@ -326,6 +376,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test --test test_mcp` verifies tool discovery, schema generation, and execution.
 
 ### [THME-402] VS Code Extension & GitHub Copilot Integration (Done)
+
 - **Component**: `editors/vscode`
 - **Problem**: Developers need native IDE access to model topologies, surgery recipes, and Copilot tools.
 - **Acceptance Criteria**:
@@ -334,6 +385,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: Extension packages cleanly with zero warnings and installs in VS Code.
 
 ### [THME-403] PyTorch & CUDA Ecosystem Interoperability Bridge (Done)
+
 - **Component**: `thme::interop`
 - **Problem**: Practitioners requiring traditional fine-tuning need seamless migration to and from PyTorch/CUDA environments.
 - **Acceptance Criteria**:
@@ -343,6 +395,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test --test test_interop` passes for script generation, configs, and LoRA math.
 
 ### [THME-404] Universal 8 Specialized AI Model Paradigm Converter (Done)
+
 - **Component**: `thme::ir::paradigm`, `thme::cli::convert`
 - **Problem**: Ingesting and cross-converting diverse model architectures (LLM, LCM, LAM, MoE, VLM, SLM, MLM, SAM) requires universal tensor manifold transformations.
 - **Acceptance Criteria**:
@@ -358,6 +411,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 ## Sprint 5: Speculative Decoding & Draft Synthesizer (Milestone v0.1.6) [COMPLETED]
 
 ### [THME-501] Draft Model Manifold Synthesizer (Done)
+
 - **Component**: `thme::speculative::synthesizer`
 - **Problem**: Generating tokens with multi-billion parameter models autoregressively is bottlenecked by memory bandwidth; smaller draft models are needed to propose candidate tokens.
 - **Acceptance Criteria**:
@@ -367,6 +421,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `DraftSynthesizer::extract_draft_model` generates valid `ModelIR` sub-networks with matching vocabularies and heads.
 
 ### [THME-502] Multi-Token Tree Speculation Engine (Done)
+
 - **Component**: `thme::speculative::engine`, `thme::speculative::tree`
 - **Problem**: Validating speculative candidate sequences requires mathematically sound rejection sampling and multi-branch tree attention.
 - **Acceptance Criteria**:
@@ -382,6 +437,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 ## Sprint 6: Hardware-Calibrated Roofline & Micro-Kernel Profiler (Milestone v0.1.7) [COMPLETED]
 
 ### [THME-601] Hardware Target Specifications & Machine Balance Database (Done)
+
 - **Component**: `thme::profiling::hardware` (`src/profiling/hardware.rs`)
 - **Problem**: Calculating Roofline boundaries requires calibrated peak compute (TFLOP/s) and peak memory bandwidth (GB/s) parameters across heterogeneous hardware platforms (NVIDIA, Apple Silicon, AMD, Intel).
 - **Acceptance Criteria**:
@@ -392,6 +448,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_hardware_database` passes and validates specs, units, and knee values across all 6 predefined hardware profiles.
 
 ### [THME-602] Linear Projection & Attention Operational Arithmetic Intensity Profiler (Done)
+
 - **Component**: `thme::profiling::intensity` (`src/profiling/intensity.rs`)
 - **Problem**: Determining whether attention projections and matrix multiplications are memory-bandwidth-bound or compute-bound requires tracking exact FLOPs and byte transfers across decode and prefill phases.
 - **Acceptance Criteria**:
@@ -403,6 +460,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_linear_attention_intensity` passes, confirming exact FLOP and byte calculations for attention layers of LLaMA and Mistral models.
 
 ### [THME-603] SwiGLU FFN & FlashAttention-2 Arithmetic Intensity Mathematical Models (Done)
+
 - **Component**: `thme::profiling::intensity` (`src/profiling/intensity.rs`)
 - **Problem**: Modern LLMs rely heavily on SwiGLU feed-forward networks (accounting for ~65% of total parameters) and tiled FlashAttention-2, which require specialized non-linear intensity models.
 - **Acceptance Criteria**:
@@ -413,6 +471,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_swiglu_flashattn_intensity` passes, verifying correct intensity curves for SwiGLU FFN across various hidden dimensions.
 
 ### [THME-604] 4-Tier Memory Hierarchy Cache Simulator (L1/L2/L3/DRAM) (Done)
+
 - **Component**: `thme::profiling::cache_sim` (`src/profiling/cache_sim.rs`)
 - **Problem**: Transformer layers exhibit distinct tensor working set sizes that fit into or spill out of on-chip caches, introducing multi-cycle latency penalties not captured by simple DRAM bandwidth equations.
 - **Acceptance Criteria**:
@@ -423,6 +482,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_cache_simulator_hierarchy` passes and demonstrates stepped latency degradation when tensor footprints exceed L1, L2, and L3 boundaries.
 
 ### [THME-605] Working Set Size & Cache Eviction Latency Degradation Model (Done)
+
 - **Component**: `thme::profiling::cache_sim` (`src/profiling/cache_sim.rs`)
 - **Problem**: Transformer layers with large intermediate activations cause cache thrashing, evicting KV cache pages and model weights, leading to unpredictable latency spikes.
 - **Acceptance Criteria**:
@@ -433,6 +493,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_working_set_eviction_model` validates that quantizing a layer below L2 cache capacity reduces simulated memory stalls by $\ge 60\%$.
 
 ### [THME-606] Empirical Roofline Boundary Curve & Memory/Compute Classifier (Done)
+
 - **Component**: `thme::profiling::roofline` (`src/profiling/roofline.rs`)
 - **Problem**: Practitioners need automated, mathematical classification of each model layer to determine whether precision reduction or kernel fusion is the appropriate optimization.
 - **Acceptance Criteria**:
@@ -444,6 +505,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_roofline_classifier` passes, correctly labeling decode vs prefill across all 32 layers of LLaMA-8B.
 
 ### [THME-607] Dynamic TDP Power & Thermal Throttling Projection Engine (Done)
+
 - **Component**: `thme::profiling::thermal` (`src/profiling/thermal.rs`)
 - **Problem**: Sustained compute-bound operations trigger thermal throttling and TDP power clamping, degrading sustained token throughput compared to burst performance.
 - **Acceptance Criteria**:
@@ -455,6 +517,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_thermal_throttling_model` passes, verifying simulated frequency back-off under sustained high-TDP workloads.
 
 ### [THME-608] CLI Subcommand `thme roofline` & MCP Tool `thme_profile_roofline` (Done)
+
 - **Component**: `thme::cli::roofline` (`src/cli/roofline.rs`), `thme::cli::mcp` (`src/cli/mcp.rs`)
 - **Problem**: Terminal users and autonomous MCP agents need seamless programmatic access to Roofline profiling and JSON reports.
 - **Acceptance Criteria**:
@@ -466,6 +529,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `thme roofline --help` executes cleanly, and unit tests in `tests/test_roofline_profiler.rs` verify CLI and MCP outputs.
 
 ### [THME-609] Desktop Studio Tab 4 Interactive SVG/egui Roofline Deck (Done)
+
 - **Component**: `thme::gui::app` (`src/gui/app.rs`)
 - **Problem**: Visual studio users require an interactive, real-time graphical representation of the Roofline model with dynamic parameter manipulation.
 - **Acceptance Criteria**:
@@ -481,6 +545,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 ## Sprint 7: Binary Quantization Exporter (Milestone v0.1.8) [COMPLETED]
 
 ### [THME-701] Vectorized BitNet b1.58 Ternary Bitstream Packer (Done)
+
 - **Component**: `thme::exporter::bitnet_pack` (`src/exporter/bitnet_pack.rs`)
 - **Problem**: Storing 1.58-bit ternary weights ($\{-1, 0, +1\}$) requires dense 2-bit packing (4 weights per byte) with SIMD acceleration to minimize export latency.
 - **Acceptance Criteria**:
@@ -492,6 +557,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_bitnet_vectorized_packer` passes, verifying exact bitwise round-trip packing fidelity.
 
 ### [THME-702] Vectorized Ternary Bitstream Unpacker with FP16 Scale Product (Done)
+
 - **Component**: `thme::exporter::bitnet_pack` (`src/exporter/bitnet_pack.rs`)
 - **Problem**: Export verification and downstream decoding require high-speed unpacking of 2-bit representations back into floating-point tensors with scale restoration.
 - **Acceptance Criteria**:
@@ -502,6 +568,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_ternary_unpacker_fidelity` passes across 100,000 randomized weight matrices.
 
 ### [THME-703] Direct Pure Rust GGUF v3 Binary Writer & 32-Byte Alignment (Done)
+
 - **Component**: `thme::exporter::gguf_writer` (`src/exporter/gguf_writer.rs`)
 - **Problem**: Deploying models to `llama.cpp` and Ollama requires writing compliant GGUF v3 binary files from pure Rust without external runtime dependencies.
 - **Acceptance Criteria**:
@@ -513,6 +580,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_gguf_v3_writer` passes, and output files pass GGUF header parser validation.
 
 ### [THME-704] GGUF Metadata Key-Value Reconstitution & Synchronization Engine (Done)
+
 - **Component**: `thme::exporter::metadata` (`src/exporter/metadata.rs`)
 - **Problem**: Restructuring layers or modifying precision alters model architecture metadata, which must be synchronized into the GGUF header to prevent downstream runtime crashes.
 - **Acceptance Criteria**:
@@ -523,6 +591,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_gguf_metadata_sync` passes, confirming metadata integrity across all 8 paradigm architectures.
 
 ### [THME-705] Direct Pure Rust SafeTensors Binary Serializer & 8-Byte Prefix (Done)
+
 - **Component**: `thme::exporter::safetensors_writer` (`src/exporter/safetensors_writer.rs`)
 - **Problem**: Exporting to PyTorch, Hugging Face `transformers`, and vLLM requires writing compliant SafeTensors binary archives.
 - **Acceptance Criteria**:
@@ -534,6 +603,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_safetensors_serializer` passes, and exported files load successfully via the standard `safetensors` crate.
 
 ### [THME-706] Low-Memory Streaming Chunked File Writer Engine (Done)
+
 - **Component**: `thme::exporter::streaming` (`src/exporter/streaming.rs`)
 - **Problem**: Exporting multi-billion parameter models (e.g. 8B to 70B) in one in-memory buffer causes Out-Of-Memory (OOM) crashes on developer workstations.
 - **Acceptance Criteria**:
@@ -545,6 +615,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_streaming_chunked_writer` exports an 8B synthetic model without exceeding 64 MB of resident memory.
 
 ### [THME-707] Calibrated Per-Channel & Per-Group MSE-Optimal Scale Search (Done)
+
 - **Component**: `thme::exporter::calibration` (`src/exporter/calibration.rs`)
 - **Problem**: Standard absmean scale factors ($\alpha = \frac{1}{N}\|W\|_1$) can cause significant quantization error on outlier distributions; MSE optimization is needed.
 - **Acceptance Criteria**:
@@ -555,6 +626,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_mse_scale_calibration` passes, demonstrating lower Frobenius reconstruction error than baseline absmean.
 
 ### [THME-708] CLI Subcommand `thme export` & Desktop Studio Tab 1 Exporter Wizard (Done)
+
 - **Component**: `thme::cli::export` (`src/cli/export.rs`), `thme::gui::app` (`src/gui/app.rs`)
 - **Problem**: Users need intuitive CLI and graphical controls to export models with chosen formats, bit-widths, and destination paths.
 - **Acceptance Criteria**:
@@ -565,6 +637,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `thme export --help` displays clean options, and unit tests verify CLI argument parsing and GUI modal state.
 
 ### [THME-709] Downstream Runtime Compatibility Testbed (Done)
+
 - **Component**: `tests/test_exporter_compatibility.rs`
 - **Problem**: Exported binary artifacts must be validated against downstream runtimes (`llama.cpp`, Ollama, vLLM) to prevent shipping unparseable models.
 - **Acceptance Criteria**:
@@ -579,6 +652,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 ## Sprint 8: Closed-Loop Teacher-Student Co-Surgery (Milestone v0.1.9) [COMPLETED]
 
 ### [THME-801] Co-Surgery Closed-Loop State Machine & Controller [COMPLETED]
+
 - **Component**: `thme::surgery::closed_loop` (`src/surgery/closed_loop.rs`)
 - **Problem**: Manually tuning heterogeneous layer precision is labor-intensive; an autonomous closed-loop state machine is needed to orchestrate iterative surgery.
 - **Acceptance Criteria**:
@@ -589,6 +663,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_closed_loop_state_machine` completes 10 simulated iterations and transitions to `Completed`.
 
 ### [THME-802] Teacher LLM Topology Analysis Prompt Synthesizer [COMPLETED]
+
 - **Component**: `thme::surgery::prompt_synth` (`src/surgery/prompt_synth.rs`)
 - **Problem**: External Teacher LLMs require concise, mathematically rich context summarizing layer sensitivities, spectral energy decay, and memory bottlenecks to formulate effective surgery recipes.
 - **Acceptance Criteria**:
@@ -599,6 +674,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_prompt_synthesizer` passes, verifying correct markdown and JSON prompt structure.
 
 ### [THME-803] Headless JSON-RPC & Subprocess Teacher Agent Communication Bridge [COMPLETED]
+
 - **Component**: `thme::surgery::agent_bridge` (`src/surgery/agent_bridge.rs`)
 - **Problem**: The co-surgery engine needs a reliable communication channel to invoke external AI agents (via CLI subprocess, HTTP REST, or MCP JSON-RPC).
 - **Acceptance Criteria**:
@@ -609,6 +685,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_agent_bridge` passes with mock agent returning valid surgery recipes.
 
 ### [THME-804] Multi-Objective 3D Pareto Optimizer [COMPLETED]
+
 - **Component**: `thme::optimization::pareto_solver` (`src/optimization/pareto_solver.rs`)
 - **Problem**: Compression decisions involve trade-offs across 3 competing objectives: perplexity degradation ($\Delta PPL$), memory traffic ($W_{\text{bytes/token}}$), and wall-clock speedup ($S$).
 - **Acceptance Criteria**:
@@ -619,6 +696,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_3d_pareto_optimizer` discovers and maintains the non-dominated set across 50 simulated candidates.
 
 ### [THME-805] Pareto Hypervolume Indicator Convergence Metric [COMPLETED]
+
 - **Component**: `thme::optimization::hypervolume` (`src/optimization/hypervolume.rs`)
 - **Problem**: Autonomous co-surgery needs an objective mathematical stopping criterion to determine when further iterations yield diminishing returns.
 - **Acceptance Criteria**:
@@ -629,6 +707,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_hypervolume_convergence` correctly halts simulated optimization upon frontier stabilization.
 
 ### [THME-806] Automated Self-Healing Parameter Relaxation Heuristic [COMPLETED]
+
 - **Component**: `thme::surgery::self_healing` (`src/surgery/self_healing.rs`)
 - **Problem**: Aggressive quantization proposals can breach quality tolerances; rather than discarding the entire recipe, fine-grained relaxation should recover quality.
 - **Acceptance Criteria**:
@@ -639,6 +718,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_self_healing_relaxation` demonstrates recovery of breached quality gate without discarding valid optimizations.
 
 ### [THME-807] Anti-Degradation Quality Gate Watchdog & Rollback Engine [COMPLETED]
+
 - **Component**: `thme::surgery::watchdog` (`src/surgery/watchdog.rs`)
 - **Problem**: Models must never enter production in a degraded or broken state; instant rollback is mandatory when validation fails.
 - **Acceptance Criteria**:
@@ -649,6 +729,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_co_surgery_watchdog_rollback` verifies immediate state restoration upon injected catastrophic degradation.
 
 ### [THME-808] CLI Subcommand `thme co-surgery` & Progress Telemetry Stream [COMPLETED]
+
 - **Component**: `thme::cli::co_surgery` (`src/cli/co_surgery.rs`)
 - **Problem**: DevOps engineers need a terminal command to launch autonomous co-surgery runs with real-time logging and progress reporting.
 - **Acceptance Criteria**:
@@ -659,6 +740,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `thme co-surgery --help` displays correct flags, and unit tests verify command dispatch.
 
 ### [THME-809] Desktop Studio Tab 2 Closed-Loop Co-Surgery Dashboard [COMPLETED]
+
 - **Component**: `thme::gui::app` (`src/gui/app.rs`)
 - **Problem**: Interactive users need visual oversight of autonomous co-surgery sessions with live graphs and manual override buttons.
 - **Acceptance Criteria**:
@@ -673,6 +755,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 ## Sprint 9: Production Core Release (Milestone v0.2.0) [SUPERSEDED by the active backlog]
 
 ### [THME-901] SmolLM-135M Open-Weights End-to-End Verification Pipeline
+
 - **Component**: `examples/production_verification.rs`
 - **Problem**: Release validation requires end-to-end proof-of-correctness on genuine, publicly available open weights.
 - **Acceptance Criteria**:
@@ -684,6 +767,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test --example production_verification -- smollm-135m` passes all quality assertions.
 
 ### [THME-902] LLaMA-3.2-1B Open-Weights End-to-End Verification Pipeline
+
 - **Component**: `examples/production_verification.rs`
 - **Problem**: Verifying scalability to billion-parameter architectures requires a full pipeline run on LLaMA-3.2-1B.
 - **Acceptance Criteria**:
@@ -694,6 +778,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test --example production_verification -- llama-3.2-1b` runs to completion and verifies tensor integrity.
 
 ### [THME-903] Automated Reproducible Benchmark Script Suite
+
 - **Component**: `scripts/benchmark_suite.py`, `scripts/benchmark_suite.sh`
 - **Problem**: External researchers and users need one-command scripts to reproduce all published release benchmarks on their own hardware.
 - **Acceptance Criteria**:
@@ -704,6 +789,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: Running `./scripts/benchmark_suite.sh` on clean environment completes in $< 5$ minutes and outputs `benchmark_results.json`.
 
 ### [THME-904] Published Benchmark Dossier Generator
+
 - **Component**: `docs/benchmark_dossier.md`, `scripts/generate_dossier.py`
 - **Problem**: Benchmark results must be formatted into transparent, publication-grade documentation with clear hardware attribution.
 - **Acceptance Criteria**:
@@ -714,6 +800,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: Generated `docs/benchmark_dossier.md` passes format check and contains complete empirical tables.
 
 ### [THME-905] Multi-Platform LTO Stripped Binary Release Packaging
+
 - **Component**: `.github/workflows/release.yml`, `Cargo.toml`
 - **Problem**: Production binaries must be optimized for size and speed across all supported operating systems and architectures.
 - **Acceptance Criteria**:
@@ -724,6 +811,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: Release workflow builds all 5 target platform archives and validates binary footprint limits.
 
 ### [THME-906] Minisign & GPG Cryptographic Artifact Signing Pipeline
+
 - **Component**: `.github/workflows/release.yml`, `scripts/sign_artifacts.sh`
 - **Problem**: Binary releases must have cryptographic provenance to guarantee authenticity and prevent supply-chain tampering.
 - **Acceptance Criteria**:
@@ -734,6 +822,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `minisign -Vm <archive> -p epiphanes.pub` verifies signatures with exit code 0.
 
 ### [THME-907] SHA-256 Checksum Manifest Generation
+
 - **Component**: `.github/workflows/release.yml`
 - **Problem**: Users and package managers require standard SHA-256 checksum manifests to verify download integrity.
 - **Acceptance Criteria**:
@@ -743,6 +832,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: Generated `SHA256SUMS.txt` verifies successfully across all built artifacts.
 
 ### [THME-908] Comprehensive Architecture Playbook, User Manual & Man Pages
+
 - **Component**: `docs/manual.md`, `docs/man/thme.1`
 - **Problem**: Production users and system administrators need exhaustive documentation and standard Unix man pages.
 - **Acceptance Criteria**:
@@ -753,6 +843,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `man ./docs/man/thme.1` renders cleanly without groff warnings.
 
 ### [THME-909] End-to-End Clean-Machine Verification Test Harness
+
 - **Component**: `.github/workflows/clean_machine_test.yml`
 - **Problem**: Binaries must execute on clean operating system installations without hidden dynamic library dependencies or environment assumptions.
 - **Acceptance Criteria**:
@@ -763,6 +854,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: Clean machine CI workflow passes 100% across all 3 OS platforms.
 
 ### [THME-910] Post-Refactoring Risk Register & Technical Debt Amortization (Pre-Release Gate)
+
 - **Component**: `src/gui/app.rs`, `examples/generate_showcase_gifs.rs`, `src/exporter/calibration.rs`
 - **Problem**: Large architectural monolithic files and un-sandboxed visual generators deferred during fast prototyping create maintainability and borrow-checker fragility prior to public release.
 - **Risk Assessment & Mitigation Matrix**:
@@ -783,6 +875,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 ## Sprint 10: Direct GPU Driver Execution Engine (former v0.2.1) [DEFERRED to v0.3+]
 
 ### [THME-1001] Hardware Abstraction Layer (HAL) Core Traits
+
 - **Component**: `thme::hardware::hal` (`src/hardware/hal.rs`)
 - **Problem**: Supporting multiple GPU backends (CUDA, Vulkan, Metal) requires a unified trait architecture for buffer allocation, memory copies, and kernel launches.
 - **Acceptance Criteria**:
@@ -793,6 +886,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_hal_traits` passes with mock CPU backend implementing full HAL interface.
 
 ### [THME-1002] NVIDIA CUDA Driver API Backend via Pure Rust `cudarc`
+
 - **Component**: `thme::hardware::cuda` (`src/hardware/cuda.rs`)
 - **Problem**: External PyTorch runtimes introduce gigabytes of dependencies; THME requires direct driver communication via `libcuda.so` / `nvcuda.dll`.
 - **Acceptance Criteria**:
@@ -803,6 +897,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_cuda_driver_backend` initializes CUDA context and executes vector-add kernel on available NVIDIA GPU.
 
 ### [THME-1003] Vulkan 1.3 SPIR-V Compute Pipeline Backend
+
 - **Component**: `thme::hardware::vulkan` (`src/hardware/vulkan.rs`)
 - **Problem**: Cross-platform GPU execution across Linux, Windows, and AMD/Intel GPUs requires standard Vulkan compute shaders.
 - **Acceptance Criteria**:
@@ -813,6 +908,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_vulkan_compute_backend` successfully runs matrix multiply on Vulkan compute device.
 
 ### [THME-1004] Apple Metal 3 Performance Shaders Backend
+
 - **Component**: `thme::hardware::metal` (`src/hardware/metal.rs`)
 - **Problem**: Apple Silicon Macs feature high-bandwidth unified memory that requires native Metal 3 Performance Shaders to achieve zero-copy execution.
 - **Acceptance Criteria**:
@@ -823,6 +919,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_metal_backend` passes on macOS runner, verifying zero-copy execution.
 
 ### [THME-1005] Fused BitNet b1.58 GEMV / GEMM Kernel
+
 - **Component**: `thme::hardware::kernels::bitnet_gemm` (`src/hardware/kernels/bitnet_gemm.rs`)
 - **Problem**: Unpacking 2-bit ternary weights to global memory before GEMM introduces severe memory bandwidth overhead; unpacking must happen inside GPU registers.
 - **Acceptance Criteria**:
@@ -833,6 +930,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo bench --bench bench_bitnet_gemm` demonstrates $\ge 2.5\times$ throughput improvement.
 
 ### [THME-1006] Fused RMSNorm Micro-Kernel
+
 - **Component**: `thme::hardware::kernels::rmsnorm` (`src/hardware/kernels/rmsnorm.rs`)
 - **Problem**: Separate reduction and scaling passes for RMSNorm incur unnecessary global memory round-trips.
 - **Acceptance Criteria**:
@@ -842,6 +940,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_fused_rmsnorm` passes and verifies bitwise alignment with reference implementation.
 
 ### [THME-1007] Fused SwiGLU Activation Micro-Kernel
+
 - **Component**: `thme::hardware::kernels::swiglu` (`src/hardware/kernels/swiglu.rs`)
 - **Problem**: SwiGLU requires computing $\text{SiLU}(W_{\text{gate}} x) \odot (W_{\text{up}} x)$, which wastes memory bandwidth if intermediate activations are written to DRAM.
 - **Acceptance Criteria**:
@@ -851,6 +950,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_fused_swiglu` verifies numerical correctness within $10^{-5}$ tolerance.
 
 ### [THME-1008] Fused Rotary Position Embedding (RoPE) Kernel
+
 - **Component**: `thme::hardware::kernels::rope` (`src/hardware/kernels/rope.rs`)
 - **Problem**: Applying RoPE to $Q$ and $K$ matrices requires complex sinusoidal rotation that can bottleneck attention pre-processing.
 - **Acceptance Criteria**:
@@ -860,6 +960,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_fused_rope` verifies exact rotation matching Hugging Face LLaMA reference.
 
 ### [THME-1009] CLI Subcommand `thme run` Direct Inference
+
 - **Component**: `thme::cli::run` (`src/cli/run.rs`)
 - **Problem**: Users need a direct CLI command to run LLM inference using native GPU drivers without Python.
 - **Acceptance Criteria**:
@@ -874,6 +975,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 ## Sprint 11: Tiered Out-of-Core NVMe SSD Streaming (former v0.2.2) [DEFERRED to v0.3+]
 
 ### [THME-1101] Linux Direct Asynchronous I/O Engine (`io_uring`)
+
 - **Component**: `thme::storage::direct_io` (`src/storage/direct_io.rs`)
 - **Problem**: Standard OS file reading incurs page cache buffering and context switch overhead, capping disk throughput below PCIe 4.0/5.0 line rates.
 - **Acceptance Criteria**:
@@ -884,6 +986,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_io_uring_direct_io` passes on Linux runner, reading 1 GB test file with zero page cache caching.
 
 ### [THME-1102] Windows Direct Asynchronous I/O Engine (Overlapped I/O)
+
 - **Component**: `thme::storage::direct_io` (`src/storage/direct_io.rs`)
 - **Problem**: Windows developers require native unbuffered disk streaming matching Linux `io_uring` throughput.
 - **Acceptance Criteria**:
@@ -894,6 +997,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_windows_overlapped_io` passes on Windows runner with verified direct I/O throughput.
 
 ### [THME-1103] Sequential Layer Streaming & Eviction Engine
+
 - **Component**: `thme::storage::layer_streamer` (`src/storage/layer_streamer.rs`)
 - **Problem**: Executing a 70B parameter model requires 140 GB of weights, exceeding consumer GPU VRAM; layers must be loaded and evicted sequentially.
 - **Acceptance Criteria**:
@@ -903,6 +1007,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_layer_streaming_execution` completes forward pass across 32 layers using single-layer memory budget.
 
 ### [THME-1104] Double-Buffered Prefetch Pipeline
+
 - **Component**: `thme::storage::prefetch` (`src/storage/prefetch.rs`)
 - **Problem**: Sequential loading stalls GPU compute while waiting for disk reads; I/O and computation must be overlapped.
 - **Acceptance Criteria**:
@@ -913,6 +1018,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_double_buffered_prefetch` demonstrates concurrent disk reading and mock layer compute.
 
 ### [THME-1105] Pinned Memory Staging Buffers (`mlock` / `VirtualLock`)
+
 - **Component**: `thme::memory::pinned` (`src/memory/pinned.rs`)
 - **Problem**: GPU DMA transfers from pageable host RAM require intermediate copies into pinned memory, reducing transfer bandwidth.
 - **Acceptance Criteria**:
@@ -922,6 +1028,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_pinned_memory_allocation` verifies lock status and zero-copy DMA transfer capabilities.
 
 ### [THME-1106] REA-LLM Tiered Heterogeneous Memory Placement Manager
+
 - **Component**: `thme::memory::tiered_allocator` (`src/memory/tiered_allocator.rs`)
 - **Problem**: Different model layers exhibit different reach probabilities $q_l$; memory placement should be tiered strategically across VRAM, Host RAM, and NVMe SSD.
 - **Acceptance Criteria**:
@@ -931,6 +1038,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_tiered_memory_placement` verifies correct layer distribution across simulated 3-tier hierarchy.
 
 ### [THME-1107] Dynamic VRAM Memory Accountant
+
 - **Component**: `thme::memory::accountant` (`src/memory/accountant.rs`)
 - **Problem**: Out-of-core execution without strict VRAM accounting risks hitting hard CUDA OOM errors.
 - **Acceptance Criteria**:
@@ -940,6 +1048,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_vram_accountant_ceiling` strictly caps allocated memory under stress testing.
 
 ### [THME-1108] 70B Model in 8 GB VRAM End-to-End Testbed
+
 - **Component**: `tests/test_out_of_core_streaming.rs`
 - **Problem**: Verifying out-of-core streaming requires full multi-layer autoregressive execution on a genuine 70B parameter topology under an 8 GB memory limit.
 - **Acceptance Criteria**:
@@ -950,6 +1059,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test --test test_out_of_core_streaming` passes and verifies $< 8 \text{ GB}$ peak VRAM usage.
 
 ### [THME-1109] PCIe Bandwidth Saturation & Disk I/O Telemetry Monitor
+
 - **Component**: `thme::profiling::io_monitor` (`src/profiling/io_monitor.rs`)
 - **Problem**: Operators need visibility into PCIe bus saturation, disk read queue depths, and streaming bottlenecks.
 - **Acceptance Criteria**:
@@ -963,6 +1073,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 ## Sprint 12: Distributed Heterogeneous Multi-Node Clustering (former v0.2.3) [DEFERRED to v0.3+]
 
 ### [THME-1201] Intra-Node Tensor Parallelism (TP) Projection Splitter
+
 - **Component**: `thme::cluster::tensor_parallel` (`src/cluster/tensor_parallel.rs`)
 - **Problem**: Multi-GPU workstations require splitting Attention and MLP projection matrices across local accelerators to reduce per-device memory footprint and latency.
 - **Acceptance Criteria**:
@@ -973,6 +1084,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_tensor_parallel_projections` passes, verifying exact output match across 2 and 4 simulated devices.
 
 ### [THME-1202] Inter-Node Pipeline Parallelism (PP) & Layer Partitioner
+
 - **Component**: `thme::cluster::pipeline_parallel` (`src/cluster/pipeline_parallel.rs`)
 - **Problem**: Distributing multi-layer models across networked nodes requires partitioning consecutive layer blocks across heterogeneous machines.
 - **Acceptance Criteria**:
@@ -982,6 +1094,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_pipeline_parallel_partitioning` splits 32 layers across 3 nodes with balanced execution.
 
 ### [THME-1203] 1F1B (One-Forward-One-Backward) Pipeline Bubble Minimizer
+
 - **Component**: `thme::cluster::schedule_1f1b` (`src/cluster/schedule_1f1b.rs`)
 - **Problem**: Naive pipeline parallelism leaves nodes idle while waiting for activations (pipeline bubbles); a 1F1B schedule is needed.
 - **Acceptance Criteria**:
@@ -991,6 +1104,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_1f1b_scheduler` verifies micro-batch ordering and idle time minimization.
 
 ### [THME-1204] Pure Rust Asynchronous TCP Ring All-Reduce
+
 - **Component**: `thme::cluster::ring_allreduce` (`src/cluster/ring_allreduce.rs`)
 - **Problem**: Distributed communication must avoid heavy MPI or NCCL runtime dependencies, providing pure Rust network communication.
 - **Acceptance Criteria**:
@@ -1001,6 +1115,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_ring_allreduce_tcp` passes across 4 simulated local nodes.
 
 ### [THME-1205] Hardware RDMA / RoCE Network Fallback Engine
+
 - **Component**: `thme::cluster::rdma` (`src/cluster/rdma.rs`)
 - **Problem**: High-end HPC clusters feature InfiniBand / RoCE networking; THME should leverage kernel-bypass RDMA when available.
 - **Acceptance Criteria**:
@@ -1011,6 +1126,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_rdma_detection_and_fallback` verifies fallback behavior and queue pair setup.
 
 ### [THME-1206] Multicast / mDNS Cluster Node Discovery & Capability Handshake
+
 - **Component**: `thme::cluster::discovery` (`src/cluster/discovery.rs`)
 - **Problem**: Ad-hoc clustering requires machines on a local subnet to automatically discover each other without manual IP configuration.
 - **Acceptance Criteria**:
@@ -1020,6 +1136,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_cluster_mdns_discovery` discovers peers and exchanges hardware capability payloads.
 
 ### [THME-1207] Continuous 100 ms Heartbeat & Dead-Node Watchdog
+
 - **Component**: `thme::cluster::watchdog` (`src/cluster/watchdog.rs`)
 - **Problem**: Nodes in heterogeneous or ad-hoc clusters may disconnect, reboot, or experience network drops during long runs.
 - **Acceptance Criteria**:
@@ -1030,6 +1147,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_cluster_heartbeat_watchdog` detects simulated node failure within 300 ms.
 
 ### [THME-1208] Automated Dynamic Layer Re-Sharding Failover
+
 - **Component**: `thme::cluster::reshard` (`src/cluster/reshard.rs`)
 - **Problem**: When a node disconnects, its assigned model layers become orphaned; the cluster must redistribute them without terminating the job.
 - **Acceptance Criteria**:
@@ -1039,6 +1157,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_dynamic_resharding` demonstrates forward pass recovery after dropping 1 of 3 nodes.
 
 ### [THME-1209] CLI Subcommand `thme cluster` & Cluster Formation Wizard
+
 - **Component**: `thme::cli::cluster` (`src/cli/cluster.rs`)
 - **Problem**: Operators need a command-line interface to initialize, join, and inspect distributed clusters.
 - **Acceptance Criteria**:
@@ -1052,6 +1171,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 ## Sprint 13: Universal Agentic AI Connectivity Gateway (former v0.2.4) [DEFERRED to v0.3+]
 
 ### [THME-1301] High-Throughput Asynchronous WebSocket Event Streaming Daemon
+
 - **Component**: `thme::daemon::server` (`src/daemon/server.rs`)
 - **Problem**: Remote agents, IDEs, and dashboards require real-time bidirectional WebSocket streaming of per-token progress, layer execution, and telemetry.
 - **Acceptance Criteria**:
@@ -1062,6 +1182,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_websocket_streaming_daemon` verifies concurrent client connections and message broadcasting.
 
 ### [THME-1302] JSON-RPC 2.0 Method Router & Remote Protocol Dispatcher
+
 - **Component**: `thme::daemon::router` (`src/daemon/router.rs`)
 - **Problem**: External tools need a standardized remote procedure call API to invoke THME operations (inspect, surgery, validate, export).
 - **Acceptance Criteria**:
@@ -1071,6 +1192,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_jsonrpc_method_router` validates JSON-RPC request and response payloads.
 
 ### [THME-1303] Cryptographic HMAC-SHA256 Surgery Recipe Attestation
+
 - **Component**: `thme::daemon::attestation` (`src/daemon/attestation.rs`)
 - **Problem**: Exposing model surgery over a network creates security vulnerabilities; recipes must be authenticated and tamper-proof.
 - **Acceptance Criteria**:
@@ -1081,6 +1203,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_hmac_recipe_attestation` rejects tampered recipes and accepts validly signed payloads.
 
 ### [THME-1304] Autonomous CLI Agent Adapter
+
 - **Component**: `thme::daemon::adapters::cli_agent` (`src/daemon/adapters/cli_agent.rs`)
 - **Problem**: Coding agents (Claude Code, Gemini CLI, Aider, OpenHands) need formatted tool schemas and direct execution wrappers.
 - **Acceptance Criteria**:
@@ -1090,6 +1213,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_cli_agent_adapter` verifies agent schema generation and tool calling.
 
 ### [THME-1305] CI/CD Orchestration Harness Adapter
+
 - **Component**: `thme::daemon::adapters::cicd` (`src/daemon/adapters/cicd.rs`)
 - **Problem**: Enterprise CI/CD systems (Harness CI/CD, GitHub Actions, GitLab CI) need structured step outputs, JUnit reports, and exit code mappings.
 - **Acceptance Criteria**:
@@ -1099,6 +1223,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_cicd_adapter_reports` verifies JUnit XML generation and workflow command formatting.
 
 ### [THME-1306] Desktop Studio Remote Daemon Connection Bridge
+
 - **Component**: `thme::gui::remote_client` (`src/gui/remote_client.rs`)
 - **Problem**: Users running `thme-gui` on lightweight laptops want to connect to remote GPU servers hosting THME daemon instances.
 - **Acceptance Criteria**:
@@ -1108,6 +1233,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_gui_remote_bridge` establishes WebSocket session and synchronizes model state.
 
 ### [THME-1307] IDE & GitHub Copilot Extension Bridge
+
 - **Component**: `thme::daemon::adapters::ide_bridge` (`src/daemon/adapters/ide_bridge.rs`)
 - **Problem**: VS Code, Cursor, and Windsurf extensions require live daemon connectivity to stream model topology changes into editor sidebars.
 - **Acceptance Criteria**:
@@ -1117,6 +1243,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_ide_bridge_synchronization` verifies event passing between editor client and daemon.
 
 ### [THME-1308] Real-Time System Telemetry & Resource Pressure Broadcasting
+
 - **Component**: `thme::daemon::telemetry_broadcaster` (`src/daemon/telemetry_broadcaster.rs`)
 - **Problem**: Remote monitoring systems (Grafana, Datadog) need real-time streams of VRAM pressure, GPU utilization, and token throughput.
 - **Acceptance Criteria**:
@@ -1126,6 +1253,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Done Means**: `cargo test test_telemetry_prometheus_exporter` verifies `/metrics` response format and values.
 
 ### [THME-1309] CLI Subcommand `thme daemon` & Universal Daemon Controller
+
 - **Component**: `thme::cli::daemon` (`src/cli/daemon.rs`)
 - **Problem**: System administrators require a dedicated CLI command to launch, configure, and daemonize the gateway server.
 - **Acceptance Criteria**:

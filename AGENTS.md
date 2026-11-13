@@ -84,8 +84,10 @@ cargo test
 ## 5. Versioning & Production Roadmap (v0.1 to v0.3)
 
 ### 5.1 Sub-Milestone Execution Architecture
+
 Every major release milestone $v0.1.x$ is governed by a 4-level sub-milestone decomposition:
 $$v0.1.x.0 \longrightarrow \left[ v0.1.x.1, v0.1.x.2, v0.1.x.3, \dots, v0.1.x.9 \right] \longrightarrow v0.1.(x+1).0$$
+
 - **Baseline Contract ($v0.1.x.0$)**: Architectural specification, trait contracts, and baseline benchmark definitions.
 - **Parallel Sub-Functions ($v0.1.x.1 \dots v0.1.x.9$)**: Exactly 9 interdependent sub-milestones executed concurrently across modular subsystems, feeding continuously into CI/CD quality gates.
 - **Convergence ($v0.1.(x+1).0$)**: End-to-end integration and verification gate preceding the subsequent milestone cycle.
@@ -111,4 +113,9 @@ Current focus and priorities live in the **now / next / later** view at the top 
 | **v0.2.2.0** | Formats & Calibration | [v0.2.2.1 - v0.2.2.9] Per-tensor GGUF formats, Q4_K/Q5_K/Q6_K, calibration activations, AWQ-style scaling, GPTQ-style rounding, Hadamard rotation, SmoothQuant migration, llama.cpp compatibility, measured artifact size. | Scheduled |
 | **v0.2.3.0** | Recovery & Distillation | [v0.2.3.1 - v0.2.3.9] Backward pass or trainer bridge, quantization-aware distillation, LoRA recovery, teacher calibration data, loop and early-exit objectives, exit heads, recovery cost accounting, overfitting guard, recovered-candidate reports. | Scheduled |
 | **v0.2.4.0** | Runtime, Speed & KV Cache | [v0.2.4.1 - v0.2.4.9] Incremental decoding, KV bytes vs context, CPU throughput, quantized kernels, peak memory, KV quantization, calibrated roofline, measured speculative decoding, energy where measurable. | Scheduled |
-| **v0.3.x** | GPU, Streaming, Clustering, Gateway, New Architectures | Former v0.2.1 - v0.2.4 plans (CUDA/Vulkan/Metal, NVMe streaming, multi-node, agentic gateway) and trained v3.0 architecture research. | Deferred |
+| **v0.2.5.0** | Math Engine Foundations | [v0.2.5.1 - v0.2.5.9] Error type, exact DP allocator, number formats with bounds, transport, bases and rotations, ODE steppers, projections, SVG visual engine, conversion registry. | Active |
+| **v0.2.6.0** | Epiphanes Model Format | [v0.2.6.1 - v0.2.6.9] .epiph container, signatures, quantized payloads, tokenizer, streaming, compression, GPU/CPU placement, Studio support, compatibility reports. | Active |
+| **v0.2.7.0** | Security & Trust | [v0.2.7.1 - v0.2.7.9] Model scanner, more formats, scan on import, permission record, sandbox design and build, read-only guardrail detection, optional safety layers, supply chain. | Active |
+| **v0.2.8.0** | Quality Gate & Benchmarks | [v0.2.8.1 - v0.2.8.9] Versioned gate, benchmark registry, runner, metrics, statistics, three-state gate, contamination check, charts, schemas and claim register. | Scheduled |
+| **v0.2.9.0** | Translation Layer & Convergence | [v0.2.9.1 - v0.2.9.9] Operation graph, exact symmetries, layout planner, architecture inference, compatibility ladder, llama.cpp checks, engine Studio views, docs, v0.3 convergence gate. | Scheduled |
+| **v0.3.x** | Routing, Distillation, GPU, Scale-out, New Architectures | Routing and needles, distillation and autonomy with budget caps, advanced mathematics, CUDA/Vulkan/Metal, NVMe streaming, multi-node, agentic gateway, trained v3.0 architectures; commercial release afterwards (version TBD). | Deferred |

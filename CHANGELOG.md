@@ -118,6 +118,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/research/THME_measured_findings_2026-11.md` and `docs/subsystems.md`.
 
 ### Changed
+- Roadmap filled from v0.2.5 to v0.2.9 (math engine, Epiphanes model format, security and trust,
+  quality gate and benchmarks, translation layer and convergence), nine sub-milestones each; v0.3
+  now holds routing, distillation, GPU and scale-out. Every THME-30xx ticket is placed on its
+  sub-milestone; AGENTS.md ledger, README table and diagrams updated.
 - ROADMAP.md opens with a now / next / later view by track (math engine, Epiphanes model format,
   security, quality and evidence), with blocked items, out-of-scope items, risks and changes; the
   numbered milestones are unchanged. README gains a "Now building" section, Quickstart commands

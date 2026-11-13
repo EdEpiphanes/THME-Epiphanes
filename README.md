@@ -353,8 +353,13 @@ flowchart LR
     D["v0.2.2<br/>Formats and calibration"]:::active
     E["v0.2.3<br/>Recovery and distillation"]:::next
     F["v0.2.4<br/>Runtime, speed, KV cache"]:::next
-    G["v0.3<br/>New architectures,<br/>GPU, scale-out"]:::next
-    A --> B --> C --> D --> E --> F --> G
+    H["v0.2.5<br/>Math engine"]:::active
+    I["v0.2.6<br/>Epiphanes model format"]:::active
+    J["v0.2.7<br/>Security and trust"]:::active
+    K["v0.2.8<br/>Quality gate,<br/>benchmarks"]:::next
+    L["v0.2.9<br/>Translation layer,<br/>convergence"]:::next
+    G["v0.3<br/>Routing, distillation,<br/>GPU, scale-out"]:::next
+    A --> B --> C --> D --> E --> F --> H --> I --> J --> K --> L --> G
 ```
 
 <sub>Solid ink: done · thick frame: in progress · dashed: next. Live counts are on the [status board](#status).</sub>
@@ -366,6 +371,11 @@ flowchart LR
 | **v0.2.2 Formats and calibration** (in progress) | 4-bit K-quants, activation-aware scales, Hadamard rotation, per-tensor export | A heterogeneous artifact smaller than uniform Q8_0 passes the gate |
 | v0.2.3 Recovery | Distillation and LoRA recovery for aggressive formats | A recovered ternary-heavy candidate passes the gate |
 | v0.2.4 Runtime | Incremental decode, measured speed, memory and KV cache | Speed and memory claims are measured on named hardware |
+| **v0.2.5 Math engine** (in progress) | Validated primitives with oracle tests, one implementation per method | Every primitive passes its oracle tests; no duplicates |
+| **v0.2.6 Epiphanes model format** (in progress) | `.epiph` with signatures, quantized payloads, tokenizer, placement | A quantized candidate packs, signs, verifies and runs from one file |
+| **v0.2.7 Security and trust** (in progress) | Scanner, sandbox, permission record, supply chain | Every import scans first; untrusted code runs only in the sandbox |
+| v0.2.8 Quality gate and benchmarks | Versioned gate, benchmark harness, statistics, charts | A task file runs to a result with an interval and a three-state verdict |
+| v0.2.9 Translation layer and convergence | Operation graph, exact symmetries, compatibility reports | Every v0.2 exit criterion met or deferred with a reason |
 
 Full plan with sub-milestones: **[ROADMAP.md](ROADMAP.md)** · Tickets: **[BACKLOG.md](BACKLOG.md)**
 

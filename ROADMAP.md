@@ -12,8 +12,17 @@
 ## Now, next, later
 
 Grouped by track. Status labels: **Done**, **On track**, **Blocked**, **Not started**. Ticket
-numbers link the plan to [BACKLOG.md](BACKLOG.md); the numbered milestones further down keep
-their own sub-milestone tables.
+numbers link the plan to [BACKLOG.md](BACKLOG.md). Each track is a numbered milestone with nine
+sub-milestones further down:
+
+| Track | Milestone |
+| :--- | :--- |
+| Math engine | [v0.2.5](#v025--math-engine-foundations) |
+| Epiphanes model format | [v0.2.6](#v026--epiphanes-model-format) |
+| Security | [v0.2.7](#v027--security-and-trust) |
+| Quality and evidence | [v0.2.8](#v028--quality-gate-and-benchmarks) |
+| Translation layer, convergence | [v0.2.9](#v029--translation-layer-and-v03-convergence) |
+| Formats and calibration; recovery; runtime | [v0.2.2](#v022--formats-and-calibration), [v0.2.3](#v023--recovery-and-distillation), [v0.2.4](#v024--runtime-speed-and-kv-cache) |
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'fontFamily': 'Chakra Petch, Bahnschrift, Arial Narrow, sans-serif', 'primaryColor': '#ffffff', 'primaryTextColor': '#0b0b0b', 'primaryBorderColor': '#0b0b0b', 'lineColor': '#0b0b0b', 'secondaryColor': '#f6f6f4', 'tertiaryColor': '#ffffff', 'clusterBkg': '#f6f6f4', 'clusterBorder': '#0b0b0b', 'edgeLabelBackground': '#ffffff'}}}%%
@@ -136,8 +145,13 @@ flowchart LR
     D["v0.2.2<br/>Formats and calibration"]:::active
     E["v0.2.3<br/>Recovery and distillation"]:::next
     F["v0.2.4<br/>Runtime, speed, KV cache"]:::next
-    G["v0.3<br/>Architectures, GPU, scale-out"]:::next
-    A --> B --> C --> D --> E --> F --> G
+    H["v0.2.5<br/>Math engine"]:::active
+    I["v0.2.6<br/>Epiphanes model format"]:::active
+    J["v0.2.7<br/>Security and trust"]:::active
+    K["v0.2.8<br/>Quality gate, benchmarks"]:::next
+    L["v0.2.9<br/>Translation layer,<br/>convergence"]:::next
+    G["v0.3<br/>Routing, distillation,<br/>GPU, scale-out"]:::next
+    A --> B --> C --> D --> E --> F --> H --> I --> J --> K --> L --> G
 ```
 
 ### Evidence levels
@@ -273,17 +287,119 @@ hardware for the source and for a passing heterogeneous candidate.
 | v0.2.4.8 | Speculative decoding measured end to end, replacing formula estimates |
 | v0.2.4.9 | Energy measurement where hardware counters are available, with the method stated |
 
+## v0.2.5 — Math engine foundations
+
+**Goal:** validated numerical primitives in `src/engine`, each tested against an oracle outside
+its own code, with one implementation per method (research dossier v3.1, Appendix M).
+**Exit criteria:** every primitive returns `EngineResult`, never panics on bad input, and passes
+its oracle tests; no method is implemented twice in the crate.
+
+| # | Item | Status |
+| :--- | :--- | :--- |
+| v0.2.5.1 | Engine error type and finite-value guard (WP1, THME-3001) | **Done**: every variant reached by a test |
+| v0.2.5.2 | Exact dynamic-programming allocator beside greedy and thresholds (WP2, THME-3002) | Implemented: matches exhaustive search; comparison on real cost tables pending |
+| v0.2.5.3 | Number formats with stated error bounds: integer, ternary, binary, codebook, FP16, BF16, FP8, phase (WP3, THME-3006) | Implemented in part: one shared absmean-ternary quantizer; other formats open |
+| v0.2.5.4 | Optimal transport: northwest-corner start, Sinkhorn with a log-domain variant (WP4) | |
+| v0.2.5.5 | Bases and rotations: one Walsh-Hadamard transform, FFT against a naive DFT, Givens and Householder (WP5, THME-3004) | Implemented in part: one shared Walsh-Hadamard transform, three copies removed |
+| v0.2.5.6 | ODE steppers: Dormand-Prince 5(4) with step control and fixed-step RK4, no default tolerances (WP6) | |
+| v0.2.5.7 | Projections that always report retained structure: PCA, participation ratio, MDS, stereographic (WP8) | |
+| v0.2.5.8 | Dependency-free SVG visual engine: log-axis traces, heatmaps, scatter, dataflow graphs, Pareto fronts (WP9) | |
+| v0.2.5.9 | Typed conversion registry with accumulated error bounds, and engine benchmarks run on every release (WP10, WP39) | |
+
+## v0.2.6 — Epiphanes model format
+
+**Goal:** `.epiph` carries any model THME can build, with everything known about it, and loads
+fast on the hardware it lands on.
+**Exit criteria:** a quantized recipe candidate packs, signs, verifies and runs from one `.epiph`
+file, and converts to GGUF and back without losing its tokenizer.
+
+| # | Item | Status |
+| :--- | :--- | :--- |
+| v0.2.6.1 | Open container v1.0: manifest, aligned payloads, digests, `thme epiph pack/verify` (THME-3012) | **Done**: round trip, corruption, truncation and GGUF conversion tested |
+| v0.2.6.2 | Minisign signatures over the manifest; Epiphanes key by default (THME-3019) | **Done**: tamper, wrong key and broken trailer tested |
+| v0.2.6.3 | Quantized payloads: each tensor in its selected format, including K-quants, ternary and BYOA (THME-3013) | |
+| v0.2.6.4 | Tokenizer and GGUF metadata attachments, lossless GGUF round trip (THME-3014) | |
+| v0.2.6.5 | Streaming writer and memory-mapped reader for models larger than memory | |
+| v0.2.6.6 | Lossless payload compression behind a per-payload encoding field (THME-3015) | |
+| v0.2.6.7 | GPU/CPU/disk placement plan from the exact allocator for a stated memory budget (THME-3016) | |
+| v0.2.6.8 | Studio support: open `.epiph`, show provenance, lineage, signature and quality evidence | |
+| v0.2.6.9 | Compatibility report per model and runtime: loads, runs, agrees, passes the gate (WP18) | |
+
+## v0.2.7 — Security and trust
+
+**Goal:** THME checks what it loads, isolates what it runs, and records who may analyse what.
+**Exit criteria:** every import path scans first, untrusted code runs only in the sandbox, and
+each release ships with signatures and a dependency report.
+
+| # | Item | Status |
+| :--- | :--- | :--- |
+| v0.2.7.1 | Static model scanner: pickles, headers, hidden bytes, templates, remote code (THME-3018) | **Done**: rule fixtures tested; nothing loaded or run |
+| v0.2.7.2 | Scanner coverage: compressed pickles, ONNX, Keras, NumPy object arrays (THME-3022) | |
+| v0.2.7.3 | Scan on import: every command that loads a model scans it first, with an explicit override | |
+| v0.2.7.4 | Permission and ownership record for reverse-engineering features (WP19, THME-3008) | |
+| v0.2.7.5 | Developer sandbox design: process isolation, no network, file and time limits per OS (THME-3020) | |
+| v0.2.7.6 | Sandbox implementation with escape tests; remote-code models and plugins run only inside it | |
+| v0.2.7.7 | Guardrail detection, read-only: safety classifiers and refusal instructions reported (THME-3021) | |
+| v0.2.7.8 | Optional safety layers THME adds on top of a model, switched on or off per deployment | |
+| v0.2.7.9 | Supply chain: SPDX headers (THME-3005), signed releases, dependency licence report in every release | |
+
+## v0.2.8 — Quality gate and benchmarks
+
+**Goal:** benchmarks run inside THME and every score carries its uncertainty, evidence label and
+gate version (research dossier v3.1, Appendix R).
+**Exit criteria:** a benchmark task file runs through one harness to a result record with an
+interval, a three-state verdict and a chart; harness self-tests pass.
+
+| # | Item | Status |
+| :--- | :--- | :--- |
+| v0.2.8.1 | One versioned quality gate: custom criteria, one or many, absolute and relative margins (WP20, THME-3003) | |
+| v0.2.8.2 | Benchmark registry: declarative task files and result records (WP31) | |
+| v0.2.8.3 | Benchmark runner: native, bridged and imported modes; resume and cache (WP32) | |
+| v0.2.8.4 | Metrics library: exact and normalized match, numeric tolerance, likelihood choice, pass@k (WP33) | |
+| v0.2.8.5 | Statistics: Wilson and bootstrap intervals, paired tests, required-items calculator (WP34) | |
+| v0.2.8.6 | Three-state gate: pass, fail or inconclusive from the interval (WP35) | |
+| v0.2.8.7 | Contamination check between benchmark items and training or teacher data (WP36) | |
+| v0.2.8.8 | Benchmark charts on the visual engine: dot plots, deltas, heatmaps, quality against cost (WP37) | |
+| v0.2.8.9 | Versioned schemas and the consolidated claim register (THME-3009, THME-3000) | |
+
+## v0.2.9 — Translation layer and v0.3 convergence
+
+**Goal:** an architecture-neutral model graph that THME can rearrange exactly, plus the
+integration gate that closes the v0.2 series (research dossier v3.1, Appendix O).
+**Exit criteria:** a model described in the graph runs like the reference forward pass, exact
+transformations prove themselves by test, and every v0.2 track meets its exit criteria.
+
+| # | Item | Status |
+| :--- | :--- | :--- |
+| v0.2.9.1 | Architecture-neutral operation graph with shape inference (WP14) | |
+| v0.2.9.2 | Exact symmetries: permutations, norm folding, residual rotation, each labelled exact, bounded or empirical (WP15) | |
+| v0.2.9.3 | Weight layout planner: shard, tile, interleave, transpose; reordering only behind the gate (WP16) | |
+| v0.2.9.4 | Architecture inference from tensors, with confidence labels, behind the permission record (WP17) | |
+| v0.2.9.5 | Compatibility ladder reports shown in the Studio and the dossier (WP18) | |
+| v0.2.9.6 | External compatibility checks: exported files load in llama.cpp, on synthetic models (THME-2208) | |
+| v0.2.9.7 | Studio views for the engine: solver traces, layer maps, dataflow graphs, projected manifolds | |
+| v0.2.9.8 | Documentation pass: tutorials for every command, glossary and specifications current | |
+| v0.2.9.9 | Convergence gate: every v0.2 exit criterion met or explicitly deferred with a reason | |
+
 ## v0.3 and later
 
-Deferred until the measured core can evaluate them:
+Opened once v0.2.9 converges:
 
-- **GPU execution** (formerly v0.2.1): CUDA, Vulkan and Metal backends with fused low-bit kernels.
+- **Routing and needles** (dossier Appendix P): calibration metrics, routers, hierarchical
+  scoring, needle training, routing charts.
+- **Distillation and autonomy** (dossier Appendix Q): teacher cache, losses, fidelity report,
+  student planner, and an autonomy controller with hard budget caps and human approval.
+- **Advanced mathematics** (dossier Appendix M): semirings, Clifford algebra, linear and integer
+  programs.
+- **GPU execution** (formerly v0.2.1): CUDA, Vulkan and Metal backends with fused low-bit kernels,
+  using `.epiph` placement plans.
 - **Out-of-core streaming** (formerly v0.2.2): NVMe layer streaming for models larger than memory.
 - **Heterogeneous clustering** (formerly v0.2.3): tensor and pipeline parallelism across nodes.
 - **Agentic gateway** (formerly v0.2.4): authenticated JSON-RPC/WebSocket daemon.
 - **New architectures from the v3.0 research concepts**: looped and early-exit models, the
   α/β/γ representation families, alternative sequence mixers. Each is a model that must be
   trained, and is scoped as its own project with its own baselines.
+- **Commercial release**: after the open-source foundations are complete; version to be decided.
 
 The original specifications for the deferred items are kept below for reference.
 
