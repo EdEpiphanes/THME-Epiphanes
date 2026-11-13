@@ -272,9 +272,10 @@ turn reports into the dossier and the charts above; neither script contains numb
 ## Architecture
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'fontFamily': 'Chakra Petch, Bahnschrift, Arial Narrow, sans-serif', 'primaryColor': '#ffffff', 'primaryTextColor': '#0b0b0b', 'primaryBorderColor': '#0b0b0b', 'lineColor': '#0b0b0b', 'secondaryColor': '#f6f6f4', 'tertiaryColor': '#ffffff', 'clusterBkg': '#f6f6f4', 'clusterBorder': '#0b0b0b', 'edgeLabelBackground': '#ffffff', 'noteBkgColor': '#ffffff', 'noteBorderColor': '#0b0b0b', 'actorBkg': '#ffffff', 'actorBorder': '#0b0b0b', 'signalColor': '#0b0b0b', 'labelBoxBkgColor': '#ffffff'}}}%%
 flowchart LR
-    classDef measured fill:#2a78d6,stroke:#2a78d6,color:#ffffff;
-    classDef impl fill:#f0efec,stroke:#c3c2b7,color:#0b0b0b;
+    classDef measured fill:#0b0b0b,stroke:#0b0b0b,stroke-width:2px,color:#ffffff;
+    classDef impl fill:#ffffff,stroke:#0b0b0b,stroke-width:1.5px,color:#0b0b0b;
 
     subgraph In["Import"]
         ST["SafeTensors"]:::impl
@@ -297,7 +298,7 @@ flowchart LR
     G --> D
 ```
 
-Blue stages are backed by measurements today. The full subsystem reference (profiler,
+Solid ink stages are backed by measurements today; white stages are implemented and tested. The full subsystem reference (profiler,
 allocator, speculative decoding, roofline, paradigm converter, PyTorch bridge, MCP, CLI flags)
 is in **[docs/subsystems.md](docs/subsystems.md)**.
 
@@ -317,26 +318,29 @@ v0.2 is redefined around one rule: **every claim is measured, or labelled as not
 Recipes and BYOA algorithms become experiments, and the gate decides what ships.
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'fontFamily': 'Chakra Petch, Bahnschrift, Arial Narrow, sans-serif', 'primaryColor': '#ffffff', 'primaryTextColor': '#0b0b0b', 'primaryBorderColor': '#0b0b0b', 'lineColor': '#0b0b0b', 'secondaryColor': '#f6f6f4', 'tertiaryColor': '#ffffff', 'clusterBkg': '#f6f6f4', 'clusterBorder': '#0b0b0b', 'edgeLabelBackground': '#ffffff', 'noteBkgColor': '#ffffff', 'noteBorderColor': '#0b0b0b', 'actorBkg': '#ffffff', 'actorBorder': '#0b0b0b', 'signalColor': '#0b0b0b', 'labelBoxBkgColor': '#ffffff'}}}%%
 flowchart LR
-    classDef done fill:#0ca30c,stroke:#0ca30c,color:#ffffff;
-    classDef active fill:#2a78d6,stroke:#2a78d6,color:#ffffff;
-    classDef next fill:#f0efec,stroke:#898781,color:#0b0b0b;
+    classDef done fill:#0b0b0b,stroke:#0b0b0b,stroke-width:2px,color:#ffffff;
+    classDef active fill:#ffffff,stroke:#0b0b0b,stroke-width:4px,color:#0b0b0b;
+    classDef next fill:#ffffff,stroke:#0b0b0b,stroke-width:1.5px,stroke-dasharray:4 3,color:#52514e;
 
     A["v0.1.x<br/>Foundations<br/>implemented"]:::done
     B["v0.2.0<br/>Measured core"]:::active
-    C["v0.2.1<br/>Recipe and BYOA lab"]:::next
-    D["v0.2.2<br/>Formats and calibration"]:::next
+    C["v0.2.1<br/>Recipe and BYOA lab<br/>done"]:::done
+    D["v0.2.2<br/>Formats and calibration"]:::active
     E["v0.2.3<br/>Recovery and distillation"]:::next
     F["v0.2.4<br/>Runtime, speed, KV cache"]:::next
     G["v0.3<br/>New architectures,<br/>GPU, scale-out"]:::next
     A --> B --> C --> D --> E --> F --> G
 ```
 
+<sub>Solid ink: done · thick frame: in progress · dashed: next. Live counts are on the [status board](#status).</sub>
+
 | Milestone | Goal | Done when |
 | :--- | :--- | :--- |
-| **v0.2.0 Measured core** (active, 7 of 9 done) | Real forward pass, measured gate, honest dossier | Every published figure regenerates from a report; analytic proxy retired or labelled everywhere |
-| v0.2.1 Recipe and BYOA lab | Any recipe or BYOA algorithm runs through the measured gate | A searched recipe beats uniform and random placement at matched size |
-| v0.2.2 Formats and calibration | 4-bit K-quants, activation-aware scales, Hadamard rotation, per-tensor export | A heterogeneous artifact smaller than uniform Q8_0 passes the gate |
+| **v0.2.0 Measured core** (active; the HF cross-check is paused) | Real forward pass, measured gate, honest dossier | Every published figure regenerates from a report; analytic proxy retired or labelled everywhere |
+| **v0.2.1 Recipe and BYOA lab** (done) | Any recipe or BYOA algorithm runs through the measured gate | A searched recipe beats uniform and random placement at matched size |
+| **v0.2.2 Formats and calibration** (in progress) | 4-bit K-quants, activation-aware scales, Hadamard rotation, per-tensor export | A heterogeneous artifact smaller than uniform Q8_0 passes the gate |
 | v0.2.3 Recovery | Distillation and LoRA recovery for aggressive formats | A recovered ternary-heavy candidate passes the gate |
 | v0.2.4 Runtime | Incremental decode, measured speed, memory and KV cache | Speed and memory claims are measured on named hardware |
 

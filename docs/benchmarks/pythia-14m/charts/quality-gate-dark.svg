@@ -1,23 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 196" width="760" height="196" role="img" font-family='system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 196" width="760" height="196" role="img" font-family='"Chakra Petch", Bahnschrift, "Arial Narrow", "Segoe UI", sans-serif'>
 <title>Perplexity on the full WikiText-2 test split, Pythia-14M</title>
 <desc>Three headline perplexity figures: source weights, exported GGUF, and the surgery recipe.</desc>
-<rect x="1" y="1" width="758" height="194" rx="2" stroke-width="2" fill="#1a1a19" stroke="#2c2c2a"/>
-<text x="24.0" y="34.0" font-size="16" font-weight="600" fill="#f0efec" text-anchor="start">Perplexity on the full WikiText-2 test split, Pythia-14M</text>
-<text x="24.0" y="54.0" font-size="12" font-weight="400" fill="#c3c2b7" text-anchor="start">286,878 scored tokens · lower is better · quality gate: Δ ≤ 0.45</text>
-<rect x="24.0" y="74" width="226.7" height="100" rx="6" fill="none" stroke="#2c2c2a"/>
-<text x="40.0" y="98.0" font-size="12" font-weight="400" fill="#c3c2b7" text-anchor="start">Source weights</text>
-<text x="40.0" y="134.0" font-size="30" font-weight="600" fill="#f0efec" text-anchor="start">114.29</text>
-<text x="40.0" y="158.0" font-size="12" font-weight="400" fill="#c3c2b7" text-anchor="start">Baseline</text>
-<rect x="266.7" y="74" width="226.7" height="100" rx="6" fill="none" stroke="#2c2c2a"/>
-<text x="282.7" y="98.0" font-size="12" font-weight="400" fill="#c3c2b7" text-anchor="start">Exported GGUF, uniform Q8_0</text>
-<text x="282.7" y="134.0" font-size="30" font-weight="600" fill="#f0efec" text-anchor="start">115.12</text>
-<circle cx="289.66666666666663" cy="154" r="7" fill="#d03b3b"/>
-<path d="M286.8666666666666,151.2 l5.6,5.6 M292.46666666666664,151.2 l-5.6,5.6" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-<text x="302.7" y="158.0" font-size="12" font-weight="400" fill="#c3c2b7" text-anchor="start">Δ +0.83 · outside the gate</text>
-<rect x="509.3" y="74" width="226.7" height="100" rx="6" fill="none" stroke="#2c2c2a"/>
-<text x="525.3" y="98.0" font-size="12" font-weight="400" fill="#c3c2b7" text-anchor="start">Surgery recipe, no retraining</text>
-<text x="525.3" y="134.0" font-size="30" font-weight="600" fill="#f0efec" text-anchor="start">618.53</text>
-<circle cx="532.3333333333333" cy="154" r="7" fill="#d03b3b"/>
-<path d="M529.5333333333333,151.2 l5.6,5.6 M535.1333333333332,151.2 l-5.6,5.6" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-<text x="545.3" y="158.0" font-size="12" font-weight="400" fill="#c3c2b7" text-anchor="start">Δ +504.24 · outside the gate</text>
+<rect x="6" y="6" width="754" height="190" fill="#f4f2ec"/>
+<rect x="1.5" y="1.5" width="753" height="189" stroke-width="3" fill="#141414" stroke="#f4f2ec"/>
+<text x="24.0" y="34.0" font-size="16" font-weight="700" fill="#f4f2ec" text-anchor="start">Perplexity on the full WikiText-2 test split, Pythia-14M</text>
+<text x="24.0" y="54.0" font-size="12" font-weight="400" fill="#c9c7c1" text-anchor="start">286,878 scored tokens · lower is better · quality gate: Δ ≤ 0.45</text>
+<rect x="24.0" y="74" width="226.7" height="100" rx="6" fill="none" stroke="#f4f2ec"/>
+<text x="40.0" y="98.0" font-size="12" font-weight="400" fill="#c9c7c1" text-anchor="start">Source weights</text>
+<text x="40.0" y="134.0" font-size="30" font-weight="600" fill="#f4f2ec" text-anchor="start">114.29</text>
+<text x="40.0" y="158.0" font-size="12" font-weight="400" fill="#c9c7c1" text-anchor="start">Baseline</text>
+<rect x="266.7" y="74" width="226.7" height="100" rx="6" fill="none" stroke="#f4f2ec"/>
+<text x="282.7" y="98.0" font-size="12" font-weight="400" fill="#c9c7c1" text-anchor="start">Exported GGUF, uniform Q8_0</text>
+<text x="282.7" y="134.0" font-size="30" font-weight="600" fill="#f4f2ec" text-anchor="start">115.12</text>
+<circle cx="289.66666666666663" cy="154" r="7" fill="#f4f2ec"/>
+<path d="M286.8666666666666,151.2 l5.6,5.6 M292.46666666666664,151.2 l-5.6,5.6" fill="none" stroke="#141414" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="302.7" y="158.0" font-size="12" font-weight="400" fill="#c9c7c1" text-anchor="start">Δ +0.83 · outside the gate</text>
+<rect x="509.3" y="74" width="226.7" height="100" rx="6" fill="none" stroke="#f4f2ec"/>
+<text x="525.3" y="98.0" font-size="12" font-weight="400" fill="#c9c7c1" text-anchor="start">Surgery recipe, no retraining</text>
+<text x="525.3" y="134.0" font-size="30" font-weight="600" fill="#f4f2ec" text-anchor="start">618.53</text>
+<circle cx="532.3333333333333" cy="154" r="7" fill="#f4f2ec"/>
+<path d="M529.5333333333333,151.2 l5.6,5.6 M535.1333333333332,151.2 l-5.6,5.6" fill="none" stroke="#141414" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="545.3" y="158.0" font-size="12" font-weight="400" fill="#c9c7c1" text-anchor="start">Δ +504.24 · outside the gate</text>
 </svg>
