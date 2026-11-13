@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **Scan on import** (v0.2.7.3): every model load (CLI, MCP server, Studio) runs the scanner
+  first and refuses on a high or critical finding. The global `--allow-unsafe-model` flag turns
+  the refusal into a printed warning; nothing in the files is executed either way.
 - **Benchmark charts** (THME-3032, v0.2.8.8): `thme bench chart` draws scores with intervals,
   paired changes against a baseline and a model-by-benchmark heatmap from result records, in
   light and dark, each with its evidence label. `engine::viz` gains an interval plot.

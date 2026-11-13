@@ -31,6 +31,10 @@ use clap::{Parser, Subcommand};
     long_about = "THME provides zero-copy model inspection, topological layer sensitivity analysis, KV-cache projection, Pareto precision planning, and quality gate verification."
 )]
 pub struct Cli {
+    /// Load models even when the safety scan finds high or critical issues (prints them)
+    #[arg(long, global = true)]
+    pub allow_unsafe_model: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -105,6 +109,7 @@ pub enum Commands {
 
 pub fn run() -> Result<()> {
     let cli = Cli::parse();
+    crate::parser::allow_unsafe_models(cli.allow_unsafe_model);
     match cli.command {
         Commands::Gui => crate::gui::launch_gui(),
         Commands::Inspect(args) => inspect::execute(args),
