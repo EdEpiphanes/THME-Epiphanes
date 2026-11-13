@@ -66,7 +66,9 @@ impl SafetensorsScanner {
                 data.len()
             );
         }
-        let header_len = u64::from_le_bytes(data[0..8].try_into().unwrap()) as usize;
+        let mut prefix = [0u8; 8];
+        prefix.copy_from_slice(&data[..8]);
+        let header_len = usize::try_from(u64::from_le_bytes(prefix)).unwrap_or(usize::MAX);
         if header_len > data.len().saturating_sub(8) {
             anyhow::bail!(
                 "Malformed SafeTensors header length {} exceeds buffer size {}",

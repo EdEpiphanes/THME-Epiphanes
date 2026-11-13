@@ -120,6 +120,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   depict the application.
 
 ### Fixed
+- Library and binaries now deny `unwrap`, `expect`, `panic!`, `unreachable!`, `unimplemented!` and
+  `todo!` outside tests (AGENTS.md rule 4, enforced by clippy). The three remaining cases were
+  replaced: the SafeTensors header prefix read, the SHA-256 block loop, and the synthetic
+  calibration dataset constructor, which now returns a `Result`.
 - GGUF export wrote a fixed RoPE base (10000) and RMSNorm epsilon (1e-5), and the forward pass
   ignored those keys on import (falling back to 1e-6). Both now come from the model's
   `config.json` or GGUF metadata (`ModelIR::norm_eps`, `ModelIR::rope_theta`).

@@ -55,7 +55,7 @@ fn test_dataset_csv_import() {
 
 #[test]
 fn test_dataset_synthetic_calibration() {
-    let ds = Dataset::create_synthetic_calibration();
+    let ds = Dataset::create_synthetic_calibration().unwrap();
     assert_eq!(ds.samples.len(), 5);
     assert_eq!(ds.summary.total_samples, 5);
     assert!(ds.summary.total_tokens > 50);

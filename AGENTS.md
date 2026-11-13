@@ -35,6 +35,7 @@ All agents and contributors must uphold these rules without exception:
 4. **Infallible Parsers & Graceful Error Handling**:
    - Model parsers, header readers, and tensor mappers must never panic (`panic!`, `unwrap()`, or `expect()` on external I/O).
    - Return structured `Result<T, E>` types with actionable diagnostic contexts.
+   - Enforced by the compiler: `src/lib.rs` and every binary deny `clippy::unwrap_used`, `expect_used`, `panic`, `unreachable`, `unimplemented` and `todo` outside tests, so `cargo clippy -- -D warnings` fails on any new one.
 
 ---
 

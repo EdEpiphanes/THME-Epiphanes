@@ -891,7 +891,7 @@ impl THMEApp {
             subblock_convert_target: 0,
 
             // Developer Lab, Multi-Format Datasets & Micro-Training
-            dataset: Some(crate::dataset::Dataset::create_synthetic_calibration()),
+            dataset: crate::dataset::Dataset::create_synthetic_calibration().ok(),
             dataset_input_text: "Topological manifold optimization and energy-weighted routing allow LLMs to reduce latency and memory bandwidth.".to_string(),
             dataset_status_msg: "Default synthetic calibration dataset loaded (5 samples).".to_string(),
             selected_experiment_idx: 0,
@@ -4830,10 +4830,17 @@ impl THMEApp {
                             )
                             .clicked()
                         {
-                            let ds = crate::dataset::Dataset::create_synthetic_calibration();
-                            self.dataset = Some(ds);
-                            self.dataset_status_msg =
-                                "Synthetic calibration dataset loaded (5 samples)".to_string();
+                            match crate::dataset::Dataset::create_synthetic_calibration() {
+                                Ok(ds) => {
+                                    self.dataset = Some(ds);
+                                    self.dataset_status_msg =
+                                        "Synthetic calibration dataset loaded (5 samples)".to_string();
+                                }
+                                Err(error) => {
+                                    self.dataset_status_msg =
+                                        format!("Could not build the synthetic dataset: {error}");
+                                }
+                            }
                             self.log_audit(
                                 "INFO",
                                 "Dataset",

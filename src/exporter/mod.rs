@@ -168,7 +168,7 @@ impl ModelExporter {
                     ExportQuantType::BitNetB158 => anyhow::bail!(
                         "BitNet conversion is not available for source-backed export; choose a matching FP16 or Q8_0 source"
                     ),
-                    ExportQuantType::PerTensor => unreachable!("handled by the per-tensor branch"),
+                    ExportQuantType::PerTensor => anyhow::bail!("per-tensor export is handled by its own branch"),
                 };
                 let mut writer = GgufWriter::new();
                 GgufMetadataSynchronizer::synchronize_into_writer(
@@ -460,8 +460,9 @@ impl Sha256 {
 
         let mut blocks = data.chunks_exact(64);
         for block in &mut blocks {
-            let block: &[u8; 64] = block.try_into().expect("chunks_exact returns 64 bytes");
-            compress_sha256_block(&mut self.state, block);
+            let mut bytes = [0u8; 64];
+            bytes.copy_from_slice(block);
+            compress_sha256_block(&mut self.state, &bytes);
         }
         let tail = blocks.remainder();
         self.buffer[..tail.len()].copy_from_slice(tail);
