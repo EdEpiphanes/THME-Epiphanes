@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **Calibration activations** (v0.2.2.3): the forward-pass probe records per-input-channel
+  statistics (mean |x|, rms, max |x|) for every linear tensor; `thme calibrate MODEL --tokens T`
+  merges them over calibration windows and saves them keyed by tensor name, for AWQ-, GPTQ- and
+  SmoothQuant-style methods.
 - **Measured artifact size** (v0.2.2.9): `thme evaluate` and `thme search` reports carry
   `export.artifact_bytes`, the size of the candidate written as a per-tensor GGUF (scales,
   metadata and alignment included), beside the nominal estimate. `thme evaluate --artifact F`

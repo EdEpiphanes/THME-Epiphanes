@@ -55,7 +55,7 @@ closes it.
 - **Done means**: Round-trip tests against the existing decoders; the formats are usable in recipes and `thme search --formats`.
 
 ### [THME-2203] Capture calibration activations from the forward pass
-- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.3 · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: ready
+- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.3 · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: done
 - **Problem**: Activation-aware methods need per-layer input statistics.
 - **Done means**: A probe records per-linear-tensor input channel statistics on calibration tokens and saves them; unit-tested on the synthetic model.
 

@@ -11,6 +11,72 @@ use serde::Serialize;
 /// Output-channel groups recorded per tensor.
 pub const ACTIVITY_BINS: usize = 32;
 
+/// Per-input-channel statistics of the activations entering one linear tensor, summed over
+/// token positions so windows can be merged. Activation-aware quantization reads them:
+/// mean |x| (AWQ-style scaling), max |x| (SmoothQuant-style migration), rms.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct InputChannelStats {
+    /// Short role name of the tensor the activations feed: `q`, `k`, `v`, `o`, `gate`, `up`,
+    /// `down`, `qkv`.
+    pub name: &'static str,
+    pub in_dim: usize,
+    /// Token positions summed.
+    pub tokens: usize,
+    pub sum_abs: Vec<f64>,
+    pub sum_sq: Vec<f64>,
+    pub max_abs: Vec<f32>,
+}
+
+impl InputChannelStats {
+    /// Statistics of a row-major `[positions, in_dim]` input.
+    pub fn measure(name: &'static str, x: &[f32], in_dim: usize) -> Self {
+        let in_dim = in_dim.max(1);
+        let mut stats = Self {
+            name,
+            in_dim,
+            tokens: 0,
+            sum_abs: vec![0.0; in_dim],
+            sum_sq: vec![0.0; in_dim],
+            max_abs: vec![0.0; in_dim],
+        };
+        for row in x.chunks_exact(in_dim) {
+            stats.tokens += 1;
+            for (c, &v) in row.iter().enumerate() {
+                let a = v.abs();
+                stats.sum_abs[c] += f64::from(a);
+                stats.sum_sq[c] += f64::from(v) * f64::from(v);
+                if a > stats.max_abs[c] || a.is_nan() {
+                    stats.max_abs[c] = a;
+                }
+            }
+        }
+        stats
+    }
+
+    /// Adds another window's statistics for the same tensor.
+    pub fn merge(&mut self, other: &Self) {
+        if self.in_dim != other.in_dim {
+            return;
+        }
+        self.tokens += other.tokens;
+        for c in 0..self.in_dim {
+            self.sum_abs[c] += other.sum_abs[c];
+            self.sum_sq[c] += other.sum_sq[c];
+            self.max_abs[c] = self.max_abs[c].max(other.max_abs[c]);
+        }
+    }
+
+    pub fn mean_abs(&self) -> Vec<f32> {
+        let n = self.tokens.max(1) as f64;
+        self.sum_abs.iter().map(|s| (s / n) as f32).collect()
+    }
+
+    pub fn rms(&self) -> Vec<f32> {
+        let n = self.tokens.max(1) as f64;
+        self.sum_sq.iter().map(|s| (s / n).sqrt() as f32).collect()
+    }
+}
+
 /// Activity of one linear tensor during a forward pass.
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct TensorActivity {
@@ -76,6 +142,8 @@ pub struct LayerTrace {
     /// Share of MLP hidden units whose activation is near zero.
     pub mlp_dead_fraction: f32,
     pub tensors: Vec<TensorActivity>,
+    /// Input-channel statistics per linear tensor, in the same order as `tensors`.
+    pub inputs: Vec<InputChannelStats>,
 }
 
 /// Trace of one forward pass over a window of tokens.
