@@ -336,18 +336,8 @@ fn apply_rule(
 
             // Quantize to nearest codebook level
             for w in weights.iter_mut() {
-                let norm_val = *w / scale;
-                let mut best_level = levels[0];
-                let mut min_diff = (norm_val - levels[0]).abs();
-
-                for &lvl in &levels[1..] {
-                    let diff = (norm_val - lvl).abs();
-                    if diff < min_diff {
-                        min_diff = diff;
-                        best_level = lvl;
-                    }
-                }
-                *w = best_level * scale;
+                let i = numfmt::nearest_level(levels, *w / scale).map_err(|e| e.to_string())?;
+                *w = levels[i] * scale;
             }
         }
         TransformationRule::StructuredSparsity { m, n: group_sz } => {

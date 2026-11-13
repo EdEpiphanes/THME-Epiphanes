@@ -197,22 +197,9 @@ pub(crate) fn encode_tq1_block(values: &[f32], out: &mut Vec<u8>) -> Result<()> 
     Ok(())
 }
 
+/// IEEE half precision, nearest-even (shared implementation in `engine::minifloat`).
 pub(crate) fn f32_to_f16(value: f32) -> u16 {
-    let bits = value.to_bits();
-    let sign = ((bits >> 16) & 0x8000) as u16;
-    let exponent = ((bits >> 23) & 0xff) as i32 - 127 + 15;
-    let mantissa = bits & 0x7fffff;
-    if exponent <= 0 {
-        if exponent < -10 {
-            return sign;
-        }
-        let mantissa = (mantissa | 0x800000) >> (1 - exponent);
-        return sign | ((mantissa + 0x1000) >> 13) as u16;
-    }
-    if exponent >= 31 {
-        return sign | 0x7c00;
-    }
-    sign | ((exponent as u16) << 10) | ((mantissa + 0x1000) >> 13) as u16
+    crate::engine::minifloat::f32_to_f16(value)
 }
 
 #[cfg(test)]
