@@ -179,7 +179,7 @@ closes it.
 
 ### [THME-3007] Dependency-free SVG visual engine (dossier WP9)
 
-- **Milestone**: v0.2.5 · **Roadmap**: v0.2.5.8 · **Priority**: p2 · **Area**: engine · **Type**: feature · **Status**: triage
+- **Milestone**: v0.2.5 · **Roadmap**: v0.2.5.8 · **Priority**: p2 · **Area**: engine · **Type**: feature · **Status**: done
 - **Problem**: Charts come from Python scripts; the Studio and dossier cannot share a headless renderer.
 - **Done means**: Deterministic SVG for log-axis traces, heatmaps, scatter with retained-variance label, dataflow graphs and Pareto fronts; NaN or non-positive log values return errors.
 

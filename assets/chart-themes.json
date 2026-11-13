@@ -1,0 +1,16 @@
+{
+  "comment": "Chart palette (docs/brand-guidelines.md: black-and-white manga panel style). The one source for scripts/generate_charts.py and thme::engine::viz. Series are told apart by tone and labelled directly.",
+  "font": "\"Chakra Petch\", Bahnschrift, \"Arial Narrow\", \"Segoe UI\", sans-serif",
+  "light": {
+    "surface": "#ffffff", "border": "#0b0b0b", "ink": "#0b0b0b", "ink2": "#3d3d3d",
+    "muted": "#7a7a7a", "grid": "#e4e4e2", "axis": "#9a9a98", "shadow": "#0b0b0b",
+    "s1": "#0b0b0b", "s2": "#8c8c8c", "deemph": "#b4b4b2",
+    "good": "#0b0b0b", "critical": "#0b0b0b", "mark": "#ffffff"
+  },
+  "dark": {
+    "surface": "#141414", "border": "#f4f2ec", "ink": "#f4f2ec", "ink2": "#c9c7c1",
+    "muted": "#8f8d88", "grid": "#2a2a29", "axis": "#5a5956", "shadow": "#f4f2ec",
+    "s1": "#f4f2ec", "s2": "#8c8c8c", "deemph": "#4e4e4c",
+    "good": "#f4f2ec", "critical": "#f4f2ec", "mark": "#141414"
+  }
+}

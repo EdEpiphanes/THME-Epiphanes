@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **SVG visual engine** (THME-3007, v0.2.5.8): `engine::viz` writes deterministic SVG line plots
+  with an optional log axis, heatmaps, scatter plots with a required caption, layered dataflow
+  graphs and Pareto fronts. Every chart prints its evidence label; NaN, non-positive log values,
+  ragged heatmaps and cyclic graphs are errors. The palette moved to `assets/chart-themes.json`,
+  read by both the engine and `scripts/generate_charts.py` (published charts unchanged).
 - **Contamination check** (THME-3030, v0.2.8.7): `thme bench contamination --task T --corpus F`
   compares a task's items with training or teacher data as normalized 13-word n-grams, streams
   the corpora, lists every overlapping item with the share copied and where, and fails when any

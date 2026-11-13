@@ -32,13 +32,13 @@ flowchart LR
     classDef later fill:#ffffff,stroke:#0b0b0b,stroke-width:1.5px,stroke-dasharray:4 3,color:#52514e;
 
     subgraph NOW["Now"]
-        N4["SVG visual engine"]:::now
+        N4["Benchmark charts"]:::now
         N5["Benchmark runner"]:::now
     end
     subgraph NEXT["Next"]
-        X1["Benchmark charts"]:::later
+        X1["Scan on import"]:::later
         X2["Scanner coverage"]:::later
-        X3["Transport, ODE, SVG visual engine"]:::later
+        X3["Transport and ODE steppers"]:::later
         X4["GPTQ-style rounding"]:::later
     end
     subgraph LATER["Later"]
@@ -68,6 +68,7 @@ flowchart LR
 | SPDX headers (THME-3005) | `AGPL-3.0-only` header on all 168 source files; `scripts/spdx.py --check` in CI | Tested in CI |
 | Signed `.epiph` (THME-3019) | Minisign signature over the manifest; `thme epiph sign`, `verify --require-signature`; Epiphanes key by default | Tested: tamper, wrong key, broken trailer |
 | Benchmark registry (THME-3024) | `src/bench`: strict task files and result records with every Table R2 field; `thme bench list/validate/verify-dataset` | Tested: malformed files refused, records round-trip, record-task mismatch caught |
+| SVG visual engine (THME-3007) | `engine::viz`: deterministic SVG line plots (log axis), heatmaps, scatter with a required caption, layered dataflow graphs, Pareto fronts; evidence label on every chart; palette in `assets/chart-themes.json`, shared with the chart script | Tested: element counts match data, byte-identical output, log-axis and cycle errors; rendered and checked in light and dark |
 | Contamination check (THME-3030) | `bench::contamination`: normalized n-gram overlap between benchmark items and corpora, streamed; `thme bench contamination` lists overlaps and fails | Tested: planted copies found through case, punctuation and line breaks; partial copies give their fraction; clean corpora find nothing |
 | Claim register (THME-3000) | [docs/research/claim-register.md](docs/research/claim-register.md): all 135 dossier claims with ID, status, section, page and note, generated from one JSON file; checked in CI | Statuses copied from the dossier; citations marked unverified |
 | Versioned schemas (THME-3009) | JSON Schemas for benchmark tasks, result records and quality gates beside the recipe schema; each validates a committed example | Tested: examples pass the schema and the Rust loader; broken copies fail both |
@@ -81,7 +82,7 @@ flowchart LR
 
 | Track | Item | Status | Depends on |
 | :--- | :--- | :--- | :--- |
-| Engine | **SVG visual engine** (dossier WP9): dependency-free, deterministic SVG charts from reports, the base for benchmark charts | Not started | Engine core |
+| Quality and evidence | **Benchmark charts** (v0.2.8.8, WP37): dot plots with intervals, paired deltas, heatmaps and quality against cost from result records | Not started | SVG visual engine |
 | Quality and evidence | **Benchmark runner** (v0.2.8.3): imported mode, resume and cache; native mode on synthetic models; `code` tasks refused | Not started | Metrics library |
 
 ### Next: planned
@@ -89,7 +90,6 @@ flowchart LR
 | Track | Item | Depends on |
 | :--- | :--- | :--- |
 | Security | Scanner for compressed pickles, ONNX, Keras, NumPy (THME-3022); scan on import (v0.2.7.3) | Scanner v1 |
-| Quality and evidence | Benchmark charts on the visual engine (WP37) | SVG visual engine |
 | Engine | Transport and Sinkhorn (WP4), ODE steppers (WP6) | Engine core |
 | Formats and calibration | GPTQ-style rounding (THME-2205); llama.cpp compatibility check on synthetic files (THME-2208) | Calibration |
 
@@ -313,7 +313,7 @@ its oracle tests; no method is implemented twice in the crate.
 | v0.2.5.5 | Bases and rotations: one Walsh-Hadamard transform, FFT against a naive DFT, Givens and Householder (WP5, THME-3004) | Implemented in part: one shared Walsh-Hadamard transform, three copies removed |
 | v0.2.5.6 | ODE steppers: Dormand-Prince 5(4) with step control and fixed-step RK4, no default tolerances (WP6) | |
 | v0.2.5.7 | Projections that always report retained structure: PCA, participation ratio, MDS, stereographic (WP8) | |
-| v0.2.5.8 | Dependency-free SVG visual engine: log-axis traces, heatmaps, scatter, dataflow graphs, Pareto fronts (WP9) | |
+| v0.2.5.8 | Dependency-free SVG visual engine: log-axis traces, heatmaps, scatter, dataflow graphs, Pareto fronts (WP9) | **Done**: `engine::viz` (THME-3007) |
 | v0.2.5.9 | Typed conversion registry with accumulated error bounds, and engine benchmarks run on every release (WP10, WP39) | |
 
 ## v0.2.6 — Epiphanes model format
