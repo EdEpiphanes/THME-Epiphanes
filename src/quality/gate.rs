@@ -37,35 +37,60 @@ pub struct GateSpec {
     pub criteria: Vec<Criterion>,
 }
 
-/// One measured metric: its value on the baseline and on the candidate.
+/// One measured metric: its value on the baseline and on the candidate, and optionally a
+/// confidence interval for the degradation (positive = worse, in the metric's units).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Measure {
     pub metric: String,
     pub baseline: f64,
     pub candidate: f64,
+    pub degradation_interval: Option<(f64, f64)>,
 }
 
 impl Measure {
+    /// A point measurement: judged as pass or fail, never inconclusive.
     pub fn new(metric: &str, baseline: f64, candidate: f64) -> Self {
         Self {
             metric: metric.to_string(),
             baseline,
             candidate,
+            degradation_interval: None,
         }
     }
+
+    /// A measurement with an interval for the degradation: judged pass, fail or inconclusive.
+    pub fn with_interval(metric: &str, baseline: f64, candidate: f64, low: f64, high: f64) -> Self {
+        Self {
+            degradation_interval: Some((low, high)),
+            ..Self::new(metric, baseline, candidate)
+        }
+    }
+}
+
+/// The three possible gate decisions (dossier R.5): an interval that straddles the allowed
+/// degradation is inconclusive, not a pass by luck.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Decision {
+    Pass,
+    Fail,
+    Inconclusive,
 }
 
 /// How one criterion came out.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct CriterionOutcome {
     pub metric: String,
-    /// `pass`, `fail` or `not measured`.
+    /// `pass`, `fail`, `inconclusive` or `not measured`.
     pub status: &'static str,
     pub baseline: Option<f64>,
     pub candidate: Option<f64>,
     /// Signed so that positive is worse, in the metric's units.
     pub degradation: Option<f64>,
     pub relative_degradation: Option<f64>,
+    /// Confidence interval for the degradation, when one was measured.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub degradation_interval: Option<(f64, f64)>,
 }
 
 /// The gate's decision.
@@ -74,7 +99,22 @@ pub struct GateVerdict {
     pub gate: String,
     pub gate_hash: String,
     pub accepted: bool,
+    /// True when no criterion failed but at least one interval straddles its margin.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub inconclusive: bool,
     pub outcomes: Vec<CriterionOutcome>,
+}
+
+impl GateVerdict {
+    pub fn decision(&self) -> Decision {
+        if self.accepted {
+            Decision::Pass
+        } else if self.inconclusive {
+            Decision::Inconclusive
+        } else {
+            Decision::Fail
+        }
+    }
 }
 
 /// Name of THME's default gate.
@@ -147,7 +187,10 @@ impl GateSpec {
         crate::exporter::compute_sha256(&bytes)
     }
 
-    /// Judges a candidate on the measured metrics. Every criterion must pass.
+    /// Judges a candidate on the measured metrics. Every criterion must pass. A criterion with a
+    /// degradation interval passes when the whole interval is within its margin, fails when the
+    /// whole interval is beyond it, and is inconclusive otherwise; a point measurement is the
+    /// zero-width case and is never inconclusive.
     pub fn judge(&self, measures: &[Measure]) -> GateVerdict {
         let outcomes: Vec<CriterionOutcome> = self
             .criteria
@@ -161,6 +204,7 @@ impl GateSpec {
                         candidate: None,
                         degradation: None,
                         relative_degradation: None,
+                        degradation_interval: None,
                     };
                 };
                 let degradation = if c.lower_is_better {
@@ -169,27 +213,54 @@ impl GateSpec {
                     m.baseline - m.candidate
                 };
                 let relative = (m.baseline != 0.0).then(|| degradation / m.baseline.abs());
-                let finite = m.baseline.is_finite() && m.candidate.is_finite();
-                let abs_ok = c.max_abs.is_none_or(|a| degradation <= a);
-                let rel_ok = c.max_rel.is_none_or(|r| relative.is_some_and(|x| x <= r));
+                let (low, high) = m.degradation_interval.unwrap_or((degradation, degradation));
+                // The allowed degradation is the tighter of the margins; a relative margin
+                // cannot be applied to a zero baseline.
+                let rel_allowed = c
+                    .max_rel
+                    .map(|r| (m.baseline != 0.0).then(|| r * m.baseline.abs()));
+                let allowed = match (c.max_abs, rel_allowed) {
+                    (_, Some(None)) => None,
+                    (Some(a), Some(Some(r))) => Some(a.min(r)),
+                    (Some(a), None) => Some(a),
+                    (None, Some(Some(r))) => Some(r),
+                    (None, None) => None,
+                };
+                let finite = [m.baseline, m.candidate, low, high]
+                    .iter()
+                    .all(|x| x.is_finite());
+                let status = match allowed {
+                    Some(t) if finite && low <= high => {
+                        if high <= t {
+                            "pass"
+                        } else if low > t {
+                            "fail"
+                        } else {
+                            "inconclusive"
+                        }
+                    }
+                    _ => "fail",
+                };
                 CriterionOutcome {
                     metric: c.metric.clone(),
-                    status: if finite && abs_ok && rel_ok {
-                        "pass"
-                    } else {
-                        "fail"
-                    },
+                    status,
                     baseline: Some(m.baseline),
                     candidate: Some(m.candidate),
                     degradation: Some(degradation),
                     relative_degradation: relative,
+                    degradation_interval: m.degradation_interval,
                 }
             })
             .collect();
+        let accepted = outcomes.iter().all(|o| o.status == "pass");
+        let failed = outcomes
+            .iter()
+            .any(|o| o.status == "fail" || o.status == "not measured");
         GateVerdict {
             gate: self.id(),
             gate_hash: self.hash(),
-            accepted: outcomes.iter().all(|o| o.status == "pass"),
+            accepted,
+            inconclusive: !accepted && !failed,
             outcomes,
         }
     }
@@ -471,6 +542,55 @@ mod tests {
                 ])
                 .accepted
         );
+    }
+
+    /// Dossier R.5: pass only if the high end is within the margin, fail if the low end is
+    /// beyond it, otherwise inconclusive.
+    #[test]
+    fn three_state_rule() {
+        let gate = GateSpec {
+            name: "acc".into(),
+            version: 1,
+            criteria: vec![criterion("accuracy", false, Some(0.01), None)],
+        };
+        let judge = |lo: f64, hi: f64| {
+            gate.judge(&[Measure::with_interval(
+                "accuracy",
+                0.70,
+                0.70 - (lo + hi) / 2.0,
+                lo,
+                hi,
+            )])
+            .decision()
+        };
+        assert_eq!(judge(-0.004, 0.008), Decision::Pass);
+        assert_eq!(judge(0.012, 0.03), Decision::Fail);
+        assert_eq!(
+            judge(-0.002, 0.03),
+            Decision::Inconclusive,
+            "small set straddles the margin"
+        );
+        // The same point estimate passes without an interval: the old point gate.
+        let point = gate.judge(&[Measure::new("accuracy", 0.70, 0.686 + 0.0)]);
+        assert_eq!(point.decision(), Decision::Fail);
+        let point = gate.judge(&[Measure::new("accuracy", 0.70, 0.695)]);
+        assert_eq!(point.decision(), Decision::Pass);
+        // A missing metric is a failure, never inconclusive.
+        let two = GateSpec {
+            criteria: vec![
+                criterion("accuracy", false, Some(0.01), None),
+                criterion("perplexity", true, Some(0.45), None),
+            ],
+            ..gate.clone()
+        };
+        let v = two.judge(&[Measure::with_interval("accuracy", 0.7, 0.7, -0.002, 0.03)]);
+        assert_eq!(v.decision(), Decision::Fail);
+        // A reversed interval is refused as a failure.
+        assert_eq!(judge(0.01, -0.01), Decision::Fail);
+        // Point verdicts serialise exactly as before.
+        let json = serde_json::to_value(gate.judge(&[Measure::new("accuracy", 0.7, 0.7)])).unwrap();
+        assert!(json.get("inconclusive").is_none());
+        assert!(json["outcomes"][0].get("degradation_interval").is_none());
     }
 
     #[test]

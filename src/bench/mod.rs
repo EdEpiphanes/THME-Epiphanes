@@ -17,6 +17,7 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::exporter::compute_sha256;
 
+pub mod compare;
 pub mod metrics;
 pub mod stats;
 

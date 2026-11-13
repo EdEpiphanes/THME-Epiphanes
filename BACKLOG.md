@@ -293,6 +293,12 @@ closes it.
 - **Problem**: Dossier WP34 and R.5: every score needs an interval, comparisons on the same items need paired tests, and small sets must be recognised as too small.
 - **Done means**: Wilson, percentile bootstrap, paired bootstrap, exact McNemar, required-items calculator, Holm correction; Table R3 values reproduced; simulated coverage near nominal.
 
+### [THME-3029] Three-state quality gate
+
+- **Milestone**: v0.2.8 · **Roadmap**: v0.2.8.6 · **Priority**: p1 · **Area**: quality · **Type**: feature · **Status**: done
+- **Problem**: Dossier WP35 and R.5: a point-estimate gate passes candidates whose interval says the drop could be several times the margin.
+- **Done means**: The gate decides pass, fail or inconclusive from a degradation interval through the existing decision path; point measures decide as before; two result records are compared with a paired bootstrap only when comparable; synthetic cases with known decisions.
+
 ### [THME-3023] Re-measure reports affected by the FP16 rounding fix
 
 - **Milestone**: v0.2.2 · **Roadmap**: none · **Priority**: p1 · **Area**: research · **Type**: chore · **Status**: blocked

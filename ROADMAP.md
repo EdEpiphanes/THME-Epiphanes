@@ -32,11 +32,11 @@ flowchart LR
     classDef later fill:#ffffff,stroke:#0b0b0b,stroke-width:1.5px,stroke-dasharray:4 3,color:#52514e;
 
     subgraph NOW["Now"]
-        N4["Three-state gate"]:::now
+        N4["Claim register and schemas"]:::now
         N5["Benchmark runner"]:::now
     end
     subgraph NEXT["Next"]
-        X1["Claim register and schemas"]:::later
+        X1["Contamination check"]:::later
         X2["Scanner coverage"]:::later
         X3["Transport, ODE, SVG visual engine"]:::later
         X4["GPTQ-style rounding"]:::later
@@ -68,6 +68,7 @@ flowchart LR
 | SPDX headers (THME-3005) | `AGPL-3.0-only` header on all 168 source files; `scripts/spdx.py --check` in CI | Tested in CI |
 | Signed `.epiph` (THME-3019) | Minisign signature over the manifest; `thme epiph sign`, `verify --require-signature`; Epiphanes key by default | Tested: tamper, wrong key, broken trailer |
 | Benchmark registry (THME-3024) | `src/bench`: strict task files and result records with every Table R2 field; `thme bench list/validate/verify-dataset` | Tested: malformed files refused, records round-trip, record-task mismatch caught |
+| Three-state gate (THME-3029) | `GateSpec::judge` decides pass, fail or inconclusive from a degradation interval (point measures unchanged); `bench::compare` pairs two result records; `thme bench gate` | Tested: synthetic cases with known decisions; a 60-item set is inconclusive where the point gate passes |
 | Benchmark statistics (THME-3028) | `bench::stats`: Wilson and percentile-bootstrap intervals, paired bootstrap, exact McNemar, required-items calculator, Holm correction; seeded resampling; `interval_for` fills a result record | Tested: every Table R3 value, the R.5 item counts, simulated coverage |
 | Metrics library (THME-3027) | `bench::metrics`: answer extraction, exact and normalized match, numeric tolerance, likelihood choice with ties scored as misses, unbiased pass@k; `TaskSpec::score_output` | Tested: dossier Table R3 pass@k values, pass@k against enumeration for n <= 10, hand-computed cases |
 | Sandbox design (THME-3020, design part) | [docs/sandbox.md](docs/sandbox.md): threat model, one fail-closed interface, layers per OS, 13 escape tests, dependency proposal | Design only; nothing built |
@@ -77,7 +78,7 @@ flowchart LR
 
 | Track | Item | Status | Depends on |
 | :--- | :--- | :--- | :--- |
-| Quality and evidence | **Three-state gate** (v0.2.8.6): pass, fail or inconclusive from the interval, versioned with the gate | Not started | Benchmark statistics |
+| Quality and evidence | **Claim register and versioned schemas** (v0.2.8.9, THME-3000, THME-3009) | Not started | Three-state gate |
 | Quality and evidence | **Benchmark runner** (v0.2.8.3): imported mode, resume and cache; native mode on synthetic models; `code` tasks refused | Not started | Metrics library |
 
 ### Next: planned
@@ -85,7 +86,7 @@ flowchart LR
 | Track | Item | Depends on |
 | :--- | :--- | :--- |
 | Security | Scanner for compressed pickles, ONNX, Keras, NumPy (THME-3022); scan on import (v0.2.7.3) | Scanner v1 |
-| Quality and evidence | Claim register (THME-3000); versioned schemas (THME-3009); contamination check (WP36) | Three-state gate |
+| Quality and evidence | Contamination check (WP36); benchmark charts on the visual engine (WP37) | Three-state gate |
 | Engine | Transport and Sinkhorn (WP4), ODE steppers (WP6), dependency-free SVG visual engine (WP9) | Engine core |
 | Formats and calibration | GPTQ-style rounding (THME-2205); llama.cpp compatibility check on synthetic files (THME-2208) | Calibration |
 
@@ -364,7 +365,7 @@ interval, a three-state verdict and a chart; harness self-tests pass.
 | v0.2.8.3 | Benchmark runner: native, bridged and imported modes; resume and cache (WP32) | |
 | v0.2.8.4 | Metrics library: exact and normalized match, numeric tolerance, likelihood choice, pass@k (WP33) | **Done**: `bench::metrics`, Table R3 reproduced (THME-3027) |
 | v0.2.8.5 | Statistics: Wilson and bootstrap intervals, paired tests, required-items calculator (WP34) | **Done**: `bench::stats`, Table R3 reproduced (THME-3028) |
-| v0.2.8.6 | Three-state gate: pass, fail or inconclusive from the interval (WP35) | |
+| v0.2.8.6 | Three-state gate: pass, fail or inconclusive from the interval (WP35) | **Done**: one decision path; `thme bench gate` (THME-3029) |
 | v0.2.8.7 | Contamination check between benchmark items and training or teacher data (WP36) | |
 | v0.2.8.8 | Benchmark charts on the visual engine: dot plots, deltas, heatmaps, quality against cost (WP37) | |
 | v0.2.8.9 | Versioned schemas and the consolidated claim register (THME-3009, THME-3000) | |
