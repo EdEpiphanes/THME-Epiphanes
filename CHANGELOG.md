@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **Benchmark charts** (THME-3032, v0.2.8.8): `thme bench chart` draws scores with intervals,
+  paired changes against a baseline and a model-by-benchmark heatmap from result records, in
+  light and dark, each with its evidence label. `engine::viz` gains an interval plot.
 - **Benchmark runner, imported mode** (THME-3031, v0.2.8.3): `thme bench score` scores outputs
   produced by any tool (generated answers, log-likelihoods, or pass counts for code tasks) with
   the metric library and writes a complete result record whose run mode and evidence are

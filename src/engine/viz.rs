@@ -145,6 +145,24 @@ pub enum PointKind {
     Control,
 }
 
+/// One row of an interval plot: a label, a point estimate and its interval.
+#[derive(Debug, Clone, PartialEq)]
+pub struct IntervalRow {
+    pub label: String,
+    pub value: f64,
+    pub low: f64,
+    pub high: f64,
+}
+
+/// Dot plot with interval whiskers, one row per entry; `reference` draws a vertical line (for
+/// example zero for differences, or a gate margin).
+#[derive(Debug, Clone, PartialEq)]
+pub struct IntervalPlot {
+    pub frame: Frame,
+    pub rows: Vec<IntervalRow>,
+    pub reference: Option<f64>,
+}
+
 /// Pareto chart of cost (x, lower is better) against loss (y, lower is better). The front of
 /// non-dominated candidates is drawn as a step line.
 #[derive(Debug, Clone, PartialEq)]
@@ -816,6 +834,92 @@ pub fn pareto(chart: &Pareto, theme: &Theme) -> EngineResult<String> {
     Ok(s)
 }
 
+/// Interval plot; each row needs low <= value <= high, all finite.
+pub fn interval_plot(plot: &IntervalPlot, theme: &Theme) -> EngineResult<String> {
+    check_frame(&plot.frame)?;
+    if plot.rows.is_empty() {
+        return Err(EngineError::InvalidInput(
+            "an interval plot needs rows".into(),
+        ));
+    }
+    for (i, r) in plot.rows.iter().enumerate() {
+        finite("interval value", [r.low, r.value, r.high].into_iter())?;
+        if !(r.low <= r.value && r.value <= r.high) {
+            return Err(EngineError::InvalidInput(format!(
+                "row {i} ('{}'): needs low <= value <= high, got {} <= {} <= {}",
+                r.label, r.low, r.value, r.high
+            )));
+        }
+    }
+    let mut xs: Vec<f64> = plot.rows.iter().flat_map(|r| [r.low, r.high]).collect();
+    xs.extend(plot.reference);
+    let left = LEFT + 110.0;
+    let x = Axis::new(&xs, false, left, W - RIGHT);
+    let row_h = (H - TOP - BOTTOM) / plot.rows.len() as f64;
+    let mut s = open(&plot.frame, theme);
+    for t in x.ticks() {
+        let px = num(x.px(t));
+        let _ = write!(
+            s,
+            "<line x1=\"{px}\" y1=\"{TOP}\" x2=\"{px}\" y2=\"{}\" stroke=\"{}\" stroke-width=\"1\"/>",
+            H - BOTTOM,
+            theme.grid
+        );
+        let _ = write!(
+            s,
+            "<text x=\"{px}\" y=\"{}\" font-size=\"11\" text-anchor=\"middle\" fill=\"{}\">{}</text>",
+            H - BOTTOM + 18.0,
+            theme.muted,
+            tick_label(t)
+        );
+    }
+    if let Some(r) = plot.reference {
+        let px = num(x.px(r));
+        let _ = write!(
+            s,
+            "<line class=\"reference\" x1=\"{px}\" y1=\"{TOP}\" x2=\"{px}\" y2=\"{}\" stroke=\"{}\" stroke-width=\"1.5\" stroke-dasharray=\"5 4\"/>",
+            H - BOTTOM,
+            theme.ink2
+        );
+    }
+    for (i, r) in plot.rows.iter().enumerate() {
+        let cy = num(TOP + row_h * (i as f64 + 0.5));
+        let _ = write!(
+            s,
+            "<text x=\"{}\" y=\"{cy}\" dy=\"4\" font-size=\"12\" text-anchor=\"end\" fill=\"{}\">{}</text>",
+            left - 10.0,
+            theme.ink,
+            esc(&r.label)
+        );
+        let _ = write!(
+            s,
+            "<line class=\"whisker\" x1=\"{}\" y1=\"{cy}\" x2=\"{}\" y2=\"{cy}\" stroke=\"{}\" stroke-width=\"2\"/>",
+            num(x.px(r.low)),
+            num(x.px(r.high)),
+            theme.ink2
+        );
+        let _ = write!(
+            s,
+            "<circle class=\"estimate\" cx=\"{}\" cy=\"{cy}\" r=\"5\" fill=\"{}\" stroke=\"{}\" stroke-width=\"1.5\"/>",
+            num(x.px(r.value)),
+            theme.series[0],
+            theme.mark
+        );
+        let _ = write!(
+            s,
+            "<text x=\"{}\" y=\"{cy}\" dx=\"8\" dy=\"-8\" font-size=\"10\" fill=\"{}\" stroke=\"{}\" stroke-width=\"4\" paint-order=\"stroke\">{} [{}, {}]</text>",
+            num(x.px(r.value)),
+            theme.ink2,
+            theme.surface,
+            tick_label(r.value),
+            tick_label(r.low),
+            tick_label(r.high)
+        );
+    }
+    s.push_str("</svg>\n");
+    Ok(s)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -992,6 +1096,33 @@ mod tests {
         assert_eq!(count(&svg, "class=\"control\""), 1);
         assert_eq!(count(&svg, "class=\"baseline\""), 1);
         assert_eq!(count(&svg, "class=\"front\""), 1);
+    }
+
+    #[test]
+    fn interval_plot_rows_and_ordering() {
+        let row = |l: &str, v: f64, lo: f64, hi: f64| IntervalRow {
+            label: l.into(),
+            value: v,
+            low: lo,
+            high: hi,
+        };
+        let plot = IntervalPlot {
+            frame: frame(),
+            rows: vec![
+                row("base", 0.70, 0.67, 0.73),
+                row("Q8_0", 0.69, 0.66, 0.72),
+                row("TQ1", 0.41, 0.38, 0.44),
+            ],
+            reference: Some(0.68),
+        };
+        let svg = interval_plot(&plot, &theme()).unwrap();
+        assert_eq!(count(&svg, "class=\"estimate\""), 3);
+        assert_eq!(count(&svg, "class=\"whisker\""), 3);
+        assert_eq!(count(&svg, "class=\"reference\""), 1);
+        assert!(svg.contains("0.69 [0.66, 0.72]"));
+        let mut bad = plot;
+        bad.rows[1].low = 0.70;
+        assert!(interval_plot(&bad, &theme()).is_err());
     }
 
     #[test]

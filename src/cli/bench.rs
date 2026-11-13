@@ -67,6 +67,24 @@ pub enum BenchCommand {
         #[arg(long)]
         out: PathBuf,
     },
+    /// Draw charts from result records: scores with intervals, paired changes, a score heatmap
+    Chart {
+        /// Result records; each is labelled with its file name; repeatable
+        #[arg(long = "record", required = true)]
+        records: Vec<PathBuf>,
+        /// Baseline record for the paired-change chart
+        #[arg(long)]
+        baseline: Option<PathBuf>,
+        /// Output folder for the SVG files
+        #[arg(long)]
+        out: PathBuf,
+        /// Theme file
+        #[arg(long, default_value = "assets/chart-themes.json")]
+        theme_file: PathBuf,
+        /// Confidence level for paired changes
+        #[arg(long, default_value_t = 0.95)]
+        level: f64,
+    },
     /// Check a task's items against training or teacher data; fails if any item appears
     Contamination {
         /// Task file; its dataset is checked against its hash first
@@ -192,6 +210,65 @@ pub fn execute(args: BenchArgs) -> Result<()> {
                 record.interval.level * 100.0,
                 out.display()
             );
+            Ok(())
+        }
+        BenchCommand::Chart {
+            records,
+            baseline,
+            out,
+            theme_file,
+            level,
+        } => {
+            use crate::bench::charts::{deltas_chart, score_heatmap, scores_chart};
+            let label = |p: &Path| {
+                p.file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            };
+            let loaded: Vec<(String, ResultRecord)> = records
+                .iter()
+                .map(|p| Ok((label(p), ResultRecord::load(p)?)))
+                .collect::<Result<_>>()?;
+            let labelled: Vec<(&str, &ResultRecord)> =
+                loaded.iter().map(|(l, r)| (l.as_str(), r)).collect();
+            std::fs::create_dir_all(&out)?;
+            let mut written = Vec::new();
+            for name in ["light", "dark"] {
+                let theme = crate::engine::viz::Theme::load(&theme_file, name)?;
+                let same_bench = labelled.iter().all(|(_, r)| {
+                    crate::bench::compare::metric_name(r)
+                        == crate::bench::compare::metric_name(labelled[0].1)
+                });
+                if same_bench {
+                    written.push(write_svg(
+                        &out,
+                        &format!("scores-{name}.svg"),
+                        &scores_chart(&labelled, &theme)?,
+                    )?);
+                }
+                written.push(write_svg(
+                    &out,
+                    &format!("heatmap-{name}.svg"),
+                    &score_heatmap(&labelled, &theme)?,
+                )?);
+                if let Some(b) = &baseline {
+                    let base = ResultRecord::load(b)?;
+                    let base_label = label(b);
+                    let others: Vec<(&str, &ResultRecord)> = labelled
+                        .iter()
+                        .copied()
+                        .filter(|(l, _)| *l != base_label)
+                        .collect();
+                    written.push(write_svg(
+                        &out,
+                        &format!("deltas-{name}.svg"),
+                        &deltas_chart((base_label.as_str(), &base), &others, level, 0, &theme)?,
+                    )?);
+                }
+            }
+            for w in written {
+                println!("wrote {w}");
+            }
             Ok(())
         }
         BenchCommand::Contamination {
@@ -347,4 +424,10 @@ fn metric_name(metric: &crate::bench::Metric) -> String {
         .ok()
         .and_then(|v| v.get("kind").and_then(|k| k.as_str()).map(String::from))
         .unwrap_or_default()
+}
+
+fn write_svg(dir: &Path, name: &str, svg: &str) -> Result<String> {
+    let path = dir.join(name);
+    std::fs::write(&path, svg)?;
+    Ok(path.display().to_string())
 }

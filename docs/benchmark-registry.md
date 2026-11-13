@@ -98,6 +98,18 @@ on a subset. Decoding settings and hardware are recorded as you state them (`--t
 `--seed`, `--max-new-tokens`, `--hardware`). Native and bridged modes, which produce the
 outputs, wait until model runs resume.
 
+## Charts
+
+```bash
+thme bench chart --record base.json --record q4.json --baseline base.json --out charts/
+```
+
+Writes light and dark SVG through the visual engine (`engine::viz`): scores with their
+intervals (when all records are on one benchmark), a model-by-benchmark score heatmap, and, with
+`--baseline`, each record's change against the baseline with a paired-bootstrap interval and a
+zero line. Every chart prints the records' evidence status. Paired changes need comparable
+records, the same rule as `thme bench gate`.
+
 ## Contamination check
 
 A score is only clean if its items were not in the model's training or teacher-written data
