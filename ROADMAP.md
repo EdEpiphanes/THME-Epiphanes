@@ -32,7 +32,7 @@ flowchart LR
     classDef later fill:#ffffff,stroke:#0b0b0b,stroke-width:1.5px,stroke-dasharray:4 3,color:#52514e;
 
     subgraph NOW["Now"]
-        N4["Contamination check"]:::now
+        N4["SVG visual engine"]:::now
         N5["Benchmark runner"]:::now
     end
     subgraph NEXT["Next"]
@@ -68,6 +68,7 @@ flowchart LR
 | SPDX headers (THME-3005) | `AGPL-3.0-only` header on all 168 source files; `scripts/spdx.py --check` in CI | Tested in CI |
 | Signed `.epiph` (THME-3019) | Minisign signature over the manifest; `thme epiph sign`, `verify --require-signature`; Epiphanes key by default | Tested: tamper, wrong key, broken trailer |
 | Benchmark registry (THME-3024) | `src/bench`: strict task files and result records with every Table R2 field; `thme bench list/validate/verify-dataset` | Tested: malformed files refused, records round-trip, record-task mismatch caught |
+| Contamination check (THME-3030) | `bench::contamination`: normalized n-gram overlap between benchmark items and corpora, streamed; `thme bench contamination` lists overlaps and fails | Tested: planted copies found through case, punctuation and line breaks; partial copies give their fraction; clean corpora find nothing |
 | Claim register (THME-3000) | [docs/research/claim-register.md](docs/research/claim-register.md): all 135 dossier claims with ID, status, section, page and note, generated from one JSON file; checked in CI | Statuses copied from the dossier; citations marked unverified |
 | Versioned schemas (THME-3009) | JSON Schemas for benchmark tasks, result records and quality gates beside the recipe schema; each validates a committed example | Tested: examples pass the schema and the Rust loader; broken copies fail both |
 | Three-state gate (THME-3029) | `GateSpec::judge` decides pass, fail or inconclusive from a degradation interval (point measures unchanged); `bench::compare` pairs two result records; `thme bench gate` | Tested: synthetic cases with known decisions; a 60-item set is inconclusive where the point gate passes |
@@ -80,7 +81,7 @@ flowchart LR
 
 | Track | Item | Status | Depends on |
 | :--- | :--- | :--- | :--- |
-| Quality and evidence | **Contamination check** (v0.2.8.7, dossier WP36): overlap between benchmark items and training or teacher data, listed before a score is shown | Not started | Benchmark registry |
+| Engine | **SVG visual engine** (dossier WP9): dependency-free, deterministic SVG charts from reports, the base for benchmark charts | Not started | Engine core |
 | Quality and evidence | **Benchmark runner** (v0.2.8.3): imported mode, resume and cache; native mode on synthetic models; `code` tasks refused | Not started | Metrics library |
 
 ### Next: planned
@@ -89,7 +90,7 @@ flowchart LR
 | :--- | :--- | :--- |
 | Security | Scanner for compressed pickles, ONNX, Keras, NumPy (THME-3022); scan on import (v0.2.7.3) | Scanner v1 |
 | Quality and evidence | Benchmark charts on the visual engine (WP37) | SVG visual engine |
-| Engine | Transport and Sinkhorn (WP4), ODE steppers (WP6), dependency-free SVG visual engine (WP9) | Engine core |
+| Engine | Transport and Sinkhorn (WP4), ODE steppers (WP6) | Engine core |
 | Formats and calibration | GPTQ-style rounding (THME-2205); llama.cpp compatibility check on synthetic files (THME-2208) | Calibration |
 
 ### Later: direction
@@ -368,7 +369,7 @@ interval, a three-state verdict and a chart; harness self-tests pass.
 | v0.2.8.4 | Metrics library: exact and normalized match, numeric tolerance, likelihood choice, pass@k (WP33) | **Done**: `bench::metrics`, Table R3 reproduced (THME-3027) |
 | v0.2.8.5 | Statistics: Wilson and bootstrap intervals, paired tests, required-items calculator (WP34) | **Done**: `bench::stats`, Table R3 reproduced (THME-3028) |
 | v0.2.8.6 | Three-state gate: pass, fail or inconclusive from the interval (WP35) | **Done**: one decision path; `thme bench gate` (THME-3029) |
-| v0.2.8.7 | Contamination check between benchmark items and training or teacher data (WP36) | |
+| v0.2.8.7 | Contamination check between benchmark items and training or teacher data (WP36) | **Done**: `thme bench contamination` (THME-3030) |
 | v0.2.8.8 | Benchmark charts on the visual engine: dot plots, deltas, heatmaps, quality against cost (WP37) | |
 | v0.2.8.9 | Versioned schemas and the consolidated claim register (THME-3009, THME-3000) | **Done**: [register](docs/research/claim-register.md) of 135 claims; schemas under `docs/schemas/` validated in CI |
 

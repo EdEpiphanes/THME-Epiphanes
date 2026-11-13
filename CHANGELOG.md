@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **Contamination check** (THME-3030, v0.2.8.7): `thme bench contamination --task T --corpus F`
+  compares a task's items with training or teacher data as normalized 13-word n-grams, streams
+  the corpora, lists every overlapping item with the share copied and where, and fails when any
+  item overlaps. Defines the dataset item format (JSONL with `id`, `input`, optional `target`).
 - **Claim register** (THME-3000, v0.2.8.9): docs/research/claim-register.md lists all 135 claims
   of the research dossier with ID, status, section, page and note, generated from
   claim-register.json by scripts/claim_register.py and checked in CI. Statuses are the

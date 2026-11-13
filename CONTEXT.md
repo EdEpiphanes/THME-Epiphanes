@@ -91,6 +91,10 @@ _Avoid_: eval, test (for this)
 The outcome of one benchmark task on one model, with per-item scores, an interval, the run mode and the evidence status.
 _Avoid_: score file, eval result
 
+**Contamination**:
+A benchmark item that also appears, verbatim or lightly reformatted, in a model's training or teacher-written data; scores on such items are not clean.
+_Avoid_: leakage (for this), overlap (as the name of the problem)
+
 **Run mode**:
 How a result record's numbers were obtained: native (THME's forward pass), bridged (an external tool) or imported (supplied by a user, labelled imported, never measured).
 
