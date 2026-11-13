@@ -17,6 +17,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
 use std::time::Instant;
 
+use super::manga::{self, calabi_yau_patches, ManifoldPatch};
 use super::theme::ThemePalette;
 use crate::inference::{
     read_token_file, synthetic_demo, ArchConfig, CausalLm, ForwardTrace, WeightPrecision,
@@ -94,6 +95,333 @@ impl Family {
 }
 
 const ANOMALY: Color32 = Color32::from_rgb(0xd0, 0x3b, 0x3b);
+
+/// Anomaly marker: red in colour themes, solid ink in the black-and-white panel theme.
+fn anomaly(p: &ThemePalette) -> Color32 {
+    if p.is_mono() {
+        manga::ink(p)
+    } else {
+        ANOMALY
+    }
+}
+
+impl Family {
+    /// Family colour for the active theme. Black-and-white themes use distinct grey tones
+    /// (and, in the manifold, screentone densities) instead of hue.
+    fn color_for(self, p: &ThemePalette) -> Color32 {
+        if !p.is_mono() {
+            return self.color();
+        }
+        Color32::from_gray(match self {
+            Self::Dense => 46,
+            Self::Int8 => 92,
+            Self::Int4 => 132,
+            Self::Ternary => 168,
+            Self::Binary => 196,
+            Self::Phase => 220,
+        })
+    }
+
+    /// Screentone dot radius used for this family on the manifold in mono themes.
+    fn tone_radius(self) -> f32 {
+        match self {
+            Self::Dense => 0.0,
+            Self::Int8 => 0.7,
+            Self::Int4 => 1.0,
+            Self::Ternary => 1.3,
+            Self::Binary => 1.6,
+            Self::Phase => 1.9,
+        }
+    }
+}
+
+/// The family most tensors of a layer use (Dense when unknown).
+fn dominant_family(entries: Option<&Vec<(String, Family)>>) -> Family {
+    let Some(entries) = entries else {
+        return Family::Dense;
+    };
+    let mut best = (Family::Dense, 0usize);
+    for family in ALL_FAMILIES {
+        let count = entries.iter().filter(|(_, f)| *f == family).count();
+        if count > best.1 {
+            best = (family, count);
+        }
+    }
+    best.0
+}
+
+/// True when the screen quad turns the same way at every corner.
+fn is_convex(pts: &[Pos2; 4]) -> bool {
+    let mut sign = 0.0f32;
+    for k in 0..4 {
+        let (a, b, c) = (pts[k], pts[(k + 1) % 4], pts[(k + 2) % 4]);
+        let cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+        if cross.abs() > 1e-3 {
+            if sign != 0.0 && cross.signum() != sign {
+                return false;
+            }
+            sign = cross.signum();
+        }
+    }
+    true
+}
+
+fn sub3(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+
+fn cross3(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
+}
+
+fn normalize3(v: [f32; 3]) -> [f32; 3] {
+    let len = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt().max(1e-9);
+    [v[0] / len, v[1] / len, v[2] / len]
+}
+
+struct Face {
+    depth: f32,
+    pts: [Pos2; 4],
+    fill: Color32,
+    dots: f32,
+    glint: bool,
+    center: Pos2,
+    patch: usize,
+}
+
+/// Draws the Calabi-Yau manifold: manga cel shading (three tones), ink linework,
+/// screentone in shadow, a glass rim light and specular glints, and token particles.
+#[allow(clippy::too_many_arguments)]
+fn draw_manifold(
+    painter: &egui::Painter,
+    pointer: Option<Pos2>,
+    camera: &Camera,
+    patches: &[ManifoldPatch],
+    trace: &ForwardTrace,
+    composition: &Composition,
+    p: &ThemePalette,
+    time: f32,
+) {
+    let n_layers = trace.layers.len();
+    if n_layers == 0 || patches.is_empty() {
+        return;
+    }
+    let mono = p.is_mono();
+    let ink = manga::ink(p);
+    let paper = if p.is_light() {
+        Color32::WHITE
+    } else {
+        Color32::from_gray(245)
+    };
+    let max_update = trace
+        .layers
+        .iter()
+        .map(|l| l.update_ratio)
+        .fold(0.0f32, f32::max)
+        .max(1e-6);
+    let light = normalize3([-0.45, 0.75, -0.55]);
+    let scale = 1.32f32;
+
+    let mut faces: Vec<Face> = Vec::with_capacity(patches.len() * 128);
+    for (index, patch) in patches.iter().enumerate() {
+        let layer = &trace.layers[index % n_layers];
+        let activity = (layer.update_ratio / max_update).clamp(0.0, 1.0).sqrt();
+        let anomalous =
+            layer.tensors.iter().any(|t| t.nonfinite > 0) || !layer.resid_rms_out.is_finite();
+        let family = dominant_family(composition.get(layer.layer));
+        let base = if anomalous {
+            anomaly(p)
+        } else {
+            family.color_for(p)
+        };
+        // Classic manga in black-and-white themes: paper highlights, grey tone by family and
+        // activity, dark shadow. Colour themes keep the family hue.
+        let (lit, mid, shade) = if mono && !anomalous {
+            (
+                paper,
+                manga::mix(paper, base, 0.18 + 0.32 * activity),
+                manga::mix(paper, base, 0.72),
+            )
+        } else {
+            (
+                manga::mix(base, paper, 0.45 + 0.25 * activity),
+                manga::mix(
+                    manga::mix(base, p.bg_dark, 0.35),
+                    base,
+                    0.35 + 0.65 * activity,
+                ),
+                manga::mix(base, ink, 0.62),
+            )
+        };
+        for j in 0..patch.nv - 1 {
+            for i in 0..patch.nu - 1 {
+                let at = |i: usize, j: usize| {
+                    let q = patch.points[j * patch.nu + i];
+                    camera.view([q[0] * scale, q[2] * scale, q[1] * scale])
+                };
+                let v = [at(i, j), at(i + 1, j), at(i + 1, j + 1), at(i, j + 1)];
+                if v.iter().any(|q| q[2] < 0.25) {
+                    continue;
+                }
+                let mut n = normalize3(cross3(sub3(v[1], v[0]), sub3(v[3], v[0])));
+                if n[2] > 0.0 {
+                    n = [-n[0], -n[1], -n[2]];
+                }
+                let diffuse = (n[0] * light[0] + n[1] * light[1] + n[2] * light[2]).max(0.0);
+                let facing = (-n[2]).clamp(0.0, 1.0);
+                let pts = v.map(|q| camera.screen(q));
+                // Skip slivers: near the manifold's pinch points faces collapse, and stroking a
+                // near-degenerate polygon makes egui's miter joins shoot out as long spikes.
+                let area = 0.5
+                    * ((pts[0].x * pts[1].y - pts[1].x * pts[0].y)
+                        + (pts[1].x * pts[2].y - pts[2].x * pts[1].y)
+                        + (pts[2].x * pts[3].y - pts[3].x * pts[2].y)
+                        + (pts[3].x * pts[0].y - pts[0].x * pts[3].y))
+                        .abs();
+                let perimeter: f32 = (0..4).map(|k| pts[k].distance(pts[(k + 1) % 4])).sum();
+                if area < 2.0 || area < 0.02 * perimeter * perimeter {
+                    continue;
+                }
+                let center = Pos2::new(
+                    (pts[0].x + pts[1].x + pts[2].x + pts[3].x) / 4.0,
+                    (pts[0].y + pts[1].y + pts[2].y + pts[3].y) / 4.0,
+                );
+                // Cel shading: three flat tones, plus a glass rim where the surface turns away.
+                let (mut fill, mut dots) = if diffuse > 0.72 {
+                    (lit, 0.0)
+                } else if diffuse > 0.32 {
+                    (mid, if mono { family.tone_radius() } else { 0.0 })
+                } else {
+                    (
+                        shade,
+                        1.1 + if mono {
+                            family.tone_radius() * 0.5
+                        } else {
+                            0.0
+                        },
+                    )
+                };
+                if facing < 0.22 {
+                    fill = manga::mix(fill, paper, 0.55);
+                    dots = 0.0;
+                }
+                faces.push(Face {
+                    depth: (v[0][2] + v[1][2] + v[2][2] + v[3][2]) / 4.0,
+                    pts,
+                    fill: manga::with_alpha(fill, 236),
+                    dots,
+                    glint: diffuse > 0.95 && facing > 0.6,
+                    center,
+                    patch: index,
+                });
+            }
+        }
+    }
+    faces.sort_by(|a, b| b.depth.total_cmp(&a.depth));
+    let line = Stroke::new(0.8_f32, manga::with_alpha(ink, 190));
+    for face in &faces {
+        // Fill without a polygon stroke, then ink the edges as plain segments: segments have
+        // no miter joins, so collapsed faces cannot throw spikes across the view.
+        if is_convex(&face.pts) {
+            painter.add(egui::Shape::convex_polygon(
+                face.pts.to_vec(),
+                face.fill,
+                Stroke::NONE,
+            ));
+        } else {
+            for tri in [
+                [face.pts[0], face.pts[1], face.pts[2]],
+                [face.pts[0], face.pts[2], face.pts[3]],
+            ] {
+                painter.add(egui::Shape::convex_polygon(
+                    tri.to_vec(),
+                    face.fill,
+                    Stroke::NONE,
+                ));
+            }
+        }
+        for k in 0..4 {
+            painter.line_segment([face.pts[k], face.pts[(k + 1) % 4]], line);
+        }
+        if face.dots > 0.0 {
+            painter.circle_filled(face.center, face.dots, manga::with_alpha(ink, 210));
+        }
+        if face.glint {
+            painter.circle_filled(face.center, 1.8, manga::with_alpha(Color32::WHITE, 235));
+        }
+    }
+
+    // Token particles riding each patch, brighter on layers that rewrite the stream more.
+    let glow = if mono { ink } else { p.accent };
+    for (index, patch) in patches.iter().enumerate() {
+        let layer = &trace.layers[index % n_layers];
+        let activity = (layer.update_ratio / max_update).clamp(0.0, 1.0).sqrt();
+        for k in 0..2 {
+            let phase = (time * 0.32 + hash01(index * 5 + k)).fract();
+            let fu = hash01(index * 11 + k + 3) * (patch.nu - 1) as f32;
+            let fv = phase * (patch.nv - 1) as f32;
+            let (i, j) = (fu as usize, fv as usize);
+            let (i1, j1) = ((i + 1).min(patch.nu - 1), (j + 1).min(patch.nv - 1));
+            let (tu, tv) = (fu.fract(), fv.fract());
+            let q = |i: usize, j: usize| patch.points[j * patch.nu + i];
+            let blend = |a: [f32; 3], b: [f32; 3], t: f32| {
+                [
+                    a[0] + (b[0] - a[0]) * t,
+                    a[1] + (b[1] - a[1]) * t,
+                    a[2] + (b[2] - a[2]) * t,
+                ]
+            };
+            let w = blend(
+                blend(q(i, j), q(i1, j), tu),
+                blend(q(i, j1), q(i1, j1), tu),
+                tv,
+            );
+            if let Some((pos, _)) = camera.project([w[0] * scale, w[2] * scale, w[1] * scale]) {
+                painter.circle_filled(
+                    pos,
+                    5.0,
+                    manga::with_alpha(glow, (40.0 + 90.0 * activity) as u8),
+                );
+                painter.circle_filled(pos, 2.0, manga::with_alpha(paper, 240));
+                painter.circle_stroke(pos, 2.0, Stroke::new(0.8_f32, ink));
+            }
+        }
+    }
+
+    // Hover: the front-most patch face under the pointer shows its layer.
+    if let Some(pointer) = pointer {
+        if let Some(face) = faces.iter().rev().find(|f| inside(pointer, &f.pts)) {
+            let patch = &patches[face.patch];
+            let layer = &trace.layers[face.patch % n_layers];
+            let family = dominant_family(composition.get(layer.layer));
+            let lines = [
+                format!(
+                    "Patch ({}, {}) -> layer {} · {}",
+                    patch.k1,
+                    patch.k2,
+                    layer.layer,
+                    family.label()
+                ),
+                format!(
+                    "Residual update {:.3} (max this window {:.3})",
+                    layer.update_ratio, max_update
+                ),
+                format!(
+                    "Residual rms {:.3} -> {:.3} · MLP inactive {:.0}%",
+                    layer.resid_rms_in,
+                    layer.resid_rms_out,
+                    100.0 * layer.mlp_dead_fraction
+                ),
+                "Geometry is illustrative; colour and light are measured.".to_string(),
+            ];
+            draw_tooltip(painter, camera.rect, pointer, &lines, p);
+        }
+    }
+}
 const ALL_FAMILIES: [Family; 6] = [
     Family::Dense,
     Family::Int8,
@@ -140,6 +468,15 @@ struct Session {
     stop: Arc<AtomicBool>,
 }
 
+/// How the live trace is drawn.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ViewMode {
+    /// Calabi-Yau manifold: each patch is a layer, lit by its measured residual update.
+    Manifold,
+    /// One slab per layer, one tile row per tensor (channel groups).
+    Slabs,
+}
+
 #[derive(Clone, Copy)]
 struct Hover {
     step: usize,
@@ -167,6 +504,8 @@ pub struct LiveView {
     zoom: f32,
     started_demo: bool,
     epoch: Instant,
+    mode: ViewMode,
+    manifold: Vec<ManifoldPatch>,
 }
 
 impl Default for LiveView {
@@ -191,6 +530,12 @@ impl Default for LiveView {
             zoom: 1.0,
             started_demo: false,
             epoch: Instant::now(),
+            // THME_GUI_LIVE_MODE=slabs opens the slab view (used for documentation captures).
+            mode: match std::env::var("THME_GUI_LIVE_MODE").as_deref() {
+                Ok("slabs") => ViewMode::Slabs,
+                _ => ViewMode::Manifold,
+            },
+            manifold: calabi_yau_patches(5, 14, 9, 0.85),
         }
     }
 }
@@ -316,18 +661,21 @@ impl LiveView {
         self.poll_gate();
         ctx.request_repaint();
 
-        ui.heading(
-            egui::RichText::new("LIVE 3D MODEL VIEW")
-                .size(13.0)
-                .color(p.text_main),
-        );
-        ui.label(
-            egui::RichText::new(
-                "Each slab is one applied layer; each row is a linear tensor split into output-channel groups, lit by the measured output magnitude of the current window and tinted by format family. Particles carry the residual stream between layers, brighter where a layer rewrites it more. Red marks anomalies. Drag to orbit, scroll to zoom, hover a tile to inspect it.",
-            )
-            .size(10.0)
-            .color(p.text_muted),
-        );
+        ui.horizontal(|ui| {
+            ui.heading(
+                egui::RichText::new("LIVE 3D MODEL VIEW")
+                    .size(15.0)
+                    .color(p.text_main),
+            );
+            ui.add_space(12.0);
+            ui.selectable_value(&mut self.mode, ViewMode::Manifold, "MANIFOLD");
+            ui.selectable_value(&mut self.mode, ViewMode::Slabs, "LAYER SLABS");
+        });
+        let caption = match self.mode {
+            ViewMode::Manifold => "A Calabi-Yau quintic cross-section with each of its 25 patches bound to a layer (cyclically). Patch colour is the layer's format family; its light is the measured residual update of the current window; anomalies are marked red (solid ink in black-and-white themes). Token particles flow across the patches. The geometry is illustrative; the colours and light are measured. Drag to orbit, scroll to zoom, hover a patch to inspect its layer.",
+            ViewMode::Slabs => "Each slab is one applied layer; each row is a linear tensor split into output-channel groups, lit by the measured output magnitude of the current window and tinted by format family. Particles carry the residual stream between layers, brighter where a layer rewrites it more. Red marks anomalies. Drag to orbit, scroll to zoom, hover a tile to inspect it.",
+        };
+        ui.label(egui::RichText::new(caption).size(10.0).color(p.text_muted));
         ui.add_space(4.0);
         ui.horizontal_wrapped(|ui| {
             ui.label("Model folder:");
@@ -421,11 +769,11 @@ impl LiveView {
             if anomalies.is_empty() {
                 ui.label(muted("None in this window".to_string()));
             }
-            for anomaly in anomalies.iter().take(8) {
+            for item in anomalies.iter().take(8) {
                 ui.label(
-                    egui::RichText::new(format!("! {anomaly}"))
+                    egui::RichText::new(format!("! {item}"))
                         .size(10.0)
-                        .color(ANOMALY),
+                        .color(anomaly(p)),
                 );
             }
         } else {
@@ -436,7 +784,7 @@ impl LiveView {
             ui.label(strong("Recipe gate (measured)"));
             for line in &self.gate_lines {
                 let color = if line.starts_with("FAILED") || line.starts_with("Error") {
-                    ANOMALY
+                    anomaly(p)
                 } else {
                     p.text_muted
                 };
@@ -449,14 +797,14 @@ impl LiveView {
             ui.horizontal(|ui| {
                 let (rect, _) = ui.allocate_exact_size(Vec2::splat(10.0), Sense::hover());
                 ui.painter()
-                    .rect_filled(rect, egui::CornerRadius::same(2), family.color());
+                    .rect_filled(rect, egui::CornerRadius::same(2), family.color_for(p));
                 ui.label(muted(family.label().to_string()));
             });
         }
         ui.horizontal(|ui| {
             let (rect, _) = ui.allocate_exact_size(Vec2::splat(10.0), Sense::hover());
             ui.painter()
-                .rect_filled(rect, egui::CornerRadius::same(2), ANOMALY);
+                .rect_filled(rect, egui::CornerRadius::same(2), anomaly(p));
             ui.label(muted("Anomaly in this window".to_string()));
         });
         ui.add_space(4.0);
@@ -469,11 +817,13 @@ impl LiveView {
     fn draw_scene(&mut self, ui: &mut egui::Ui, size: Vec2, p: &ThemePalette) {
         let (rect, response) = ui.allocate_exact_size(size, Sense::click_and_drag());
         let painter = ui.painter_at(rect);
-        painter.rect_filled(rect, egui::CornerRadius::same(6), p.bg_dark);
+        let radius = egui::CornerRadius::same(manga::radius(p));
+        painter.rect_filled(rect, radius, manga::glass_fill(p.bg_dark, p));
+        manga::glass_sheen(&painter, rect, f32::from(manga::radius(p)), p);
         painter.rect_stroke(
             rect,
-            egui::CornerRadius::same(6),
-            Stroke::new(1.0_f32, p.border),
+            radius,
+            Stroke::new(2.0_f32, p.border),
             egui::StrokeKind::Inside,
         );
 
@@ -500,6 +850,16 @@ impl LiveView {
             let scroll = ui.input(|i| i.smooth_scroll_delta.y);
             self.zoom = (self.zoom * (scroll * 0.002).exp()).clamp(0.3, 4.0);
         }
+        if self.mode == ViewMode::Manifold {
+            if !response.dragged() {
+                // Slow turntable spin while nobody is holding the camera.
+                self.yaw += ui.input(|i| i.stable_dt).min(0.1) * 0.22;
+            }
+            // 4D rotation: the surface lives in C^2 (four real dimensions); sweeping the angle
+            // that mixes Im z1 and Im z2 into the third axis turns it through the hidden ones.
+            let t = self.epoch.elapsed().as_secs_f32();
+            self.manifold = calabi_yau_patches(5, 14, 9, 0.85 + 0.55 * (t * 0.17).sin());
+        }
 
         let Some(frame) = &self.latest else {
             painter.text(
@@ -511,6 +871,25 @@ impl LiveView {
             );
             return;
         };
+        if self.mode == ViewMode::Manifold {
+            let camera = Camera {
+                yaw: self.yaw,
+                pitch: self.pitch,
+                dist: 6.0 / self.zoom,
+                rect,
+            };
+            draw_manifold(
+                &painter,
+                response.hover_pos(),
+                &camera,
+                &self.manifold,
+                &frame.trace,
+                &self.composition,
+                p,
+                self.epoch.elapsed().as_secs_f32(),
+            );
+            return;
+        }
         let trace = &frame.trace;
         let steps = trace.layers.len();
         if steps == 0 {
@@ -572,7 +951,7 @@ impl LiveView {
                 let family = composition
                     .and_then(|c| c.iter().find(|(n, _)| n == tensor.name))
                     .map_or(Family::Dense, |(_, f)| *f);
-                let base = family.color();
+                let base = family.color_for(p);
                 let dim = lerp(p.bg_dark, base, 0.18);
                 let y = y_of(row);
                 let bins = tensor.bins.len().max(1);
@@ -582,7 +961,7 @@ impl LiveView {
                     let x0 = -half_w + bin as f32 * w + 0.01;
                     let x1 = x0 + w - 0.02;
                     let color = if tensor.nonfinite > 0 {
-                        ANOMALY
+                        anomaly(p)
                     } else {
                         let t = (value / scale).clamp(0.0, 1.0).sqrt();
                         lerp(dim, base, 0.2 + 0.8 * t)
@@ -634,7 +1013,7 @@ impl LiveView {
                     egui::Align2::RIGHT_BOTTOM,
                     format!("L{}", layer.layer),
                     egui::FontId::monospace(10.0),
-                    if anomalous { ANOMALY } else { p.text_muted },
+                    if anomalous { anomaly(p) } else { p.text_muted },
                 );
             }
             if step + 1 < steps {
@@ -1008,22 +1387,30 @@ struct Camera {
 }
 
 impl Camera {
-    /// Projects a world point; returns the screen position and camera-space depth.
-    fn project(&self, p: [f32; 3]) -> Option<(Pos2, f32)> {
+    /// World point to camera space (x right, y up, z = depth away from the eye).
+    fn view(&self, p: [f32; 3]) -> [f32; 3] {
         let (sy, cy) = self.yaw.sin_cos();
         let x1 = p[0] * cy - p[2] * sy;
         let z1 = p[0] * sy + p[2] * cy;
         let (sp, cp) = self.pitch.sin_cos();
         let y2 = p[1] * cp - z1 * sp;
         let z2 = p[1] * sp + z1 * cp + self.dist;
-        if z2 < 0.2 {
+        [x1, y2, z2]
+    }
+
+    /// Camera-space point to screen (caller ensures depth > 0.2).
+    fn screen(&self, v: [f32; 3]) -> Pos2 {
+        let f = self.rect.height() * 1.15;
+        self.rect.center() + Vec2::new(v[0] * f / v[2], -v[1] * f / v[2])
+    }
+
+    /// Projects a world point; returns the screen position and camera-space depth.
+    fn project(&self, p: [f32; 3]) -> Option<(Pos2, f32)> {
+        let v = self.view(p);
+        if v[2] < 0.2 {
             return None;
         }
-        let f = self.rect.height() * 1.15;
-        Some((
-            self.rect.center() + Vec2::new(x1 * f / z2, -y2 * f / z2),
-            z2,
-        ))
+        Some((self.screen(v), v[2]))
     }
 
     fn quad(&self, corners: [[f32; 3]; 4]) -> Option<(f32, [Pos2; 4])> {
