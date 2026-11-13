@@ -258,9 +258,10 @@ closes it.
 
 ### [THME-3020] Developer sandbox for untrusted code
 
-- **Milestone**: v0.2.7 · **Roadmap**: v0.2.7.5 · **Priority**: p1 · **Area**: security · **Type**: feature · **Status**: triage
+- **Milestone**: v0.2.7 · **Roadmap**: v0.2.7.5, v0.2.7.6 · **Priority**: p1 · **Area**: security · **Type**: feature · **Status**: in progress
 - **Problem**: Remote-code models, plugins (dossier L.4) and benchmark code (R.4) need to run isolated.
 - **Done means**: Design doc first: separate process, no network, file access limited to a work folder, time and memory caps, per-OS mechanism; then an implementation with escape tests.
+- **Progress**: design done ([docs/sandbox.md](docs/sandbox.md)). Implementation waits for owner approval of the proposed dependencies (`landlock`, `seccompiler`, `windows-sys`).
 
 ### [THME-3021] Guardrail detection and evaluation (read-only)
 

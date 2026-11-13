@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **Developer sandbox design** (THME-3020, v0.2.7.5): [docs/sandbox.md](docs/sandbox.md) sets the
+  threat model, one fail-closed interface, the isolation layers on Linux, Windows and macOS, and
+  13 escape tests the implementation must pass. Design only; nothing is built yet.
 - **`.epiph` 1.1: tokenizer round trip** (THME-3014, v0.2.6.4): GGUF metadata, tokenizer included,
   is stored as a typed attachment and restored on read, so GGUF to `.epiph` to GGUF is
   byte-identical; packing a Hugging Face folder attaches `config.json` and tokenizer files, and
