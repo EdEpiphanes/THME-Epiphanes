@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/EdEpiphanes/THME-Epiphanes/main/docs/schemas/quality-gate-v1.json",
+  "title": "THME quality gate, version 1",
+  "description": "A versioned quality gate (docs/quality-gate.md), as in configs/gates/. Loader: thme::quality::gate::GateSpec, which also refuses a metric listed twice. Reports add the gate's id and hash beside these fields, so other fields are allowed.",
+  "type": "object",
+  "required": ["name", "version", "criteria"],
+  "properties": {
+    "name": { "type": "string", "minLength": 1 },
+    "version": { "type": "integer", "minimum": 0 },
+    "criteria": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["metric", "lower_is_better"],
+        "anyOf": [
+          { "required": ["max_abs"], "properties": { "max_abs": { "type": "number" } } },
+          { "required": ["max_rel"], "properties": { "max_rel": { "type": "number" } } }
+        ],
+        "properties": {
+          "metric": { "type": "string", "minLength": 1, "description": "Metric name, e.g. perplexity or bench:<id>@v<version>" },
+          "lower_is_better": { "type": "boolean" },
+          "max_abs": { "type": ["number", "null"], "minimum": 0 },
+          "max_rel": { "type": ["number", "null"], "minimum": 0 }
+        }
+      }
+    }
+  }
+}

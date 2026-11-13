@@ -1,0 +1,30 @@
+{
+  "schema": "thme-bench-record/v1",
+  "benchmark": {
+    "id": "toy-arith",
+    "version": 1,
+    "task_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "dataset_sha256": "8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4",
+    "split": "test",
+    "licence": "CC0-1.0"
+  },
+  "model": { "sha256": "1111111111111111111111111111111111111111111111111111111111111111", "transformation": null },
+  "harness": {
+    "version": "0.2.0",
+    "run_mode": "native",
+    "prompt_template_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "decoding": { "temperature": 0.0, "seed": null, "max_new_tokens": 16 },
+  "items": [
+    { "id": "q1", "output": "#### 4", "score": 1.0 },
+    { "id": "q2", "output": "#### 7", "score": 0.0 },
+    { "id": "q3", "output": "#### 9", "score": 1.0 },
+    { "id": "q4", "output": "#### 12", "score": 1.0 }
+  ],
+  "score": 0.75,
+  "interval": { "low": 0.30064, "high": 0.95441, "method": "wilson", "level": 0.95 },
+  "evidence": "simulated",
+  "hardware": "example record, not a measurement",
+  "run_date": "2026-11-13",
+  "duration_s": 0.0
+}

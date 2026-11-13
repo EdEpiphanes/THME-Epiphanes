@@ -38,6 +38,9 @@ jobs:
       - name: SPDX licence header on every source file
         run: python3 scripts/spdx.py --check
 
+      - name: Claim register matches its JSON
+        run: python3 scripts/claim_register.py --check
+
   lint:
     name: Format and clippy
     runs-on: ubuntu-latest
