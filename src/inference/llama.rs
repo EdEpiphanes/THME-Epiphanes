@@ -7,7 +7,9 @@
 use anyhow::{bail, Context, Result};
 use std::path::Path;
 
-use super::probe::{dead_fraction, rms, update_ratio, ForwardTrace, LayerTrace, TensorActivity};
+use super::probe::{
+    dead_fraction, rms, update_ratio, ForwardTrace, InputChannelStats, LayerTrace, TensorActivity,
+};
 use super::weights::{apply_selected_format, fake_quantize, read_tensor_f32};
 use crate::ir::{ModelIR, TensorFormat, TensorIR};
 
@@ -379,19 +381,21 @@ impl LlamaModel {
         let head_dim = d / cfg.num_heads;
         let kv_dim = head_dim * cfg.num_kv_heads;
         let inter = self.intermediate_size;
-        let mut record = |name: &'static str, y: &[f32], out_dim: usize| {
-            if let Some(t) = trace.as_deref_mut() {
-                t.tensors.push(TensorActivity::measure(name, y, out_dim));
-            }
-        };
+        let mut record =
+            |name: &'static str, x: &[f32], in_dim: usize, y: &[f32], out_dim: usize| {
+                if let Some(t) = trace.as_deref_mut() {
+                    t.tensors.push(TensorActivity::measure(name, y, out_dim));
+                    t.inputs.push(InputChannelStats::measure(name, x, in_dim));
+                }
+            };
 
         rms_norm(x, &layer.attn_norm, cfg.rms_norm_eps, normed);
         let mut q = linear(normed, &layer.q, d, d);
         let mut k = linear(normed, &layer.k, d, kv_dim);
         let v = linear(normed, &layer.v, d, kv_dim);
-        record("q", &q, d);
-        record("k", &k, kv_dim);
-        record("v", &v, kv_dim);
+        record("q", normed, d, &q, d);
+        record("k", normed, d, &k, kv_dim);
+        record("v", normed, d, &v, kv_dim);
         rope.apply(&mut q);
         rope.apply(&mut k);
         let mixed = attention(&AttentionInputs {
@@ -403,19 +407,19 @@ impl LlamaModel {
             head_dim,
         });
         let attn_out = linear(&mixed, &layer.o, d, d);
-        record("o", &attn_out, d);
+        record("o", &mixed, d, &attn_out, d);
         add_in_place(x, &attn_out);
 
         rms_norm(x, &layer.mlp_norm, cfg.rms_norm_eps, normed);
         let mut hidden = linear(normed, &layer.gate, d, inter);
         let up = linear(normed, &layer.up, d, inter);
-        record("gate", &hidden, inter);
-        record("up", &up, inter);
+        record("gate", normed, d, &hidden, inter);
+        record("up", normed, d, &up, inter);
         for (g, u) in hidden.iter_mut().zip(&up) {
             *g = *g / (1.0 + (-*g).exp()) * u;
         }
         let mlp_out = linear(&hidden, &layer.down, inter, d);
-        record("down", &mlp_out, d);
+        record("down", &hidden, inter, &mlp_out, d);
         if let Some(t) = trace {
             t.mlp_dead_fraction = dead_fraction(&hidden);
         }

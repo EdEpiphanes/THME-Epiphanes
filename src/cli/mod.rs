@@ -1,3 +1,4 @@
+pub mod calibrate;
 pub mod co_surgery;
 pub mod convert;
 pub mod evaluate;
@@ -51,6 +52,9 @@ pub enum Commands {
     /// Search for a mixed-precision recipe from measured costs under a size budget
     Search(search::SearchArgs),
 
+    /// Record per-input-channel activation statistics on calibration tokens
+    Calibrate(calibrate::CalibrateArgs),
+
     /// Run quality gate check between baseline and candidate
     #[command(alias = "check")]
     Validate(validate::ValidateArgs),
@@ -95,6 +99,7 @@ pub fn run() -> Result<()> {
         Commands::Plan(args) => plan::execute(args),
         Commands::Evaluate(args) => evaluate::execute(args),
         Commands::Search(args) => search::execute(args),
+        Commands::Calibrate(args) => calibrate::execute(args),
         Commands::Validate(args) => validate::execute(args),
         Commands::Tweak(args) => tweak::execute(args),
         Commands::Report(args) => report::execute(args),

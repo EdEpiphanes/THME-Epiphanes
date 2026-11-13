@@ -12,7 +12,9 @@ use super::llama::{
     add_in_place, attention, find_tensor, linear, load_tensor, score_head, AttentionInputs,
     DepthExit, RopeTable, WeightPrecision,
 };
-use super::probe::{dead_fraction, rms, update_ratio, ForwardTrace, LayerTrace, TensorActivity};
+use super::probe::{
+    dead_fraction, rms, update_ratio, ForwardTrace, InputChannelStats, LayerTrace, TensorActivity,
+};
 use crate::ir::{ModelIR, TensorIR};
 
 /// Architectural hyperparameters needed by the GPT-NeoX forward pass.
@@ -333,6 +335,7 @@ impl NeoxModel {
         add_bias(&mut qkv, &layer.qkv_b);
         if let Some(t) = trace.as_deref_mut() {
             t.tensors.push(TensorActivity::measure("qkv", &qkv, 3 * d));
+            t.inputs.push(InputChannelStats::measure("qkv", &normed, d));
         }
         let (mut q, mut k, mut v) = (
             vec![0.0f32; x.len()],
@@ -362,6 +365,7 @@ impl NeoxModel {
         add_bias(&mut attn_out, &layer.o_b);
         if let Some(t) = trace.as_deref_mut() {
             t.tensors.push(TensorActivity::measure("o", &attn_out, d));
+            t.inputs.push(InputChannelStats::measure("o", &mixed, d));
         }
 
         if cfg.parallel_residual {
@@ -388,6 +392,7 @@ impl NeoxModel {
         if let Some(t) = trace.as_deref_mut() {
             t.tensors
                 .push(TensorActivity::measure("up", &hidden, inter));
+            t.inputs.push(InputChannelStats::measure("up", &normed, d));
         }
         for h in hidden.iter_mut() {
             *h = gelu(*h);
@@ -396,6 +401,8 @@ impl NeoxModel {
         add_bias(&mut mlp_out, &layer.down_b);
         if let Some(t) = trace {
             t.tensors.push(TensorActivity::measure("down", &mlp_out, d));
+            t.inputs
+                .push(InputChannelStats::measure("down", &hidden, inter));
             t.mlp_dead_fraction = dead_fraction(&hidden);
         }
         add_in_place(x, &mlp_out);

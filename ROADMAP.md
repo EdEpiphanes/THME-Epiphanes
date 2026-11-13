@@ -115,7 +115,7 @@ SmolLM-135M, measured from the written file.
 | :--- | :--- |
 | v0.2.2.1 | Per-tensor formats in the GGUF writer, so the recipe and the artifact are the same thing. **Done**: `thme export --recipe` writes each tensor in its assigned format (FP16, Q8_0, Q4_0, Q4_K, Q5_K, Q6_K, TQ1_0; FP32 and 1-D tensors as stored); a test re-imports the file and reproduces `thme evaluate`'s perplexity, with bit-identical weights. Norm epsilon and RoPE base now travel through GGUF metadata instead of fixed defaults |
 | v0.2.2.2 | Q4_K, Q5_K and Q6_K encoders with round-trip tests against the decoders. **Done**: GGML-layout codecs (`src/exporter/kquant.rs`) checked against hand-built blocks; the forward pass reads K-quant tensors; `q4_k`, `q5_k`, `q6_k` usable in recipes, `thme evaluate` and `thme search --formats` |
-| v0.2.2.3 | Calibration activations captured from the forward pass |
+| v0.2.2.3 | Calibration activations captured from the forward pass. **Done**: the probe records per-input-channel mean \|x\|, rms and max \|x\| for every linear tensor; `thme calibrate` merges them over calibration windows and saves them keyed by tensor name (`inference::calibration`) |
 | v0.2.2.4 | Activation-aware scaling (AWQ-style) |
 | v0.2.2.5 | Second-order rounding (GPTQ-style) |
 | v0.2.2.6 | Randomized Hadamard rotation of weight inputs (QuaRot-style), measured with and without |
