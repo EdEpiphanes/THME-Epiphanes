@@ -13,6 +13,7 @@
 )]
 
 pub mod allocator;
+pub mod bench;
 pub mod cli;
 pub mod dataset;
 pub mod engine;

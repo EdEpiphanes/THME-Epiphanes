@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+pub mod bench;
 pub mod calibrate;
 pub mod co_surgery;
 pub mod convert;
@@ -87,6 +88,9 @@ pub enum Commands {
     /// Security scan of a model file or folder for code execution, hidden payloads and malformed headers
     Scan(scan::ScanArgs),
 
+    /// Benchmark registry: list and check task files and result records
+    Bench(bench::BenchArgs),
+
     /// Generate PyTorch / CUDA fine-tuning scripts or Hugging Face configurations
     Interop(interop::InteropArgs),
 
@@ -118,6 +122,7 @@ pub fn run() -> Result<()> {
         Commands::Export(args) => export::execute(args),
         Commands::Epiph(args) => epiph::execute(args),
         Commands::Scan(args) => scan::execute(args),
+        Commands::Bench(args) => bench::execute(args),
         Commands::Interop(args) => interop::execute(args),
         Commands::Mcp(args) => mcp::execute(args),
         Commands::CoSurgery(args) => co_surgery::execute(args),

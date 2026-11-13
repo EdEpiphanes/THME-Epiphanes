@@ -79,6 +79,17 @@ _Avoid_: gate (unqualified), threshold
 One metric of a quality gate and the degradation it allows, as an absolute and/or a relative margin.
 _Avoid_: tolerance, gate value
 
+**Benchmark task**:
+A declarative file naming a dataset by hash, its split and licence, a prompt template, an answer-extraction rule and a metric; identified by `id@vN`.
+_Avoid_: eval, test (for this)
+
+**Result record**:
+The outcome of one benchmark task on one model, with per-item scores, an interval, the run mode and the evidence status.
+_Avoid_: score file, eval result
+
+**Run mode**:
+How a result record's numbers were obtained: native (THME's forward pass), bridged (an external tool) or imported (supplied by a user, labelled imported, never measured).
+
 **Gate unit**:
 A gating function inside a model's weights, such as the gate of a gated feed-forward layer.
 _Avoid_: gate (unqualified)
