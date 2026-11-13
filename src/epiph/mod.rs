@@ -105,6 +105,8 @@ pub struct PackOptions {
     pub annotations: BTreeMap<String, String>,
     /// Fixed creation time for reproducible files; the current time when `None`.
     pub created_unix: Option<u64>,
+    /// Store every tensor in its selected format (as `thme export` would), not as stored.
+    pub store_selected: bool,
 }
 
 /// What a write produced.
@@ -140,9 +142,24 @@ pub fn write(model: &ModelIR, options: &PackOptions, out: &Path) -> Result<PackS
     let mut payloads: Vec<Vec<u8>> = Vec::with_capacity(model.tensors.len() + 1);
     let mut tensors = Vec::with_capacity(model.tensors.len());
     let mut offset = 0u64;
-    for tensor in &model.tensors {
-        let bytes = read_tensor_bytes(tensor)
-            .with_context(|| format!("Cannot pack tensor '{}'", tensor.name))?;
+    // The description written to the manifest: with `store_selected`, each tensor's stored type
+    // and size become those of its encoded payload, and the original type is kept in metadata.
+    let mut described = model.clone();
+    for (tensor, out) in model.tensors.iter().zip(described.tensors.iter_mut()) {
+        let bytes = if options.store_selected {
+            let (dtype, bytes) = crate::exporter::encoded_payload(tensor)
+                .with_context(|| format!("Cannot pack tensor '{}'", tensor.name))?;
+            if dtype != tensor.original_dtype {
+                out.metadata
+                    .insert("epiph.source_dtype".into(), tensor.original_dtype.clone());
+                out.original_dtype = dtype;
+                out.byte_size = bytes.len();
+            }
+            bytes
+        } else {
+            read_tensor_bytes(tensor)
+                .with_context(|| format!("Cannot pack tensor '{}'", tensor.name))?
+        };
         tensors.push(TensorEntry {
             name: tensor.name.clone(),
             offset,
@@ -181,7 +198,7 @@ pub fn write(model: &ModelIR, options: &PackOptions, out: &Path) -> Result<PackS
     let manifest = Manifest {
         format: "epiph".into(),
         version: format!("{MAJOR}.{MINOR}"),
-        model: serde_json::to_value(model)?,
+        model: serde_json::to_value(&described)?,
         tensors,
         attachments,
         recipe: options.recipe.clone(),

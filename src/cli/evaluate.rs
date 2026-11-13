@@ -598,7 +598,7 @@ pub(crate) mod tests {
         (model_dir, token_path)
     }
 
-    fn write_recipe(dir: &Path, with_mixer: bool) -> PathBuf {
+    pub(crate) fn write_recipe(dir: &Path, with_mixer: bool) -> PathBuf {
         let mut ops = vec![
             json!({"type": "SetPrecision", "params": {"start_layer": 0, "end_layer": 1, "role": "MlpDown", "format": "Q8_0"}}),
         ];

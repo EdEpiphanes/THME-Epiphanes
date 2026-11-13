@@ -161,3 +161,65 @@ fn epiph_converts_to_gguf_like_its_source() {
     assert_eq!(reimported.tensors.len(), ir.tensors.len());
     assert!(read_tensor_f32(&reimported.tensors[0]).is_ok());
 }
+
+/// THME-3013 done-means: a recipe candidate packs with each tensor in its selected format; the
+/// packed file runs exactly like the in-memory candidate and converts to the same GGUF bytes.
+#[test]
+fn quantized_pack_runs_like_the_candidate() {
+    let dir = tempfile::tempdir().unwrap();
+    let (model_dir, tokens) = synthetic_checkpoint(dir.path());
+    let ir = ModelImporter::import(&model_dir).unwrap();
+    let recipe = crate::cli::evaluate::tests::write_recipe(dir.path(), false);
+    let candidate = crate::cli::export::apply_recipe(&ir, &recipe, false).unwrap();
+
+    let plain = dir.path().join("plain.epiph");
+    let quant = dir.path().join("quant.epiph");
+    write(&ir, &PackOptions::default(), &plain).unwrap();
+    let options = PackOptions {
+        store_selected: true,
+        ..PackOptions::default()
+    };
+    write(&candidate, &options, &quant).unwrap();
+    assert!(
+        std::fs::metadata(&quant).unwrap().len() < std::fs::metadata(&plain).unwrap().len(),
+        "quantized file is smaller"
+    );
+    assert_eq!(verify(&quant).unwrap().tensors, ir.tensors.len());
+
+    let (packed, _) = read(&quant).unwrap();
+    let down = packed
+        .tensors
+        .iter()
+        .find(|t| t.name.contains("down_proj"))
+        .unwrap();
+    assert_eq!(down.original_dtype, "Q8_0");
+    assert_eq!(down.metadata["epiph.source_dtype"], "F32");
+
+    let ids = read_token_file(&tokens).unwrap();
+    let nll = |m: &ModelIR, path: &Path, precision| {
+        ArchConfig::detect(m, path)
+            .unwrap()
+            .load(m, precision)
+            .unwrap()
+            .forward_nll(&ids[..40])
+            .unwrap()
+    };
+    assert_eq!(
+        nll(&packed, &quant, WeightPrecision::AsStored),
+        nll(&candidate, &model_dir, WeightPrecision::SelectedFormat),
+        "packed weights equal the candidate's round-tripped weights"
+    );
+
+    let export = |m: &ModelIR, name: &str| {
+        let path = dir.path().join(name);
+        let config = crate::exporter::ExportConfig {
+            format: crate::exporter::ExportFormat::GGUFv3,
+            quant_type: crate::exporter::ExportQuantType::PerTensor,
+            output_path: path.clone(),
+            compute_checksum: false,
+        };
+        crate::exporter::ModelExporter::export(m, &config).unwrap();
+        std::fs::read(path).unwrap()
+    };
+    assert_eq!(export(&packed, "a.gguf"), export(&candidate, "b.gguf"));
+}

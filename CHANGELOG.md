@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **Quantized `.epiph` files** (THME-3013, v0.2.6.3): `thme epiph pack MODEL --recipe R --quantize`
+  applies the recipe and stores each tensor in its selected format (Q8_0, Q4_0, K-quants, ternary,
+  FP16) through the same plan and encoders as the per-tensor GGUF export
+  (`exporter::encoded_payload`). The packed file runs bit-identically to the in-memory candidate.
 - **Number formats with stated error bounds** (THME-3006, v0.2.5.3): `engine::minifloat` rounds to
   FP16, BF16, FP8 E4M3 and FP8 E5M2 with one nearest-even routine (every FP16 code and every tie in
   all four formats tested); `engine::numfmt` adds absmax integer, sign, nearest-codebook and phase

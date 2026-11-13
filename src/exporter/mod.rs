@@ -287,6 +287,34 @@ impl ModelExporter {
     }
 }
 
+/// A tensor's payload in its selected format, by the same plan the per-tensor GGUF export uses:
+/// the stored bytes when they already match (or the tensor is 1-D or FP32), otherwise the float
+/// source encoded with THME's block encoders. Returns the stored data type name and the bytes.
+pub fn encoded_payload(tensor: &crate::ir::TensorIR) -> Result<(String, Vec<u8>)> {
+    let stored = crate::inference::read_tensor_bytes(tensor)?;
+    match per_tensor_plan(tensor)? {
+        TensorPlan::Copy(ggml_type) => Ok((ggml_type.type_name().to_string(), stored)),
+        TensorPlan::Convert(ggml_type) => {
+            let mut out = Vec::new();
+            conversion::encode_float_source(
+                &mut std::io::Cursor::new(stored),
+                &mut out,
+                &tensor.original_dtype,
+                ggml_type,
+                tensor.numel,
+            )
+            .with_context(|| {
+                format!(
+                    "Cannot encode tensor '{}' as {}",
+                    tensor.name,
+                    ggml_type.type_name()
+                )
+            })?;
+            Ok((ggml_type.type_name().to_string(), out))
+        }
+    }
+}
+
 /// How one tensor is written in a per-tensor export.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TensorPlan {
