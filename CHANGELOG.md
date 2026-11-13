@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **Benchmark statistics** (THME-3028, v0.2.8.5): `bench::stats` gives Wilson and
+  percentile-bootstrap intervals, a paired bootstrap, the exact McNemar test, the number of items
+  a comparison needs, and the Holm correction, with seeded resampling. It reproduces every value
+  in dossier Table R3 and the item counts in R.5.
 - **Benchmark metrics library** (THME-3027, v0.2.8.4): `bench::metrics` extracts answers (exact,
   first line, last number, choice letter, after a marker) and scores them (exact and normalized
   match, numeric tolerance, likelihood choice, unbiased pass@k). pass@k reproduces dossier Table

@@ -74,6 +74,7 @@ Checks on every record:
 
 ## Not yet
 
-The metric implementations are in `thme::bench::metrics` (v0.2.8.4). Computing intervals
-(v0.2.8.5), running tasks (v0.2.8.3) and the three-state gate (v0.2.8.6) build on these formats. JSON Schema files for
+The metrics are in `thme::bench::metrics` (v0.2.8.4) and the intervals and tests in
+`thme::bench::stats` (v0.2.8.5; `interval_for` fills a record's `interval`). Running tasks
+(v0.2.8.3) and the three-state gate (v0.2.8.6) build on these. JSON Schema files for
 both come with THME-3009.
