@@ -10,14 +10,16 @@
 //! [`SandboxError::Unsupported`] and starts nothing. There is no flag that turns layers off.
 //! [`check`] reports, layer by layer, what this host can enforce.
 //!
-//! Backends: Windows (AppContainer and job object). Linux and macOS are refused until their
-//! backends land; see the roadmap.
+//! Backends: Windows (AppContainer and job object), Linux (Landlock, seccomp, rlimits). macOS is
+//! refused until its backend lands; see the roadmap.
 
 use std::ffi::OsString;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+#[cfg(target_os = "linux")]
+mod linux;
 pub mod probe;
 #[cfg(windows)]
 mod windows;
@@ -184,7 +186,11 @@ pub fn check() -> Support {
     {
         windows::check()
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        linux::check()
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         Support {
             os: std::env::consts::OS,
@@ -213,7 +219,11 @@ pub fn run(
     {
         windows::run(policy, program, args, stdin)
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        linux::run(policy, program, args, stdin)
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         let _ = (args, stdin);
         Err(SandboxError::Unsupported {
@@ -226,7 +236,7 @@ pub fn run(
 /// Collects a pipe into memory up to `cap` bytes; returns the bytes and whether the cap was hit.
 /// Keeps reading (and discarding) after the cap is hit so the writer is never blocked; the
 /// caller stops the run when it sees the flag.
-#[cfg_attr(not(windows), allow(dead_code))]
+#[cfg_attr(not(any(windows, target_os = "linux")), allow(dead_code))]
 fn drain(
     mut reader: impl std::io::Read,
     cap: u64,
@@ -249,7 +259,7 @@ fn drain(
 }
 
 /// Sizes of every file under `dir`, recursively, without following links.
-#[cfg_attr(not(windows), allow(dead_code))]
+#[cfg_attr(not(any(windows, target_os = "linux")), allow(dead_code))]
 fn file_sizes(dir: &Path) -> std::collections::HashMap<PathBuf, u64> {
     let mut sizes = std::collections::HashMap::new();
     let mut stack = vec![dir.to_path_buf()];
@@ -273,7 +283,7 @@ fn file_sizes(dir: &Path) -> std::collections::HashMap<PathBuf, u64> {
 
 /// Whether the run wrote a file over `cap`: a file that is new or grew since `before` and is
 /// now larger than `cap`. Files that were already there unchanged do not count.
-#[cfg_attr(not(windows), allow(dead_code))]
+#[cfg_attr(not(any(windows, target_os = "linux")), allow(dead_code))]
 fn wrote_over(dir: &Path, before: &std::collections::HashMap<PathBuf, u64>, cap: u64) -> bool {
     file_sizes(dir)
         .into_iter()

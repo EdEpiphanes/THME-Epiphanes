@@ -4,8 +4,11 @@
 //! failed. Probe exit 0 means the action succeeded. On an OS without a backend yet, `run` must
 //! refuse to start anything.
 
-// Most helpers serve the Windows suite; other OSes only check the refusal until their backends land.
-#![cfg_attr(not(windows), allow(dead_code, unused_imports))]
+// Most helpers serve the backend suites; other OSes only check the refusal until theirs lands.
+#![cfg_attr(
+    not(any(windows, target_os = "linux")),
+    allow(dead_code, unused_imports)
+)]
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -63,7 +66,7 @@ fn s(p: &Path) -> &str {
     p.to_str().unwrap()
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 #[test]
 fn refuses_to_start_without_a_backend() {
     let rig = Rig::new();
@@ -74,9 +77,20 @@ fn refuses_to_start_without_a_backend() {
     assert!(!thme::sandbox::check().all_supported());
 }
 
-#[cfg(windows)]
-mod windows {
+#[cfg(any(windows, target_os = "linux"))]
+mod escapes {
     use super::*;
+
+    /// Windows: the run's ACL entries are gone afterwards. Elsewhere there are none to check.
+    fn assert_no_container_entry(path: &Path) {
+        if cfg!(windows) {
+            let acl = std::process::Command::new("icacls")
+                .arg(path)
+                .output()
+                .unwrap();
+            assert!(!String::from_utf8_lossy(&acl.stdout).contains("S-1-15-2"));
+        }
+    }
 
     fn run_ok(rig: &Rig, policy: &Policy, args: &[&str]) -> Outcome {
         rig.probe(policy, args)
@@ -162,10 +176,32 @@ mod windows {
         assert_blocked(&run_ok(&rig, &p, &["dns", "example.com"]), "dns");
     }
 
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn e05_unix_and_abstract_sockets_are_unreachable() {
+        use std::os::linux::net::SocketAddrExt;
+        use std::os::unix::net::{SocketAddr, UnixListener};
+        let rig = Rig::new();
+        let path = rig.outside("outside.sock");
+        let on_path = UnixListener::bind(&path).unwrap();
+        on_path.set_nonblocking(true).unwrap();
+        let name = format!("thme-escape-{}", std::process::id());
+        let addr = SocketAddr::from_abstract_name(name.as_bytes()).unwrap();
+        let on_abstract = UnixListener::bind_addr(&addr).unwrap();
+        on_abstract.set_nonblocking(true).unwrap();
+        let p = rig.policy();
+        assert_blocked(&run_ok(&rig, &p, &["unix", s(&path)]), "unix socket");
+        assert_blocked(
+            &run_ok(&rig, &p, &["unix-abstract", &name]),
+            "abstract socket",
+        );
+        assert!(on_path.accept().is_err() && on_abstract.accept().is_err());
+    }
+
     #[test]
     fn e06_memory_cap() {
         let rig = Rig::new();
-        let o = run_ok(&rig, &rig.policy(), &["alloc", "2000000000"]);
+        let o = run_ok(&rig, &rig.policy(), &["alloc", "800000000"]);
         assert_blocked(&o, "alloc");
         assert_eq!(o.ended, Ended::MemoryLimit);
     }
@@ -188,9 +224,25 @@ mod windows {
     #[test]
     fn e08_process_cap() {
         let rig = Rig::new();
-        let o = run_ok(&rig, &rig.policy(), &["spawn", "100"]);
+        let p = rig.policy();
+        let o = run_ok(&rig, &p, &["spawn", "100"]);
         assert_blocked(&o, "spawn 100");
-        assert_eq!(o.ended, Ended::ProcessLimit);
+        if cfg!(windows) {
+            assert_eq!(o.ended, Ended::ProcessLimit);
+        }
+        // Whatever ended the run, no more than the cap was ever started.
+        let out = String::from_utf8_lossy(&o.stdout);
+        if let Some(n) = out
+            .split_whitespace()
+            .nth(1)
+            .and_then(|n| n.parse::<u32>().ok())
+        {
+            assert!(
+                n < p.max_processes,
+                "started {n} with a cap of {}",
+                p.max_processes
+            );
+        }
     }
 
     #[test]
@@ -233,8 +285,9 @@ mod windows {
         let rig = Rig::new();
         let o = run_ok(&rig, &rig.policy(), &["env", "PATH"]);
         assert_blocked(&o, "env PATH");
-        let o = run_ok(&rig, &rig.policy(), &["env", "USERPROFILE"]);
-        assert_blocked(&o, "env USERPROFILE");
+        let home = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
+        let o = run_ok(&rig, &rig.policy(), &["env", home]);
+        assert_blocked(&o, "env home");
     }
 
     #[test]
@@ -272,11 +325,7 @@ mod windows {
         let o = run(&p, &rig.probe, &args, b"hello").unwrap();
         assert_eq!(o.stdout, b"hello");
         // Grants are removed afterwards: the work folder no longer lists a container SID.
-        let acl = std::process::Command::new("icacls")
-            .arg(rig.work())
-            .output()
-            .unwrap();
-        assert!(!String::from_utf8_lossy(&acl.stdout).contains("S-1-15-2"));
+        assert_no_container_entry(&rig.work());
     }
 
     #[test]
@@ -297,11 +346,7 @@ mod windows {
                 assert_eq!(h.join().unwrap(), Ended::Exited(DID));
             }
         });
-        let acl = std::process::Command::new("icacls")
-            .arg(&rig.probe)
-            .output()
-            .unwrap();
-        assert!(!String::from_utf8_lossy(&acl.stdout).contains("S-1-15-2"));
+        assert_no_container_entry(&rig.probe);
     }
 
     #[test]
