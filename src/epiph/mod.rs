@@ -122,7 +122,7 @@ pub fn is_epiph(path: &Path) -> bool {
         .is_some_and(|e| e.eq_ignore_ascii_case(EXTENSION))
 }
 
-fn align(n: u64) -> u64 {
+pub(crate) fn align(n: u64) -> u64 {
     n.div_ceil(ALIGN) * ALIGN
 }
 
@@ -248,12 +248,15 @@ pub fn write(model: &ModelIR, options: &PackOptions, out: &Path) -> Result<PackS
 }
 
 /// Header fields and manifest of a file, after the structural checks of the specification.
-struct Opened {
+pub(crate) struct Opened {
     manifest: Manifest,
+    manifest_bytes: Vec<u8>,
     data_offset: u64,
+    /// End of the last payload, relative to the start of the file.
+    payload_end: u64,
 }
 
-fn open(path: &Path) -> Result<Opened> {
+pub(crate) fn open(path: &Path) -> Result<Opened> {
     let mut file = File::open(path).with_context(|| format!("Failed to open {path:?}"))?;
     let file_len = file.metadata()?.len();
     let mut header = [0u8; HEADER_LEN as usize];
@@ -317,7 +320,9 @@ fn open(path: &Path) -> Result<Opened> {
     }
     Ok(Opened {
         manifest,
+        manifest_bytes,
         data_offset,
+        payload_end: data_offset + end,
     })
 }
 
@@ -326,6 +331,7 @@ pub fn read(path: &Path) -> Result<(ModelIR, Manifest)> {
     let Opened {
         manifest,
         data_offset,
+        ..
     } = open(path)?;
     let mut model: ModelIR = serde_json::from_value(manifest.model.clone())
         .with_context(|| format!("{path:?} has an unreadable model description"))?;
@@ -365,6 +371,7 @@ pub fn read_calibration(path: &Path) -> Result<Option<CalibrationFile>> {
     let Opened {
         manifest,
         data_offset,
+        ..
     } = open(path)?;
     let Some(entry) = manifest
         .attachments
@@ -424,6 +431,8 @@ pub fn verify(path: &Path) -> Result<VerifyReport> {
         payload_bytes,
     })
 }
+
+pub mod sign;
 
 #[cfg(test)]
 mod tests;

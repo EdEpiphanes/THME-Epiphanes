@@ -51,7 +51,7 @@ commercial release follows later. This week's work, all tested on synthetic data
 
 | Track | Shipped | In progress |
 | :--- | :--- | :--- |
-| **Epiphanes model format** | [`.epiph` v1.0](docs/formats/epiph-v1.md): one verifiable file with weights, model description, recipe, provenance, quality results and calibration (`thme epiph pack`, `thme epiph verify`); converts to GGUF and SafeTensors | Signed files; quantized payloads |
+| **Epiphanes model format** | [`.epiph` v1.0](docs/formats/epiph-v1.md): one verifiable file with weights, model description, recipe, provenance, quality results and calibration (`thme epiph pack`, `thme epiph verify`); signed with Minisign (`thme epiph sign`); converts to GGUF and SafeTensors | Quantized payloads |
 | **Model security** | `thme scan PATH`: finds code-executing pickles, chat-template injection, `trust_remote_code` files, hidden executables and malformed headers without loading anything | Developer sandbox; more formats |
 | **Math engine** | `src/engine`: one shared Walsh-Hadamard transform, one ternary quantizer, an exact DP allocator (`thme search --solver dp`) beside greedy and thresholds | Number formats with error bounds |
 | **Quality and evidence** | Every figure labelled Measured, Tested, Estimate or Simulated; project glossary in [CONTEXT.md](CONTEXT.md) | One versioned quality gate with custom criteria |

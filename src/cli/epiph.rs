@@ -6,6 +6,7 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use crate::epiph::sign::{self, SignatureStatus};
 use crate::epiph::{self, PackOptions};
 use crate::exporter::compute_file_sha256;
 use crate::inference::CalibrationFile;
@@ -21,10 +22,31 @@ pub struct EpiphArgs {
 pub enum EpiphCommand {
     /// Pack a model (SafeTensors directory, GGUF or .epiph) with its metadata into one .epiph file
     Pack(PackArgs),
-    /// Check an .epiph file: header, layout, every SHA-256 digest, and every tensor's shape and type
+    /// Check an .epiph file: header, layout, every SHA-256 digest, every tensor's shape and type,
+    /// and its signature (against the Epiphanes key unless --public-key is given)
     Verify {
         #[arg(value_name = "FILE")]
         file: PathBuf,
+        /// Minisign public key (.pub) to check the signature with
+        #[arg(long)]
+        public_key: Option<PathBuf>,
+        /// Fail unless the file carries a valid signature
+        #[arg(long)]
+        require_signature: bool,
+    },
+    /// Sign an .epiph file in place with a Minisign secret key (replaces an earlier signature)
+    Sign {
+        #[arg(value_name = "FILE")]
+        file: PathBuf,
+        /// Minisign secret key file; it is read, never copied or printed
+        #[arg(long)]
+        secret_key: PathBuf,
+        /// Name of an environment variable holding the key's password (omit for unencrypted keys)
+        #[arg(long)]
+        password_env: Option<String>,
+        /// Matching public key, to check the new signature before writing it
+        #[arg(long)]
+        public_key: Option<PathBuf>,
     },
 }
 
@@ -61,6 +83,11 @@ pub struct PackArgs {
 fn read_json(path: &Path) -> Result<Value> {
     let text = std::fs::read_to_string(path).with_context(|| format!("Failed to read {path:?}"))?;
     serde_json::from_str(&text).with_context(|| format!("Failed to parse {path:?}"))
+}
+
+fn load_public_key(path: &Path) -> Result<minisign::PublicKey> {
+    let text = std::fs::read_to_string(path).with_context(|| format!("Failed to read {path:?}"))?;
+    sign::public_key_from_text(&text)
 }
 
 pub fn pack(args: &PackArgs) -> Result<epiph::PackSummary> {
@@ -112,12 +139,72 @@ pub fn execute(args: EpiphArgs) -> Result<()> {
                 s.tensors, s.attachments, pack_args.out, s.file_bytes, s.sha256
             );
         }
-        EpiphCommand::Verify { file } => {
+        EpiphCommand::Verify {
+            file,
+            public_key,
+            require_signature,
+        } => {
             let r = epiph::verify(&file)?;
             println!(
                 "OK: {} tensors and {} attachments verified ({} payload bytes)",
                 r.tensors, r.attachments, r.payload_bytes
             );
+            let key = public_key.as_deref().map(load_public_key).transpose()?;
+            match sign::check(&file, key.as_ref())? {
+                SignatureStatus::Valid {
+                    key_id,
+                    by_epiphanes,
+                    ..
+                } => println!(
+                    "Signature: valid, key {key_id}{}",
+                    if by_epiphanes { " (Epiphanes)" } else { "" }
+                ),
+                SignatureStatus::UnknownKey { key_id } => {
+                    println!(
+                        "Signature: by key {key_id}, not Epiphanes; pass --public-key to check it"
+                    );
+                    if require_signature {
+                        bail!("signature not verified");
+                    }
+                }
+                SignatureStatus::Unsigned => {
+                    println!("Signature: none");
+                    if require_signature {
+                        bail!("file is not signed");
+                    }
+                }
+            }
+        }
+        EpiphCommand::Sign {
+            file,
+            secret_key,
+            password_env,
+            public_key,
+        } => {
+            let password = match password_env {
+                Some(var) => Some(
+                    std::env::var(&var)
+                        .with_context(|| format!("environment variable {var} is not set"))?,
+                ),
+                None => None,
+            };
+            let text = std::fs::read_to_string(&secret_key)
+                .with_context(|| format!("Failed to read the secret key file {secret_key:?}"))?;
+            let key_box = minisign::SecretKeyBox::from_string(&text)
+                .map_err(|e| anyhow::anyhow!("not a Minisign secret key file: {e}"))?;
+            // Never prompt: an encrypted key needs --password-env.
+            let sk = match password {
+                Some(pw) => minisign::SecretKey::from_box(key_box, Some(pw)),
+                None => minisign::SecretKey::from_unencrypted_box(key_box),
+            }
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "cannot open the secret key ({e}); for a password-protected key pass --password-env VAR"
+                )
+            })?;
+            let pk = public_key.as_deref().map(load_public_key).transpose()?;
+            sign::sign(&file, &sk, pk.as_ref())?;
+            println!("Signed {file:?}");
         }
     }
     Ok(())
@@ -127,6 +214,53 @@ pub fn execute(args: EpiphArgs) -> Result<()> {
 mod tests {
     use super::*;
     use crate::cli::evaluate::tests::synthetic_checkpoint;
+
+    #[test]
+    fn sign_and_verify_through_the_commands_with_key_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let (model, _) = synthetic_checkpoint(dir.path());
+        let file = dir.path().join("s.epiph");
+        pack(&PackArgs {
+            model,
+            out: file.clone(),
+            recipe: None,
+            calibration: None,
+            quality: vec![],
+            parent: vec![],
+            annotate: vec![],
+        })
+        .unwrap();
+        let pair = minisign::KeyPair::generate_unencrypted_keypair().unwrap();
+        let sk_path = dir.path().join("test.key");
+        let pk_path = dir.path().join("test.pub");
+        std::fs::write(&sk_path, pair.sk.to_box(None).unwrap().into_string()).unwrap();
+        std::fs::write(&pk_path, pair.pk.to_box().unwrap().into_string()).unwrap();
+        let verify = |key: Option<PathBuf>, require: bool| {
+            execute(EpiphArgs {
+                command: EpiphCommand::Verify {
+                    file: file.clone(),
+                    public_key: key,
+                    require_signature: require,
+                },
+            })
+        };
+        assert!(
+            verify(None, true).is_err(),
+            "unsigned file fails --require-signature"
+        );
+        execute(EpiphArgs {
+            command: EpiphCommand::Sign {
+                file: file.clone(),
+                secret_key: sk_path,
+                password_env: None,
+                public_key: Some(pk_path.clone()),
+            },
+        })
+        .unwrap();
+        assert!(verify(Some(pk_path), true).is_ok());
+        assert!(verify(None, true).is_err(), "not an Epiphanes signature");
+        assert!(verify(None, false).is_ok());
+    }
 
     #[test]
     fn pack_from_the_command_line_and_verify() {
