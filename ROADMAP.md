@@ -32,7 +32,8 @@ flowchart LR
     classDef later fill:#ffffff,stroke:#0b0b0b,stroke-width:1.5px,stroke-dasharray:4 3,color:#52514e;
 
     subgraph NOW["Now"]
-        N4["Benchmark registry"]:::now
+        N4["Sandbox implementation"]:::now
+        N5["Benchmark runner"]:::now
     end
     subgraph NEXT["Next"]
         X1["Benchmark runner and statistics"]:::later
@@ -66,6 +67,7 @@ flowchart LR
 | Number formats (THME-3006) | `engine::minifloat` (FP16, BF16, FP8 E4M3/E5M2, nearest-even) and integer, sign, codebook, phase quantizers; fixed an FP16 rounding bug in every block encoder (THME-3023) | Tested: every FP16 code, every tie in four formats |
 | SPDX headers (THME-3005) | `AGPL-3.0-only` header on all 168 source files; `scripts/spdx.py --check` in CI | Tested in CI |
 | Signed `.epiph` (THME-3019) | Minisign signature over the manifest; `thme epiph sign`, `verify --require-signature`; Epiphanes key by default | Tested: tamper, wrong key, broken trailer |
+| Benchmark registry (THME-3024) | `src/bench`: strict task files and result records with every Table R2 field; `thme bench list/validate/verify-dataset` | Tested: malformed files refused, records round-trip, record-task mismatch caught |
 | Sandbox design (THME-3020, design part) | [docs/sandbox.md](docs/sandbox.md): threat model, one fail-closed interface, layers per OS, 13 escape tests, dependency proposal | Design only; nothing built |
 | No-panic rule, GUI split, glossary | Compiler-enforced; Studio tabs as modules; `CONTEXT.md` | Tested |
 
@@ -73,14 +75,15 @@ flowchart LR
 
 | Track | Item | Status | Depends on |
 | :--- | :--- | :--- | :--- |
-| Quality and evidence | **Benchmark registry** (v0.2.8.2): declarative task files and result records | Not started | Versioned gate |
+| Security | **Sandbox implementation** (THME-3020, v0.2.7.6): escape tests on three OSes | Blocked | Owner approval of `landlock`, `seccompiler`, `windows-sys` |
+| Quality and evidence | **Benchmark runner and metrics** (v0.2.8.3-4): imported mode, resume, metric library; native mode on synthetic models | Not started | Benchmark registry |
 
 ### Next: planned
 
 | Track | Item | Depends on |
 | :--- | :--- | :--- |
-| Security | Sandbox implementation with escape tests (v0.2.7.6, THME-3020); scanner for compressed pickles, ONNX, Keras, NumPy (THME-3022); scan on import (v0.2.7.3) | Owner approval of the sandbox dependencies |
-| Quality and evidence | Benchmark runner, metrics, statistics and three-state gate (dossier WP32-35); claim register (THME-3000); versioned schemas (THME-3009) | Benchmark registry |
+| Security | Scanner for compressed pickles, ONNX, Keras, NumPy (THME-3022); scan on import (v0.2.7.3) | Scanner v1 |
+| Quality and evidence | Statistics and three-state gate (dossier WP34-35); claim register (THME-3000); versioned schemas (THME-3009) | Benchmark runner |
 | Engine | Transport and Sinkhorn (WP4), ODE steppers (WP6), dependency-free SVG visual engine (WP9) | Engine core |
 | Formats and calibration | GPTQ-style rounding (THME-2205); llama.cpp compatibility check on synthetic files (THME-2208) | Calibration |
 
@@ -354,7 +357,7 @@ interval, a three-state verdict and a chart; harness self-tests pass.
 | # | Item | Status |
 | :--- | :--- | :--- |
 | v0.2.8.1 | One versioned quality gate: custom criteria, one or many, absolute and relative margins (WP20, THME-3003) | **Done**: every gate decision goes through `GateSpec`; reports record the gate hash; `thme validate` re-judges |
-| v0.2.8.2 | Benchmark registry: declarative task files and result records (WP31) | |
+| v0.2.8.2 | Benchmark registry: declarative task files and result records (WP31) | **Done**: [formats](docs/benchmark-registry.md), strict checks, `thme bench` (THME-3024) |
 | v0.2.8.3 | Benchmark runner: native, bridged and imported modes; resume and cache (WP32) | |
 | v0.2.8.4 | Metrics library: exact and normalized match, numeric tolerance, likelihood choice, pass@k (WP33) | |
 | v0.2.8.5 | Statistics: Wilson and bootstrap intervals, paired tests, required-items calculator (WP34) | |

@@ -275,6 +275,12 @@ closes it.
 - **Problem**: v1 does not inspect deflate-compressed pickles, ONNX, Keras Lambda layers or NumPy object arrays.
 - **Done means**: Each format added with fixtures; compressed pickles inspected with a pure-Rust inflate dependency proposed first.
 
+### [THME-3024] Benchmark registry: task files and result records
+
+- **Milestone**: v0.2.8 · **Roadmap**: v0.2.8.2 · **Priority**: p1 · **Area**: quality · **Type**: feature · **Status**: done
+- **Problem**: Dossier R.4 and WP31: benchmarks must be declarative data with one result format, so runs are reproducible and intervals and paired tests can be computed without re-running.
+- **Done means**: Task file (dataset path and hash, split, licence, prompt template, extraction, metric) and result record (every Table R2 field, per-item results) with strict validation; a folder registry; `thme bench list/validate/verify-dataset`; tests show malformed files are refused and a record round-trips.
+
 ### [THME-3023] Re-measure reports affected by the FP16 rounding fix
 
 - **Milestone**: v0.2.2 · **Roadmap**: none · **Priority**: p1 · **Area**: research · **Type**: chore · **Status**: blocked
