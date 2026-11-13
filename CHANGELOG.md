@@ -98,6 +98,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/research/THME_measured_findings_2026-11.md` and `docs/subsystems.md`.
 
 ### Changed
+- One Walsh-Hadamard transform, `engine::basis` (THME-3004): the three copies in
+  `MatrixMath`, `byoa::wht_blocks` and the `OrthogonalRotation` rule now call it. Outputs are
+  bit-identical to before (hash-pinned test) and checked against the explicit Hadamard matrix.
 - Studio code: `src/gui/app.rs` (5,787 lines) is split into one module per tab under
   `src/gui/app/` (THME-2003); `app.rs` keeps state, shared logic and the frame loop (1,812 lines).
   No behaviour change: tab captures match the committed screenshots.

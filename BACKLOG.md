@@ -135,8 +135,8 @@ closes it.
 - **Done means**: A gate is versioned data with a content hash, absolute and relative margins; every report records its gate version; MMLU/GSM8K marked not measured.
 
 ### [THME-3004] Shared basis module: one Walsh-Hadamard transform (dossier WP5)
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: engine · **Type**: refactor · **Status**: triage
-- **Problem**: Two implementations exist: `transform::fast_walsh_hadamard_transform` and `byoa::wht_blocks`. Two copies can drift and confound a comparison.
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: engine · **Type**: refactor · **Status**: done
+- **Problem**: Three implementations existed: `MatrixMath::fast_walsh_hadamard_transform`, `byoa::wht_blocks` and an inline copy in the `OrthogonalRotation` rule. Two copies can drift and confound a comparison.
 - **Done means**: `engine::basis` owns the transform; both callers use it with bit-identical results before and after; orthonormality and involution tests.
 
 ### [THME-3005] SPDX headers on every source file
@@ -147,6 +147,7 @@ closes it.
 ### [THME-3006] Number-format conversions with stated error bounds (dossier WP3)
 - **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: engine · **Type**: feature · **Status**: triage
 - **Problem**: Codecs live in the exporter without declared error bounds.
+- **Also**: absmean ternary is written three times (`MatrixMath::discretize_bitnet_ternary`, `BitNetPacker::pack_matrix`, the BYOA `AbsmeanTernary` rule) with different all-zero handling; one shared quantizer.
 - **Done means**: `engine::numfmt` covers integer, ternary, binary, codebook, FP16/BF16/FP8 and phase, each with a bound its tests confirm.
 
 ### [THME-3007] Dependency-free SVG visual engine (dossier WP9)
