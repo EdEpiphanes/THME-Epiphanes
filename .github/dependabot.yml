@@ -28,3 +28,16 @@ updates:
     labels: ["type:chore", "area:ci"]
     commit-message:
       prefix: "chore(ci)"
+
+  - package-ecosystem: npm
+    directory: /editors/vscode
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    labels: ["type:chore", "area:dependencies"]
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      vscode-extension:
+        update-types: ["minor", "patch"]
