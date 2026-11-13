@@ -15,7 +15,7 @@ jobs:
     name: Verify tag and quality gates
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Tag matches Cargo.toml version
         run: |
           crate_version="$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)"
@@ -43,7 +43,7 @@ jobs:
           - { os: macos-latest, target: aarch64-apple-darwin, ext: "" }
           - { os: macos-latest, target: x86_64-apple-darwin, ext: "" }
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Add target to the pinned toolchain
         run: rustup target add ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
@@ -90,7 +90,7 @@ jobs:
       # Password-less Minisign secret key (minisign -G -W). Signing is skipped when unset.
       MINISIGN_KEY: ${{ secrets.MINISIGN_KEY }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v4
         with:
           path: dist
