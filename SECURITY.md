@@ -9,22 +9,29 @@
 
 ## Binary Verification & Cryptographic Provenance
 
-All official release binaries, archives, and manifests for THME (Epiphanes) are signed cryptographically:
+Every release archive on the GitHub Releases page ships with a SHA-256 checksum and a Minisign
+signature. The combined `SHA256SUMS.txt` manifest is signed too.
 
-1. **SHA-256 Digest**:
+**Release signing key** (also committed as [minisign.pub](minisign.pub)):
+
+```text
+untrusted comment: minisign public key 35DF5AFBFC0331CD
+RWTNMQP8+1rfNWQsVzNDUlnVRotV3ZdJrNsbpoP8+FedvedBGyRUzB6O
+```
+
+1. **Verify the signature** (install Minisign with `winget install jedisct1.minisign`,
+   `brew install minisign` or `apt install minisign`):
    ```bash
-   sha256sum -c SHA256SUMS.txt
+   minisign -Vm SHA256SUMS.txt -P RWTNMQP8+1rfNWQsVzNDUlnVRotV3ZdJrNsbpoP8+FedvedBGyRUzB6O
+   minisign -Vm <archive>.tar.gz -P RWTNMQP8+1rfNWQsVzNDUlnVRotV3ZdJrNsbpoP8+FedvedBGyRUzB6O
    ```
 
-2. **Minisign Verification**:
+2. **Verify the checksums**:
    ```bash
-   minisign -Vm <archive>.tar.gz -P RWTJ3yD... (Epiphanes public key)
+   sha256sum -c SHA256SUMS.txt --ignore-missing
    ```
 
-3. **GPG Signature Verification**:
-   ```bash
-   gpg --verify <archive>.tar.gz.asc <archive>.tar.gz
-   ```
+If the key ever changes, the new key is announced in a release signed with the old one.
 
 ## Reporting a Vulnerability
 
