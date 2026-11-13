@@ -29,7 +29,7 @@ All agents and contributors must uphold these rules without exception:
    - Any synthetic telemetry or simulated token flow must be explicitly labeled as simulated or benchmark projections.
 
 3. **Zero Committed Binaries or Model Weights**:
-   - Never commit `.safetensors`, `.gguf`, `.bin`, `.pt`, `.onnx`, `.thme`, `.exe`, `.dll`, `.so`, `.dylib`, or `.pdb` files.
+   - Never commit `.safetensors`, `.gguf`, `.bin`, `.pt`, `.onnx`, `.thme`, `.epiph`, `.exe`, `.dll`, `.so`, `.dylib`, or `.pdb` files.
    - Use mock generator scripts (`examples/generate_mock_model.rs`) for testing and CI validation.
 
 4. **Infallible Parsers & Graceful Error Handling**:

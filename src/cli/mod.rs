@@ -1,6 +1,7 @@
 pub mod calibrate;
 pub mod co_surgery;
 pub mod convert;
+pub mod epiph;
 pub mod evaluate;
 pub mod export;
 pub mod inspect;
@@ -78,6 +79,9 @@ pub enum Commands {
     /// Export a source-backed model as GGUF or SafeTensors
     Export(export::ExportArgs),
 
+    /// Pack or verify Epiphanes model files (.epiph): weights plus all their metadata
+    Epiph(epiph::EpiphArgs),
+
     /// Generate PyTorch / CUDA fine-tuning scripts or Hugging Face configurations
     Interop(interop::InteropArgs),
 
@@ -107,6 +111,7 @@ pub fn run() -> Result<()> {
         Commands::Speculate(args) => speculate::execute(args),
         Commands::Roofline(args) => roofline::execute(args),
         Commands::Export(args) => export::execute(args),
+        Commands::Epiph(args) => epiph::execute(args),
         Commands::Interop(args) => interop::execute(args),
         Commands::Mcp(args) => mcp::execute(args),
         Commands::CoSurgery(args) => co_surgery::execute(args),

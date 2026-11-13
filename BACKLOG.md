@@ -177,6 +177,36 @@ closes it.
 - **Problem**: Reports show nominal bits per weight (format bit-widths averaged over all parameters, unchanged tensors at stored width). `TensorFormat::bits_per_weight` also says 8.0 for Q8_0 and 4.5 for Q4_0, while the stored blocks are 8.5 and 4.5. llama.cpp reports file-level bits per weight (artifact bytes x 8 / parameters), which includes block scales.
 - **Done means**: Every report that writes an artifact also states measured bits per weight from its byte size, next to the nominal figure, each labelled; the nominal definition is kept for unexported candidates. No committed number changes without a new report.
 
+### [THME-3012] `.epiph` v1.0: open container with full model metadata
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: exporter · **Type**: feature · **Status**: done
+- **Problem**: THME had no native format that carries a model with its recipe, provenance, quality results and calibration.
+- **Done means**: Spec `docs/formats/epiph-v1.md`; `src/epiph` reader/writer; `thme epiph pack|verify`; the importer reads `.epiph`; round trip, corruption, truncation and GGUF-conversion tests pass.
+
+### [THME-3013] `.epiph`: pack tensors in their selected formats
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: exporter · **Type**: feature · **Status**: triage
+- **Problem**: v1.0 stores tensors as stored; a candidate's quantized formats are not packed yet.
+- **Done means**: Packing a recipe candidate stores each tensor in its selected format (reusing the exporter codecs); the forward pass on the packed file equals the in-memory candidate.
+
+### [THME-3014] `.epiph`: tokenizer and GGUF metadata attachments
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: exporter · **Type**: feature · **Status**: triage
+- **Problem**: GGUF metadata (including the tokenizer) is not serializable yet, so GGUF to .epiph to GGUF loses it.
+- **Done means**: GGUF -> .epiph -> GGUF keeps every metadata key; SafeTensors tokenizer files are attached.
+
+### [THME-3015] `.epiph`: lossless payload compression
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: exporter · **Type**: feature · **Status**: triage
+- **Problem**: Owner asks for a compressed variant. Quantization already shrinks weights; lossless coding on top needs a pure-Rust codec dependency.
+- **Done means**: Dependency proposed and approved (licence, binary size); per-payload `encoding` field; compression ratio and decode speed reported as measured on the synthetic checkpoint only.
+
+### [THME-3016] `.epiph`: GPU/CPU placement plan
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: engine · **Type**: feature · **Status**: triage
+- **Problem**: Owner asks for files that place their own parameters across GPU and CPU. THME has no GPU backend yet (v0.3).
+- **Done means**: A `placement` section from the exact allocator for a stated memory budget per tier; tested on synthetic budgets; used by the GPU runtime when it exists.
+
+### [THME-3017] Trademark search and filing for the format name
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: legal · **Type**: chore · **Status**: triage
+- **Problem**: The owner wants the format name protected under Epiphanes. Extensions are not usually registrable; the name is.
+- **Done means**: A lawyer has searched and advised on the name; filing decided by the owner.
+
 <!-- backlog:end -->
 
 ---

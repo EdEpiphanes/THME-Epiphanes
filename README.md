@@ -354,6 +354,7 @@ THME is also a research programme into heterogeneous representations for languag
 
 - [Research Programme v2](docs/research/THME_Research_Programme_v2.pdf): hypotheses, method, controls
 - [Measured findings, November 2026](docs/research/THME_measured_findings_2026-11.md): what the first experiments support and refute
+- [The `.epiph` format](docs/formats/epiph-v1.md): Epiphanes model files holding weights, recipe, provenance, quality results and calibration in one verifiable file (`thme epiph pack`, `thme epiph verify`)
 - [Research Dossier v3.1](docs/research/THME_Research_Dossier_v3.1_2026-11-13.pdf) (theoretical proposal and engineering brief; no measurements of its own) and its [review against the repository](docs/research/REVIEW_dossier_v3.1.md)
 
 ## Contributing

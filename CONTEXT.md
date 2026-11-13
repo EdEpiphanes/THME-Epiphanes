@@ -51,6 +51,10 @@ _Avoid_: plugin (reserved for out-of-process extensions)
 **Rule**:
 The transformation an algorithm performs on a tensor's weights, with a weight contract.
 
+**Epiphanes model file**:
+A single `.epiph` file holding a model's weights, its description and everything known about it, each payload with a digest.
+_Avoid_: epi file, THME file, checkpoint (for this format)
+
 **Calibration statistics**:
 Per-input-channel activation statistics of each linear tensor, collected by running the source model over calibration text.
 _Avoid_: calibration data, activations

@@ -47,6 +47,9 @@ impl NeoxConfig {
 
     /// Overrides rotary, normalization and residual settings from a Hugging Face `config.json`.
     pub fn with_hf_config(mut self, model_path: &Path) -> Result<Self> {
+        if crate::epiph::is_epiph(model_path) {
+            return Ok(self); // self-describing; never read a sibling config.json
+        }
         let dir = if model_path.is_file() {
             model_path.parent().unwrap_or_else(|| Path::new("."))
         } else {
