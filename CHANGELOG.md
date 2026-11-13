@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### License
 - **THME is now dual-licensed: AGPL-3.0-only or a commercial license from Epiphanes**
   ([LICENSING.md](LICENSING.md)). Source obtained before 2026-11-13, up to and including commit
-  `d161bdb`, stays available under Apache-2.0. Contributions are accepted under the contributor
+  `56ae520`, stays available under Apache-2.0. Contributions are accepted under the contributor
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added

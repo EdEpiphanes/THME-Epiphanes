@@ -31,7 +31,7 @@ To ask about a commercial license, hosted service or trial, contact Epiphanes th
 ## Earlier versions
 
 THME was published under the Apache License 2.0 until 2026-11-13. Copies of the source obtained
-before that date, up to and including commit `d161bdb` on `main`, remain available under
+before that date, up to and including commit `56ae520` on `main`, remain available under
 Apache-2.0 to whoever received them. All later changes are AGPL-3.0-only or commercial.
 
 ## Contributions
@@ -44,7 +44,7 @@ To keep dual licensing possible, contributors agree to the contributor terms in
 THME depends on third-party crates under their own permissive licences (MIT, Apache-2.0, BSD,
 MPL-2.0, Unicode and font licences). `cargo deny check licenses` enforces the allow-list in
 [deny.toml](deny.toml). Those licences continue to apply to those components under either THME
-license.
+license. Every release archive includes their full notices in `THIRD_PARTY_LICENSES.html`.
 
 ## Trademarks
 
