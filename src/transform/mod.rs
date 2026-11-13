@@ -155,38 +155,7 @@ impl MatrixMath {
     /// Rotates the basis to evenly spread energy and eliminate high-amplitude outliers.
     /// Returns an error if the slice length is not a power of two.
     pub fn fast_walsh_hadamard_transform(data: &mut [f32]) -> Result<(), String> {
-        let n = data.len();
-        if n < 2 {
-            return Ok(());
-        }
-        if (n & (n - 1)) != 0 {
-            return Err(format!(
-                "Fast Walsh-Hadamard Transform requires power-of-two length; got {n}"
-            ));
-        }
-
-        let mut len = 1;
-        while len < n {
-            let mut i = 0;
-            while i < n {
-                for j in 0..len {
-                    let u = data[i + j];
-                    let v = data[i + len + j];
-                    data[i + j] = u + v;
-                    data[i + len + j] = u - v;
-                }
-                i += 2 * len;
-            }
-            len *= 2;
-        }
-
-        // Normalize by 1 / sqrt(N)
-        let norm = 1.0 / (n as f32).sqrt();
-        for x in data.iter_mut() {
-            *x *= norm;
-        }
-
-        Ok(())
+        crate::engine::basis::walsh_hadamard(data).map_err(|e| e.to_string())
     }
 
     /// Truncated SVD power-iteration approximation for rank-1 projection:

@@ -8,6 +8,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::engine::basis::{walsh_hadamard, walsh_hadamard_blocks};
 use crate::ir::TensorRole;
 
 /// Category of the custom algorithm
@@ -246,29 +247,6 @@ impl AlgorithmDefinition {
     }
 }
 
-/// Normalized in-place Walsh-Hadamard transform on each block of `b` values (`b` a power of two).
-fn wht_blocks(weights: &mut [f32], b: usize) {
-    for chunk in weights.chunks_exact_mut(b) {
-        let mut step = 1;
-        while step < b {
-            let mut i = 0;
-            while i < b {
-                for j in 0..step {
-                    let (u, v) = (chunk[i + j], chunk[i + step + j]);
-                    chunk[i + j] = u + v;
-                    chunk[i + step + j] = u - v;
-                }
-                i += 2 * step;
-            }
-            step *= 2;
-        }
-        let norm = 1.0 / (b as f32).sqrt();
-        for x in chunk.iter_mut() {
-            *x *= norm;
-        }
-    }
-}
-
 /// Applies one transformation rule in place (shared by plain and composed rules).
 fn apply_rule(rule: &TransformationRule, weights: &mut [f32]) -> Result<(), String> {
     let n = weights.len();
@@ -385,9 +363,10 @@ fn apply_rule(rule: &TransformationRule, weights: &mut [f32]) -> Result<(), Stri
                     "RotatedQuantize needs a power-of-two block size dividing {n}, got {b}"
                 ));
             }
-            wht_blocks(weights, b);
+            walsh_hadamard_blocks(weights, b).map_err(|e| e.to_string())?;
             apply_rule(inner, weights)?;
-            wht_blocks(weights, b); // the normalized Hadamard matrix is its own inverse
+            // The normalized Hadamard matrix is its own inverse.
+            walsh_hadamard_blocks(weights, b).map_err(|e| e.to_string())?;
         }
         TransformationRule::OrthogonalRotation { block_size, .. } => {
             let raw_b = (*block_size).max(2);
@@ -397,27 +376,9 @@ fn apply_rule(rule: &TransformationRule, weights: &mut [f32]) -> Result<(), Stri
                 1usize << (usize::BITS - 1 - raw_b.leading_zeros()).max(1)
             };
             for chunk in weights.chunks_mut(b) {
-                let len = chunk.len();
-                if len >= 2 && (len & (len - 1)) == 0 {
-                    // In-place Walsh-Hadamard butterfly
-                    let mut step = 1;
-                    while step < len {
-                        let mut i = 0;
-                        while i < len {
-                            for j in 0..step {
-                                let u = chunk[i + j];
-                                let v = chunk[i + step + j];
-                                chunk[i + j] = u + v;
-                                chunk[i + step + j] = u - v;
-                            }
-                            i += 2 * step;
-                        }
-                        step *= 2;
-                    }
-                    let norm = 1.0 / (len as f32).sqrt();
-                    for x in chunk.iter_mut() {
-                        *x *= norm;
-                    }
+                // A short tail block is rotated only when its length is a power of two.
+                if chunk.len() >= 2 && chunk.len().is_power_of_two() {
+                    walsh_hadamard(chunk).map_err(|e| e.to_string())?;
                 }
             }
         }
@@ -717,9 +678,9 @@ mod tests {
     fn hadamard_is_its_own_inverse() {
         let original = outlier_weights();
         let mut w = original.clone();
-        wht_blocks(&mut w, 64);
+        walsh_hadamard_blocks(&mut w, 64).unwrap();
         assert_ne!(w, original);
-        wht_blocks(&mut w, 64);
+        walsh_hadamard_blocks(&mut w, 64).unwrap();
         for (a, b) in w.iter().zip(&original) {
             assert!((a - b).abs() < 1e-5);
         }
