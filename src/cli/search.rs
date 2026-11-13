@@ -27,7 +27,7 @@ use crate::inference::{
 use crate::ir::{ModelIR, TensorFormat, TensorRole};
 use crate::parser::ModelImporter;
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, Clone)]
 pub struct SearchArgs {
     /// Model directory or file with on-disk weights (LLaMA family or GPT-NeoX)
     #[arg(value_name = "MODEL_PATH")]
@@ -88,6 +88,16 @@ pub struct SearchArgs {
     /// Tokens after the validation slice held out as a test slice (0 = none); never used by the search
     #[arg(long, default_value_t = 0)]
     pub test_tokens: usize,
+
+    /// Allocation solver on the measured cost table: `greedy` (best saving per unit cost,
+    /// one step at a time) or `dp` (exact minimum predicted cost under the budget)
+    #[arg(long, default_value = "greedy")]
+    pub solver: String,
+
+    /// Size grid for `--solver dp`: the stored linear size is split into this many units and
+    /// each option's size is rounded up to a unit, so every plan also meets the real budget
+    #[arg(long, default_value_t = 10_000)]
+    pub dp_grid: u64,
 }
 
 const LINEAR: [TensorRole; 8] = [
@@ -320,6 +330,98 @@ fn load_or_measure_costs(
 /// A format choice per group (`None` = stored) and the moves that produced it, in order.
 pub type Allocation = (Vec<Option<usize>>, Vec<(usize, Option<usize>)>);
 
+/// Exact allocation on measured costs (`engine::alloc`): the assignment of minimum summed
+/// cost whose nominal size fits `budget_bits`, with sizes rounded up to a grid of `grid`
+/// units of the stored size. Only formats smaller than a group's stored size are options.
+/// Moves are ordered from best to worst saving per unit cost, so global refinement reverts
+/// the least efficient choice first.
+pub fn exact(
+    groups: &[Group],
+    formats: &[TensorFormat],
+    costs: &[Vec<f64>],
+    budget_bits: f64,
+    grid: u64,
+) -> Result<Allocation> {
+    use crate::engine::alloc::{min_cost_choice, Choice};
+    if grid == 0 {
+        bail!("--dp-grid must be at least 1");
+    }
+    let stored: f64 = groups.iter().map(|g| g.stored_bits).sum();
+    if stored <= budget_bits {
+        return Ok((vec![None; groups.len()], Vec::new()));
+    }
+    let unit = stored / grid as f64;
+    let units = |bits: f64| (bits / unit - 1e-9).ceil().max(0.0) as u64;
+    let mut options: Vec<Vec<(Option<usize>, Choice)>> = Vec::with_capacity(groups.len());
+    for (g, group) in groups.iter().enumerate() {
+        let mut row = vec![(
+            None,
+            Choice {
+                weight: units(group.stored_bits),
+                cost: 0.0,
+            },
+        )];
+        for (f, format) in formats.iter().enumerate() {
+            let bits = group.params as f64 * format.bits_per_weight();
+            if bits < group.stored_bits {
+                row.push((
+                    Some(f),
+                    Choice {
+                        weight: units(bits),
+                        cost: costs[g][f],
+                    },
+                ));
+            }
+        }
+        options.push(row);
+    }
+    let items: Vec<Vec<Choice>> = options
+        .iter()
+        .map(|row| row.iter().map(|(_, c)| *c).collect())
+        .collect();
+    let capacity = (budget_bits / unit + 1e-9).floor().max(0.0) as u64;
+    let plan = min_cost_choice(&items, capacity).map_err(|e| {
+        anyhow::anyhow!("{e} (budget {budget_bits:.0} bits on a grid of {grid} units)")
+    })?;
+    let assignment: Vec<Option<usize>> = plan
+        .choice
+        .iter()
+        .enumerate()
+        .map(|(g, &o)| options[g][o].0)
+        .collect();
+    let mut moves: Vec<(f64, usize)> = assignment
+        .iter()
+        .enumerate()
+        .filter_map(|(g, a)| {
+            a.map(|f| {
+                let saving =
+                    groups[g].stored_bits - groups[g].params as f64 * formats[f].bits_per_weight();
+                (costs[g][f] / saving, g)
+            })
+        })
+        .collect();
+    moves.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+    Ok((
+        assignment,
+        moves.into_iter().map(|(_, g)| (g, None)).collect(),
+    ))
+}
+
+/// Runs the solver named by `--solver`.
+fn allocate(
+    args: &SearchArgs,
+    groups: &[Group],
+    formats: &[TensorFormat],
+    costs: &[Vec<f64>],
+    budget_bits: f64,
+) -> Result<Allocation> {
+    match args.solver.as_str() {
+        "greedy" => Ok(greedy(groups, formats, costs, budget_bits)),
+        "dp" => exact(groups, formats, costs, budget_bits, args.dp_grid),
+        other => bail!("Unknown --solver '{other}'; use greedy or dp"),
+    }
+}
+
 /// Greedy allocation on measured costs. Returns the assignment and the order of moves.
 pub fn greedy(
     groups: &[Group],
@@ -465,7 +567,7 @@ pub fn search(args: &SearchArgs) -> Result<Value> {
     let key = cost_table_key(&source, &groups, args, &formats, calib.len());
     let costs = load_or_measure_costs(&eval, calib, &key, &args.cost_table, calib_base)?;
 
-    let (mut assignment, mut moves) = greedy(&groups, &formats, &costs, budget_bits);
+    let (mut assignment, mut moves) = allocate(args, &groups, &formats, &costs, budget_bits)?;
     let predicted: f64 = assignment
         .iter()
         .enumerate()
@@ -473,7 +575,8 @@ pub fn search(args: &SearchArgs) -> Result<Value> {
         .sum();
     let mut measured = eval.measure(&assignment, calib)?.perplexity - calib_base;
     println!(
-        "  greedy: predicted Δ {predicted:+.4} (sum of group costs), measured Δ {measured:+.4}"
+        "  {}: predicted Δ {predicted:+.4} (sum of group costs), measured Δ {measured:+.4}",
+        args.solver
     );
     let mut reverted = 0usize;
     while measured > args.max_ppl_delta {
@@ -561,7 +664,7 @@ pub fn search(args: &SearchArgs) -> Result<Value> {
             if !(0.0..=1.0).contains(&budget) || (budget - args.budget).abs() < 1e-9 {
                 continue;
             }
-            let (mut a, mut mv) = greedy(&groups, &formats, &costs, stored_bits * budget);
+            let (mut a, mut mv) = allocate(args, &groups, &formats, &costs, stored_bits * budget)?;
             let mut d = eval.measure(&a, calib)?.perplexity - calib_base;
             while d > args.max_ppl_delta {
                 let Some((g, previous)) = mv.pop() else { break };
@@ -652,6 +755,8 @@ pub fn search(args: &SearchArgs) -> Result<Value> {
             "granularity": args.granularity,
             "formats": formats.iter().map(|f| f.display_name().to_string()).collect::<Vec<_>>(),
             "budget_fraction": args.budget,
+            "solver": args.solver,
+            "dp_grid": if args.solver == "dp" { json!(args.dp_grid) } else { Value::Null },
             "achieved_fraction": achieved / stored_bits,
             "budget_met": budget_met,
             "calibration_tokens": calib.len(),
@@ -774,6 +879,64 @@ mod tests {
         assert_eq!(assignment[1], Some(1));
     }
 
+    /// THME-3002 done-means: on the same cost table and budget, the exact solver's
+    /// predicted cost is never above greedy's, and both meet the budget.
+    #[test]
+    fn exact_is_never_worse_than_greedy() {
+        let formats = parse_formats("q8_0,q4_0").unwrap();
+        let mut state = 99u64;
+        let mut rand = || {
+            state = state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            (state >> 33) as f64 / (1u64 << 31) as f64
+        };
+        let predicted = |a: &[Option<usize>], costs: &[Vec<f64>]| -> f64 {
+            a.iter()
+                .enumerate()
+                .filter_map(|(g, f)| f.map(|f| costs[g][f]))
+                .sum()
+        };
+        for case in 0..200 {
+            let groups: Vec<Group> = (0..6)
+                .map(|i| group(&format!("g{i}"), 64 * (1 + (rand() * 4.0) as usize)))
+                .collect();
+            let costs: Vec<Vec<f64>> = (0..6)
+                .map(|_| {
+                    let q8 = rand();
+                    vec![q8, q8 + 4.0 * rand()]
+                })
+                .collect();
+            let stored: f64 = groups.iter().map(|g| g.stored_bits).sum();
+            let budget = stored * (0.15 + 0.8 * rand());
+            let (gr, _) = greedy(&groups, &formats, &costs, budget);
+            let (dp, moves) = exact(&groups, &formats, &costs, budget, 20_000).unwrap();
+            assert!(
+                nominal_bits(&groups, &dp, &formats) <= budget + 1e-6,
+                "case {case}"
+            );
+            assert_eq!(moves.len(), dp.iter().filter(|a| a.is_some()).count());
+            if nominal_bits(&groups, &gr, &formats) <= budget {
+                assert!(
+                    predicted(&dp, &costs) <= predicted(&gr, &costs) + 1e-9,
+                    "case {case}: dp {} > greedy {}",
+                    predicted(&dp, &costs),
+                    predicted(&gr, &costs)
+                );
+            }
+        }
+        // Budget above the stored size: nothing to do.
+        let groups = vec![group("a", 64)];
+        assert_eq!(
+            exact(&groups, &formats, &[vec![1.0, 2.0]], 1e12, 100)
+                .unwrap()
+                .0,
+            vec![None]
+        );
+        // Below the smallest format: infeasible is an error, not a silent plan.
+        assert!(exact(&groups, &formats, &[vec![1.0, 2.0]], 10.0, 100).is_err());
+    }
+
     #[test]
     fn matched_random_keeps_format_counts() {
         let groups = vec![
@@ -817,9 +980,31 @@ mod tests {
             emit_recipe: Some(recipe.clone()),
             pareto_budgets: Some("0.8,0.5".into()),
             test_tokens: 0,
+            solver: "greedy".into(),
+            dp_grid: 10_000,
         };
+        let mut dp_args = args.clone();
         let report = search(&args).unwrap();
         assert_eq!(report["search"]["budget_met"], Value::Bool(true));
+        assert_eq!(report["search"]["solver"], json!("greedy"));
+        // The exact solver runs through the same measured path on the cached cost table.
+        dp_args.solver = "dp".into();
+        dp_args.report = dir.path().join("report_dp.json");
+        dp_args.emit_recipe = None;
+        let dp_report = search(&dp_args).unwrap();
+        assert_eq!(dp_report["search"]["budget_met"], Value::Bool(true));
+        assert_eq!(dp_report["search"]["solver"], json!("dp"));
+        assert!(
+            dp_report["search"]["predicted_delta_calibration"]
+                .as_f64()
+                .unwrap()
+                <= report["search"]["predicted_delta_calibration"]
+                    .as_f64()
+                    .unwrap()
+                    + 1e-9
+        );
+        dp_args.solver = "simplex".into();
+        assert!(search(&dp_args).is_err());
         assert_eq!(report["export"]["measured"], Value::Bool(true));
         assert!(report["export"]["artifact_bytes"].as_u64().unwrap() > 0);
         let pareto = report["search"]["pareto"].as_array().unwrap();

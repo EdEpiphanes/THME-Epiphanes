@@ -125,8 +125,9 @@ closes it.
 - **Done means**: `src/engine/error.rs`: invalid-input, infeasible, no-convergence and non-finite variants plus a finite-value guard, each reached by a test; no behaviour change elsewhere.
 
 ### [THME-3002] Exact dynamic-programming allocator behind `thme search --solver` (dossier WP2)
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: engine · **Type**: feature · **Status**: triage
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: engine · **Type**: feature · **Status**: blocked
 - **Problem**: Docs promised a knapsack solver; `ParetoAllocator` uses sensitivity thresholds and `thme search` is greedy.
+- **Progress**: Implemented: `engine::alloc` (exhaustive-search oracle on 300 instances) and `thme search --solver dp --dp-grid N`; never worse than greedy on predicted cost (200 random tables). Default stays greedy. Blocked on the comparison on real cost tables, which needs model runs (paused).
 - **Done means**: `engine::alloc` matches exhaustive search on small instances and is never worse than greedy at equal budget; default solver unchanged until compared on committed cost tables.
 
 ### [THME-3003] One versioned quality gate; retire the stale 0.25 tolerance (dossier WP20)
@@ -170,6 +171,11 @@ closes it.
 - **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: byoa · **Type**: refactor · **Status**: triage
 - **Problem**: `ActivationAware` reads statistics from a JSON string in tensor metadata and needs a special case in `apply_selected_format`; each new data-needing rule would add another.
 - **Done means**: A rule receives an apply context (calibration statistics, row width) at one seam; the metadata side channel and special case are gone; AWQ tests unchanged.
+### [THME-3011] Measured bits per weight from the written artifact (placeholder)
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p3 · **Area**: exporter · **Type**: feature · **Status**: triage
+- **Problem**: Reports show nominal bits per weight (format bit-widths averaged over all parameters, unchanged tensors at stored width). `TensorFormat::bits_per_weight` also says 8.0 for Q8_0 and 4.5 for Q4_0, while the stored blocks are 8.5 and 4.5. llama.cpp reports file-level bits per weight (artifact bytes x 8 / parameters), which includes block scales.
+- **Done means**: Every report that writes an artifact also states measured bits per weight from its byte size, next to the nominal figure, each labelled; the nominal definition is kept for unexported candidates. No committed number changes without a new report.
+
 <!-- backlog:end -->
 
 ---

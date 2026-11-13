@@ -9,6 +9,7 @@
 //! number formats, transport, bases, ODE steppers, the SVG visual engine) are proposed in
 //! BACKLOG.md and wait for the owner to place them on the roadmap.
 
+pub mod alloc;
 pub mod basis;
 pub mod error;
 pub mod numfmt;

@@ -14,7 +14,7 @@
 
 `Subsystems: Model Ingestion • Layer Sensitivity • SVD Spectral Decay • Threshold Allocator`
 
-> **Architectural Highlight**: Ingests GGUF v2/v3 and SafeTensors weights via OS memory mapping (`memmap2`) without full-memory copy overhead. Automatically profiles layer sensitivity curves $s(l)$ and assigns a format per tensor by comparing its sensitivity with fixed thresholds (`src/allocator/pareto.rs`). This is a heuristic, not an exact solver; the measured search (`thme search`) uses a greedy allocator with global refinement. An exact dynamic-programming solver is proposed as THME-3002.
+> **Architectural Highlight**: Ingests GGUF v2/v3 and SafeTensors weights via OS memory mapping (`memmap2`) without full-memory copy overhead. Automatically profiles layer sensitivity curves $s(l)$ and assigns a format per tensor by comparing its sensitivity with fixed thresholds (`src/allocator/pareto.rs`). This is a fast heuristic. The measured search (`thme search`) chooses from a measured cost table with either a greedy allocator (`--solver greedy`, the default) or an exact dynamic program (`--solver dp`, `engine::alloc`), then refines globally.
 
 | Metric / Dimension | Production Engineering Specification |
 |---|---|
@@ -328,7 +328,7 @@ The allocation problem is a multi-choice knapsack. Given a memory ceiling $B_{\t
 $$\max \sum_{l=0}^{N-1} \Delta M_l(p_l) \quad \text{subject to} \quad \sum_{l=0}^{N-1} \Delta Q_l(p_l) \le \epsilon, \quad \sum_{l=0}^{N-1} M_l(p_l) \le B_{\text{target}}$$
 where $p_l \in \{\text{FP16}, \text{INT8}, \text{INT4}, \text{BitNet b1.58}, \text{2:4 Sparse}\}$.
 
-THME does not solve this problem exactly yet. `ParetoAllocator` uses sensitivity thresholds and `thme search` uses a greedy allocator with global refinement; neither is guaranteed optimal. The exact solver is THME-3002 (research dossier v3.1, work package WP2).
+Three allocators are available. `ParetoAllocator` (`thme plan`) uses sensitivity thresholds. `thme search --solver greedy` takes the best saving per unit of measured cost one step at a time. `thme search --solver dp` solves the problem exactly for the measured costs, with sizes rounded up to a grid (`--dp-grid`, default 10,000 units) so every plan meets the real budget; its predicted cost is never above greedy's. Predicted costs add per-group measurements, so the whole candidate is still measured and refined against the gate.
 
 ### 5.4 Teacher LLM Surgery Engine
 
