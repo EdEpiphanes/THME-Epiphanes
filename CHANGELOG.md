@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **Number formats with stated error bounds** (THME-3006, v0.2.5.3): `engine::minifloat` rounds to
+  FP16, BF16, FP8 E4M3 and FP8 E5M2 with one nearest-even routine (every FP16 code and every tie in
+  all four formats tested); `engine::numfmt` adds absmax integer, sign, nearest-codebook and phase
+  quantizers, each with a tested bound. The BYOA codebook rule uses the shared nearest-level search.
 - SPDX headers (THME-3005, v0.2.7.9): every tracked source file (Rust, Python, shell, PowerShell,
   TypeScript) carries `SPDX-License-Identifier: AGPL-3.0-only`; `scripts/spdx.py --check` runs in
   the CI hygiene job, `--fix` adds missing headers. CI also refuses tracked `.epiph` files.
@@ -180,6 +184,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   depict the application.
 
 ### Fixed
+- **FP16 rounding** (THME-3023): float32-to-float16 conversion joined exponent and mantissa with
+  a bitwise OR, so a rounding carry was lost and values just below a power of two (about 1 in
+  2,000) became half their size (1.9999 became 1.0); it also rounded ties up instead of to even and
+  turned NaN into infinity. Q8_0, Q4_0, TQ1_0 and K-quant block scales and FP16 tensors went
+  through it. One correct routine now lives in `engine::minifloat`. Committed measured reports
+  were produced with the old code; the dossier says so, and re-measurement is blocked on model runs.
 - BYOA `AbsmeanTernary` compared the scaled weight `w / gamma` with `gamma * zero_band`, so almost
   nothing rounded to zero. The band is now in scaled units, as in BitNet b1.58; with band 0.5 the
   rule matches `MatrixMath::discretize_bitnet_ternary` exactly. No committed report used the rule.

@@ -171,7 +171,7 @@ closes it.
 
 ### [THME-3006] Number-format conversions with stated error bounds (dossier WP3)
 
-- **Milestone**: v0.2.5 · **Roadmap**: v0.2.5.3 · **Priority**: p2 · **Area**: engine · **Type**: feature · **Status**: triage
+- **Milestone**: v0.2.5 · **Roadmap**: v0.2.5.3 · **Priority**: p2 · **Area**: engine · **Type**: feature · **Status**: done
 - **Problem**: Codecs live in the exporter without declared error bounds.
 - **Also**: absmean ternary is written three times (`MatrixMath::discretize_bitnet_ternary`, `BitNetPacker::pack_matrix`, the BYOA `AbsmeanTernary` rule) with different all-zero handling; one shared quantizer.
 - **Progress**: `engine::numfmt` started with the shared absmean-ternary quantizer; the three copies call it. Other formats and error bounds open.
@@ -273,6 +273,12 @@ closes it.
 - **Milestone**: v0.2.7 · **Roadmap**: v0.2.7.2 · **Priority**: p2 · **Area**: security · **Type**: feature · **Status**: triage
 - **Problem**: v1 does not inspect deflate-compressed pickles, ONNX, Keras Lambda layers or NumPy object arrays.
 - **Done means**: Each format added with fixtures; compressed pickles inspected with a pure-Rust inflate dependency proposed first.
+
+### [THME-3023] Re-measure reports affected by the FP16 rounding fix
+
+- **Milestone**: v0.2.2 · **Roadmap**: none · **Priority**: p1 · **Area**: research · **Type**: chore · **Status**: blocked
+- **Problem**: Until 13 November 2026, f32-to-f16 conversion lost the rounding carry for values just below a power of two, so about 1 in 2,000 Q8_0, Q4_0 and TQ1_0 block scales (and FP16 values) were stored at half their size. Committed reports were measured with that code.
+- **Done means**: The verification, precision-sweep and depth-probe reports for both models are re-run with the fixed code and committed; the dossier caveat is removed. Blocked while model runs are paused.
 
 <!-- backlog:end -->
 
