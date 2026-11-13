@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - v0.2.0 Measured Core
 
+### License
+- **THME is now dual-licensed: AGPL-3.0-only or a commercial license from Epiphanes**
+  ([LICENSING.md](LICENSING.md)). Source obtained before 2026-11-13, up to and including commit
+  `d161bdb`, stays available under Apache-2.0. Contributions are accepted under the contributor
+  terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
+
 ### Added
 - Reference CPU forward pass (`src/inference/`): LLaMA family and GPT-NeoX (Pythia), AVX2/FMA
   kernels with a portable fallback, layer schedules and per-depth readouts.

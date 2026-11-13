@@ -91,4 +91,5 @@ Or with pre-compiled binary:
 
 ## License
 
-Licensed under the Apache License, Version 2.0. Developed by Epiphanes.
+Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0-only), with commercial
+licenses available from Epiphanes. See [LICENSING.md](../../LICENSING.md).
