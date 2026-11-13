@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>THME third-party licences</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; max-width: 960px; margin: 0 auto; padding: 24px 16px; color: #1b1b1f; background: #fff; }
+  h1 { font-size: 24px; } h2 { font-size: 18px; margin-top: 40px; border-top: 1px solid #ddd; padding-top: 16px; }
+  ul.overview { columns: 2; } ul.crates { font-size: 13px; columns: 3; }
+  pre { white-space: pre-wrap; background: #f6f6f8; padding: 12px; font-size: 12px; border-radius: 4px; }
+  @media (prefers-color-scheme: dark) { body { color: #e6e6ea; background: #121216; } pre { background: #1d1d23; } h2 { border-color: #333; } a { color: #8ab4ff; } }
+</style>
+</head>
+<body>
+<h1>Third-party licences</h1>
+<p>THME is built from the open-source components listed below. Each is used under the licence shown,
+whose full text follows. THME's own licence is in <code>LICENSE</code>.</p>
+<h2>Overview</h2>
+<ul class="overview">
+{{#each overview}}  <li><a href="#{{id}}">{{name}}</a> ({{count}})</li>
+{{/each}}</ul>
+{{#each licenses}}
+<h2 id="{{id}}">{{name}}</h2>
+<p>Used by:</p>
+<ul class="crates">
+{{#each used_by}}  <li><a href="{{#if crate.repository}}{{crate.repository}}{{else}}https://crates.io/crates/{{crate.name}}{{/if}}">{{crate.name}} {{crate.version}}</a></li>
+{{/each}}</ul>
+<pre>{{text}}</pre>
+{{/each}}
+</body>
+</html>
