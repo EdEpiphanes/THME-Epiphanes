@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **Isometric figures in Rust** (THME-3033): `engine::iso` ports the core of the anatomy
+  figure kit (camera and fit, extruded solids with four side tones by facing and a lighter top,
+  painter's order, lines, dots, wires, figure and card markup, the kit stylesheet). Its output is
+  byte-identical to the kit's on 48 committed cases; `examples/iso_bench.rs` times it against
+  `scripts/iso_golden.mjs --bench`.
 - **Scan on import** (v0.2.7.3): every model load (CLI, MCP server, Studio) runs the scanner
   first and refuses on a high or critical finding. The global `--allow-unsafe-model` flag turns
   the refusal into a printed warning; nothing in the files is executed either way.
