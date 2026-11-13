@@ -23,3 +23,4 @@
 - [ ] `CHANGELOG.md` has an entry under "Unreleased" for user-visible changes
 - [ ] `ROADMAP.md` / `BACKLOG.md` status updated if this completes an item
 - [ ] Studio screenshots recaptured (`scripts/capture_studio.ps1`) if the GUI changed visibly
+- [ ] I agree to the [contributor terms](../CONTRIBUTING.md#licensing-of-contributions) (AGPL-3.0-only, plus a commercial license grant to Epiphanes)

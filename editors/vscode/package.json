@@ -4,7 +4,7 @@
   "description": "Live LLM memory profiling, layer sensitivity analysis, Pareto precision optimization, and Teacher LLM surgery for VS Code & GitHub Copilot.",
   "version": "0.1.5",
   "publisher": "epiphanes",
-  "license": "Apache-2.0",
+  "license": "AGPL-3.0-only",
   "repository": {
     "type": "git",
     "url": "https://github.com/EdEpiphanes/THME-Epiphanes.git"

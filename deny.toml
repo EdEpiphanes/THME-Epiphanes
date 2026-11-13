@@ -20,8 +20,13 @@ ignore = [
 [licenses]
 version = 2
 confidence-threshold = 0.8
-# Permissive licences compatible with distributing THME under Apache-2.0.
+# Dependencies must stay permissive so THME can be offered both under AGPL-3.0-only and under a
+# commercial license (LICENSING.md). Copyleft licences such as GPL or AGPL are therefore not on
+# this list; only THME itself is AGPL, via the exception below.
 # OFL-1.1, UFL-1.0 and Ubuntu-font-1.0 cover the fonts bundled by egui.
+exceptions = [
+    { allow = ["AGPL-3.0-only"], crate = "thme" },
+]
 allow = [
     "0BSD",
     "Apache-2.0",

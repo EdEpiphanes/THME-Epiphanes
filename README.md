@@ -15,7 +15,7 @@
   <img src="https://img.shields.io/badge/Rust-2021%20%C2%B7%20MSRV%201.89-orange?logo=rust&style=flat-square" alt="Rust 2021, MSRV 1.89" />
   <img src="https://img.shields.io/badge/Formats-SafeTensors%20%C2%B7%20GGUF%20v2%2Fv3-10b981?style=flat-square" alt="Formats" />
   <img src="https://img.shields.io/badge/Measured%20on-SmolLM--135M%20%C2%B7%20Pythia--14M-2a78d6?style=flat-square" alt="Measured models" />
-  <img src="https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square" alt="License" />
+  <a href="LICENSING.md"><img src="https://img.shields.io/badge/License-AGPL--3.0%20%7C%20Commercial-blue?style=flat-square" alt="License: AGPL-3.0 or commercial" /></a>
 </p>
 
 <p align="center">
@@ -333,4 +333,4 @@ Before any change: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnin
 New benchmark numbers must come from a committed report under `docs/benchmarks/`.
 
 Security: [SECURITY.md](SECURITY.md) · Conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) ·
-License: [Apache 2.0](LICENSE)
+License: [AGPL-3.0](LICENSE) or [commercial](LICENSING.md)

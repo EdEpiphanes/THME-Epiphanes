@@ -52,3 +52,21 @@ All contributors and maintainers are expected to follow our [Code of Conduct](CO
 2. **Testing**: Add unit and integration tests covering your additions under `tests/`.
 3. **Documentation**: Update the README or module-level rustdocs if you introduce new CLI flags or public APIs.
 4. **Commits**: Write clear, conventional commit messages (`feat:`, `fix:`, `perf:`, `docs:`, `chore:`).
+5. **Licensing**: Tick the contributor terms box in the pull request template (see below).
+
+## Licensing of Contributions
+
+THME is dual-licensed: AGPL-3.0-only for everyone, and a commercial license sold by Epiphanes
+(see [LICENSING.md](LICENSING.md)). For that to keep working, every contribution has to be
+usable under both.
+
+By opening a pull request you confirm that:
+
+1. You wrote the contribution, or otherwise have the right to submit it.
+2. You license it to the public under AGPL-3.0-only.
+3. You grant Epiphanes a perpetual, worldwide, non-exclusive, royalty-free, irrevocable license
+   to use, modify, sublicense and distribute your contribution under any terms, including
+   commercial licenses.
+4. You keep the copyright in your contribution, and you may use it elsewhere however you like.
+
+If you cannot agree to point 3, open an issue first so we can discuss it.
