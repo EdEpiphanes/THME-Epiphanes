@@ -133,7 +133,7 @@ closes it.
 
 ### [THME-3000] Consolidate the dossier v3.1 claim register under docs/research/
 
-- **Milestone**: v0.2.8 · **Roadmap**: v0.2.8.9 · **Priority**: p1 · **Area**: research · **Type**: docs · **Status**: triage
+- **Milestone**: v0.2.8 · **Roadmap**: v0.2.8.9 · **Priority**: p1 · **Area**: research · **Type**: docs · **Status**: done
 - **Problem**: Claims V-01 to V-135 are spread over the appendices of the PDF; citations were written from memory.
 - **Done means**: One register file with unique IDs, status letters and the section each claim lives in; every citation checked or marked unverified.
 
@@ -191,9 +191,10 @@ closes it.
 
 ### [THME-3009] Versioned schemas under docs/schemas/ (dossier B.6.4)
 
-- **Milestone**: v0.2.8 · **Roadmap**: v0.2.8.9 · **Priority**: p2 · **Area**: core · **Type**: docs · **Status**: triage
+- **Milestone**: v0.2.8 · **Roadmap**: v0.2.8.9 · **Priority**: p2 · **Area**: core · **Type**: docs · **Status**: done
 - **Problem**: Benchmark task, benchmark result, quality-gate version, plugin protocol and conversion-registry entry have no schema.
 - **Done means**: Each schema carries a version field and validates a fixture in CI.
+- **Progress**: benchmark task, result record and quality gate schemas done (`docs/schemas/*-v1.json`, `tests/schemas.rs`). Plugin protocol and conversion-registry schemas wait until those exist (plugins are commercial-only for now).
 
 ### [THME-3010] BYOA rules get calibration through their interface, not tensor metadata
 

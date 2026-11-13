@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **Claim register** (THME-3000, v0.2.8.9): docs/research/claim-register.md lists all 135 claims
+  of the research dossier with ID, status, section, page and note, generated from
+  claim-register.json by scripts/claim_register.py and checked in CI. Statuses are the
+  dossier's own; citations are marked unverified.
+- **Versioned schemas** (THME-3009, v0.2.8.9): JSON Schemas for benchmark tasks, result records
+  and quality gates under docs/schemas/. A test validates each committed example against its
+  schema and its Rust loader, and checks that broken copies fail both.
 - **Three-state quality gate** (THME-3029, v0.2.8.6): when a criterion's degradation has a
   confidence interval, the gate decides pass, fail or inconclusive from it; point measurements
   decide exactly as before. `thme bench gate` compares two comparable result records with a

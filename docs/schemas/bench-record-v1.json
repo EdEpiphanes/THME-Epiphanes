@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/EdEpiphanes/THME-Epiphanes/main/docs/schemas/bench-record-v1.json",
+  "title": "THME benchmark result record, version 1",
+  "description": "One run of one task on one model, with every field of dossier Table R2. Loader: thme::bench::ResultRecord, which also checks that the score is the mean of the item scores, the interval contains it, item ids are unique, run mode and evidence agree, and sampling has a seed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "benchmark", "model", "harness", "decoding", "items", "score", "interval", "evidence", "hardware", "run_date", "duration_s"],
+  "properties": {
+    "schema": { "const": "thme-bench-record/v1" },
+    "benchmark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "task_sha256", "dataset_sha256", "split", "licence"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+        "version": { "type": "integer", "minimum": 1 },
+        "task_sha256": { "$ref": "#/$defs/sha256" },
+        "dataset_sha256": { "$ref": "#/$defs/sha256" },
+        "split": { "type": "string", "minLength": 1 },
+        "licence": { "type": "string", "minLength": 1 }
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256"],
+      "properties": {
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "transformation": { "type": ["string", "null"] }
+      }
+    },
+    "harness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "run_mode", "prompt_template_sha256"],
+      "properties": {
+        "version": { "type": "string", "minLength": 1 },
+        "run_mode": { "enum": ["native", "bridged", "imported"] },
+        "prompt_template_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "decoding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["temperature"],
+      "properties": {
+        "temperature": { "type": "number", "minimum": 0 },
+        "seed": { "type": ["integer", "null"], "minimum": 0 },
+        "max_new_tokens": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "score"],
+        "properties": {
+          "id": { "type": "string" },
+          "output": { "type": ["string", "null"] },
+          "score": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+    "score": { "type": "number", "minimum": 0, "maximum": 1 },
+    "interval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["low", "high", "method", "level"],
+      "properties": {
+        "low": { "type": "number", "minimum": 0, "maximum": 1 },
+        "high": { "type": "number", "minimum": 0, "maximum": 1 },
+        "method": { "enum": ["wilson", "bootstrap"] },
+        "level": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1 }
+      }
+    },
+    "evidence": { "enum": ["measured", "imported", "estimate", "simulated"] },
+    "hardware": { "type": "string", "minLength": 1 },
+    "run_date": { "type": "string", "minLength": 10, "maxLength": 10, "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+    "duration_s": { "type": "number", "minimum": 0 }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "minLength": 64, "maxLength": 64, "pattern": "^[0-9a-f]{64}$" }
+  }
+}

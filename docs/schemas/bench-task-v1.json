@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/EdEpiphanes/THME-Epiphanes/main/docs/schemas/bench-task-v1.json",
+  "title": "THME benchmark task, version 1",
+  "description": "A declarative benchmark task (docs/benchmark-registry.md). Loader: thme::bench::TaskSpec, which also checks the family/extract/metric combination and that dataset.path stays inside the task folder.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "id", "version", "family", "dataset", "prompt_template", "extract", "metric"],
+  "properties": {
+    "schema": { "const": "thme-bench-task/v1" },
+    "id": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+    "version": { "type": "integer", "minimum": 1 },
+    "family": { "enum": ["multiple-choice", "checkable-answer", "code"] },
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "split", "licence"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1, "description": "Relative to the task file, '/' separators, no '..'" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "split": { "type": "string", "minLength": 1 },
+        "licence": { "type": "string", "minLength": 1 }
+      }
+    },
+    "prompt_template": { "type": "string", "minLength": 1, "description": "Must contain {input}" },
+    "extract": {
+      "oneOf": [
+        { "$ref": "#/$defs/plainExtract" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "marker"],
+          "properties": { "kind": { "const": "after-marker" }, "marker": { "type": "string", "minLength": 1 } }
+        }
+      ]
+    },
+    "metric": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": { "kind": { "enum": ["exact-match", "normalized-match", "choice-by-likelihood"] } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "anyOf": [{ "required": ["abs"] }, { "required": ["rel"] }],
+          "properties": {
+            "kind": { "const": "numeric-tolerance" },
+            "abs": { "type": "number", "minimum": 0 },
+            "rel": { "type": "number", "minimum": 0 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "k", "samples"],
+          "properties": {
+            "kind": { "const": "pass-at-k" },
+            "k": { "type": "integer", "minimum": 1 },
+            "samples": { "type": "integer", "minimum": 1 }
+          }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "minLength": 64, "maxLength": 64, "pattern": "^[0-9a-f]{64}$" },
+    "plainExtract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": { "kind": { "enum": ["exact", "first-line", "last-number", "choice-letter", "none"] } }
+    }
+  }
+}
