@@ -137,7 +137,7 @@ Interpretation against the research programme: **[measured findings](docs/resear
 | `thme validate --report`, `thme co-surgery MODEL --tokens` | **Measured** | Gate measured reports; co-surgery scores candidates with the forward pass |
 | Surgery recipes, BYOA registry | Implemented | Recipes are measured through the verification pipeline and co-surgery |
 | Layer sensitivity profiler (`thme profile`) | Estimate | Analytic model; not yet calibrated against measured sensitivity |
-| `thme evaluate --recipe`, `thme search` | **Measured** | Any recipe through the gate; mixed-precision search on measured costs with calibration/validation split and random controls |
+| `thme evaluate --recipe`, `thme search` | **Measured** | Any recipe through the gate; mixed-precision search on measured costs (greedy or exact DP solver, `--solver`) with calibration/validation split and random controls |
 | Pareto allocator (`thme plan`) | Estimate | Analytic costs; superseded by `thme search` for measured allocation |
 | Co-surgery without tokens, Studio Co-Surgery tab | **Simulated** | Analytic proxy, labelled as simulated in the output |
 | Speculative decoding, roofline, energy | Model | Formulas over published hardware specs; no timing measured |

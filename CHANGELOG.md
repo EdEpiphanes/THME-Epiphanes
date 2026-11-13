@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **Exact allocator** (THME-3002, dossier WP2): `engine::alloc::min_cost_choice` solves the
+  multiple-choice knapsack by dynamic programming and matches exhaustive search;
+  `thme search --solver dp [--dp-grid N]` uses it on the measured cost table. Greedy stays the
+  default and the threshold allocator stays available; the comparison on real cost tables is
+  pending (no model runs).
 - **Research Dossier v3.1** in `docs/research/` with a review against the repository, and the
   first engine module, `src/engine/` (error type and finite-value guard only; dossier WP1).
   Eleven proposed tickets (THME-3000 to THME-3010) wait for the owner to place them.
