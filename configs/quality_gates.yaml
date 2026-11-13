@@ -1,4 +1,10 @@
 # THME Quality Gate Tolerances
+#
+# NOT READ BY ANY COMMAND. The rule in force is the command-line default
+# `--max-ppl-delta 0.45` of `thme evaluate`, `thme search` and `thme validate`, and every
+# measured report records the gate it used. The 0.25 below is stale.
+# The MMLU and GSM8K gates are not yet measured: the repository has no accuracy harness.
+# Reconciliation into a versioned gate is THME-3003 (research dossier v3.1, WP20).
 quality_gates:
   primary:
     metric: "mmlu_accuracy"

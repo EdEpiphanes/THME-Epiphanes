@@ -14,6 +14,7 @@
 pub mod allocator;
 pub mod cli;
 pub mod dataset;
+pub mod engine;
 pub mod experiment;
 pub mod exporter;
 pub mod gui;

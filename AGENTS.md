@@ -93,7 +93,7 @@ $$v0.1.x.0 \longrightarrow \left[ v0.1.x.1, v0.1.x.2, v0.1.x.3, \dots, v0.1.x.9 
 
 | Version | Focus Area | Sub-Milestones [1-9] Summary | Status |
 | :--- | :--- | :--- | :--- |
-| **v0.1.0.0** | Core Foundations | [v0.1.0.1 - v0.1.0.9] SafeTensors/GGUF mmap, SVD decay, condition number, Fisher proxy, Pareto DP allocator, 60 FPS studio, token simulator, recipe engine. | Completed |
+| **v0.1.0.0** | Core Foundations | [v0.1.0.1 - v0.1.0.9] SafeTensors/GGUF mmap, SVD decay, condition number, Fisher proxy, Pareto allocator (threshold-based; exact DP proposed as THME-3002), 60 FPS studio, token simulator, recipe engine. | Completed |
 | **v0.1.1.0** | Path Hygiene & CI | [v0.1.1.1 - v0.1.1.9] Rebranding, AGENTS.md governance, 3-OS CI matrix, path-leak guard, tag release pipeline, zero warnings, recipe schema, alias, symbol stripping. | Completed |
 | **v0.1.2.0** | Format Correctness | [v0.1.2.1 - v0.1.2.9] 28 GGML quant types, zero-alloc decoders, header recovery, crate modularization, 1k fuzz suite, SafeTensors fuzzing, crates.io prep, diagnostic errors. | Completed |
 | **v0.1.3.0** | BYOA & REA-LLM Engine | [v0.1.3.1 - v0.1.3.9] Algorithm registry, JSON import/export, architecture rebuilder, open-weights remapping, EWHA reach profile, memory metric, energy model, layer anatomy, SIMD benches. | Completed |

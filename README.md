@@ -58,7 +58,7 @@ calibration. Quality gate: perplexity may rise by at most 0.45.
 | SmolLM-135M | 19.80 | 19.83 (Δ +0.03, **passes**) | 48.71 (Δ +28.91, fails) | 303,118 |
 | Pythia-14M | 114.29 | 115.12 (Δ +0.83, fails) | 618.53 (Δ +504.24, fails) | 286,878 |
 
-The exported SmolLM-135M GGUF is 136 MiB, against a 513 MiB source.
+The exported SmolLM-135M GGUF is 136 MiB, against a 513 MiB FP32 source (about 257 MiB at FP16, so about 47% smaller than FP16).
 
 ### What the experiments show
 
@@ -354,6 +354,7 @@ THME is also a research programme into heterogeneous representations for languag
 
 - [Research Programme v2](docs/research/THME_Research_Programme_v2.pdf): hypotheses, method, controls
 - [Measured findings, November 2026](docs/research/THME_measured_findings_2026-11.md): what the first experiments support and refute
+- [Research Dossier v3.1](docs/research/THME_Research_Dossier_v3.1_2026-11-13.pdf) (theoretical proposal and engineering brief; no measurements of its own) and its [review against the repository](docs/research/REVIEW_dossier_v3.1.md)
 
 ## Contributing
 

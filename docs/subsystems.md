@@ -12,9 +12,9 @@
 
 ### 1. Analytical Cockpit and Pareto Precision AutoDecider
 
-`Subsystems: Model Ingestion • Layer Sensitivity • SVD Spectral Decay • Dynamic Programming Allocator`
+`Subsystems: Model Ingestion • Layer Sensitivity • SVD Spectral Decay • Threshold Allocator`
 
-> **Architectural Highlight**: Ingests GGUF v2/v3 and SafeTensors weights via OS memory mapping (`memmap2`) without full-memory copy overhead. Automatically profiles layer sensitivity curves $s(l)$ and solves a multi-constraint knapsack problem to construct a Pareto-optimal precision plan that maximizes memory savings under strict quality bounds ($\Delta PPL \le \epsilon$).
+> **Architectural Highlight**: Ingests GGUF v2/v3 and SafeTensors weights via OS memory mapping (`memmap2`) without full-memory copy overhead. Automatically profiles layer sensitivity curves $s(l)$ and assigns a format per tensor by comparing its sensitivity with fixed thresholds (`src/allocator/pareto.rs`). This is a heuristic, not an exact solver; the measured search (`thme search`) uses a greedy allocator with global refinement. An exact dynamic-programming solver is proposed as THME-3002.
 
 | Metric / Dimension | Production Engineering Specification |
 |---|---|
@@ -324,9 +324,11 @@ where $L$ is layer count, $B$ is batch size, $S$ is context sequence length, $H_
 
 ### 5.3 Heterogeneous Pareto Precision Allocator
 
-Given a user-specified memory ceiling $B_{\text{target}}$ and maximum tolerable quality loss $\epsilon$, THME solves a multi-choice knapsack problem:
+The allocation problem is a multi-choice knapsack. Given a memory ceiling $B_{\text{target}}$ and a maximum quality loss $\epsilon$:
 $$\max \sum_{l=0}^{N-1} \Delta M_l(p_l) \quad \text{subject to} \quad \sum_{l=0}^{N-1} \Delta Q_l(p_l) \le \epsilon, \quad \sum_{l=0}^{N-1} M_l(p_l) \le B_{\text{target}}$$
 where $p_l \in \{\text{FP16}, \text{INT8}, \text{INT4}, \text{BitNet b1.58}, \text{2:4 Sparse}\}$.
+
+THME does not solve this problem exactly yet. `ParetoAllocator` uses sensitivity thresholds and `thme search` uses a greedy allocator with global refinement; neither is guaranteed optimal. The exact solver is THME-3002 (research dossier v3.1, work package WP2).
 
 ### 5.4 Teacher LLM Surgery Engine
 
