@@ -79,6 +79,14 @@ pub struct PackArgs {
     /// Free annotation, `key=value`
     #[arg(long)]
     pub annotate: Vec<String>,
+
+    /// Apply --recipe and store each tensor in its selected format (Q8_0, Q4_K, ternary, ...)
+    #[arg(long, requires = "recipe")]
+    pub quantize: bool,
+
+    /// With --quantize, skip recipe operations that cannot be applied instead of failing
+    #[arg(long, requires = "quantize")]
+    pub allow_partial: bool,
 }
 
 fn read_json(path: &Path) -> Result<Value> {
@@ -95,7 +103,14 @@ pub fn pack(args: &PackArgs) -> Result<epiph::PackSummary> {
     if !epiph::is_epiph(&args.out) {
         bail!("--out must end in .{}", epiph::EXTENSION);
     }
-    let model = ModelImporter::import(&args.model)?;
+    let mut model = ModelImporter::import(&args.model)?;
+    if args.quantize {
+        let recipe = args
+            .recipe
+            .as_deref()
+            .context("--quantize needs --recipe")?;
+        model = crate::cli::export::apply_recipe(&model, recipe, args.allow_partial)?;
+    }
     let mut quality = Vec::new();
     for path in &args.quality {
         quality.push(json!({
@@ -127,6 +142,7 @@ pub fn pack(args: &PackArgs) -> Result<epiph::PackSummary> {
             .collect::<Result<_>>()?,
         annotations,
         created_unix: None,
+        store_selected: args.quantize,
     };
     epiph::write(&model, &options, &args.out)
 }
@@ -229,6 +245,8 @@ mod tests {
             quality: vec![],
             parent: vec![],
             annotate: vec![],
+            quantize: false,
+            allow_partial: false,
         })
         .unwrap();
         let pair = minisign::KeyPair::generate_unencrypted_keypair().unwrap();
@@ -264,6 +282,34 @@ mod tests {
     }
 
     #[test]
+    fn quantize_applies_the_recipe_and_needs_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let (model, _) = synthetic_checkpoint(dir.path());
+        let recipe = crate::cli::evaluate::tests::write_recipe(dir.path(), false);
+        let base = PackArgs {
+            model,
+            out: dir.path().join("q.epiph"),
+            recipe: Some(recipe.clone()),
+            calibration: None,
+            quality: vec![],
+            parent: vec![],
+            annotate: vec![],
+            quantize: true,
+            allow_partial: false,
+        };
+        pack(&base).unwrap();
+        let (m, manifest) = epiph::read(&base.out).unwrap();
+        assert!(m.tensors.iter().any(|t| t.original_dtype == "Q8_0"));
+        assert!(manifest.recipe.is_some(), "the recipe is embedded too");
+        let missing = PackArgs {
+            recipe: None,
+            out: dir.path().join("x.epiph"),
+            ..base
+        };
+        assert!(format!("{:#}", pack(&missing).unwrap_err()).contains("--recipe"));
+    }
+
+    #[test]
     fn pack_from_the_command_line_and_verify() {
         let dir = tempfile::tempdir().unwrap();
         let (model, _) = synthetic_checkpoint(dir.path());
@@ -278,6 +324,8 @@ mod tests {
             quality: vec![report],
             parent: vec![],
             annotate: vec!["stage=base".into()],
+            quantize: false,
+            allow_partial: false,
         };
         pack(&args).unwrap();
         // Re-pack from the .epiph itself, recording lineage.
@@ -309,6 +357,8 @@ mod tests {
             quality: vec![],
             parent: vec![],
             annotate: vec!["no-equals".into()],
+            quantize: false,
+            allow_partial: false,
         };
         assert!(pack(&bad).is_err());
     }

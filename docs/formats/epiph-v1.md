@@ -74,7 +74,9 @@ ignored.
 One entry per tensor in `model`, in the same order, giving where its payload lives in the data
 section and its SHA-256 digest (lowercase hex). The payload's encoding is the tensor's stored
 data type: `F32`, `F16`, `BF16`, or a GGML block type name (`Q8_0`, `Q4_0`, `Q4_K`, `Q5_K`,
-`Q6_K`, `TQ1_0`), laid out exactly as in GGUF.
+`Q6_K`, `TQ1_0`), laid out exactly as in GGUF. A packed recipe candidate stores each tensor in its
+selected format; the tensor's metadata then records its type before packing under
+`epiph.source_dtype`.
 
 ### 3.3 `attachments`
 
@@ -134,8 +136,6 @@ implement this section still read the weights; they lose only the signature.
 
 Each lands as a minor version with tests before it is used:
 
-- **Quantized payloads.** Pack a candidate's tensors in their selected formats (K-quants,
-  ternary, BYOA custom), not only as stored.
 - **Compression.** A per-payload `encoding` field (`raw` by default) for lossless compression
   of payloads, decompressed while streaming to memory. Needs a pure-Rust codec dependency,
   proposed before it is added.

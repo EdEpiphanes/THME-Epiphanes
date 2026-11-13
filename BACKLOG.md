@@ -216,7 +216,7 @@ closes it.
 
 ### [THME-3013] `.epiph`: pack tensors in their selected formats
 
-- **Milestone**: v0.2.6 · **Roadmap**: v0.2.6.3 · **Priority**: p1 · **Area**: exporter · **Type**: feature · **Status**: triage
+- **Milestone**: v0.2.6 · **Roadmap**: v0.2.6.3 · **Priority**: p1 · **Area**: exporter · **Type**: feature · **Status**: done
 - **Problem**: v1.0 stores tensors as stored; a candidate's quantized formats are not packed yet.
 - **Done means**: Packing a recipe candidate stores each tensor in its selected format (reusing the exporter codecs); the forward pass on the packed file equals the in-memory candidate.
 
