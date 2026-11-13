@@ -52,6 +52,12 @@ MPL-2.0, Unicode and font licences). `cargo deny check licenses` enforces the al
 [deny.toml](deny.toml). Those licences continue to apply to those components under either THME
 license. Every release archive includes their full notices in `THIRD_PARTY_LICENSES.html`.
 
+Some source in this repository is derived from third-party projects and keeps their notices:
+
+| Files | Derived from | Licence |
+| :--- | :--- | :--- |
+| `src/engine/iso.rs`, `assets/iso.css` | anatomy figure kit (`kit/iso-kit.ts`, `kit/iso.css`), Copyright (c) 2026 Ryan | MIT, full text in [LICENSES/anatomy-MIT.txt](LICENSES/anatomy-MIT.txt) |
+
 ## Trademarks
 
 "THME", "Epiphanes", the mascot and the logo are not licensed under the AGPL or the commercial

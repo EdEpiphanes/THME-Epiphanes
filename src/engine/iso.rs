@@ -1,4 +1,6 @@
-// SPDX-License-Identifier: AGPL-3.0-only
+// SPDX-License-Identifier: AGPL-3.0-only AND MIT
+// Derived from the anatomy figure kit (kit/iso-kit.ts), Copyright (c) 2026 Ryan, MIT License:
+// see LICENSES/anatomy-MIT.txt. Changes for THME are AGPL-3.0-only.
 //! Isometric figures in Rust: the core of the anatomy kit (`kit/iso-kit.ts`), ported line for
 //! line so the same inputs give the same SVG strings (checked against the kit's own output in
 //! `tests/iso_golden.rs`).

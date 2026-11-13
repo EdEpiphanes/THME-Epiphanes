@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: MIT
+   From the anatomy figure kit (kit/iso.css), Copyright (c) 2026 Ryan, MIT License:
+   see LICENSES/anatomy-MIT.txt. */
 .iso{
   --anatomy-page:#0b0b0b;--anatomy-card:#131313;--anatomy-text:#a3a3a3;--anatomy-strong:#e6e6e6;--anatomy-muted:#6e6e6e;
   --anatomy-paper:#131313;--anatomy-face:#1b1b1b;--anatomy-top:#1c1c1c;
