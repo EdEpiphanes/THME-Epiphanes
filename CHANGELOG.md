@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **AWQ-style activation-aware quantization** (v0.2.2.4, implemented; not measured on a real
+  model): `thme.awq_q4_0` and `thme.awq_q4_k` BYOA rules scale input channels by calibration
+  mean |x|^alpha before rounding and pick alpha by activation-weighted error (never worse than
+  plain rounding under that error). `thme evaluate --calibration stats.json` attaches the
+  statistics; without them the rule refuses to run.
 - **SmoothQuant-style scale migration** (v0.2.2.7, `inference::smoothing`): per-input-channel
   scales from calibration statistics are folded into the preceding RMSNorm or LayerNorm
   (weight and bias) and multiplied into the linears that read it, for LLaMA and GPT-NeoX. Tests

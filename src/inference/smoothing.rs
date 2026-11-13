@@ -39,7 +39,7 @@ pub fn smoothing_scales(
     }
     let mut w_max = vec![0.0f32; in_dim];
     for weights in consumers {
-        if weights.len() % in_dim != 0 {
+        if !weights.len().is_multiple_of(in_dim) {
             bail!(
                 "Consumer weight length {} is not a multiple of {in_dim}",
                 weights.len()

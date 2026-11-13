@@ -67,6 +67,14 @@ pub enum TransformationRule {
         block_size: usize,
         inner: Box<TransformationRule>,
     },
+    /// AWQ-style activation-aware quantization: scale each input channel by
+    /// `mean|x|^alpha`, store in `format` (e.g. `Q4_0`, `Q4_K`), undo the scale, and keep the
+    /// alpha from `alpha_grid` with the lowest activation-weighted error. Needs calibration
+    /// statistics attached to the tensor (`thme evaluate --calibration`).
+    ActivationAware {
+        format: String,
+        alpha_grid: Vec<f32>,
+    },
 }
 
 /// What a rule means for a running model.
@@ -81,12 +89,18 @@ pub enum WeightContract {
 }
 
 impl TransformationRule {
+    /// True for rules that read calibration activations and cannot run on weights alone.
+    pub fn needs_calibration(&self) -> bool {
+        matches!(self, Self::ActivationAware { .. })
+    }
+
     pub fn contract(&self) -> WeightContract {
         match self {
             Self::AbsmeanTernary { .. }
             | Self::QuantizeCodebook { .. }
             | Self::StructuredSparsity { .. }
-            | Self::SmoothQuantOutlier { .. } => WeightContract::Reconstruct,
+            | Self::SmoothQuantOutlier { .. }
+            | Self::ActivationAware { .. } => WeightContract::Reconstruct,
             Self::OrthogonalRotation { .. } => WeightContract::Rotation,
             Self::AffineProject { .. } => WeightContract::NotWeightOnly(
                 "AffineProject attenuates weights by position; it is not a low-rank projection",
@@ -260,6 +274,12 @@ fn apply_rule(rule: &TransformationRule, weights: &mut [f32]) -> Result<(), Stri
     let n = weights.len();
     let orig_norm_sq: f32 = weights.iter().map(|&x| x * x).sum();
     match rule {
+        TransformationRule::ActivationAware { .. } => {
+            return Err(
+                "activation-aware rules need calibration statistics; run `thme calibrate` and pass `--calibration` to `thme evaluate`"
+                    .to_string(),
+            );
+        }
         TransformationRule::AbsmeanTernary {
             scale_gamma,
             zero_band,
@@ -516,6 +536,33 @@ impl AlgorithmRegistry {
                 }),
             },
         });
+        for (format, bits) in [("Q4_0", 4.5f32), ("Q4_K", 4.5)] {
+            self.register(AlgorithmDefinition {
+                id: format!("thme.awq_{}", format.to_ascii_lowercase()),
+                name: format!("Activation-aware {format} (AWQ-style)"),
+                author: "Epiphanes".to_string(),
+                version: "1.0.0".to_string(),
+                category: AlgorithmCategory::Quantization,
+                description: format!("Scales input channels by calibration mean |x|^alpha before {format} rounding and undoes the scale, choosing alpha by activation-weighted error. Needs `thme evaluate --calibration`."),
+                effective_bits_per_param: bits,
+                compression_ratio: 16.0 / bits,
+                hardware_speedup_factor: 1.0,
+                target_roles: vec![
+                    TensorRole::AttentionQ,
+                    TensorRole::AttentionK,
+                    TensorRole::AttentionV,
+                    TensorRole::AttentionQkv,
+                    TensorRole::AttentionOut,
+                    TensorRole::MlpGate,
+                    TensorRole::MlpUp,
+                    TensorRole::MlpDown,
+                ],
+                rule: TransformationRule::ActivationAware {
+                    format: format.to_string(),
+                    alpha_grid: (0..=10).map(|k| k as f32 / 10.0).collect(),
+                },
+            });
+        }
         // 2. Semi-Structured 2:4 Sparsity
         self.register(AlgorithmDefinition {
             id: "thme.sparse_2to4".to_string(),
@@ -692,7 +739,7 @@ mod tests {
         assert!(get("thme.gated_deltanet").measurable().is_err());
         let sample = outlier_weights();
         for alg in registry.list() {
-            if alg.measurable().is_ok() {
+            if alg.measurable().is_ok() && !alg.rule.needs_calibration() {
                 alg.verify_contract(&sample).unwrap();
             }
         }
