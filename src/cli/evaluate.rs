@@ -61,6 +61,57 @@ pub struct EvaluateArgs {
     /// BYOA algorithm definition files (one definition or an array) used by the recipe
     #[arg(long = "algorithms", value_name = "ALGORITHMS_JSON")]
     pub algorithms: Vec<PathBuf>,
+
+    /// Keep the recipe's GGUF artifact here. Without it the artifact is written to a temporary
+    /// file, measured and deleted; either way the report records its real size.
+    #[arg(long, value_name = "GGUF")]
+    pub artifact: Option<PathBuf>,
+}
+
+/// Writes the candidate as a per-tensor GGUF and reports the file's real size (block scales,
+/// metadata and alignment included). Candidates the exporter cannot write (BYOA algorithms,
+/// K-quants on narrow rows) are reported as not measured, with the reason.
+pub fn measure_artifact(candidate: &ModelIR, keep: Option<&Path>) -> Value {
+    use crate::exporter::{ExportConfig, ExportFormat, ExportQuantType, ModelExporter};
+    let (path, temporary) = match keep {
+        Some(path) => (path.to_path_buf(), false),
+        None => {
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0);
+            let name = format!("thme-evaluate-{}-{nanos}.gguf", std::process::id());
+            (std::env::temp_dir().join(name), true)
+        }
+    };
+    let result = ModelExporter::export(
+        candidate,
+        &ExportConfig {
+            format: ExportFormat::GGUFv3,
+            quant_type: ExportQuantType::PerTensor,
+            output_path: path.clone(),
+            compute_checksum: !temporary,
+        },
+    );
+    let value = match result {
+        Ok(report) => json!({
+            "measured": true,
+            "container": "GGUF v3, per-tensor formats",
+            "artifact_bytes": report.exported_bytes,
+            "file": if temporary {
+                Value::Null
+            } else {
+                json!(path.file_name().map(|n| n.to_string_lossy().into_owned()))
+            },
+            "sha256": report.sha256_checksum,
+            "note": "Size of the written file, including block scales, metadata and alignment.",
+        }),
+        Err(error) => json!({"measured": false, "reason": format!("{error:#}")}),
+    };
+    if temporary {
+        let _ = std::fs::remove_file(&path);
+    }
+    value
 }
 
 /// Formats the measured path can round-trip.
@@ -286,6 +337,14 @@ pub fn evaluate(args: &EvaluateArgs) -> Result<Value> {
     if !skipped.is_empty() {
         println!("  NOT EVALUATED: {}", skipped.join(", "));
     }
+    let artifact = measure_artifact(&candidate, args.artifact.as_deref());
+    match artifact["artifact_bytes"].as_u64() {
+        Some(bytes) => println!("  artifact   {bytes} bytes (GGUF, measured)"),
+        None => println!(
+            "  artifact   not written: {}",
+            artifact["reason"].as_str().unwrap_or("unknown reason")
+        ),
+    }
 
     let corpus: Value = std::fs::read_to_string(args.tokens.with_extension("json"))
         .ok()
@@ -307,11 +366,11 @@ pub fn evaluate(args: &EvaluateArgs) -> Result<Value> {
             "relabelled_tensors": relabelled,
             "format_counts": counts,
             "estimated_bytes": (nominal_bits / 8.0) as u64,
-            "estimated_bytes_note": "Computed from nominal bits per weight; no artifact of this size is written.",
+            "estimated_bytes_note": "Computed from nominal bits per weight; export.artifact_bytes is the size of the written GGUF.",
             "operations_evaluated": operations_evaluated,
             "operations_not_evaluated": skipped,
         },
-        "export": Value::Null,
+        "export": artifact,
         "evaluation": {
             "measured": true,
             "corpus": corpus,
@@ -504,6 +563,7 @@ pub(crate) mod tests {
             report,
             allow_partial,
             algorithms: Vec::new(),
+            artifact: None,
         }
     }
 
@@ -523,6 +583,20 @@ pub(crate) mod tests {
         assert!(variants
             .iter()
             .all(|v| v.perplexity.is_finite() && v.perplexity > 1.0));
+        // THME-2209: the written GGUF's real size sits beside the nominal estimate.
+        assert_eq!(report["export"]["measured"], json!(true));
+        let artifact = report["export"]["artifact_bytes"].as_u64().unwrap();
+        let estimated = report["recipe"]["estimated_bytes"].as_u64().unwrap();
+        assert!(
+            artifact > estimated,
+            "file adds metadata: {artifact} vs {estimated}"
+        );
+        assert!(artifact < report["source_payload_bytes"].as_u64().unwrap() + 64 * 1024);
+        assert_eq!(
+            report["export"]["file"],
+            Value::Null,
+            "temporary artifact is not kept"
+        );
     }
 
     #[test]
@@ -571,6 +645,11 @@ pub(crate) mod tests {
             false,
         ))
         .unwrap();
+        assert_eq!(report["export"]["measured"], json!(false));
+        assert!(report["export"]["reason"]
+            .as_str()
+            .unwrap()
+            .contains("BYOA"));
         assert_eq!(
             report["recipe"]["format_counts"]["BYOA thme.hadamard_ternary"],
             json!(2)
