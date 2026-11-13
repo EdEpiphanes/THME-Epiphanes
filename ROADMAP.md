@@ -32,13 +32,13 @@ flowchart LR
     classDef later fill:#ffffff,stroke:#0b0b0b,stroke-width:1.5px,stroke-dasharray:4 3,color:#52514e;
 
     subgraph NOW["Now"]
-        N4["Benchmark charts"]:::now
-        N5["Benchmark runner"]:::now
+        N4["Scan on import"]:::now
+        N5["Transport and ODE steppers"]:::now
     end
     subgraph NEXT["Next"]
-        X1["Scan on import"]:::later
+        X1["Native benchmark runner"]:::later
         X2["Scanner coverage"]:::later
-        X3["Transport and ODE steppers"]:::later
+        X3["Scanner coverage"]:::later
         X4["GPTQ-style rounding"]:::later
     end
     subgraph LATER["Later"]
@@ -68,6 +68,7 @@ flowchart LR
 | SPDX headers (THME-3005) | `AGPL-3.0-only` header on all 168 source files; `scripts/spdx.py --check` in CI | Tested in CI |
 | Signed `.epiph` (THME-3019) | Minisign signature over the manifest; `thme epiph sign`, `verify --require-signature`; Epiphanes key by default | Tested: tamper, wrong key, broken trailer |
 | Benchmark registry (THME-3024) | `src/bench`: strict task files and result records with every Table R2 field; `thme bench list/validate/verify-dataset` | Tested: malformed files refused, records round-trip, record-task mismatch caught |
+| Benchmark charts (THME-3032) | `thme bench chart`: scores with intervals, paired changes against a baseline, a model-by-benchmark heatmap; `engine::viz` interval plot | Tested: row and cell counts, signs of paired changes, evidence labels; rendered and checked |
 | Benchmark runner, imported mode (THME-3031) | `thme bench score`: outputs from any tool (answers, log-likelihoods or pass counts) scored with the metric library into a complete result record, labelled imported | Tested: generation, likelihood and pass@k outputs; partial, duplicate and unknown outputs refused; Table R3 interval reproduced |
 | SVG visual engine (THME-3007) | `engine::viz`: deterministic SVG line plots (log axis), heatmaps, scatter with a required caption, layered dataflow graphs, Pareto fronts; evidence label on every chart; palette in `assets/chart-themes.json`, shared with the chart script | Tested: element counts match data, byte-identical output, log-axis and cycle errors; rendered and checked in light and dark |
 | Contamination check (THME-3030) | `bench::contamination`: normalized n-gram overlap between benchmark items and corpora, streamed; `thme bench contamination` lists overlaps and fails | Tested: planted copies found through case, punctuation and line breaks; partial copies give their fraction; clean corpora find nothing |
@@ -83,15 +84,15 @@ flowchart LR
 
 | Track | Item | Status | Depends on |
 | :--- | :--- | :--- | :--- |
-| Quality and evidence | **Benchmark charts** (v0.2.8.8, WP37): dot plots with intervals, paired deltas, heatmaps and quality against cost from result records | Not started | SVG visual engine |
+| Security | **Scan on import** (v0.2.7.3): every command that loads a model scans it first and refuses on a high finding unless overridden explicitly | Not started | Scanner v1 |
+| Engine | **Transport and ODE steppers** (dossier WP4, WP6): Sinkhorn transport with mass conservation; Euler, RK4 and adaptive RK with error-order tests | Not started | Engine core |
 | Quality and evidence | **Benchmark runner, native and bridged modes** (v0.2.8.3): produce outputs with THME's forward pass or an external tool; resume and cache | Blocked | Model runs paused |
 
 ### Next: planned
 
 | Track | Item | Depends on |
 | :--- | :--- | :--- |
-| Security | Scanner for compressed pickles, ONNX, Keras, NumPy (THME-3022); scan on import (v0.2.7.3) | Scanner v1 |
-| Engine | Transport and Sinkhorn (WP4), ODE steppers (WP6) | Engine core |
+| Security | Scanner for compressed pickles, ONNX, Keras, NumPy (THME-3022) | Owner approval of an inflate dependency |
 | Formats and calibration | GPTQ-style rounding (THME-2205); llama.cpp compatibility check on synthetic files (THME-2208) | Calibration |
 
 ### Later: direction
@@ -371,7 +372,7 @@ interval, a three-state verdict and a chart; harness self-tests pass.
 | v0.2.8.5 | Statistics: Wilson and bootstrap intervals, paired tests, required-items calculator (WP34) | **Done**: `bench::stats`, Table R3 reproduced (THME-3028) |
 | v0.2.8.6 | Three-state gate: pass, fail or inconclusive from the interval (WP35) | **Done**: one decision path; `thme bench gate` (THME-3029) |
 | v0.2.8.7 | Contamination check between benchmark items and training or teacher data (WP36) | **Done**: `thme bench contamination` (THME-3030) |
-| v0.2.8.8 | Benchmark charts on the visual engine: dot plots, deltas, heatmaps, quality against cost (WP37) | |
+| v0.2.8.8 | Benchmark charts on the visual engine: dot plots, deltas, heatmaps, quality against cost (WP37) | **Done**: `thme bench chart` (THME-3032); quality against cost uses `engine::viz::pareto` |
 | v0.2.8.9 | Versioned schemas and the consolidated claim register (THME-3009, THME-3000) | **Done**: [register](docs/research/claim-register.md) of 135 claims; schemas under `docs/schemas/` validated in CI |
 
 ## v0.2.9 — Translation layer and v0.3 convergence

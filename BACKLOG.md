@@ -312,6 +312,12 @@ closes it.
 - **Problem**: Dossier R.4: numbers produced by other tools must enter THME through the same record format, labelled as supplied and never as measured.
 - **Done means**: Outputs (answers, log-likelihoods, pass counts) scored with the metric library into a validated result record with run mode and evidence `imported`; every dataset item scored exactly once; one dataset reader shared with the contamination check.
 
+### [THME-3032] Benchmark charts
+
+- **Milestone**: v0.2.8 · **Roadmap**: v0.2.8.8 · **Priority**: p2 · **Area**: quality · **Type**: feature · **Status**: done
+- **Problem**: Dossier WP37 and R.7: benchmark results need charts drawn from stored records, with intervals and evidence status.
+- **Done means**: Scores with intervals, paired changes against a baseline, a model-by-benchmark heatmap, from result records through the visual engine; light and dark; evidence label on each.
+
 ### [THME-3023] Re-measure reports affected by the FP16 rounding fix
 
 - **Milestone**: v0.2.2 · **Roadmap**: none · **Priority**: p1 · **Area**: research · **Type**: chore · **Status**: blocked
