@@ -50,7 +50,7 @@ closes it.
 - **Done means**: Exporting a recipe writes each tensor in its assigned format; re-importing and evaluating the file reproduces `thme evaluate`'s perplexity for the same recipe.
 
 ### [THME-2202] Q4_K, Q5_K and Q6_K encoders
-- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.2 · **Priority**: p1 · **Area**: exporter · **Type**: feature · **Status**: ready
+- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.2 · **Priority**: p1 · **Area**: exporter · **Type**: feature · **Status**: done
 - **Problem**: Only Q8_0, Q4_0 and TQ1_0 can be encoded; K-quants are the common deployment formats.
 - **Done means**: Round-trip tests against the existing decoders; the formats are usable in recipes and `thme search --formats`.
 

@@ -44,7 +44,9 @@ impl Family {
             | TensorFormat::FP16
             | TensorFormat::BF16
             | TensorFormat::Custom(_) => Self::Dense,
-            TensorFormat::INT8 | TensorFormat::Q8_0 => Self::Int8,
+            TensorFormat::INT8 | TensorFormat::Q8_0 | TensorFormat::Q5_K | TensorFormat::Q6_K => {
+                Self::Int8
+            }
             TensorFormat::Q4_0 | TensorFormat::Q4_K | TensorFormat::Q2_K => Self::Int4,
             TensorFormat::Ternary => Self::Ternary,
             TensorFormat::Bit1_5 => Self::Binary,
@@ -70,7 +72,7 @@ impl Family {
     fn label(self) -> &'static str {
         match self {
             Self::Dense => "Dense (FP32/FP16/BF16)",
-            Self::Int8 => "8-bit blocks",
+            Self::Int8 => "5 to 8-bit blocks",
             Self::Int4 => "4-bit and below",
             Self::Ternary => "Ternary {-1, 0, +1}",
             Self::Binary => "Binary (not implemented)",

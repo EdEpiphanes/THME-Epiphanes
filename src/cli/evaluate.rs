@@ -72,6 +72,9 @@ fn measurable(format: &TensorFormat) -> bool {
             | TensorFormat::BF16
             | TensorFormat::Q8_0
             | TensorFormat::Q4_0
+            | TensorFormat::Q4_K
+            | TensorFormat::Q5_K
+            | TensorFormat::Q6_K
             | TensorFormat::Ternary
     )
 }
@@ -211,7 +214,7 @@ pub fn prepare_candidate(
             format => {
                 if !measurable(&format) {
                     bail!(
-                        "Tensor '{}' is assigned {}, which the measured path cannot round-trip yet (supported: FP16, BF16, Q8_0, Q4_0, Ternary, or a BYOA algorithm)",
+                        "Tensor '{}' is assigned {}, which the measured path cannot round-trip yet (supported: FP16, BF16, Q8_0, Q6_K, Q5_K, Q4_K, Q4_0, Ternary, or a BYOA algorithm)",
                         tensor.name,
                         format.display_name()
                     );
