@@ -32,7 +32,7 @@
 
 ## 2. Measured Precision Sensitivity: SmolLM-135M
 
-Model: SmolLM-135M. Each row is a separate real forward pass over the first 16,384 corpus tokens (context 1024), so absolute values differ from the full-split figures in section 1. Tensors a row does not name keep their stored values. No retraining or calibration is applied. Bits per weight are nominal arithmetic, not artifact sizes.
+Model: SmolLM-135M. Each row is a separate real forward pass over the first 16,384 corpus tokens (context 1024), so absolute values differ from the full-split figures in section 1. Tensors a row does not name keep their stored values. No retraining or calibration is applied. Bits per weight are nominal arithmetic, not artifact sizes: format bit-widths averaged over every parameter, with tensors a row does not change counted at their stored width (32 bits for FP32 embeddings), so the figure is a whole-model average, not the bits of the changed tensors.
 
 Baseline perplexity on this subset: 17.9730
 
@@ -106,7 +106,7 @@ Additivity check: the per-layer deltas sum to +1,509.2, while ternarizing all of
 
 ## 3. Measured Precision Sensitivity: Pythia-14M
 
-Model: Pythia-14M. Each row is a separate real forward pass over the first 65,536 corpus tokens (context 1024), so absolute values differ from the full-split figures in section 1. Tensors a row does not name keep their stored values. No retraining or calibration is applied. Bits per weight are nominal arithmetic, not artifact sizes.
+Model: Pythia-14M. Each row is a separate real forward pass over the first 65,536 corpus tokens (context 1024), so absolute values differ from the full-split figures in section 1. Tensors a row does not name keep their stored values. No retraining or calibration is applied. Bits per weight are nominal arithmetic, not artifact sizes: format bit-widths averaged over every parameter, with tensors a row does not change counted at their stored width (32 bits for FP32 embeddings), so the figure is a whole-model average, not the bits of the changed tensors.
 
 Baseline perplexity on this subset: 113.6962
 

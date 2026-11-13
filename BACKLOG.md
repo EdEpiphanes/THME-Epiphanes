@@ -108,6 +108,66 @@ closes it.
 - **Problem**: No speed, memory or KV-cache figure is measured yet.
 - **Done means**: Broken into tickets per ROADMAP.md v0.2.4 when v0.2.3 closes.
 
+## Proposed: research dossier v3.1 (awaiting owner placement)
+
+> From `docs/research/THME_Research_Dossier_v3.1_2026-11-13.pdf` and its review
+> (`docs/research/REVIEW_dossier_v3.1.md`). Milestone left `unplaced` until the owner
+> chooses where the engine work sits in ROADMAP.md; existing milestones are not renumbered.
+
+### [THME-3000] Consolidate the dossier v3.1 claim register under docs/research/
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: research · **Type**: docs · **Status**: triage
+- **Problem**: Claims V-01 to V-135 are spread over the appendices of the PDF; citations were written from memory.
+- **Done means**: One register file with unique IDs, status letters and the section each claim lives in; every citation checked or marked unverified.
+
+### [THME-3001] Engine error module (dossier WP1)
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: engine · **Type**: feature · **Status**: done
+- **Problem**: Engine primitives need one error type that never panics and never falls back silently.
+- **Done means**: `src/engine/error.rs`: invalid-input, infeasible, no-convergence and non-finite variants plus a finite-value guard, each reached by a test; no behaviour change elsewhere.
+
+### [THME-3002] Exact dynamic-programming allocator behind `thme search --solver` (dossier WP2)
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: engine · **Type**: feature · **Status**: triage
+- **Problem**: Docs promised a knapsack solver; `ParetoAllocator` uses sensitivity thresholds and `thme search` is greedy.
+- **Done means**: `engine::alloc` matches exhaustive search on small instances and is never worse than greedy at equal budget; default solver unchanged until compared on committed cost tables.
+
+### [THME-3003] One versioned quality gate; retire the stale 0.25 tolerance (dossier WP20)
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: quality · **Type**: fix · **Status**: triage
+- **Problem**: The threshold lives in three places: CLI defaults (0.45), `configs/quality_gates.yaml` (0.25, unread) and evaluator tests (0.25).
+- **Done means**: A gate is versioned data with a content hash, absolute and relative margins; every report records its gate version; MMLU/GSM8K marked not measured.
+
+### [THME-3004] Shared basis module: one Walsh-Hadamard transform (dossier WP5)
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: engine · **Type**: refactor · **Status**: triage
+- **Problem**: Two implementations exist: `transform::fast_walsh_hadamard_transform` and `byoa::wht_blocks`. Two copies can drift and confound a comparison.
+- **Done means**: `engine::basis` owns the transform; both callers use it with bit-identical results before and after; orthonormality and involution tests.
+
+### [THME-3005] SPDX headers on every source file
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: ci · **Type**: chore · **Status**: triage
+- **Problem**: The dossier's rules assume `SPDX-License-Identifier: AGPL-3.0-only` headers; no file carries one.
+- **Done means**: Every `.rs` and script file has the header; the hygiene CI job fails on a file without it.
+
+### [THME-3006] Number-format conversions with stated error bounds (dossier WP3)
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: engine · **Type**: feature · **Status**: triage
+- **Problem**: Codecs live in the exporter without declared error bounds.
+- **Done means**: `engine::numfmt` covers integer, ternary, binary, codebook, FP16/BF16/FP8 and phase, each with a bound its tests confirm.
+
+### [THME-3007] Dependency-free SVG visual engine (dossier WP9)
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: engine · **Type**: feature · **Status**: triage
+- **Problem**: Charts come from Python scripts; the Studio and dossier cannot share a headless renderer.
+- **Done means**: Deterministic SVG for log-axis traces, heatmaps, scatter with retained-variance label, dataflow graphs and Pareto fronts; NaN or non-positive log values return errors.
+
+### [THME-3008] Permission and ownership record for reverse-engineering features (dossier WP19)
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: core · **Type**: feature · **Status**: triage
+- **Problem**: Architecture inference and closed-format analysis must only run on models the user owns or may analyze.
+- **Done means**: Those features refuse to run without a stored basis and purpose statement next to the model hash; wording reviewed by a lawyer.
+
+### [THME-3009] Versioned schemas under docs/schemas/ (dossier B.6.4)
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: core · **Type**: docs · **Status**: triage
+- **Problem**: Benchmark task, benchmark result, quality-gate version, plugin protocol and conversion-registry entry have no schema.
+- **Done means**: Each schema carries a version field and validates a fixture in CI.
+
+### [THME-3010] BYOA rules get calibration through their interface, not tensor metadata
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: byoa · **Type**: refactor · **Status**: triage
+- **Problem**: `ActivationAware` reads statistics from a JSON string in tensor metadata and needs a special case in `apply_selected_format`; each new data-needing rule would add another.
+- **Done means**: A rule receives an apply context (calibration statistics, row width) at one seam; the metadata side channel and special case are gone; AWQ tests unchanged.
 <!-- backlog:end -->
 
 ---

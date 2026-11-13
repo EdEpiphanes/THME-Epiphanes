@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **Research Dossier v3.1** in `docs/research/` with a review against the repository, and the
+  first engine module, `src/engine/` (error type and finite-value guard only; dossier WP1).
+  Eleven proposed tickets (THME-3000 to THME-3010) wait for the owner to place them.
 - **AWQ-style activation-aware quantization** (v0.2.2.4, implemented; not measured on a real
   model): `thme.awq_q4_0` and `thme.awq_q4_k` BYOA rules scale input channels by calibration
   mean |x|^alpha before rounding and pick alpha by activation-weighted error (never worse than
@@ -123,6 +126,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   depict the application.
 
 ### Fixed
+- Documentation no longer claims a dynamic-programming knapsack allocator; the allocator uses
+  sensitivity thresholds. `configs/quality_gates.yaml` is marked unread (the gate in force is
+  `--max-ppl-delta 0.45`); the dossier defines its nominal-bits column; the README states the
+  513 MiB source is FP32.
 - Library and binaries now deny `unwrap`, `expect`, `panic!`, `unreachable!`, `unimplemented!` and
   `todo!` outside tests (AGENTS.md rule 4, enforced by clippy). The three remaining cases were
   replaced: the SafeTensors header prefix read, the SHA-256 block loop, and the synthetic

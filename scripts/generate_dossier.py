@@ -61,7 +61,7 @@ def sweep_section(sweep, heading):
         f"Model: {sweep['model_name']}. Each row is a separate real forward pass over the first "
         f"{sweep['corpus_tokens_used']:,} corpus tokens (context {sweep['context_len']}), so absolute values differ "
         "from the full-split figures in section 1. Tensors a row does not name keep their stored values. "
-        "No retraining or calibration is applied. Bits per weight are nominal arithmetic, not artifact sizes.",
+        "No retraining or calibration is applied. Bits per weight are nominal arithmetic, not artifact sizes: format bit-widths averaged over every parameter, with tensors a row does not change counted at their stored width (32 bits for FP32 embeddings), so the figure is a whole-model average, not the bits of the changed tensors.",
         "",
         f"Baseline perplexity on this subset: {base['perplexity']:.4f}",
         "",
