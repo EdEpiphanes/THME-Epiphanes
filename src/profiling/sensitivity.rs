@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use crate::ir::{ModelIR, TensorFormat, TensorIR};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Integration Tests for Pure-Rust GGUF v3 Binary Writer (Milestone v0.1.8.2)
 
 use std::path::Path;

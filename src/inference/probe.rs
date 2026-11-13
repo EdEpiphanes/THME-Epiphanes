@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Forward-pass probe: what every layer and tensor actually did on real tokens.
 //!
 //! A trace is collected during a normal forward pass. For each linear tensor it records

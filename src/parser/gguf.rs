@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use anyhow::{bail, Context, Result};
 use memmap2::Mmap;
 use std::collections::HashMap;

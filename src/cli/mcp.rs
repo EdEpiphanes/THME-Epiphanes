@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Model Context Protocol (MCP) Server for AI Copilots & IDE Extensions
 //!
 //! Provides a standard stdin/stdout JSON-RPC MCP server conforming to the 2024-11-05 specification.

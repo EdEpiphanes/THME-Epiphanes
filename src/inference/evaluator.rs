@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Measured quality evaluator for the co-surgery loop.
 
 use super::arch::ArchConfig;

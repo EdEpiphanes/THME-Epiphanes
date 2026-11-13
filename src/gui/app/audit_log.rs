@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Studio tab: TAB 6: Audit Log (Structured filterable event stream)
 
 use super::*;

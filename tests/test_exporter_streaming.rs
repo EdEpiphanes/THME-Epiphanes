@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use std::io::{Read, Seek, SeekFrom};
 
 use thme::exporter::gguf_writer::GgufWriter;

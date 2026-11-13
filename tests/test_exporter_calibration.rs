@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 #[path = "../src/exporter/calibration.rs"]
 mod calibration;
 

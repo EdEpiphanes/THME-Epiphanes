@@ -54,6 +54,11 @@ All contributors and maintainers are expected to follow our [Code of Conduct](CO
 4. **Commits**: Write clear, conventional commit messages (`feat:`, `fix:`, `perf:`, `docs:`, `chore:`).
 5. **Licensing**: Tick the contributor terms box in the pull request template (see below).
 
+## Source headers
+
+Every source file starts with `SPDX-License-Identifier: AGPL-3.0-only` in a comment (after a
+shebang line, if any). Run `python scripts/spdx.py --fix` to add it; CI runs `--check`.
+
 ## Licensing of Contributions
 
 THME is AGPL-3.0-only for everyone. Epiphanes plans a commercial license in a later release

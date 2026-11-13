@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Theme engine for THME Studio.
 //!
 //! Palettes (Manga Panel by default: black and white; Manga Night and Manga Ink with a red spot

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use clap::Parser;
 use thme::cli::{Cli, Commands};
 use thme::exporter::gguf_writer::GgufWriter;

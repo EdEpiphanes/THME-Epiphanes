@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Integration tests for Layer Deconstruction & Topological Component Disassembly Engine
 
 use thme::ir::layer_decomp::{

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 # Builds THME's manga brand art from the mascot (assets/brand/thme-mascot.png):
 #   assets/brand/thme-icon-256.png  ink-only face crop for the app icon and favicon
 #   assets/brand/thme-icon-64.png

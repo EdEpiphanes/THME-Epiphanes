@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Adversarial Stress & Boundary Challenge Test Suite for THME Roofline Engine (v0.1.7.0)
 //!
 //! EMPIRICAL CHALLENGER 1 ADVERSARIAL HARNESS:

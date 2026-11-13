@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! End-to-end source-backed exporter checks for GGUF and SafeTensors.
 
 use std::io::{Read, Seek, SeekFrom};

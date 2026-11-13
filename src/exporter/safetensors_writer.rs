@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Direct Pure-Rust SafeTensors Binary Serializer (Milestone v0.1.8.5)
 //!
 //! Serializes tensor arrays and model metadata into the standard SafeTensors

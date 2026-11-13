@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 # Captures every THME Studio tab as a PNG for the README.
 #
 # Builds thme-gui, runs it in capture mode (THME_GUI_CAPTURE_DIR), and converts the

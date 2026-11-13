@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use comfy_table::modifiers::UTF8_ROUND_CORNERS;
 use comfy_table::presets::UTF8_FULL;
 use comfy_table::{Cell, Color, ContentArrangement, Table};

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Model Architecture Rebuilder & Open Weights Scaffold Engine
 //!
 //! Enables researchers and Teacher LLMs to:

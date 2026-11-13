@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! `thme epiph`: pack any model THME can read into one `.epiph` file, and verify one.
 
 use anyhow::{bail, Context, Result};

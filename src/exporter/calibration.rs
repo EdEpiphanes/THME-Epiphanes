@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! MSE-optimal ternary scales for row-wise channels and fixed-size groups.
 
 use anyhow::{bail, Result};

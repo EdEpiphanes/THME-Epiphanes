@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Integration Tests for Bring Your Own Algorithm (BYOA) Engine
 
 use thme::ir::TensorRole;

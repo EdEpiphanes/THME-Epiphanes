@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use crate::ir::WeightProfile;
 
 /// Fast IEEE 754 half-precision float (f16) to single-precision (f32) converter

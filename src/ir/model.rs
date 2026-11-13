@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use super::tensor::{TensorIR, TensorRole};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! GGUF Model Architecture Metadata Synchronization Engine (Milestone v0.1.8.4)
 //!
 //! Synchronizes high-level neural architecture parameters and hyper-parameters

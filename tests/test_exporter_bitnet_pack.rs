@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Integration & Verification Test Suite for BitNet b1.58 Bitstream Packer (v0.1.8.1)
 //!
 //! Verifies:

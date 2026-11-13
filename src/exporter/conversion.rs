@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Bounded-memory conversion of float tensor sources to GGML block formats.
 
 use anyhow::{bail, Context, Result};

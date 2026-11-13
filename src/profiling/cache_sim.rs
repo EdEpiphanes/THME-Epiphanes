@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use crate::profiling::hardware::HardwareDevice;
 use serde::{Deserialize, Serialize};
 

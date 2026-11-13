@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use super::*;
 use crate::cli::evaluate::tests::synthetic_checkpoint;
 use crate::inference::{

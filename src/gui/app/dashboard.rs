@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Studio tab: TAB 0: Master Dashboard (All tabs unified in one master cockpit)
 
 use super::*;

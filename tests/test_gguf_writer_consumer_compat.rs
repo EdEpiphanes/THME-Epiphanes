@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Adversarial Compatibility & Consumer Integration Test Suite for GgufWriter (Milestone v0.1.8.2)
 //!
 //! EMPIRICAL CHALLENGER 2 ADVERSARIAL HARNESS:

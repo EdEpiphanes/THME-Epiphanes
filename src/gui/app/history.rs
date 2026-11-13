@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Studio tab: TAB 5: History & Checkpoints (Timeline of optimization checkpoints, diffs, rollback)
 
 use super::*;

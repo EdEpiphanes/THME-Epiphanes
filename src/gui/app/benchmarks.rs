@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Studio tab: TAB 4: Full Benchmarks (Live Flow simulator, batch scaling, context length scaling)
 
 use super::*;

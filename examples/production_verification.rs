@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Production Open-Weights End-to-End Verification Pipeline (Milestone v0.2.0.1 / v0.2.0.2).
 //!
 //! Pipeline Stages:

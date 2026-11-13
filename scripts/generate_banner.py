@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
 """
 Render the animated THME brand banner (assets/brand/thme-banner.gif) and its static frame
 (assets/brand/thme-banner.png).

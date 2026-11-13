@@ -33,7 +33,6 @@ flowchart LR
 
     subgraph NOW["Now"]
         N3["Number formats with error bounds"]:::now
-        N4["SPDX headers"]:::now
     end
     subgraph NEXT["Next"]
         X1["Quantized .epiph payloads"]:::later
@@ -62,6 +61,7 @@ flowchart LR
 | `.epiph` v1.0 (THME-3012) | Open Epiphanes model format with full metadata; `thme epiph pack/verify` | Tested: round trip, corruption, GGUF conversion |
 | `thme scan` (THME-3018) | Static model security scanner | Tested on built fixtures |
 | Versioned quality gate (THME-3003) | `GateSpec`: custom criteria, absolute and relative margins, hash in every report; `--gate FILE`; validate re-judges; five inline copies removed; validate default now 0.45, like every other command | Tested, including every committed report |
+| SPDX headers (THME-3005) | `AGPL-3.0-only` header on all 168 source files; `scripts/spdx.py --check` in CI | Tested in CI |
 | Signed `.epiph` (THME-3019) | Minisign signature over the manifest; `thme epiph sign`, `verify --require-signature`; Epiphanes key by default | Tested: tamper, wrong key, broken trailer |
 | No-panic rule, GUI split, glossary | Compiler-enforced; Studio tabs as modules; `CONTEXT.md` | Tested |
 
@@ -70,7 +70,6 @@ flowchart LR
 | Track | Item | Status | Depends on |
 | :--- | :--- | :--- | :--- |
 | Engine | **Number formats with stated error bounds** (THME-3006): FP16, BF16, FP8, integer, codebook, phase | On track | None |
-| Hygiene | **SPDX licence headers** on every file, enforced in CI (THME-3005) | Not started | None |
 
 ### Next: planned
 
@@ -340,7 +339,7 @@ each release ships with signatures and a dependency report.
 | v0.2.7.6 | Sandbox implementation with escape tests; remote-code models and plugins run only inside it | |
 | v0.2.7.7 | Guardrail detection, read-only: safety classifiers and refusal instructions reported (THME-3021) | |
 | v0.2.7.8 | Optional safety layers THME adds on top of a model, switched on or off per deployment | |
-| v0.2.7.9 | Supply chain: SPDX headers (THME-3005), signed releases, dependency licence report in every release | |
+| v0.2.7.9 | Supply chain: SPDX headers (THME-3005), signed releases, dependency licence report in every release | **Done**: headers on every source file, enforced in CI; releases signed with Minisign; `THIRD_PARTY_LICENSES.html` in every archive |
 
 ## v0.2.8 — Quality gate and benchmarks
 

@@ -165,7 +165,7 @@ closes it.
 
 ### [THME-3005] SPDX headers on every source file
 
-- **Milestone**: v0.2.7 · **Roadmap**: v0.2.7.9 · **Priority**: p2 · **Area**: ci · **Type**: chore · **Status**: triage
+- **Milestone**: v0.2.7 · **Roadmap**: v0.2.7.9 · **Priority**: p2 · **Area**: ci · **Type**: chore · **Status**: done
 - **Problem**: The dossier's rules assume `SPDX-License-Identifier: AGPL-3.0-only` headers; no file carries one.
 - **Done means**: Every `.rs` and script file has the header; the hygiene CI job fails on a file without it.
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Tensor payload decoding and precision round-tripping for the reference forward pass.
 
 use anyhow::{bail, Context, Result};

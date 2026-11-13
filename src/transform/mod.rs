@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Matrix & Linear Transformation, Distillation, and Automated Parameter Selection Engine
 //!
 //! Provides mathematically rigorous implementations of:
