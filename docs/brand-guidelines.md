@@ -37,6 +37,7 @@ speed lines, with a bright top rim (sheen), a crisp ink edge and a hard offset p
 | `assets/brand/thme-banner.png` | First frame of the banner (static fallback) | `scripts/generate_banner.py` |
 | `assets/brand/thme-mark-256.png` | Logo mark: the ink-shaded manifold in a panel frame | `scripts/generate_banner.py` |
 | `assets/brand/thme-mascot.png` | Mascot artwork, black-and-white manga | Supplied artwork; to be refined by a human artist |
+| `assets/brand/thme-mascot-loop.gif` | Mascot breathing loop (10 s, 400x225, greyscale) | Owner-supplied animation of the mascot, compressed to 24 greys |
 | `assets/brand/thme-icon-256.png`, `-64.png` | App and window icon (mascot face crop) | `scripts/generate_brand_art.ps1` |
 | `assets/gifs/*.gif` | Recordings of the real Studio | `scripts/record_gif.ps1` |
 | `docs/status/status-*.svg` | Status board in the panel style | `scripts/generate_status.py` |

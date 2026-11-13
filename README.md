@@ -341,6 +341,8 @@ Full plan with sub-milestones: **[ROADMAP.md](ROADMAP.md)** · Tickets: **[BACKL
 
 ## Research
 
+<img src="assets/brand/thme-mascot-loop.gif" align="right" width="360" alt="The THME mascot, drawn in black-and-white manga style, breathing slowly while a wireframe Calabi-Yau manifold turns in her hands" />
+
 THME is also a research programme into heterogeneous representations for language models.
 
 - [Research Programme v2](docs/research/THME_Research_Programme_v2.pdf): hypotheses, method, controls
