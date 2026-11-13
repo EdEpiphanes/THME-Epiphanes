@@ -32,7 +32,6 @@ flowchart LR
     classDef later fill:#ffffff,stroke:#0b0b0b,stroke-width:1.5px,stroke-dasharray:4 3,color:#52514e;
 
     subgraph NOW["Now"]
-        N3["Developer sandbox design"]:::now
         N4["Benchmark registry"]:::now
     end
     subgraph NEXT["Next"]
@@ -67,20 +66,20 @@ flowchart LR
 | Number formats (THME-3006) | `engine::minifloat` (FP16, BF16, FP8 E4M3/E5M2, nearest-even) and integer, sign, codebook, phase quantizers; fixed an FP16 rounding bug in every block encoder (THME-3023) | Tested: every FP16 code, every tie in four formats |
 | SPDX headers (THME-3005) | `AGPL-3.0-only` header on all 168 source files; `scripts/spdx.py --check` in CI | Tested in CI |
 | Signed `.epiph` (THME-3019) | Minisign signature over the manifest; `thme epiph sign`, `verify --require-signature`; Epiphanes key by default | Tested: tamper, wrong key, broken trailer |
+| Sandbox design (THME-3020, design part) | [docs/sandbox.md](docs/sandbox.md): threat model, one fail-closed interface, layers per OS, 13 escape tests, dependency proposal | Design only; nothing built |
 | No-panic rule, GUI split, glossary | Compiler-enforced; Studio tabs as modules; `CONTEXT.md` | Tested |
 
 ### Now: committed, in progress
 
 | Track | Item | Status | Depends on |
 | :--- | :--- | :--- | :--- |
-| Security | **Developer sandbox design** (THME-3020, v0.2.7.5): isolation per OS, written before code | Not started | None |
 | Quality and evidence | **Benchmark registry** (v0.2.8.2): declarative task files and result records | Not started | Versioned gate |
 
 ### Next: planned
 
 | Track | Item | Depends on |
 | :--- | :--- | :--- |
-| Security | Sandbox implementation (v0.2.7.6); scanner for compressed pickles, ONNX, Keras, NumPy (THME-3022); scan on import (v0.2.7.3) | Sandbox design |
+| Security | Sandbox implementation with escape tests (v0.2.7.6, THME-3020); scanner for compressed pickles, ONNX, Keras, NumPy (THME-3022); scan on import (v0.2.7.3) | Owner approval of the sandbox dependencies |
 | Quality and evidence | Benchmark runner, metrics, statistics and three-state gate (dossier WP32-35); claim register (THME-3000); versioned schemas (THME-3009) | Benchmark registry |
 | Engine | Transport and Sinkhorn (WP4), ODE steppers (WP6), dependency-free SVG visual engine (WP9) | Engine core |
 | Formats and calibration | GPTQ-style rounding (THME-2205); llama.cpp compatibility check on synthetic files (THME-2208) | Calibration |
@@ -339,7 +338,7 @@ each release ships with signatures and a dependency report.
 | v0.2.7.2 | Scanner coverage: compressed pickles, ONNX, Keras, NumPy object arrays (THME-3022) | |
 | v0.2.7.3 | Scan on import: every command that loads a model scans it first, with an explicit override | |
 | v0.2.7.4 | Permission and ownership record for reverse-engineering features (WP19, THME-3008) | |
-| v0.2.7.5 | Developer sandbox design: process isolation, no network, file and time limits per OS (THME-3020) | |
+| v0.2.7.5 | Developer sandbox design: process isolation, no network, file and time limits per OS (THME-3020) | **Done**: [design](docs/sandbox.md) with threat model, layers per OS and escape tests |
 | v0.2.7.6 | Sandbox implementation with escape tests; remote-code models and plugins run only inside it | |
 | v0.2.7.7 | Guardrail detection, read-only: safety classifiers and refusal instructions reported (THME-3021) | |
 | v0.2.7.8 | Optional safety layers THME adds on top of a model, switched on or off per deployment | |

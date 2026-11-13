@@ -104,6 +104,19 @@ The measured quality loss of each tensor group in each candidate format, one gro
 The method an allocator uses to choose: sensitivity thresholds, greedy by saving per unit cost, or an exact dynamic program over the cost table.
 _Avoid_: optimizer (implies the result is optimal)
 
+## Security
+
+**Untrusted code**:
+Code that arrives with a model, benchmark or plugin and that nobody has reviewed; it runs only in the sandbox, and only when the user chooses to run it.
+_Avoid_: remote code (for the general case), payload
+
+**Sandbox**:
+An isolated process with no network, write access only to its work folder, and caps on time, memory, processes and output; it refuses to start when a layer cannot be enforced.
+_Avoid_: jail, container (unless it is one)
+
+**Escape test**:
+A test that runs a probe inside the sandbox, attempts one forbidden action and asserts that it fails.
+
 ## Engine
 
 **Engine primitive**:
