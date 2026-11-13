@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Independent consumer and optional runtime checks for exported model files.
 
 use std::path::{Path, PathBuf};

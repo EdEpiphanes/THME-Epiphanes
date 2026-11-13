@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use serde::{Deserialize, Serialize};
 
 /// A single candidate point evaluated in 3D optimization space.

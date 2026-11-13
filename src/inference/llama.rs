@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! LLaMA-family decoder forward pass (RMSNorm, RoPE, grouped-query attention, SwiGLU).
 //!
 //! Tensor naming follows the Hugging Face `LlamaForCausalLM` layout. Weights are

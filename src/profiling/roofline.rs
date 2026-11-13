@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use crate::ir::model::ModelIR;
 use crate::profiling::hardware::{HardwareDevice, PrecisionType};
 use crate::profiling::intensity::{IntensityCalculator, KernelType};

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Static security scan of model files and folders (`thme scan`).
 //!
 //! Nothing is loaded or executed: files are read as bytes and checked by rules. The scan looks

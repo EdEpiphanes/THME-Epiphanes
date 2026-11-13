@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- SPDX headers (THME-3005, v0.2.7.9): every tracked source file (Rust, Python, shell, PowerShell,
+  TypeScript) carries `SPDX-License-Identifier: AGPL-3.0-only`; `scripts/spdx.py --check` runs in
+  the CI hygiene job, `--fix` adds missing headers. CI also refuses tracked `.epiph` files.
 - **Versioned quality gates** (THME-3003, v0.2.8.1): `quality::gate::GateSpec` holds a name, a
   version and one or more criteria with absolute and/or relative margins; every report records
   the gate, its SHA-256 and a per-criterion verdict. `thme evaluate` and `thme search` take

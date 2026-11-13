@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // AGENTS.md rule 4: no panicking shortcuts outside tests; return errors with context instead.
 #![cfg_attr(
     not(test),

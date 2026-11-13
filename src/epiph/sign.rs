@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Signed `.epiph` files (specification section 7).
 //!
 //! The signature is a Minisign signature over the manifest bytes. The manifest holds the

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! The quality gate (roadmap v0.2.8.1).
 //!
 //! A gate is versioned data: a name, a version and one or more criteria. Each criterion names a

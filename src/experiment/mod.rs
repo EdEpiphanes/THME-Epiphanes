@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Non-Conventional Experimentation Laboratory Engine
 //!
 //! Provides experimental, non-conventional mathematical techniques for researchers and Teacher LLMs:

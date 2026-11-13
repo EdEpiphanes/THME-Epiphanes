@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
 # THME Release Artifact Cryptographic Signing Script (Milestone v0.2.0.6)
 # Signs all distribution tarballs and checksum manifests using Minisign & GPG.
 set -euo pipefail

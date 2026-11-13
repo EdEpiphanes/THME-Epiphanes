@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use thme::interop::{
     HuggingFaceConfigGenerator, PeftLoraAdapter, PyTorchCUDATrainingStrategy, PyTorchInteropConfig,
     PyTorchScriptGenerator,

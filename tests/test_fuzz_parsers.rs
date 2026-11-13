@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use std::path::Path;
 use thme::parser::gguf::GgufParser;
 use thme::parser::safetensors::SafetensorsScanner;

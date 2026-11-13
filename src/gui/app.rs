@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 macro_rules! f {
     ($($arg:tt)*) => {
         format!($($arg)*)

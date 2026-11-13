@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Quality Gate Decision Logic, Analytic Perplexity Proxy & External Evaluation Bridge
 //!
 //! ModelEvaluator::evaluate_weights is an analytic proxy: it never runs a forward pass and its

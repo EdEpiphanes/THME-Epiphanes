@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! AWQ-style activation-aware quantization (roadmap v0.2.2.4).
 //!
 //! Input channels that carry large activations matter more to a layer's output than their

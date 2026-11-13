@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use crate::ir::TensorFormat;
 use crate::surgery::recipe::{TweakOperation, TweakRecipe};
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 pub mod agent_bridge;
 pub mod closed_loop;
 pub mod pareto_3d;

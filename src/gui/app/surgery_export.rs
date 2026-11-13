@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Studio tab: TAB 7: Export & Surgery (Teacher LLM JSON recipes and model exporter)
 
 use super::*;

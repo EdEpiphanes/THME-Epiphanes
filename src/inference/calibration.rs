@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Calibration activations: per-input-channel statistics of every linear tensor, collected
 //! with the forward-pass probe over calibration tokens (roadmap v0.2.2.3).
 //!

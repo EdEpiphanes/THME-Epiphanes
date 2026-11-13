@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
 """
 THME Automated Reproducible Benchmark Script Suite (Milestone v0.2.0.3)
 Measures empirical throughput, profiling latency, Pareto DP allocation time,

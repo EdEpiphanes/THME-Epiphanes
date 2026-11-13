@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Live 3D model view: what every layer and tensor of a running model is doing.
 //!
 //! A background worker runs the reference forward pass with the probe enabled and streams

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Integration Tests for Open Weights Architecture Rebuilder
 
 use thme::ir::model::{ModelArchitecture, ModelIR};

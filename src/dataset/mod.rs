@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Dataset Ingestion, Formatting & Tokenization Engine
 //!
 //! Supports importing any training, fine-tuning, or calibration dataset:

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! End-to-End Integration & Unit Test Suite for THME Roofline & Micro-Kernel Profiler (v0.1.7.0)
 //!
 //! Covers:

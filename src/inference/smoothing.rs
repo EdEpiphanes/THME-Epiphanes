@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! SmoothQuant-style scale migration (roadmap v0.2.2.7).
 //!
 //! Activation outliers make the inputs of a linear layer hard to quantize. Migration moves

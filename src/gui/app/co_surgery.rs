@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Studio tab: TAB 9: Closed-Loop Teacher-Student Co-Surgery Dashboard (v0.1.9)
 
 use super::*;

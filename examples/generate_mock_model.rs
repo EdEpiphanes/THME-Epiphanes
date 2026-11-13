@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use std::collections::HashMap;
 use std::fs::{create_dir_all, File};
 use std::io::Write;

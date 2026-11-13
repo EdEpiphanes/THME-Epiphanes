@@ -30,10 +30,13 @@ jobs:
 
       - name: No committed weights or binaries (AGENTS.md rule 3)
         run: |
-          if git ls-files | grep -iE '\.(safetensors|gguf|bin|pt|onnx|thme|exe|dll|so|dylib|pdb)$'; then
+          if git ls-files | grep -iE '\.(safetensors|gguf|bin|pt|onnx|thme|epiph|exe|dll|so|dylib|pdb)$'; then
             echo "::error::Model weights or binaries are tracked"
             exit 1
           fi
+
+      - name: SPDX licence header on every source file
+        run: python3 scripts/spdx.py --check
 
   lint:
     name: Format and clippy

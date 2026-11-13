@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use thme::gui::TensorInfo;
 use thme::transform::{AutoDecider, MatrixAlgorithm, MatrixMath};
 

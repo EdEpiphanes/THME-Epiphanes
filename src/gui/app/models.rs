@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Studio tab: TAB 1: Models Manager (Loaded models, GGUF/SafeTensors importer, tensor inventory)
 
 use super::*;

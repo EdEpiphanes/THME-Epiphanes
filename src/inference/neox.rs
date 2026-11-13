@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! GPT-NeoX (Pythia) forward pass.
 //!
 //! Differences from the LLaMA path: LayerNorm with bias, a fused QKV projection laid out

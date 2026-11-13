@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! The Epiphanes model format, `.epiph` (open specification: `docs/formats/epiph-v1.md`).
 //!
 //! One file holds a model's weights, its full description, and what is known about it:

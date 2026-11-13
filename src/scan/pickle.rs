@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Static pickle inspection: walks the opcode stream without executing anything and reports
 //! every import (`GLOBAL`, `INST`, `STACK_GLOBAL`) a load would perform. Loading a pickle can
 //! call any importable function, so the imports are the risk.

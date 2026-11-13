@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Architecture dispatch for the reference forward pass.
 
 use anyhow::{bail, Context, Result};

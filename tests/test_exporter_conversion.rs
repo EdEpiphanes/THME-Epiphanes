@@ -1,4 +1,5 @@
 #![allow(clippy::chunks_exact_to_as_chunks)]
+// SPDX-License-Identifier: AGPL-3.0-only
 
 use std::io::{Read, Seek, SeekFrom};
 

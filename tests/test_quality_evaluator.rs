@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use thme::quality::{
     EvaluationCorpus, EvaluatorConfig, ModelEvaluator, PerplexityGateDecision, PerplexityMetrics,
 };

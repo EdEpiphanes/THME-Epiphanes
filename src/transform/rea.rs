@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! REA-LLM: Representation & Energy-Aware Language Model Engine
 //!
 //! Implements Execution-Weighted Heterogeneous Allocation (EWHA) based on the

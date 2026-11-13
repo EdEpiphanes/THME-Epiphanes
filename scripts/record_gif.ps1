@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 # Records README GIFs from the real THME Studio (no mock-ups).
 #
 # Builds thme-gui, runs it in recording mode (THME_GUI_CAPTURE_DIR + THME_GUI_RECORD) for each

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! `thme scan`: static security scan of a model file or folder. Nothing is loaded or run.
 
 use anyhow::{bail, Result};
