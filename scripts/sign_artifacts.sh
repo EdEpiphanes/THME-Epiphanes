@@ -16,7 +16,7 @@ echo "Signing release artifacts in ${DIST_DIR}..."
 if command -v minisign >/dev/null 2>&1 && [ -n "${MINISIGN_KEY:-}" ]; then
     umask 077
     printf '%s\n' "${MINISIGN_KEY}" > /tmp/minisign.key
-    for f in "${DIST_DIR}"/*.tar.gz; do
+    for f in "${DIST_DIR}"/*.tar.gz "${DIST_DIR}"/SHA256SUMS.txt; do
         if [ -f "$f" ]; then
             echo "  [minisign] Signing $(basename "$f")..."
             minisign -Sm "$f" -s /tmp/minisign.key -t "THME Epiphanes Release Asset"

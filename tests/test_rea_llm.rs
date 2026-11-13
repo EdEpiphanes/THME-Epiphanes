@@ -13,13 +13,13 @@ fn test_layer_reach_profile_80_20() {
     assert!((reach.p_continue - 0.20).abs() < 1e-4);
 
     // Early prefix layers (L0..=2) must have q_l = 1.0
-    for l in 0..=checkpoint {
-        assert_eq!(reach.q_values[l], 1.0);
+    for &q in &reach.q_values[..=checkpoint] {
+        assert_eq!(q, 1.0);
     }
 
     // Remaining layers (L3..=9) must have q_l = 0.20
-    for l in (checkpoint + 1)..num_layers {
-        assert!((reach.q_values[l] - 0.20).abs() < 1e-4);
+    for &q in &reach.q_values[(checkpoint + 1)..num_layers] {
+        assert!((q - 0.20).abs() < 1e-4);
     }
 
     // Expected depth fraction: (3 * 1.0 + 7 * 0.2) / 10 = 4.4 / 10 = 0.44

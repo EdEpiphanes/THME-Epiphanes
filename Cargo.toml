@@ -7,7 +7,6 @@ authors = ["Epiphanes <https://github.com/EdEpiphanes>"]
 description = "THME: Topological Heterogeneous Manifold Engine by Epiphanes - Open-source framework for LLM memory profiling, weight sensitivity analysis, and Pareto precision optimization."
 license = "Apache-2.0"
 repository = "https://github.com/EdEpiphanes/THME-Epiphanes"
-homepage = "https://github.com/EdEpiphanes/THME-Epiphanes"
 readme = "README.md"
 keywords = ["llm", "quantization", "optimization", "transformer", "kv-cache"]
 categories = ["command-line-utilities", "science"]
@@ -51,13 +50,14 @@ serde_json = "1.0"
 safetensors = "0.5"
 memmap2 = "0.9"
 comfy-table = "7.1"
-sysinfo = "0.33"
 anyhow = "1.0"
 eframe = { version = "0.31", default-features = true }
 rfd = "0.15"
 
 [dev-dependencies]
 tempfile = "3.17"
+# Host description in examples/production_verification.rs only.
+sysinfo = "0.33"
 
 [profile.release]
 opt-level = 3
