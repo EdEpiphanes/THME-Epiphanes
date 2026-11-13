@@ -43,7 +43,7 @@ thme bench validate run.json --task benchmarks/tasks/gsm8k.json
 | `multiple-choice` | `none` | `choice-by-likelihood` |
 | `multiple-choice` | `choice-letter`, `exact`, `first-line` | `exact-match`, `normalized-match` |
 | `checkable-answer` | `exact`, `first-line`, `last-number`, `after-marker` | `exact-match`, `normalized-match`, `numeric-tolerance` |
-| `code` | `none` | `pass-at-k` (`k`, `samples`); runs only in the [sandbox](sandbox.md) |
+| `code` | `none` | `pass-at-k` (`k`, `samples`); accepted by the registry, but running it needs the [sandbox](sandbox.md), which is reserved for the commercial version |
 
 Other combinations are refused. Every metric gives each item a score in [0, 1]. Perplexity is
 not a registry task: it stays with `thme evaluate` and its measured reports.
@@ -74,6 +74,6 @@ Checks on every record:
 
 ## Not yet
 
-Computing intervals (v0.2.8.5), running tasks (v0.2.8.3), the metric implementations
-(v0.2.8.4) and the three-state gate (v0.2.8.6) build on these formats. JSON Schema files for
+The metric implementations are in `thme::bench::metrics` (v0.2.8.4). Computing intervals
+(v0.2.8.5), running tasks (v0.2.8.3) and the three-state gate (v0.2.8.6) build on these formats. JSON Schema files for
 both come with THME-3009.

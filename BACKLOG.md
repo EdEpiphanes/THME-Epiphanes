@@ -258,10 +258,10 @@ closes it.
 
 ### [THME-3020] Developer sandbox for untrusted code
 
-- **Milestone**: v0.2.7 · **Roadmap**: v0.2.7.5, v0.2.7.6 · **Priority**: p1 · **Area**: security · **Type**: feature · **Status**: in progress
+- **Milestone**: v0.2.7 · **Roadmap**: v0.2.7.5, v0.2.7.6 · **Priority**: p2 · **Area**: security · **Type**: feature · **Status**: blocked
 - **Problem**: Remote-code models, plugins (dossier L.4) and benchmark code (R.4) need to run isolated.
 - **Done means**: Design doc first: separate process, no network, file access limited to a work folder, time and memory caps, per-OS mechanism; then an implementation with escape tests.
-- **Progress**: design done ([docs/sandbox.md](docs/sandbox.md)). Implementation waits for owner approval of the proposed dependencies (`landlock`, `seccompiler`, `windows-sys`).
+- **Progress**: design done ([docs/sandbox.md](docs/sandbox.md)). Implementation shelved by the owner for the commercial version (unmerged branches `feature/sandbox-windows` and `feature/sandbox-linux`, PRs #65 and #66). Until then the open-source version does not run untrusted code.
 
 ### [THME-3021] Guardrail detection and evaluation (read-only)
 
@@ -280,6 +280,12 @@ closes it.
 - **Milestone**: v0.2.8 · **Roadmap**: v0.2.8.2 · **Priority**: p1 · **Area**: quality · **Type**: feature · **Status**: done
 - **Problem**: Dossier R.4 and WP31: benchmarks must be declarative data with one result format, so runs are reproducible and intervals and paired tests can be computed without re-running.
 - **Done means**: Task file (dataset path and hash, split, licence, prompt template, extraction, metric) and result record (every Table R2 field, per-item results) with strict validation; a folder registry; `thme bench list/validate/verify-dataset`; tests show malformed files are refused and a record round-trips.
+
+### [THME-3027] Benchmark metrics library
+
+- **Milestone**: v0.2.8 · **Roadmap**: v0.2.8.4 · **Priority**: p1 · **Area**: quality · **Type**: feature · **Status**: done
+- **Problem**: Dossier WP33: the runner needs one tested implementation of each extraction rule and metric a task file can name.
+- **Done means**: Extraction (exact, first line, last number, choice letter, after marker), exact and normalized match, numeric tolerance, likelihood choice, unbiased pass@k; Table R3 pass@k values reproduced; pass@k equal to enumeration.
 
 ### [THME-3023] Re-measure reports affected by the FP16 rounding fix
 

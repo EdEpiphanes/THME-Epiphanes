@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **Benchmark metrics library** (THME-3027, v0.2.8.4): `bench::metrics` extracts answers (exact,
+  first line, last number, choice letter, after a marker) and scores them (exact and normalized
+  match, numeric tolerance, likelihood choice, unbiased pass@k). pass@k reproduces dossier Table
+  R3 and equals full enumeration.
 - **Benchmark registry** (THME-3024, v0.2.8.2): `src/bench` defines task files (dataset hash,
   split, licence, prompt template, extraction, metric) and result records with every field of
   dossier Table R2, refuses malformed or inconsistent files, and loads a folder of tasks.
@@ -148,6 +152,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/research/THME_measured_findings_2026-11.md` and `docs/subsystems.md`.
 
 ### Changed
+- **Developer sandbox implementation reserved for the commercial version** (THME-3020). The design
+  stays public in docs/sandbox.md; the open-source version does not run untrusted code.
 - One gate decision path: the legacy `QualityGate` functions, `assert_gate`, the co-surgery loop,
   the rollback watchdog and the Studio's colour checks now call `GateSpec`; search's duplicate
   report-row helper is gone. `thme validate --max-ppl-delta` now defaults to 0.45 like every

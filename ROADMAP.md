@@ -32,11 +32,11 @@ flowchart LR
     classDef later fill:#ffffff,stroke:#0b0b0b,stroke-width:1.5px,stroke-dasharray:4 3,color:#52514e;
 
     subgraph NOW["Now"]
-        N4["Sandbox implementation"]:::now
+        N4["Benchmark statistics"]:::now
         N5["Benchmark runner"]:::now
     end
     subgraph NEXT["Next"]
-        X1["Benchmark runner and statistics"]:::later
+        X1["Three-state gate"]:::later
         X2["Scanner coverage"]:::later
         X3["Transport, ODE, SVG visual engine"]:::later
         X4["GPTQ-style rounding"]:::later
@@ -68,6 +68,7 @@ flowchart LR
 | SPDX headers (THME-3005) | `AGPL-3.0-only` header on all 168 source files; `scripts/spdx.py --check` in CI | Tested in CI |
 | Signed `.epiph` (THME-3019) | Minisign signature over the manifest; `thme epiph sign`, `verify --require-signature`; Epiphanes key by default | Tested: tamper, wrong key, broken trailer |
 | Benchmark registry (THME-3024) | `src/bench`: strict task files and result records with every Table R2 field; `thme bench list/validate/verify-dataset` | Tested: malformed files refused, records round-trip, record-task mismatch caught |
+| Metrics library (THME-3027) | `bench::metrics`: answer extraction, exact and normalized match, numeric tolerance, likelihood choice with ties scored as misses, unbiased pass@k; `TaskSpec::score_output` | Tested: dossier Table R3 pass@k values, pass@k against enumeration for n <= 10, hand-computed cases |
 | Sandbox design (THME-3020, design part) | [docs/sandbox.md](docs/sandbox.md): threat model, one fail-closed interface, layers per OS, 13 escape tests, dependency proposal | Design only; nothing built |
 | No-panic rule, GUI split, glossary | Compiler-enforced; Studio tabs as modules; `CONTEXT.md` | Tested |
 
@@ -75,15 +76,15 @@ flowchart LR
 
 | Track | Item | Status | Depends on |
 | :--- | :--- | :--- | :--- |
-| Security | **Sandbox implementation** (THME-3020, v0.2.7.6): escape tests on three OSes | Blocked | Owner approval of `landlock`, `seccompiler`, `windows-sys` |
-| Quality and evidence | **Benchmark runner and metrics** (v0.2.8.3-4): imported mode, resume, metric library; native mode on synthetic models | Not started | Benchmark registry |
+| Quality and evidence | **Benchmark statistics** (v0.2.8.5): Wilson and bootstrap intervals, exact McNemar, paired bootstrap, required-items calculator, checked against Table R3 | Not started | Metrics library |
+| Quality and evidence | **Benchmark runner** (v0.2.8.3): imported mode, resume and cache; native mode on synthetic models; `code` tasks refused | Not started | Metrics library |
 
 ### Next: planned
 
 | Track | Item | Depends on |
 | :--- | :--- | :--- |
 | Security | Scanner for compressed pickles, ONNX, Keras, NumPy (THME-3022); scan on import (v0.2.7.3) | Scanner v1 |
-| Quality and evidence | Statistics and three-state gate (dossier WP34-35); claim register (THME-3000); versioned schemas (THME-3009) | Benchmark runner |
+| Quality and evidence | Three-state gate (dossier WP35); claim register (THME-3000); versioned schemas (THME-3009) | Benchmark statistics |
 | Engine | Transport and Sinkhorn (WP4), ODE steppers (WP6), dependency-free SVG visual engine (WP9) | Engine core |
 | Formats and calibration | GPTQ-style rounding (THME-2205); llama.cpp compatibility check on synthetic files (THME-2208) | Calibration |
 
@@ -97,7 +98,7 @@ flowchart LR
 | Distillation and autonomy | Teacher cache, losses, fidelity report, student planner, autonomy controller with budget caps (WP26-30) |
 | Security | Guardrail detection and refusal evaluation, read-only; optional safety layers THME adds (THME-3021) |
 | Runtime | GPU backends, measured speed, memory and KV cache (v0.2.4, v0.3) |
-| Release | Commercial release after the open-source foundations are complete; version to be decided |
+| Release | Commercial release after the open-source foundations are complete; version to be decided. Reserved for it: the developer sandbox implementation (THME-3020; design public in [docs/sandbox.md](docs/sandbox.md)) and sandboxed `code` benchmark tasks |
 
 ### Blocked: needs real-model runs (paused)
 
@@ -332,8 +333,9 @@ file, and converts to GGUF and back without losing its tokenizer.
 ## v0.2.7 — Security and trust
 
 **Goal:** THME checks what it loads, isolates what it runs, and records who may analyse what.
-**Exit criteria:** every import path scans first, untrusted code runs only in the sandbox, and
-each release ships with signatures and a dependency report.
+**Exit criteria:** every import path scans first, the open-source version never runs untrusted
+code (the sandbox that would run it is reserved for the commercial version), and each release ships
+with signatures and a dependency report.
 
 | # | Item | Status |
 | :--- | :--- | :--- |
@@ -342,7 +344,7 @@ each release ships with signatures and a dependency report.
 | v0.2.7.3 | Scan on import: every command that loads a model scans it first, with an explicit override | |
 | v0.2.7.4 | Permission and ownership record for reverse-engineering features (WP19, THME-3008) | |
 | v0.2.7.5 | Developer sandbox design: process isolation, no network, file and time limits per OS (THME-3020) | **Done**: [design](docs/sandbox.md) with threat model, layers per OS and escape tests |
-| v0.2.7.6 | Sandbox implementation with escape tests; remote-code models and plugins run only inside it | |
+| v0.2.7.6 | Sandbox implementation with escape tests; remote-code models and plugins run only inside it | **Commercial version**: shelved by the owner; the open-source version does not run untrusted code |
 | v0.2.7.7 | Guardrail detection, read-only: safety classifiers and refusal instructions reported (THME-3021) | |
 | v0.2.7.8 | Optional safety layers THME adds on top of a model, switched on or off per deployment | |
 | v0.2.7.9 | Supply chain: SPDX headers (THME-3005), signed releases, dependency licence report in every release | **Done**: headers on every source file, enforced in CI; releases signed with Minisign; `THIRD_PARTY_LICENSES.html` in every archive |
@@ -359,7 +361,7 @@ interval, a three-state verdict and a chart; harness self-tests pass.
 | v0.2.8.1 | One versioned quality gate: custom criteria, one or many, absolute and relative margins (WP20, THME-3003) | **Done**: every gate decision goes through `GateSpec`; reports record the gate hash; `thme validate` re-judges |
 | v0.2.8.2 | Benchmark registry: declarative task files and result records (WP31) | **Done**: [formats](docs/benchmark-registry.md), strict checks, `thme bench` (THME-3024) |
 | v0.2.8.3 | Benchmark runner: native, bridged and imported modes; resume and cache (WP32) | |
-| v0.2.8.4 | Metrics library: exact and normalized match, numeric tolerance, likelihood choice, pass@k (WP33) | |
+| v0.2.8.4 | Metrics library: exact and normalized match, numeric tolerance, likelihood choice, pass@k (WP33) | **Done**: `bench::metrics`, Table R3 reproduced (THME-3027) |
 | v0.2.8.5 | Statistics: Wilson and bootstrap intervals, paired tests, required-items calculator (WP34) | |
 | v0.2.8.6 | Three-state gate: pass, fail or inconclusive from the interval (WP35) | |
 | v0.2.8.7 | Contamination check between benchmark items and training or teacher data (WP36) | |
