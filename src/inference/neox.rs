@@ -461,10 +461,10 @@ fn gelu(x: f32) -> f32 {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
-    fn tiny(scale: f32) -> NeoxModel {
+    pub(crate) fn tiny(scale: f32) -> NeoxModel {
         let (d, heads, inter, vocab) = (16usize, 2usize, 32usize, 24usize);
         let mut seed = 11u64;
         let mut rand = |len: usize| -> Vec<f32> {

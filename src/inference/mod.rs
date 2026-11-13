@@ -15,6 +15,7 @@ pub mod llama;
 pub mod neox;
 pub mod perplexity;
 pub mod probe;
+pub mod smoothing;
 pub mod weights;
 
 pub use arch::{ArchConfig, CausalLm};
