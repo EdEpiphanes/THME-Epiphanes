@@ -17,20 +17,22 @@ import math
 import os
 import sys
 
-FONT = 'system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'
+FONT = '"Chakra Petch", Bahnschrift, "Arial Narrow", "Segoe UI", sans-serif'
 
 THEMES = {
+    # Black-and-white manga panel style (docs/brand-guidelines.md): ink, paper and greys.
+    # Series are told apart by tone (solid ink vs mid grey) and always labelled directly.
     "light": {
-        "surface": "#ffffff", "border": "#0b0b0b", "ink": "#0b0b0b", "ink2": "#52514e",
-        "muted": "#898781", "grid": "#e1e0d9", "axis": "#c3c2b7",
-        "s1": "#2a78d6", "s2": "#eb6834", "deemph": "#898781",
-        "good": "#0ca30c", "critical": "#d03b3b",
+        "surface": "#ffffff", "border": "#0b0b0b", "ink": "#0b0b0b", "ink2": "#3d3d3d",
+        "muted": "#7a7a7a", "grid": "#e4e4e2", "axis": "#9a9a98", "shadow": "#0b0b0b",
+        "s1": "#0b0b0b", "s2": "#8c8c8c", "deemph": "#b4b4b2",
+        "good": "#0b0b0b", "critical": "#0b0b0b", "mark": "#ffffff",
     },
     "dark": {
-        "surface": "#1a1a19", "border": "#2c2c2a", "ink": "#f0efec", "ink2": "#c3c2b7",
-        "muted": "#898781", "grid": "#2c2c2a", "axis": "#383835",
-        "s1": "#3987e5", "s2": "#d95926", "deemph": "#898781",
-        "good": "#0ca30c", "critical": "#d03b3b",
+        "surface": "#141414", "border": "#f4f2ec", "ink": "#f4f2ec", "ink2": "#c9c7c1",
+        "muted": "#8f8d88", "grid": "#2a2a29", "axis": "#5a5956", "shadow": "#f4f2ec",
+        "s1": "#f4f2ec", "s2": "#8c8c8c", "deemph": "#4e4e4c",
+        "good": "#f4f2ec", "critical": "#f4f2ec", "mark": "#141414",
     },
 }
 
@@ -54,10 +56,12 @@ class Svg:
             f'height="{height}" role="img" font-family=\'{FONT}\'>',
             f"<title>{esc(title)}</title>",
             f"<desc>{esc(description)}</desc>",
-            f'<rect x="1" y="1" width="{width - 2}" height="{height - 2}" rx="2" stroke-width="2" '
+            # Manga panel: hard offset print shadow, then the paper panel with a heavy ink frame.
+            f'<rect x="6" y="6" width="{width - 6}" height="{height - 6}" fill="{theme["shadow"]}"/>',
+            f'<rect x="1.5" y="1.5" width="{width - 7}" height="{height - 7}" stroke-width="3" '
             f'fill="{theme["surface"]}" stroke="{theme["border"]}"/>',
         ]
-        self.text(24, 34, title, size=16, weight=600)
+        self.text(24, 34, title, size=16, weight=700)
         self.text(24, 54, subtitle, size=12, color=theme["ink2"])
 
     def text(self, x, y, content, size=12, color=None, weight=400, anchor="start"):
@@ -111,7 +115,7 @@ class Svg:
         else:
             path = f"M{x + 4.2},{y - 6.8} l5.6,5.6 M{x + 9.8},{y - 6.8} l-5.6,5.6"
         self.parts.append(
-            f'<path d="{path}" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" '
+            f'<path d="{path}" fill="none" stroke="{self.t["mark"]}" stroke-width="1.6" stroke-linecap="round" '
             'stroke-linejoin="round"/>'
         )
         self.text(x + 20, y, label, size=12, color=self.t["ink2"])

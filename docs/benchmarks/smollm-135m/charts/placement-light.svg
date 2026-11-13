@@ -1,24 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 266" width="760" height="266" role="img" font-family='system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 266" width="760" height="266" role="img" font-family='"Chakra Petch", Bahnschrift, "Arial Narrow", "Segoe UI", sans-serif'>
 <title>Placement matters: the recipe against random placement</title>
 <desc>Perplexity increase for the surgery recipe compared with three random placements of the same formats.</desc>
-<rect x="1" y="1" width="758" height="264" rx="2" stroke-width="2" fill="#ffffff" stroke="#0b0b0b"/>
-<text x="24.0" y="34.0" font-size="16" font-weight="600" fill="#0b0b0b" text-anchor="start">Placement matters: the recipe against random placement</text>
-<text x="24.0" y="54.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">Δ perplexity vs baseline 17.97 · same tensor counts and shapes in every row · all rows are outside the 0.45 gate</text>
-<line x1="232.0" y1="74.0" x2="232.0" y2="204.0" stroke="#c3c2b7" stroke-width="1"/>
+<rect x="6" y="6" width="754" height="260" fill="#0b0b0b"/>
+<rect x="1.5" y="1.5" width="753" height="259" stroke-width="3" fill="#ffffff" stroke="#0b0b0b"/>
+<text x="24.0" y="34.0" font-size="16" font-weight="700" fill="#0b0b0b" text-anchor="start">Placement matters: the recipe against random placement</text>
+<text x="24.0" y="54.0" font-size="12" font-weight="400" fill="#3d3d3d" text-anchor="start">Δ perplexity vs baseline 17.97 · same tensor counts and shapes in every row · all rows are outside the 0.45 gate</text>
+<line x1="232.0" y1="74.0" x2="232.0" y2="204.0" stroke="#9a9a98" stroke-width="1"/>
 <text x="220.0" y="93.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="end">Sensitivity-guided recipe</text>
-<path d="M232.0,80.0 h58.9 a4,4 0 0 1 4,4 v10.0 a4,4 0 0 1 -4,4 h-58.9 z" fill="#2a78d6"/>
-<text x="302.9" y="93.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">+25.5</text>
+<path d="M232.0,80.0 h58.9 a4,4 0 0 1 4,4 v10.0 a4,4 0 0 1 -4,4 h-58.9 z" fill="#0b0b0b"/>
+<text x="302.9" y="93.0" font-size="12" font-weight="400" fill="#3d3d3d" text-anchor="start">+25.5</text>
 <text x="220.0" y="127.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="end">Random placement, seed 3</text>
-<path d="M232.0,114.0 h127.7 a4,4 0 0 1 4,4 v10.0 a4,4 0 0 1 -4,4 h-127.7 z" fill="#898781"/>
-<text x="371.7" y="127.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">+53.3</text>
+<path d="M232.0,114.0 h127.7 a4,4 0 0 1 4,4 v10.0 a4,4 0 0 1 -4,4 h-127.7 z" fill="#b4b4b2"/>
+<text x="371.7" y="127.0" font-size="12" font-weight="400" fill="#3d3d3d" text-anchor="start">+53.3</text>
 <text x="220.0" y="161.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="end">Random placement, seed 1</text>
-<path d="M232.0,148.0 h199.3 a4,4 0 0 1 4,4 v10.0 a4,4 0 0 1 -4,4 h-199.3 z" fill="#898781"/>
-<text x="443.3" y="161.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">+82.3</text>
+<path d="M232.0,148.0 h199.3 a4,4 0 0 1 4,4 v10.0 a4,4 0 0 1 -4,4 h-199.3 z" fill="#b4b4b2"/>
+<text x="443.3" y="161.0" font-size="12" font-weight="400" fill="#3d3d3d" text-anchor="start">+82.3</text>
 <text x="220.0" y="195.0" font-size="12" font-weight="400" fill="#0b0b0b" text-anchor="end">Random placement, seed 2</text>
-<path d="M232.0,182.0 h424.0 a4,4 0 0 1 4,4 v10.0 a4,4 0 0 1 -4,4 h-424.0 z" fill="#898781"/>
-<text x="668.0" y="195.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">+173.2</text>
-<rect x="232" y="227" width="10" height="10" rx="2" fill="#2a78d6"/>
-<text x="248.0" y="236.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">Recipe</text>
-<rect x="322" y="227" width="10" height="10" rx="2" fill="#898781"/>
-<text x="338.0" y="236.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">Random placement (exploratory, n = 3)</text>
+<path d="M232.0,182.0 h424.0 a4,4 0 0 1 4,4 v10.0 a4,4 0 0 1 -4,4 h-424.0 z" fill="#b4b4b2"/>
+<text x="668.0" y="195.0" font-size="12" font-weight="400" fill="#3d3d3d" text-anchor="start">+173.2</text>
+<rect x="232" y="227" width="10" height="10" rx="2" fill="#0b0b0b"/>
+<text x="248.0" y="236.0" font-size="12" font-weight="400" fill="#3d3d3d" text-anchor="start">Recipe</text>
+<rect x="322" y="227" width="10" height="10" rx="2" fill="#b4b4b2"/>
+<text x="338.0" y="236.0" font-size="12" font-weight="400" fill="#3d3d3d" text-anchor="start">Random placement (exploratory, n = 3)</text>
 </svg>

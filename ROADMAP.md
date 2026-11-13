@@ -10,15 +10,16 @@
 ## Where things stand
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'fontFamily': 'Chakra Petch, Bahnschrift, Arial Narrow, sans-serif', 'primaryColor': '#ffffff', 'primaryTextColor': '#0b0b0b', 'primaryBorderColor': '#0b0b0b', 'lineColor': '#0b0b0b', 'secondaryColor': '#f6f6f4', 'tertiaryColor': '#ffffff', 'clusterBkg': '#f6f6f4', 'clusterBorder': '#0b0b0b', 'edgeLabelBackground': '#ffffff', 'noteBkgColor': '#ffffff', 'noteBorderColor': '#0b0b0b', 'actorBkg': '#ffffff', 'actorBorder': '#0b0b0b', 'signalColor': '#0b0b0b', 'labelBoxBkgColor': '#ffffff'}}}%%
 flowchart LR
-    classDef done fill:#0ca30c,stroke:#0ca30c,color:#ffffff;
-    classDef active fill:#2a78d6,stroke:#2a78d6,color:#ffffff;
-    classDef next fill:#f0efec,stroke:#898781,color:#0b0b0b;
+    classDef done fill:#0b0b0b,stroke:#0b0b0b,stroke-width:2px,color:#ffffff;
+    classDef active fill:#ffffff,stroke:#0b0b0b,stroke-width:4px,color:#0b0b0b;
+    classDef next fill:#ffffff,stroke:#0b0b0b,stroke-width:1.5px,stroke-dasharray:4 3,color:#52514e;
 
     A["v0.1.0 – v0.1.9<br/>Foundations<br/>implemented"]:::done
     B["v0.2.0<br/>Measured core"]:::active
-    C["v0.2.1<br/>Recipe and BYOA lab"]:::next
-    D["v0.2.2<br/>Formats and calibration"]:::next
+    C["v0.2.1<br/>Recipe and BYOA lab<br/>done"]:::done
+    D["v0.2.2<br/>Formats and calibration"]:::active
     E["v0.2.3<br/>Recovery and distillation"]:::next
     F["v0.2.4<br/>Runtime, speed, KV cache"]:::next
     G["v0.3<br/>Architectures, GPU, scale-out"]:::next
