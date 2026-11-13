@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::time::Instant;
 
+use super::manga;
 use super::theme::{self, GuiTheme, ThemePalette};
 
 // Layer node and model representations
@@ -758,7 +759,8 @@ pub struct THMEApp {
 }
 
 impl THMEApp {
-    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        manga::install_fonts(&cc.egui_ctx);
         let mut initial_model = UniversalModel::create_synthetic(12, 2048);
         let cp_idx = (initial_model.layers.len() as f32 * 0.30).round() as usize;
         initial_model.update_exit_routing(80.0, cp_idx);
@@ -779,7 +781,7 @@ impl THMEApp {
         let start_instant = Instant::now();
 
         let mut app = Self {
-            theme: GuiTheme::MangaNight,
+            theme: GuiTheme::default(),
             models: vec![initial_model],
             active_model_idx: 0,
             active_tab: 0,
@@ -1423,15 +1425,11 @@ impl eframe::App for THMEApp {
 
         let p = self.palette();
         theme::configure_visuals(ctx, &p);
+        manga::paint_backdrop(ctx, &p);
 
         // Top Control Header
         egui::TopBottomPanel::top("header_panel")
-            .frame(
-                egui::Frame::NONE
-                    .fill(p.bg_card)
-                    .stroke(Stroke::new(1.0_f32, p.border))
-                    .inner_margin(egui::Margin::symmetric(16, 10)),
-            )
+            .frame(manga::glass_bar(&p).inner_margin(egui::Margin::symmetric(16, 10)))
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     let (rect, _) =
@@ -1590,11 +1588,7 @@ impl eframe::App for THMEApp {
 
         // Enhanced Stats Ribbon
         egui::TopBottomPanel::top("stats_ribbon")
-            .frame(
-                egui::Frame::NONE
-                    .fill(p.bg_dark)
-                    .inner_margin(egui::Margin::symmetric(14, 8)),
-            )
+            .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(14, 8)))
             .show(ctx, |ui| {
                 let (store_mb, tr_mb, f_bar, joules, tok_sec) = self.model().compute_costs();
 
@@ -1646,12 +1640,7 @@ impl eframe::App for THMEApp {
 
         // Bottom Status Bar
         egui::TopBottomPanel::bottom("status_bar")
-            .frame(
-                egui::Frame::NONE
-                    .fill(p.bg_card)
-                    .stroke(Stroke::new(1.0_f32, p.border))
-                    .inner_margin(egui::Margin::symmetric(12, 6)),
-            )
+            .frame(manga::glass_bar(&p).inner_margin(egui::Margin::symmetric(12, 6)))
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     let badge_rect = Rect::from_center_size(
@@ -1740,9 +1729,7 @@ impl THMEApp {
             ui.columns(4, |cols| {
                 // Card 1: Models & Active Architecture
                 cols[0].vertical(|ui| {
-                    egui::Frame::NONE
-                        .fill(p.bg_card)
-                        .stroke(Stroke::new(1.0_f32, p.border))
+                    manga::glass_frame(&p, p.border)
                         .inner_margin(egui::Margin::same(12))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
@@ -1764,9 +1751,7 @@ impl THMEApp {
 
                 // Card 2: Matrix & Distillation Plan Status
                 cols[1].vertical(|ui| {
-                    egui::Frame::NONE
-                        .fill(p.bg_card)
-                        .stroke(Stroke::new(1.0_f32, p.border))
+                    manga::glass_frame(&p, p.border)
                         .inner_margin(egui::Margin::same(12))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
@@ -1791,9 +1776,7 @@ impl THMEApp {
 
                 // Card 3: REA-LLM & EWHA Telemetry
                 cols[2].vertical(|ui| {
-                    egui::Frame::NONE
-                        .fill(p.bg_card)
-                        .stroke(Stroke::new(1.0_f32, p.border))
+                    manga::glass_frame(&p, p.border)
                         .inner_margin(egui::Margin::same(12))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
@@ -1815,9 +1798,7 @@ impl THMEApp {
 
                 // Card 4: Benchmarks & Live Telemetry
                 cols[3].vertical(|ui| {
-                    egui::Frame::NONE
-                        .fill(p.bg_card)
-                        .stroke(Stroke::new(1.0_f32, p.border))
+                    manga::glass_frame(&p, p.border)
                         .inner_margin(egui::Margin::same(12))
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
@@ -2005,9 +1986,7 @@ impl THMEApp {
 
                 if self.rebuilder_open {
                     ui.add_space(6.0);
-                    egui::Frame::NONE
-                        .fill(p.bg_card)
-                        .stroke(Stroke::new(1.0_f32, p.primary))
+                    manga::glass_frame(&p, p.primary)
                         .inner_margin(egui::Margin::same(10))
                         .show(ui, |ui| {
                             ui.label(egui::RichText::new("REBUILD ARCHITECTURE FROM SCRATCH").strong().color(p.primary));
@@ -2078,9 +2057,7 @@ impl THMEApp {
 
                 if self.paradigm_converter_open {
                     ui.add_space(6.0);
-                    egui::Frame::NONE
-                        .fill(p.bg_card)
-                        .stroke(Stroke::new(1.0_f32, p.secondary))
+                    manga::glass_frame(&p, p.secondary)
                         .inner_margin(egui::Margin::same(10))
                         .show(ui, |ui| {
                             ui.label(
@@ -2126,9 +2103,7 @@ impl THMEApp {
                             let target_paradigm = paradigms[self.selected_target_paradigm_idx.min(paradigms.len() - 1)];
 
                             ui.add_space(6.0);
-                            egui::Frame::NONE
-                                .fill(p.bg_input)
-                                .stroke(Stroke::new(1.0_f32, p.border))
+                            egui::Frame::NONE.fill(manga::glass_fill(p.bg_input, &p)).stroke(Stroke::new(1.0_f32, p.border)).corner_radius(8)
                                 .inner_margin(egui::Margin::same(8))
                                 .show(ui, |ui| {
                                     ui.label(
@@ -2225,9 +2200,7 @@ impl THMEApp {
 
                             if let Some(ref report) = self.paradigm_last_report {
                                 ui.add_space(8.0);
-                                egui::Frame::NONE
-                                    .fill(p.bg_dark)
-                                    .stroke(Stroke::new(1.0_f32, p.success))
+                                manga::glass_deep(&p, p.success)
                                     .inner_margin(egui::Margin::same(8))
                                     .show(ui, |ui| {
                                         ui.label(egui::RichText::new("CONVERSION MANIFOLD REPORT").strong().color(p.success));
@@ -2250,7 +2223,7 @@ impl THMEApp {
                     };
 
                     egui::Frame::NONE
-                        .fill(if is_active { p.bg_input } else { p.bg_card })
+                        .fill(if is_active { manga::glass_fill(p.bg_input, &p) } else { manga::glass_fill(p.bg_card, &p) })
                         .stroke(Stroke::new(1.0_f32, if is_active { p.primary } else { p.border }))
                         .inner_margin(egui::Margin::same(10))
                         .show(ui, |ui| {
@@ -2402,9 +2375,7 @@ impl THMEApp {
         ui.add_space(8.0);
 
         // 1. VISUAL LAYER ANATOMY & DATAFLOW ROUTING MAP
-        egui::Frame::NONE
-            .fill(p.bg_card)
-            .stroke(Stroke::new(1.0_f32, p.border))
+        manga::glass_frame(&p, p.border)
             .inner_margin(egui::Margin::same(10))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
@@ -2445,7 +2416,7 @@ impl THMEApp {
                                 let is_sel = self.selected_subblock
                                     == Some(crate::ir::SubBlockCategory::InputNorm);
                                 egui::Frame::NONE
-                                    .fill(p.bg_input)
+                                    .fill(manga::glass_fill(p.bg_input, &p))
                                     .stroke(Stroke::new(
                                         if is_sel { 2.0_f32 } else { 1.0_f32 },
                                         if is_sel { p.primary } else { p.border },
@@ -2521,7 +2492,7 @@ impl THMEApp {
                             let is_sel_mix = self.selected_subblock
                                 == Some(crate::ir::SubBlockCategory::SequenceMixer);
                             egui::Frame::NONE
-                                .fill(p.bg_input)
+                                .fill(manga::glass_fill(p.bg_input, &p))
                                 .stroke(Stroke::new(
                                     if is_sel_mix { 2.0_f32 } else { 1.0_f32 },
                                     if is_sel_mix { p.primary } else { p.border },
@@ -2624,9 +2595,7 @@ impl THMEApp {
                             ui.label(egui::RichText::new("-->").size(14.0).color(p.primary));
 
                             // Sub-Block 3: Residual Highway 1 (Add)
-                            egui::Frame::NONE
-                                .fill(p.bg_card)
-                                .stroke(Stroke::new(1.0_f32, p.border))
+                            manga::glass_frame(&p, p.border)
                                 .inner_margin(egui::Margin::same(8))
                                 .show(ui, |ui| {
                                     ui.vertical(|ui| {
@@ -2663,7 +2632,7 @@ impl THMEApp {
                                 let is_sel_post = self.selected_subblock
                                     == Some(crate::ir::SubBlockCategory::PostMixerNorm);
                                 egui::Frame::NONE
-                                    .fill(p.bg_input)
+                                    .fill(manga::glass_fill(p.bg_input, &p))
                                     .stroke(Stroke::new(
                                         if is_sel_post { 2.0_f32 } else { 1.0_f32 },
                                         if is_sel_post { p.primary } else { p.border },
@@ -2738,7 +2707,7 @@ impl THMEApp {
                                 let is_sel_ffn = self.selected_subblock
                                     == Some(crate::ir::SubBlockCategory::FeedForwardMlp);
                                 egui::Frame::NONE
-                                    .fill(p.bg_input)
+                                    .fill(manga::glass_fill(p.bg_input, &p))
                                     .stroke(Stroke::new(
                                         if is_sel_ffn { 2.0_f32 } else { 1.0_f32 },
                                         if is_sel_ffn { p.primary } else { p.border },
@@ -2839,9 +2808,7 @@ impl THMEApp {
                             }
 
                             // Sub-Block 6: Residual Highway 2 (+ Add)
-                            egui::Frame::NONE
-                                .fill(p.bg_card)
-                                .stroke(Stroke::new(1.0_f32, p.border))
+                            manga::glass_frame(&p, p.border)
                                 .inner_margin(egui::Margin::same(8))
                                 .show(ui, |ui| {
                                     ui.vertical(|ui| {
@@ -2937,9 +2904,7 @@ impl THMEApp {
                 );
                 ui.add_space(6.0);
 
-                egui::Frame::NONE
-                    .fill(p.bg_card)
-                    .stroke(Stroke::new(1.0_f32, p.border))
+                manga::glass_frame(&p, p.border)
                     .inner_margin(egui::Margin::same(10))
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
@@ -3511,9 +3476,7 @@ impl THMEApp {
             });
 
         ui.add_space(10.0);
-        egui::Frame::NONE
-            .fill(p.bg_card)
-            .stroke(Stroke::new(1.0_f32, p.border))
+        manga::glass_frame(&p, p.border)
             .inner_margin(egui::Margin::same(12))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
@@ -3564,9 +3527,7 @@ impl THMEApp {
 
                 if self.byoa_designer_open {
                     ui.add_space(8.0);
-                    egui::Frame::NONE
-                        .fill(p.bg_input)
-                        .stroke(Stroke::new(1.0_f32, p.primary))
+                    egui::Frame::NONE.fill(manga::glass_fill(p.bg_input, &p)).stroke(Stroke::new(1.0_f32, p.primary)).corner_radius(8)
                         .inner_margin(egui::Margin::same(10))
                         .show(ui, |ui| {
                             ui.label(egui::RichText::new("Custom Algorithm Designer").strong().color(p.primary));
@@ -3812,9 +3773,7 @@ impl THMEApp {
 
                 ui.add_space(10.0);
                 ui.label(egui::RichText::new("Live Stream Terminal:").strong().color(p.text_main));
-                egui::Frame::NONE
-                    .fill(p.bg_card)
-                    .stroke(Stroke::new(1.0_f32, p.border))
+                manga::glass_frame(&p, p.border)
                     .inner_margin(egui::Margin::same(10))
                     .show(ui, |ui| {
                         let stream_text = if snap.token_stream.is_empty() {
@@ -3875,9 +3834,7 @@ impl THMEApp {
         });
 
         ui.add_space(10.0);
-        egui::Frame::NONE
-            .fill(p.bg_card)
-            .stroke(Stroke::new(1.0_f32, p.border))
+        manga::glass_frame(&p, p.border)
             .inner_margin(egui::Margin::same(12))
             .show(ui, |ui| {
                 ui.heading(
@@ -3933,9 +3890,7 @@ impl THMEApp {
             });
 
         ui.add_space(10.0);
-        egui::Frame::NONE
-            .fill(p.bg_card)
-            .stroke(Stroke::new(1.0_f32, p.accent))
+        manga::glass_frame(&p, p.accent)
             .inner_margin(egui::Margin::same(12))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
@@ -4077,9 +4032,7 @@ impl THMEApp {
 
                 if let Some(ref report) = self.spec_last_report {
                     ui.add_space(8.0);
-                    egui::Frame::NONE
-                        .fill(p.bg_dark)
-                        .stroke(Stroke::new(1.0_f32, p.accent))
+                    manga::glass_deep(&p, p.accent)
                         .inner_margin(egui::Margin::same(8))
                         .show(ui, |ui| {
                             ui.label(egui::RichText::new("SPECULATIVE SYNTHESIS & TELEMETRY REPORT").strong().color(p.accent));
@@ -4091,9 +4044,7 @@ impl THMEApp {
             });
 
         ui.add_space(10.0);
-        egui::Frame::NONE
-            .fill(p.bg_card)
-            .stroke(Stroke::new(1.0_f32, p.primary))
+        manga::glass_frame(&p, p.primary)
             .inner_margin(egui::Margin::same(12))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
@@ -4266,9 +4217,7 @@ impl THMEApp {
 
                 if let Some(ref report) = self.roofline_last_report {
                     ui.add_space(8.0);
-                    egui::Frame::NONE
-                        .fill(p.bg_dark)
-                        .stroke(Stroke::new(1.0_f32, p.primary))
+                    manga::glass_deep(&p, p.primary)
                         .inner_margin(egui::Margin::same(8))
                         .show(ui, |ui| {
                             ui.label(egui::RichText::new("EMPIRICAL ROOFLINE & KERNEL PROFILE REPORT").strong().color(p.primary));
@@ -4665,9 +4614,7 @@ impl THMEApp {
                 }
 
                 ui.add_space(16.0);
-                egui::Frame::NONE
-                    .fill(p.bg_card)
-                    .stroke(Stroke::new(1.0_f32, p.primary))
+                manga::glass_frame(&p, p.primary)
                     .inner_margin(egui::Margin::same(10))
                     .show(ui, |ui| {
                         ui.label(egui::RichText::new("PYTORCH & CUDA ECOSYSTEM BRIDGE").strong().color(p.primary).size(11.0));

@@ -23,7 +23,7 @@ jobs:
 
       - name: No absolute developer paths
         run: |
-          if git grep -inE "(C:\\\\Users\\\\[a-zA-Z0-9_-]+|/home/[a-zA-Z0-9_-]+)" -- ':!*.png' ':!*.gif' ':!*.jpg' ':!AGENTS.md'; then
+          if git grep -inE "(C:\\\\Users\\\\[a-zA-Z0-9_-]+|/home/[a-zA-Z0-9_-]+)" -- ':!*.png' ':!*.gif' ':!*.jpg' ':!*.ttf' ':!AGENTS.md'; then
             echo "::error::Local username or absolute developer path found in tracked files"
             exit 1
           fi
@@ -93,7 +93,7 @@ jobs:
           python-version: "3.12"
       - name: Scripts compile
         run: python -m py_compile scripts/*.py
-      - name: Regenerate dossier and charts
+      - name: Regenerate dossier, charts and status board
         run: |
           python scripts/generate_dossier.py
           for data in docs/benchmarks/*/data; do
@@ -103,7 +103,7 @@ jobs:
       - name: Nothing changed
         run: |
           if ! git diff --exit-code -- docs/; then
-            echo "::error::Committed dossier or charts differ from what the committed reports produce. Regenerate them and commit."
+            echo "::error::Committed dossier, charts or status board differ from what the committed reports produce. Regenerate them and commit."
             exit 1
           fi
 
