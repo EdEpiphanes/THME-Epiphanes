@@ -52,11 +52,24 @@ MPL-2.0, Unicode and font licences). `cargo deny check licenses` enforces the al
 [deny.toml](deny.toml). Those licences continue to apply to those components under either THME
 license. Every release archive includes their full notices in `THIRD_PARTY_LICENSES.html`.
 
-Some source in this repository is derived from third-party projects and keeps their notices:
+### Derived source: the anatomy figure kit
 
-| Files | Derived from | Licence |
+Two files in this repository are derived from the anatomy figure kit, which is under the MIT
+licence (Copyright (c) 2026 Ryan):
+
+| File | Derived from | What we did |
 | :--- | :--- | :--- |
-| `src/engine/iso.rs`, `assets/iso.css` | anatomy figure kit (`kit/iso-kit.ts`, `kit/iso.css`), Copyright (c) 2026 Ryan | MIT, full text in [LICENSES/anatomy-MIT.txt](LICENSES/anatomy-MIT.txt) |
+| `src/engine/iso.rs` | `kit/iso-kit.ts` (the kit's core) | Ported from TypeScript to Rust for performance and so THME draws figures without Node or a browser; added CSS-free output and an SVG card |
+| `assets/iso.css` | `kit/iso.css` | Copied; THME reads its palette from it |
+
+Only these two files carry the MIT licence. All other code in this repository is THME's own,
+under AGPL-3.0-only or the commercial license. The MIT licence allows the kit's code to be used,
+modified, translated and redistributed as part of THME under either license, on one condition:
+its copyright and permission notice stays with that code. A translation into another language is
+still a derivative of the original, so the Rust port keeps the notice too. The notice is in the
+header of both files and in full in [LICENSES/anatomy-MIT.txt](LICENSES/anatomy-MIT.txt), and
+must be kept in any copy or release that includes these files. THME's own changes to them are
+AGPL-3.0-only (or commercial).
 
 ## Trademarks
 

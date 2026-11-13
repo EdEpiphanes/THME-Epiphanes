@@ -6,6 +6,7 @@ pub mod convert;
 pub mod epiph;
 pub mod evaluate;
 pub mod export;
+pub mod figure;
 pub mod inspect;
 pub mod interop;
 pub mod mcp;
@@ -95,6 +96,9 @@ pub enum Commands {
     /// Benchmark registry: list and check task files and result records
     Bench(bench::BenchArgs),
 
+    /// Draw a model as an isometric figure: one tray per layer, one block per tensor
+    Figure(figure::FigureArgs),
+
     /// Generate PyTorch / CUDA fine-tuning scripts or Hugging Face configurations
     Interop(interop::InteropArgs),
 
@@ -128,6 +132,7 @@ pub fn run() -> Result<()> {
         Commands::Epiph(args) => epiph::execute(args),
         Commands::Scan(args) => scan::execute(args),
         Commands::Bench(args) => bench::execute(args),
+        Commands::Figure(args) => figure::execute(args),
         Commands::Interop(args) => interop::execute(args),
         Commands::Mcp(args) => mcp::execute(args),
         Commands::CoSurgery(args) => co_surgery::execute(args),

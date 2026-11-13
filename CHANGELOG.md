@@ -20,7 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   figure kit (camera and fit, extruded solids with four side tones by facing and a lighter top,
   painter's order, lines, dots, wires, figure and card markup, the kit stylesheet). Its output is
   byte-identical to the kit's on 48 committed cases; `examples/iso_bench.rs` times it against
-  `scripts/iso_golden.mjs --bench`.
+  `scripts/iso_golden.mjs --bench`. CSS-free output: Rust resolves every colour from the kit
+  palette and draws the card in SVG, so a figure is one self-contained file.
+- **`thme figure MODEL --out DIR`**: draws a model as an isometric parts tray (one tray per
+  layer, one block per tensor; footprint follows stored bytes, height follows measured bits per
+  weight). Showcase from the synthetic mock model in [docs/figures.md](docs/figures.md).
 - **Scan on import** (v0.2.7.3): every model load (CLI, MCP server, Studio) runs the scanner
   first and refuses on a high or critical finding. The global `--allow-unsafe-model` flag turns
   the refusal into a printed warning; nothing in the files is executed either way.

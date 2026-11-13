@@ -792,6 +792,367 @@ pub fn plate_html(
     )
 }
 
+// ---------------------------------------------------------------------------------------------
+// CSS-free output: Rust resolves the kit's styles itself.
+
+/// The kit's colours for one theme, read from [`ISO_CSS`] (its `--anatomy-*` variables), so the
+/// palette has one source.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Palette {
+    vars: std::collections::BTreeMap<String, String>,
+}
+
+impl Palette {
+    /// The palette for `theme`: the `.iso` variables, overridden by the light block for light.
+    pub fn of(theme: Theme) -> Self {
+        let mut vars = std::collections::BTreeMap::new();
+        let mut read = |block: &str| {
+            for decl in block.split(';') {
+                if let Some((k, v)) = decl.trim().split_once(':') {
+                    if let Some(name) = k.trim().strip_prefix("--anatomy-") {
+                        vars.insert(name.to_string(), v.trim().to_string());
+                    }
+                }
+            }
+        };
+        let block_after = |marker: &str| -> &str {
+            ISO_CSS
+                .find(marker)
+                .and_then(|i| {
+                    let rest = &ISO_CSS[i..];
+                    let open = rest.find('{')?;
+                    let close = rest.find('}')?;
+                    Some(&rest[open + 1..close])
+                })
+                .unwrap_or("")
+        };
+        read(block_after(".iso{"));
+        if theme == Theme::Light {
+            read(block_after(".iso[data-theme=\"light\"]{"));
+        }
+        Self { vars }
+    }
+
+    /// A colour or value by its variable name without the prefix, for example `hi` or `paper`.
+    pub fn get(&self, name: &str) -> &str {
+        self.vars.get(name).map(String::as_str).unwrap_or("#808080")
+    }
+
+    fn tone(&self, tone: &str) -> &str {
+        match tone {
+            "hi" | "mid" | "lo" | "faint" | "lit" | "red" | "green" | "blue" => self.get(tone),
+            _ => self.get("lo"),
+        }
+    }
+}
+
+/// Attributes of one tag, in order.
+fn attributes(tag: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    let mut rest = tag;
+    while let Some(eq) = rest.find("=\"") {
+        let name = rest[..eq]
+            .rsplit(|c: char| c.is_whitespace())
+            .next()
+            .unwrap_or("")
+            .to_string();
+        let after = &rest[eq + 2..];
+        let Some(end) = after.find('"') else { break };
+        out.push((name, after[..end].to_string()));
+        rest = &after[end + 1..];
+    }
+    out
+}
+
+/// Rewrites kit markup (as produced by [`solid_svg`], [`line_svg`], [`dots_svg`], [`wire_svg`])
+/// so every element carries its own `fill`, `stroke` and widths from `palette`, and no class
+/// needs a stylesheet. The halo becomes an SVG blur filter (`#iso-halo`, from
+/// [`inline_defs`]).
+pub fn inline_styles(markup: &str, palette: &Palette) -> String {
+    let mut out = String::with_capacity(markup.len() * 2);
+    // Context from enclosing groups: (lit solid, dots tone, wire tone).
+    let mut stack: Vec<(bool, Option<String>, Option<String>)> = Vec::new();
+    let mut rest = markup;
+    while let Some(lt) = rest.find('<') {
+        out.push_str(&rest[..lt]);
+        let Some(gt) = rest[lt..].find('>') else {
+            out.push_str(&rest[lt..]);
+            return out;
+        };
+        let tag = &rest[lt..lt + gt + 1];
+        rest = &rest[lt + gt + 1..];
+        if tag.starts_with("</") {
+            if tag == "</g>" {
+                stack.pop();
+            }
+            out.push_str(tag);
+            continue;
+        }
+        let name: String = tag[1..]
+            .chars()
+            .take_while(|c| c.is_alphanumeric())
+            .collect();
+        let attrs = attributes(tag);
+        let get = |k: &str| attrs.iter().find(|(n, _)| n == k).map(|(_, v)| v.as_str());
+        let class = get("class").unwrap_or("");
+        let has = |c: &str| class.split_whitespace().any(|x| x == c);
+        let self_closing = tag.ends_with("/>");
+        let (lit, dots_tone, wire_tone) = stack.last().cloned().unwrap_or((false, None, None));
+        let keep: Vec<(String, String)> = attrs
+            .iter()
+            .filter(|(n, _)| {
+                !matches!(
+                    n.as_str(),
+                    "class"
+                        | "data-tone"
+                        | "data-shade"
+                        | "data-lit"
+                        | "data-free"
+                        | "data-dotted"
+                        | "data-dashed"
+                        | "data-flow"
+                        | "data-seamless"
+                )
+            })
+            .cloned()
+            .collect();
+        let mut paint: Vec<(String, String)> = Vec::new();
+        let weight = "0.6";
+        if name == "g" {
+            let ctx = (
+                lit || (has("iso-solid") && get("data-lit").is_some()),
+                if has("iso-dots") {
+                    Some(get("data-tone").unwrap_or("mid").to_string())
+                } else {
+                    dots_tone
+                },
+                if has("iso-wire") {
+                    Some(get("data-tone").unwrap_or("lo").to_string())
+                } else {
+                    wire_tone
+                },
+            );
+            stack.push(ctx);
+        } else if has("iso-halo") {
+            paint.extend([
+                ("fill".into(), palette.get("halo").into()),
+                ("opacity".into(), palette.get("halo-opacity").into()),
+                ("filter".into(), "url(#iso-halo)".into()),
+                ("transform".into(), "translate(0 3)".into()),
+            ]);
+        } else if has("iso-fill") {
+            paint.push((
+                "fill".into(),
+                palette.get(if lit { "face" } else { "paper" }).into(),
+            ));
+        } else if has("iso-shade") {
+            let shade = format!("shade-{}", get("data-shade").unwrap_or("0"));
+            paint.push((
+                "fill".into(),
+                palette.get(if lit { "lit-shade" } else { &shade }).into(),
+            ));
+        } else if has("iso-top") {
+            paint.push((
+                "fill".into(),
+                palette.get(if lit { "lit-top" } else { "top" }).into(),
+            ));
+        } else if has("iso-line") {
+            let tone = if lit && has("iso-edge") {
+                "lit"
+            } else {
+                get("data-tone").unwrap_or("lo")
+            };
+            paint.extend([
+                ("fill".into(), "none".into()),
+                ("stroke".into(), palette.tone(tone).into()),
+                (
+                    "stroke-width".into(),
+                    if get("data-dotted").is_some() {
+                        "1".into()
+                    } else {
+                        weight.into()
+                    },
+                ),
+                ("stroke-linecap".into(), "round".into()),
+                ("stroke-linejoin".into(), "round".into()),
+            ]);
+            if get("data-dotted").is_some() {
+                paint.push(("stroke-dasharray".into(), ".01 3.5".into()));
+            } else if get("data-dashed").is_some() {
+                paint.push(("stroke-dasharray".into(), "3 3".into()));
+            } else if get("data-flow").is_some() {
+                paint.push(("stroke-dasharray".into(), "2 6".into()));
+            }
+        } else if has("iso-wire-end") {
+            paint.extend([
+                ("fill".into(), palette.get("paper").into()),
+                (
+                    "stroke".into(),
+                    palette.tone(wire_tone.as_deref().unwrap_or("lo")).into(),
+                ),
+                ("stroke-width".into(), weight.into()),
+            ]);
+        } else if name == "circle" {
+            if let Some(t) = &dots_tone {
+                let opacity = match t.as_str() {
+                    "hi" => ".85",
+                    "mid" => ".45",
+                    "lo" => ".22",
+                    "faint" => ".12",
+                    _ => ".32",
+                };
+                paint.extend([
+                    ("fill".into(), palette.get("dot").into()),
+                    ("opacity".into(), opacity.into()),
+                ]);
+            }
+        }
+        if matches!(name.as_str(), "path" | "circle") && !has("iso-halo") {
+            paint.push(("vector-effect".into(), "non-scaling-stroke".into()));
+        }
+        out.push('<');
+        out.push_str(&name);
+        for (k, v) in keep.iter().chain(paint.iter()) {
+            let _ = write!(out, " {k}=\"{v}\"");
+        }
+        out.push_str(if self_closing { "/>" } else { ">" });
+    }
+    out.push_str(rest);
+    out
+}
+
+/// The `<defs>` an inlined figure needs (the halo blur).
+pub fn inline_defs() -> &'static str {
+    "<defs><filter id=\"iso-halo\" x=\"-20%\" y=\"-20%\" width=\"140%\" height=\"140%\"><feGaussianBlur stdDeviation=\"9\"/></filter></defs>"
+}
+
+/// What the card around a figure says.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct Card {
+    pub fig: String,
+    pub title: String,
+    pub hint: String,
+    pub readout: String,
+    /// Lines of caption under the card.
+    pub caption: Vec<String>,
+}
+
+/// A complete figure as one SVG file with no stylesheet: the card (border, `Fig n` top left,
+/// title top right, hint bottom left, readout bottom right, caption below) around the drawing,
+/// every colour resolved from the kit palette for `theme`. `body` is kit markup drawn for a
+/// `width` by `height` area.
+pub fn card_svg(
+    width: f64,
+    height: f64,
+    label: &str,
+    body: &str,
+    card: &Card,
+    theme: Theme,
+) -> String {
+    let pal = Palette::of(theme);
+    let pad = 24.0;
+    let top = 44.0;
+    let card_h = height + top + 40.0;
+    let cap_h = 20.0 * card.caption.len() as f64 + if card.caption.is_empty() { 0.0 } else { 12.0 };
+    let (tw, th) = (width + pad * 2.0, card_h + cap_h);
+    let mono = "ui-monospace,'SF Mono',Menlo,Consolas,monospace";
+    let sans = "ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif";
+    let mut s = format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {tw} {th}\" width=\"{tw}\" height=\"{th}\" role=\"img\" aria-label=\"{}\">{}",
+        escape(label),
+        inline_defs()
+    );
+    let _ = write!(
+        s,
+        "<rect width=\"{tw}\" height=\"{th}\" fill=\"{}\"/>",
+        pal.get("page")
+    );
+    let _ = write!(
+        s,
+        "<rect x=\"0.5\" y=\"0.5\" width=\"{}\" height=\"{}\" fill=\"{}\" stroke=\"{}\" stroke-width=\"1\"/>",
+        tw - 1.0,
+        card_h - 1.0,
+        pal.get("card"),
+        pal.get("mid")
+    );
+    let corner = |s: &mut String,
+                  x: f64,
+                  y: f64,
+                  anchor: &str,
+                  colour: &str,
+                  text: &str,
+                  upper: bool| {
+        let text = if upper {
+            text.to_uppercase()
+        } else {
+            text.to_string()
+        };
+        let spacing = if upper { "1" } else { "0.4" };
+        let _ = write!(
+            s,
+            "<text x=\"{x}\" y=\"{y}\" font-family=\"{mono}\" font-size=\"10.5\" letter-spacing=\"{spacing}\" text-anchor=\"{anchor}\" fill=\"{colour}\">{}</text>",
+            escape(&text)
+        );
+    };
+    corner(
+        &mut s,
+        20.0,
+        28.0,
+        "start",
+        pal.get("text"),
+        &card.fig,
+        false,
+    );
+    corner(
+        &mut s,
+        tw - 20.0,
+        28.0,
+        "end",
+        pal.get("muted"),
+        &card.title,
+        true,
+    );
+    corner(
+        &mut s,
+        20.0,
+        card_h - 18.0,
+        "start",
+        pal.get("muted"),
+        &card.hint,
+        true,
+    );
+    corner(
+        &mut s,
+        tw - 20.0,
+        card_h - 18.0,
+        "end",
+        pal.get("text"),
+        &card.readout,
+        false,
+    );
+    // The card colour is the paper the drawing sits on.
+    let mut paper = pal.clone();
+    paper
+        .vars
+        .insert("paper".into(), pal.get("card").to_string());
+    let _ = write!(
+        s,
+        "<g transform=\"translate({pad} {top})\">{}</g>",
+        inline_styles(body, &paper)
+    );
+    for (i, line) in card.caption.iter().enumerate() {
+        let _ = write!(
+            s,
+            "<text x=\"2\" y=\"{}\" font-family=\"{sans}\" font-size=\"13\" fill=\"{}\">{}</text>",
+            card_h + 22.0 + 20.0 * i as f64,
+            pal.get("muted"),
+            escape(line)
+        );
+    }
+    s.push_str("</svg>\n");
+    s
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -868,6 +1229,65 @@ mod tests {
         s.add(1.0, "<far/>".into());
         s.add(5.0, "<near-front/>".into());
         assert_eq!(s.render(), "<far/><near/><near-front/>");
+    }
+
+    #[test]
+    fn inline_output_needs_no_stylesheet() {
+        let p = Projection::new((100.0, 80.0), 2.0);
+        let body = solid_svg(
+            &slab_of(
+                &Plan {
+                    x: 0.0,
+                    y: 0.0,
+                    w: 20.0,
+                    d: 10.0,
+                    r: 2.0,
+                },
+                0.0,
+                6.0,
+                &p,
+                8,
+                0.5,
+            ),
+            &SolidStyle {
+                halo: true,
+                lit: true,
+                ..Default::default()
+            },
+        ) + &dots_svg(&[(1.0, 2.0)], 0.5, Tone::Hi)
+            + &wire_svg((0.0, 0.0), (10.0, 10.0), &[], Tone::Mid);
+        let dark = Palette::of(Theme::Dark);
+        let out = inline_styles(&body, &dark);
+        assert!(
+            !out.contains("class=") && !out.contains("data-tone"),
+            "{out}"
+        );
+        assert!(
+            out.contains(&format!("fill=\"{}\"", dark.get("face"))),
+            "lit solid fill"
+        );
+        assert!(
+            out.contains(&format!("stroke=\"{}\"", dark.get("lit"))),
+            "lit edge"
+        );
+        assert!(out.contains("filter=\"url(#iso-halo)\""));
+        let light = Palette::of(Theme::Light);
+        assert_ne!(light.get("paper"), dark.get("paper"));
+        assert_eq!(dark.get("hi"), "#d4d4d4", "read from assets/iso.css");
+        let card = Card {
+            fig: "Fig 1".into(),
+            title: "Rig".into(),
+            hint: "Hint".into(),
+            readout: "0.5".into(),
+            caption: vec!["Caption".into()],
+        };
+        let svg = card_svg(300.0, 200.0, "label", &body, &card, Theme::Light);
+        assert!(
+            !svg.contains("<style")
+                && !svg.contains("class=")
+                && svg.contains("RIG")
+                && svg.contains("Caption")
+        );
     }
 
     #[test]
