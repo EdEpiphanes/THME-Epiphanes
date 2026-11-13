@@ -190,7 +190,8 @@ mod windows {
         let rig = Rig::new();
         let o = run_ok(&rig, &rig.policy(), &["spawn", "100"]);
         assert_blocked(&o, "spawn 100");
-        assert_eq!(o.ended, Ended::ProcessLimit);
+        let out = String::from_utf8_lossy(&o.stdout);
+        assert_eq!(o.ended, Ended::ProcessLimit, "{out}");
     }
 
     #[test]
@@ -213,7 +214,8 @@ mod windows {
         let rig = Rig::new();
         let pid_file = rig.work().join("pid.txt");
         let o = run_ok(&rig, &rig.policy(), &["detach", s(&pid_file)]);
-        assert_eq!(o.ended, Ended::Exited(DID));
+        let out = String::from_utf8_lossy(&o.stdout);
+        assert_eq!(o.ended, Ended::Exited(DID), "{out}");
         let pid: u32 = std::fs::read_to_string(&pid_file)
             .unwrap()
             .trim()
