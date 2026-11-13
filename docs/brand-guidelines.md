@@ -1,167 +1,80 @@
 # Brand Guidelines: Epiphanes // THME
 
-> Last updated: 2026-11-11
-> Version: 1.0.0
-> Organization: Epiphanes
-> Product: THME (Topological Heterogeneous Manifold Engine)
-> Design Motif: OLED Obsidian Black Developer Interface
+> Last updated: 2026-11-13 · Version 2.0.0 · Organization: Epiphanes
+> Product: THME (Topological Heterogeneous Manifold Engine) · CLI alias: `llm-tweaker`
+> Design motif: classic black-and-white manga panel, with liquid-glass surfaces
 
 ---
 
-## Quick Reference
+## Quick reference
 
 | Element | Value |
-|---------|-------|
-| Company | Epiphanes |
-| Product | THME (Topological Heterogeneous Manifold Engine) |
-| CLI Alias | llm-tweaker |
-| Primary Color | #00E5FF |
-| Secondary Color | #10B981 |
-| Accent Color | #F59E0B |
-| Canvas Background | #09090B |
-| Primary Font | JetBrains Mono, Inter |
-| Tone | Rigorous, Systems-Focused, Empirical, Zero-Slop |
+| :--- | :--- |
+| Ink | `#0B0B0B` (outlines, type, solid tone, print shadows) |
+| Paper | `#FFFFFF` panels on a `#F6F6F4` ground |
+| Tone | Greys only, carried by screentone dots and hatching rather than hue |
+| Spot colour | Red `#E0284A` / `#C8102E`, only in the optional Manga Night and Manga Ink themes |
+| Display and UI type | Chakra Petch Bold / Medium (SIL OFL 1.1, `assets/fonts/`) |
+| Data type | Monospace (Studio default mono; JetBrains Mono or Consolas in SVGs) |
+| Motif | Calabi-Yau quintic cross-section, drawn from its equation, never traced |
+| Voice | Rigorous, empirical, plain: every figure is measured or labelled |
 
----
+## 1. Identity
 
-## 1. Color Palette
+THME's look is a manga title page: paper, ink, screentone and panel frames. The default Studio
+theme (**Manga Panel**) uses no colour at all. Format families, states and charts are told apart
+by grey tone and dot density. Red survives as an optional spot colour in the **Manga Night**
+(dark) and **Manga Ink** (paper) themes.
 
-The color system is engineered for high-contrast OLED developer dashboards, hardware-calibrated telemetry, and terminal matrix inspections.
+Glass is the second layer: panels are translucent over a painted backdrop of screentone and
+speed lines, with a bright top rim (sheen), a crisp ink edge and a hard offset print shadow.
 
-### Primary Colors
+## 2. Assets
 
-| Name | Hex | RGB | Usage |
-|------|-----|-----|-------|
-| Obsidian Cyan | #00E5FF | rgb(0,229,255) | Active cockpit tabs, primary controls, live streaming token highlights |
-| Primary Dark | #00B4D8 | rgb(0,180,216) | Hover states, active borders, secondary charts |
-| Primary Light | #80F2FF | rgb(128,242,255) | Glow overlays, selected text highlights |
+| File | What it is | Source |
+| :--- | :--- | :--- |
+| `assets/brand/thme-banner.gif` | Animated title spread: the mascot breathing; the manifold turning in 3D and through its 4D projection inside focus lines | `scripts/generate_banner.py` |
+| `assets/brand/thme-banner.png` | First frame of the banner (static fallback) | `scripts/generate_banner.py` |
+| `assets/brand/thme-mark-256.png` | Logo mark: the ink-shaded manifold in a panel frame | `scripts/generate_banner.py` |
+| `assets/brand/thme-mascot.png` | Mascot artwork, black-and-white manga | Supplied artwork; to be refined by a human artist |
+| `assets/brand/thme-icon-256.png`, `-64.png` | App and window icon (mascot face crop) | `scripts/generate_brand_art.ps1` |
+| `assets/gifs/*.gif` | Recordings of the real Studio | `scripts/record_gif.ps1` |
+| `docs/status/status-*.svg` | Status board in the panel style | `scripts/generate_status.py` |
 
-### Secondary Colors
+The manifold in the banner, the logo mark and the Studio's Live 3D view all come from the same
+parametrization (`src/gui/manga.rs`, `scripts/generate_banner.py`): each point solves
+z1^5 + z2^5 = 1, and a test checks it.
 
-| Name | Hex | RGB | Usage |
-|------|-----|-----|-------|
-| Emerald Green | #10B981 | rgb(16,185,129) | Quality gate accepted status, throughput speedup confirmations, BitNet pass |
-| Emerald Dark | #059669 | rgb(5,150,105) | Success hover states, confirmed ledger items |
-| Emerald Light | #6EE7B7 | rgb(110,231,183) | Verified checkmarks, positive delta badges |
+## 3. Panels and surfaces
 
-### Accent Colors
+- **Panel frame**: 2 to 2.5 px ink edge, near-square corners (2 px) in the Manga Panel theme,
+  rounded glass corners (12 px) in the colour themes.
+- **Print shadow**: hard, no blur, offset 4 px down and right; ink on paper, the spot colour at
+  low opacity on dark grounds.
+- **Sheen**: a 1 px white rim along the top edge and a soft fade over the upper 45 %.
+- **Screentone**: dots on a 9 to 11 px grid, growing toward one corner; never behind body text
+  at full strength.
+- **Speed and focus lines**: thin ink wedges radiating from a point outside the frame (backdrop)
+  or toward a subject (banner).
 
-| Name | Hex | RGB | Usage |
-|------|-----|-----|-------|
-| Amber Warning | #F59E0B | rgb(245,158,11) | Memory ceiling pressure, compute-bound kneepoints, fallback paths |
-| Crimson Error | #EF4444 | rgb(239,68,68) | Perplexity regressions, gate rejections, critical panics |
-| Delta Indigo | #6366F1 | rgb(99,102,241) | Speculative decoding trees, Hadamard transforms, SVD energy decay |
+## 4. Type
 
-### Neutral Palette (OLED Obsidian Black)
+- Headings, tabs, KPI values and the wordmark: **Chakra Petch Bold**, uppercase for tabs.
+- Body and controls: **Chakra Petch Medium**.
+- Numbers in tables and code: monospace.
+- The wordmark is set as outlined paper letters over a solid ink print shadow.
 
-| Name | Hex | RGB | Usage |
-|------|-----|-----|-------|
-| Background | #09090B | rgb(9,9,11) | Root canvas, OLED background, terminal black |
-| Surface | #18181B | rgb(24,24,27) | Component cards, telemetry panels, inspector sidebars |
-| Surface Raised | #27272A | rgb(39,39,42) | Hovered card state, dropdown containers, table headers |
-| Border | #27272A | rgb(39,39,42) | 1px structural dividing lines, subtle containment borders |
-| Text Primary | #FFFFFF | rgb(255,255,255) | High-contrast KPI headers, active parameter readouts (19.06:1 AAA) |
-| Text Secondary | #A1A1AA | rgb(161,161,170) | Parameter descriptions, diagnostic subtitles, inactive controls |
-| Text Muted | #71717A | rgb(113,113,122) | Inactive tabs, disabled options, timestamp metadata |
+## 5. Mascot
 
-### Accessibility & Contrast Compliance
+The mascot holds the manifold: the person behind the measurements, holding the shape of the
+model. In motion she breathes slowly (about 1 % scale, two breaths per loop). She is not
+redrawn by scripts; changes to her design go through a human artist.
 
-- Primary White on OLED Black (#FFFFFF on #09090B): 19.06:1 contrast ratio (exceeds WCAG 2.1 AAA 7:1 requirement).
-- Obsidian Cyan on Surface (#00E5FF on #18181B): 11.4:1 contrast ratio (exceeds WCAG 2.1 AAA).
-- Emerald on Surface (#10B981 on #18181B): 6.8:1 contrast ratio (WCAG 2.1 AA for large and medium text).
-- Amber on Surface (#F59E0B on #18181B): 7.3:1 contrast ratio (WCAG 2.1 AAA).
+## 6. Do and don't
 
----
-
-## 2. Typography
-
-Engineering interfaces prioritize readability, zero ambiguity between numerical characters (`0`, `O`, `1`, `l`, `I`), and tabular numerical alignment.
-
-### Typefaces
-
-- **Primary Code & Monospace**: `JetBrains Mono`, `Fira Code`, `Consolas`, `monospace`
-  - Usage: Weight matrices, memory metrics, CLI commands, telemetry feeds, JSON manifests.
-- **Primary Proportional / UI**: `Inter`, `-apple-system`, `BlinkMacSystemFont`, `Segoe UI`, `sans-serif`
-  - Usage: Navigation tabs, panel titles, documentation prose, modal dialogs.
-
-### Type Scale
-
-| Role | Size | Weight | Line Height | Usage |
-|------|------|--------|-------------|-------|
-| Display | 24px | 700 (Bold) | 32px | Studio header, main brand logotype |
-| Heading 1 | 18px | 600 (SemiBold) | 24px | Tab titles, modal titles, KPI primary values |
-| Heading 2 | 14px | 600 (SemiBold) | 20px | Section headers, card titles |
-| Body | 13px | 400 (Regular) | 18px | Standard UI labels, body explanations |
-| Monospace / Code | 12px | 500 (Medium) | 16px | Data readouts, tensor dimensions, CLI syntax |
-| Micro / Caption | 10px | 500 (Medium) | 14px | Status bar indicators, hardware knee markers |
-
----
-
-## 3. Brand Voice & Editorial Tone
-
-The voice of Epiphanes and THME is that of a seasoned systems researcher and performance engineer:
-
-- **Mathematical Precision**: Always reference specific mathematical operations (e.g. *singular value decomposition*, *Frobenius norm*, *Hadamard Walsh transform*, *Fisher information matrix*, *2-bit ternary bitstream*) rather than generic descriptions.
-- **Empirical Honesty**: Non-negotiable standard from `AGENTS.md`. Never present simulated projections as physical hardware benchmarks. Clearly demarcate simulated telemetry from measured runtime profiles.
-- **Conciseness & High Information Density**: Communicate through structured tables, ASCII waterfalls, and direct diffs.
-- **Strictly No Emojis**: Emojis are forbidden in all official documentation, user interfaces, code comments, tests, and commit messages.
-- **Zero AI-Generated Slop**: Avoid filler jargon, overused superlatives, and artificial hype words.
-
----
-
-## 4. Logo & Insignia Standards
-
-THME brand identity combines neoclassical architectural engraving with topological manifold geometry.
-
-### 4.0 Mascot (primary mark, `assets/brand/thme-mascot.png`)
-The primary image for the README hero, splash screens and release announcements: a researcher
-in dark, screentoned manga style on a grainy ink ground, studying a Calabi-Yau manifold she holds in her hands. The
-manifold stands for the research (heterogeneous representations on a shared geometry); the
-researcher stands for the tool's purpose, which is to look closely at a model and measure it.
-Show it on a white or very light ground at 240 px wide or more; below that, use the sigil.
-
-A computed Calabi-Yau quintic slice coloured by representation family
-(`assets/brand/calabi-yau.svg`, generated by `scripts/generate_logo.py`) is available
-for diagrams and covers where colour is needed.
-
-### 4.0.1 Manga system
-The whole identity is drawn as manga: black ink line art on paper, square panel frames,
-screentone (halftone dot) shading, speed lines, and a single spot red (#C8102E) for alerts.
-Everything below regenerates from the mascot with `scripts/generate_brand_art.ps1`:
-
-- `assets/brand/thme-banner.png`: README title panel (lettering with a screentone drop shadow,
-  speed lines, graded halftone, slanted mascot panel).
-- `assets/brand/thme-icon-256.png` and `thme-icon-64.png`: ink-only face crop in a panel frame,
-  used as the Studio window icon and favicon.
-- Studio theme **Manga Night** (default): grainy ink-black ground with paper-white ink lines and text,
-  the Live 3D view. Data colours (format families) stay in colour so charts remain readable.
-- Charts: light mode uses an ink panel frame; data colours are unchanged.
-
-### 4.1 Former Master Emblem: Neoclassical Insignia (`assets/brand/thme_insignia_emblem.svg`)
-Retired from the README in favour of the mascot; kept for existing materials. Originally the
-primary emblem for README heroes, splash screens, documentation covers, and official releases:
-- **Central Bust**: Epiphaneia (Divine Insight / Sophia), personifying the high-rank unquantized Teacher LLM prior to model surgery.
-- **Topological Compass**: Outer coordinate dial with 360-degree ticks, orbital coordinate nodes, and directional vector arrows (`↑`).
-- **Signal Modulation**: Undulating waveform passing through the coordinate origin, symbolizing Fast Walsh-Hadamard Transform (FWHT) and spectral kurtosis outlier suppression.
-- **Heterogeneous Lattice**: 4-tier memory hierarchy and tensor wireframe mesh in the upper quadrant.
-- **Acronym Cipher**: Nordic/Celtic knotwork breastplate emblem interlocking `T`, `H`, `M`, and `E`.
-
-### 4.2 Application Sigil & Favicon (`assets/brand/thme_sigil_icon.svg`)
-The scalable vector glyph for desktop app icons, browser favicons, dock icons, and CLI output:
-- **Scalability**: Pure geometric Bézier curves designed for crisp legibility from 16×16px to 512×512px.
-- **Contrast**: Meets WCAG 2.1 AAA (19.06:1 on OLED Obsidian `#09090B`).
-
-### 4.3 Monogram & ASCII Lockup
-For terminal environments without vector rendering:
-
-```
-+---+---+
-| T | H |
-+---+---+  THME // TOPOLOGICAL HETEROGENEOUS MANIFOLD ENGINE
-| M | E |  EPIPHANES SYSTEMS
-+---+---+
-```
-
-- **Clearspace**: Minimum 16px padding on all sides of the logomark.
-- **Monochrome Inversion**: On light backgrounds (print or export documentation), invert canvas to pure white (`#FFFFFF`) with Obsidian Slate (`#09090B`) mark strokes.
-- **Minimum Digital Size**: 16×16 pixels for favicon; 24×24 pixels for app icons.
+- Do keep data honest: brand art may be illustrative, but any figure that shows numbers must
+  come from a committed report or say that it is illustrative or simulated.
+- Do keep the default UI free of hue; use tone and pattern.
+- Don't use the red spot colour for decoration in the Manga Panel theme.
+- Don't trace or copy other people's manifold renderings; generate from the equation.
+- Don't use third-party logos or trademarks as part of THME marks.

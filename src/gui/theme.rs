@@ -1,14 +1,15 @@
-//! Modern Dark-Mode Developer Tool Theme Engine for THME Desktop Studio
+//! Theme engine for THME Studio.
 //!
-//! Provides OLED, Zinc, and Deep Slate color palettes calibrated for
-//! Linear/Vercel/Raycast developer tool aesthetics with zero emojis,
-//! WCAG AAA contrast compliance, and elevated reusable components.
+//! Palettes (Manga Panel by default: black and white; Manga Night and Manga Ink with a red spot
+//! colour; plus developer themes), egui visuals tuned for the manga x liquid-glass style kit in
+//! `manga.rs`, and shared widgets (KPI cards, waterfall chart, tab buttons).
 
 use eframe::egui;
 use egui::{Color32, CornerRadius, Pos2, Rect, Stroke, Vec2};
 use serde::{Deserialize, Serialize};
 
 use super::app::LayerNode;
+use super::manga;
 
 // ============================================================================
 // Master Color Tokens (Tailwind Zinc, Slate, and Developer Accents)
@@ -75,13 +76,34 @@ impl ThemePalette {
         let c = self.bg_dark;
         u32::from(c.r()) + u32::from(c.g()) + u32::from(c.b()) > 3 * 160
     }
+
+    /// True for black-and-white themes (every accent and status colour is a grey), such as
+    /// Manga Panel. Views then use grey tones and screentone instead of hue.
+    pub fn is_mono(&self) -> bool {
+        let grey = |c: Color32| {
+            let (r, g, b) = (i32::from(c.r()), i32::from(c.g()), i32::from(c.b()));
+            r.max(g).max(b) - r.min(g).min(b) <= 10
+        };
+        [
+            self.primary,
+            self.secondary,
+            self.accent,
+            self.success,
+            self.warning,
+            self.danger,
+        ]
+        .into_iter()
+        .all(grey)
+    }
 }
 
 /// UI/UX Pro Max Multi-Theme Palette Engine for THME Studio
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum GuiTheme {
-    /// Default brand theme: dark manga, paper-white ink on a grainy black ground, one spot red
+    /// Default brand theme: a classic black-and-white manga panel (paper, ink, screentone)
     #[default]
+    MangaPanel,
+    /// Dark manga: paper-white ink on a grainy black ground, one spot red
     MangaNight,
     /// Paper variant of the brand theme: manga ink on paper, square panel frames
     MangaInk,
@@ -104,6 +126,7 @@ pub enum GuiTheme {
 impl GuiTheme {
     /// Canonical list of all themes for selectors and iteration
     pub const ALL: &'static [GuiTheme] = &[
+        GuiTheme::MangaPanel,
         GuiTheme::MangaNight,
         GuiTheme::MangaInk,
         GuiTheme::ZincDark,
@@ -116,6 +139,7 @@ impl GuiTheme {
     /// Human-readable display label
     pub fn name(&self) -> &'static str {
         match self {
+            GuiTheme::MangaPanel => "Manga Panel",
             GuiTheme::MangaNight => "Manga Night",
             GuiTheme::MangaInk => "Manga Ink",
             GuiTheme::ZincDark => "Zinc Dark",
@@ -129,6 +153,20 @@ impl GuiTheme {
     /// Produce the calibrated 12-slot `ThemePalette`
     pub fn palette(&self) -> ThemePalette {
         match self {
+            GuiTheme::MangaPanel => ThemePalette {
+                bg_dark: Color32::from_rgb(246, 246, 244),
+                bg_card: Color32::from_rgb(255, 255, 255),
+                bg_input: Color32::from_rgb(234, 234, 232),
+                border: Color32::from_rgb(8, 8, 8),
+                text_main: Color32::from_rgb(6, 6, 6),
+                text_muted: Color32::from_rgb(78, 78, 78),
+                primary: Color32::from_rgb(8, 8, 8),
+                secondary: Color32::from_rgb(64, 64, 64),
+                accent: Color32::from_rgb(8, 8, 8),
+                success: Color32::from_rgb(24, 24, 24),
+                warning: Color32::from_rgb(96, 96, 96),
+                danger: Color32::from_rgb(0, 0, 0),
+            },
             GuiTheme::MangaNight => ThemePalette {
                 bg_dark: Color32::from_rgb(12, 12, 12),
                 bg_card: Color32::from_rgb(22, 22, 21),
@@ -283,11 +321,14 @@ pub fn configure_visuals(ctx: &egui::Context, p: &ThemePalette) {
         egui::Visuals::dark()
     };
     visuals.dark_mode = !light;
-    visuals.panel_fill = p.bg_dark;
-    visuals.window_fill = p.bg_card;
-    visuals.window_stroke = Stroke::new(1.0_f32, p.border);
-    visuals.window_corner_radius = CornerRadius::same(6);
-    visuals.menu_corner_radius = CornerRadius::same(6);
+    // Panels are see-through: the manga backdrop (manga::paint_backdrop) shows behind glass.
+    visuals.panel_fill = Color32::TRANSPARENT;
+    visuals.window_fill = manga::glass_fill(p.bg_card, p);
+    visuals.window_stroke = Stroke::new(1.5_f32, p.border);
+    visuals.window_corner_radius = CornerRadius::same(manga::radius(p));
+    visuals.menu_corner_radius = CornerRadius::same(10);
+    visuals.window_shadow = manga::print_shadow(p);
+    visuals.popup_shadow = manga::print_shadow(p);
     visuals.override_text_color = Some(p.text_main);
     visuals.extreme_bg_color = p.bg_input; // Used for text input troughs and slider tracks
     visuals.faint_bg_color = p.bg_card;
@@ -303,36 +344,40 @@ pub fn configure_visuals(ctx: &egui::Context, p: &ThemePalette) {
     visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0_f32, p.text_muted);
     visuals.widgets.noninteractive.corner_radius = CornerRadius::same(4);
 
-    // Inactive buttons and controls
-    visuals.widgets.inactive.bg_fill = p.bg_input;
+    // Inactive buttons and controls: glass pills with an ink edge
+    visuals.widgets.inactive.bg_fill = manga::glass_fill(p.bg_input, p);
+    visuals.widgets.inactive.weak_bg_fill = manga::glass_fill(p.bg_input, p);
     visuals.widgets.inactive.bg_stroke = Stroke::new(1.0_f32, p.border);
-    visuals.widgets.inactive.fg_stroke = Stroke::new(1.0_f32, p.text_muted);
-    visuals.widgets.inactive.corner_radius = CornerRadius::same(4);
+    visuals.widgets.inactive.fg_stroke = Stroke::new(1.0_f32, p.text_main);
+    visuals.widgets.inactive.corner_radius = CornerRadius::same(8);
 
-    // Hovered widgets
-    visuals.widgets.hovered.bg_fill = p.border;
-    visuals.widgets.hovered.bg_stroke = Stroke::new(1.0_f32, p.text_muted);
+    // Hovered widgets: the spot colour glows through the glass
+    visuals.widgets.hovered.bg_fill = manga::with_alpha(p.accent, 56);
+    visuals.widgets.hovered.weak_bg_fill = manga::with_alpha(p.accent, 56);
+    visuals.widgets.hovered.bg_stroke = Stroke::new(1.5_f32, p.accent);
     visuals.widgets.hovered.fg_stroke = Stroke::new(1.5_f32, p.text_main);
-    visuals.widgets.hovered.corner_radius = CornerRadius::same(4);
+    visuals.widgets.hovered.corner_radius = CornerRadius::same(8);
 
     // Active / Pressed widgets
-    visuals.widgets.active.bg_fill = p.primary.linear_multiply(0.20);
-    visuals.widgets.active.bg_stroke = Stroke::new(1.5_f32, p.primary);
-    visuals.widgets.active.fg_stroke = Stroke::new(1.5_f32, p.primary);
-    visuals.widgets.active.corner_radius = CornerRadius::same(4);
+    visuals.widgets.active.bg_fill = manga::with_alpha(p.accent, 96);
+    visuals.widgets.active.weak_bg_fill = manga::with_alpha(p.accent, 96);
+    visuals.widgets.active.bg_stroke = Stroke::new(2.0_f32, p.accent);
+    visuals.widgets.active.fg_stroke = Stroke::new(1.5_f32, p.text_main);
+    visuals.widgets.active.corner_radius = CornerRadius::same(8);
 
     // Open menus / comboboxes
-    visuals.widgets.open.bg_fill = p.bg_input;
-    visuals.widgets.open.bg_stroke = Stroke::new(1.0_f32, p.primary);
+    visuals.widgets.open.bg_fill = manga::glass_fill(p.bg_input, p);
+    visuals.widgets.open.weak_bg_fill = manga::glass_fill(p.bg_input, p);
+    visuals.widgets.open.bg_stroke = Stroke::new(1.5_f32, p.accent);
     visuals.widgets.open.fg_stroke = Stroke::new(1.0_f32, p.text_main);
-    visuals.widgets.open.corner_radius = CornerRadius::same(4);
+    visuals.widgets.open.corner_radius = CornerRadius::same(8);
 
     ctx.set_visuals(visuals);
 
     // Spacing and layout calibration
     ctx.style_mut(|style| {
         style.spacing.item_spacing = Vec2::new(8.0, 6.0);
-        style.spacing.button_padding = Vec2::new(10.0, 5.0);
+        style.spacing.button_padding = Vec2::new(12.0, 6.0);
         style.spacing.slider_width = 160.0;
     });
 }
@@ -349,44 +394,29 @@ pub fn draw_kpi_card(
     badge: Option<(&str, Color32)>,
     p: &ThemePalette,
 ) {
-    let w = ui.available_width();
-    let (rect, resp) = ui.allocate_exact_size(Vec2::new(w, 54.0), egui::Sense::hover());
+    let w = ui.available_width() - 4.0;
+    let (outer, resp) = ui.allocate_exact_size(Vec2::new(w + 4.0, 58.0), egui::Sense::hover());
+    let rect = Rect::from_min_size(outer.min, Vec2::new(w, 54.0));
 
-    // Subtle border lighting and background shift on hover
-    let stroke_col = if resp.hovered() {
-        p.text_muted
-    } else {
-        p.border
-    };
-    let bg_col = if resp.hovered() {
-        p.bg_card.linear_multiply(1.08)
-    } else {
-        p.bg_card
-    };
+    // Glass plate; the edge lights up in the spot colour on hover
+    let edge = if resp.hovered() { p.accent } else { p.border };
+    manga::paint_glass_plate(ui.painter(), rect, edge, p);
 
-    ui.painter().rect_filled(rect, 6.0_f32, bg_col);
-    ui.painter().rect_stroke(
-        rect,
-        6.0_f32,
-        Stroke::new(1.0_f32, stroke_col),
-        egui::StrokeKind::Outside,
-    );
-
-    // Category title (muted uppercase 8.5pt)
+    // Category title (muted uppercase)
     ui.painter().text(
         Pos2::new(rect.min.x + 12.0, rect.min.y + 14.0),
         egui::Align2::LEFT_CENTER,
         title.to_uppercase(),
-        egui::FontId::proportional(8.5),
+        egui::FontId::proportional(9.0),
         p.text_muted,
     );
 
-    // Primary Metric Value (prominent, high contrast 16.0pt)
+    // Primary metric value in the display face
     ui.painter().text(
         Pos2::new(rect.min.x + 12.0, rect.min.y + 36.0),
         egui::Align2::LEFT_CENTER,
         value,
-        egui::FontId::proportional(16.0),
+        manga::display(18.0),
         p.text_main,
     );
 
@@ -526,27 +556,39 @@ pub fn draw_tab_button(
     let is_active = *active_tab == tab_idx;
     let text_col = if is_active { p.text_main } else { p.text_muted };
     let bg_col = if is_active {
-        p.bg_input
+        manga::glass_fill(p.bg_card, p)
     } else {
         Color32::TRANSPARENT
     };
     let stroke = if is_active {
-        Stroke::new(1.0_f32, p.primary.linear_multiply(0.8))
+        Stroke::new(1.5_f32, p.accent)
     } else {
         Stroke::NONE
     };
 
     let btn = ui.add(
         egui::Button::new(
-            egui::RichText::new(title)
-                .size(11.0)
-                .strong()
+            egui::RichText::new(title.to_uppercase())
+                .font(manga::display(11.5))
                 .color(text_col),
         )
         .fill(bg_col)
         .stroke(stroke)
-        .corner_radius(4.0_f32),
+        .corner_radius(10.0_f32),
     );
+
+    if is_active {
+        // Liquid sheen and an ink underline "brush stroke" under the active tab
+        manga::glass_sheen(ui.painter(), btn.rect, 10.0, p);
+        let y = btn.rect.bottom() + 3.0;
+        ui.painter().line_segment(
+            [
+                Pos2::new(btn.rect.left() + 8.0, y),
+                Pos2::new(btn.rect.right() - 8.0, y),
+            ],
+            Stroke::new(2.5_f32, p.accent),
+        );
+    }
 
     if btn.clicked() {
         *active_tab = tab_idx;
@@ -562,9 +604,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_default_theme_is_manga_night_and_ink_is_light() {
-        assert_eq!(GuiTheme::default(), GuiTheme::MangaNight);
-        assert_eq!(GuiTheme::default().name(), "Manga Night");
+    fn test_default_theme_is_manga_panel_and_red_themes_remain() {
+        assert_eq!(GuiTheme::default(), GuiTheme::MangaPanel);
+        assert_eq!(GuiTheme::default().name(), "Manga Panel");
+        let panel = GuiTheme::MangaPanel.palette();
+        assert!(panel.is_light() && panel.is_mono());
+        assert!(!GuiTheme::MangaNight.palette().is_mono());
+        assert!(!GuiTheme::MangaInk.palette().is_mono());
         assert!(!GuiTheme::MangaNight.palette().is_light());
         assert!(GuiTheme::MangaInk.palette().is_light());
         assert!(!GuiTheme::ZincDark.palette().is_light());
@@ -640,8 +686,8 @@ mod tests {
         let visuals = ctx.style().visuals.clone();
         assert!(visuals.dark_mode);
         assert!(visuals.slider_trailing_fill);
-        assert_eq!(visuals.panel_fill, p.bg_dark);
-        assert_eq!(visuals.window_fill, p.bg_card);
+        assert_eq!(visuals.panel_fill, Color32::TRANSPARENT);
+        assert_eq!(visuals.window_fill, manga::glass_fill(p.bg_card, &p));
         assert_eq!(visuals.extreme_bg_color, p.bg_input);
         assert_eq!(visuals.override_text_color, Some(p.text_main));
     }

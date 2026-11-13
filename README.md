@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/brand/thme-banner.png" alt="THME, Topological Heterogeneous Manifold Engine: manga title panel with the mascot holding a Calabi-Yau manifold" width="900" />
+  <img src="assets/brand/thme-banner.gif" alt="THME title spread in black-and-white manga style: the mascot breathing in the left panel; in the right panel a Calabi-Yau manifold turning in 3D and through its fourth dimension inside focus lines, under the THME wordmark" width="900" />
 </p>
 
 <h1 align="center">THME</h1>
@@ -24,6 +24,7 @@
   <a href="#thme-studio">Studio</a> ·
   <a href="#quickstart">Quickstart</a> ·
   <a href="#architecture">Architecture</a> ·
+  <a href="#status">Status</a> ·
   <a href="#roadmap">Roadmap</a> ·
   <a href="docs/benchmark_dossier.md">Benchmark dossier</a> ·
   <a href="docs/research/THME_measured_findings_2026-11.md">Research notes</a>
@@ -148,26 +149,37 @@ Interpretation against the research programme: **[measured findings](docs/resear
 
 ## THME Studio
 
-A native desktop workbench (`thme-gui`, egui). These are screenshots of the actual app,
-captured by `scripts/capture_studio.ps1`.
+A native desktop workbench (`thme-gui`, egui) in a black-and-white manga style: paper, ink,
+screentone and glass panels, set in Chakra Petch. Every image here is the actual app, captured by
+`scripts/capture_studio.ps1` and `scripts/record_gif.ps1`.
 
 ### Live 3D model view
 
-Watch a model compute. Every slab is one applied layer, every row a linear tensor split into
-output-channel groups, lit by the **measured** output magnitude of the current window and
-tinted by format family. Particles carry the residual stream between layers, brighter where a
-layer rewrites it more. Non-finite values, exploding residuals and dead MLP units turn red and
-are listed beside the view. Drag to orbit, scroll to zoom, hover any tile for its tensor,
-channel range and statistics. Point it at any local LLaMA-family or GPT-NeoX folder, or run the
-built-in synthetic demo shown here.
+Watch a model compute. The default **Manifold** view binds each of the 25 patches of a
+Calabi-Yau quintic cross-section to a layer: a patch's tone is the layer's format family and its
+light is the layer's **measured** residual update in the current window. The surface turns
+through its fourth dimension while token particles ride across it. The geometry is
+illustrative; the tones and light are measured. **Layer slabs** shows the detail: every slab is
+one applied layer, every row a linear tensor split into output-channel groups, lit by measured
+output magnitude, with particles carrying the residual stream between layers. Non-finite
+values, exploding residuals and dead MLP units are marked and listed beside the view. Drag to
+orbit, scroll to zoom, hover for statistics. Point it at any local LLaMA-family or GPT-NeoX
+folder, or run the built-in synthetic demo shown here.
 
 <p align="center">
-  <img src="assets/screenshots/10-live-3d.png" alt="Live 3D view: layer slabs with tensor rows coloured by format family and lit by measured activity, token-flow particles between layers, anomaly list and format legend" width="920" />
+  <img src="assets/gifs/live-3d-manifold.gif" alt="Recording of the Live 3D manifold view: a black-and-white manga-shaded Calabi-Yau surface turning and morphing through its fourth dimension, patches toned by format family and lit by measured layer activity, token particles flowing" width="760" />
 </p>
 
-<sub>Shown: the synthetic demo (pseudo-random weights, mixed formats), so its perplexity is not
-meaningful. The activity is real computation. Binary and phase families and adaptive routing
-are in the legend as not implemented.</sub>
+<table>
+  <tr>
+    <td width="50%"><img src="assets/gifs/live-3d-slabs.gif" alt="Recording of the Live 3D layer-slab view with measured per-channel activity and token-flow particles" /><br><sub><b>Layer slabs</b>: tensors, channel groups, residual flow</sub></td>
+    <td width="50%"><img src="assets/gifs/dashboard.gif" alt="Recording of the Studio dashboard in the Manga Panel theme" /><br><sub><b>Manga Panel</b> theme (default); <b>Manga Night</b> and <b>Manga Ink</b> keep the red</sub></td>
+  </tr>
+</table>
+
+<sub>Recorded from the real app with `scripts/record_gif.ps1` while it runs the synthetic demo
+(pseudo-random weights, mixed formats), so perplexity is not meaningful; the activity is real
+computation. Binary and phase families and adaptive routing are in the legend as not implemented.</sub>
 
 ### Workspaces
 
@@ -285,6 +297,16 @@ flowchart LR
 Blue stages are backed by measurements today. The full subsystem reference (profiler,
 allocator, speculative decoding, roofline, paradigm converter, PyTorch bridge, MCP, CLI flags)
 is in **[docs/subsystems.md](docs/subsystems.md)**.
+
+## Status
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/status/status-dark.svg">
+  <img alt="Project status board: milestones and sub-milestones done, in progress and open for the v0.1 and v0.2 series, active backlog tickets by area, and tests by module" src="docs/status/status-light.svg" width="900">
+</picture>
+
+<sub>Generated by `scripts/generate_status.py` from [ROADMAP.md](ROADMAP.md),
+[BACKLOG.md](BACKLOG.md) and the test suite. CI regenerates it and fails if the committed board is stale.</sub>
 
 ## Roadmap
 
