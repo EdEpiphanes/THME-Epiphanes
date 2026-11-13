@@ -85,15 +85,15 @@ nominal size on two models, across at least five random seeds.
 
 | # | Item |
 | :--- | :--- |
-| v0.2.1.1 | `thme evaluate --recipe <file>`: run any recipe JSON through the measured gate and write a report |
-| v0.2.1.2 | BYOA algorithms callable from recipes with a declared, testable encode/decode contract |
-| v0.2.1.3 | Measured cost table: per-tensor Δ perplexity for each candidate format, cached per model and corpus |
-| v0.2.1.4 | Greedy allocator driven by the measured cost table, with a size budget |
-| v0.2.1.5 | Global refinement: re-evaluate whole candidates to correct non-additive interactions |
-| v0.2.1.6 | Random-placement controls generated automatically for every searched recipe (n ≥ 5, distinct draws) |
-| v0.2.1.7 | Measured Pareto front (size vs Δ perplexity) plotted from reports |
-| v0.2.1.8 | Separate calibration, validation and test token sets; search never reads the test set |
-| v0.2.1.9 | Studio recipe workbench: load a recipe, preview its layer composition in the Live 3D view, run the gate, view the report |
+| v0.2.1.1 | `thme evaluate --recipe <file>`: run any recipe JSON through the measured gate and write a report. **Done**: unsupported operations are refused or, with `--allow-partial`, listed as not evaluated |
+| v0.2.1.2 | BYOA algorithms callable from recipes with a declared, testable encode/decode contract. **Done**: `WeightContract` classifies every rule; `thme evaluate --algorithms` measures reconstructing rules; rotations only inside `RotatedQuantize`; mixers and `AffineProject` are refused with a reason |
+| v0.2.1.3 | Measured cost table: per-tensor Δ perplexity for each candidate format, cached per model and corpus. **Done** (`thme search`, layer or tensor granularity) |
+| v0.2.1.4 | Greedy allocator driven by the measured cost table, with a size budget. **Done** (`thme search --budget`) |
+| v0.2.1.5 | Global refinement: re-evaluate whole candidates to correct non-additive interactions. **Done** (first version: measure the whole candidate, revert moves until it passes) |
+| v0.2.1.6 | Random-placement controls generated automatically for every searched recipe (n ≥ 5, distinct draws). **Done** (`--controls`, default 5) |
+| v0.2.1.7 | Measured Pareto front (size vs Δ perplexity) plotted from reports. **Done**: `thme search --pareto-budgets`, Pareto chart and dossier section (rendered once a search report is committed) |
+| v0.2.1.8 | Separate calibration, validation and test token sets; search never reads the test set. **Done**: calibration, validation and an optional held-out test slice (`--test-tokens`) |
+| v0.2.1.9 | Studio recipe workbench: load a recipe, preview its layer composition in the Live 3D view, run the gate, view the report. **Done** (Live 3D tab: recipe and BYOA fields, recipe-applied runs, Run gate) |
 
 **Studio Live 3D view.** Delivered in v0.2.0: forward-pass probe, background worker, software
 3D renderer, anomaly detection, synthetic demo. Planned extensions, in order:

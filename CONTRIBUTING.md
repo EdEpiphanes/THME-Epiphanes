@@ -4,6 +4,10 @@ Thank you for your interest in contributing to **THME (Topological Heterogeneous
 
 ---
 
+> **Start here:** [docs/WORKFLOW.md](docs/WORKFLOW.md) describes the full workflow: backlog and
+> labels, branches and commits, the pull-request template and evidence levels, CI gates, and the
+> release train. Planned work is in [BACKLOG.md](BACKLOG.md).
+
 ## Code of Conduct
 
 All contributors and maintainers are expected to follow our [Code of Conduct](CODE_OF_CONDUCT.md).
@@ -21,7 +25,7 @@ All contributors and maintainers are expected to follow our [Code of Conduct](CO
 
 ## Development Setup
 
-1. Install the Rust toolchain (version >= 1.80 recommended):
+1. Install the Rust toolchain (version >= 1.89 required):
    ```bash
    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
    ```

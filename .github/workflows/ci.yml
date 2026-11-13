@@ -2,60 +2,62 @@
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  path-leak-guard:
-    name: Path Leak Guard
+  hygiene:
+    name: Repository hygiene
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Scan tracked files for absolute user paths
+      - name: No absolute developer paths
         run: |
-          echo "Scanning tracked files for machine path leaks..."
-          # Reject developer paths or Windows/Linux user profile patterns in tracked files
           if git grep -inE "(C:\\\\Users\\\\[a-zA-Z0-9_-]+|/home/[a-zA-Z0-9_-]+)" -- ':!*.png' ':!*.gif' ':!*.jpg' ':!AGENTS.md'; then
-            echo "ERROR: Local username or absolute developer path detected in repository!"
+            echo "::error::Local username or absolute developer path found in tracked files"
             exit 1
           fi
-          echo "Path leak verification passed: 0 leaks detected."
 
-  test-matrix:
+      - name: No committed weights or binaries (AGENTS.md rule 3)
+        run: |
+          if git ls-files | grep -iE '\.(safetensors|gguf|bin|pt|onnx|thme|exe|dll|so|dylib|pdb)$'; then
+            echo "::error::Model weights or binaries are tracked"
+            exit 1
+          fi
+
+  lint:
+    name: Format and clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # rust-toolchain.toml pins the compiler, rustfmt and clippy.
+      - run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets --locked -- -D warnings
+
+  test:
     name: Test (${{ matrix.os }})
+    needs: lint
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Rust Toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-          components: rustfmt, clippy
-
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-
-      - name: Format Check
-        run: cargo fmt --check
-
-      - name: Clippy Linter
-        run: cargo clippy --all-targets -- -D warnings
-
-      - name: Run Test Suite
-        run: cargo test --verbose
-
-      - name: Verify exporter compatibility consumers
-        run: cargo test --test test_exporter_compatibility --test test_export_cli --test test_exporter_e2e
+      - uses: actions/checkout@v5
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --locked
 
       - name: Verify configured llama.cpp and Ollama runtimes
         if: ${{ vars.THME_COMPAT_MODEL != '' && vars.THME_LLAMA_CPP != '' && vars.THME_OLLAMA != '' }}
@@ -64,4 +66,64 @@ jobs:
           THME_LLAMA_CPP: ${{ vars.THME_LLAMA_CPP }}
           THME_OLLAMA: ${{ vars.THME_OLLAMA }}
           THME_REQUIRE_RUNTIME_COMPAT: "1"
-        run: cargo test --test test_exporter_compatibility exported_gguf_runs_in_configured_llama_cpp_and_ollama -- --exact
+        run: cargo test --locked --test test_exporter_compatibility exported_gguf_runs_in_configured_llama_cpp_and_ollama -- --exact
+
+  msrv:
+    name: Minimum supported Rust (Cargo.toml rust-version)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Read rust-version
+        id: msrv
+        run: echo "version=$(grep -m1 '^rust-version' Cargo.toml | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
+      - name: Install the minimum toolchain
+        run: rustup toolchain install "${{ steps.msrv.outputs.version }}" --profile minimal
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: msrv
+      - run: cargo +${{ steps.msrv.outputs.version }} check --all-targets --locked
+
+  measured-claims:
+    name: Published figures regenerate from committed reports
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Scripts compile
+        run: python -m py_compile scripts/*.py
+      - name: Regenerate dossier and charts
+        run: |
+          python scripts/generate_dossier.py
+          for data in docs/benchmarks/*/data; do
+            model_dir="$(dirname "$data")"
+            python scripts/generate_charts.py --data-dir "$data" --out-dir "$model_dir/charts"
+          done
+      - name: Nothing changed
+        run: |
+          if ! git diff --exit-code -- docs/; then
+            echo "::error::Committed dossier or charts differ from what the committed reports produce. Regenerate them and commit."
+            exit 1
+          fi
+
+  dependencies:
+    name: Dependency advisories, licences and sources
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories bans licenses sources
+
+  latest-stable:
+    name: Preview on latest stable (non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+      - name: Override the pinned toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy
+          rustup override set stable
+      - run: cargo clippy --all-targets -- -D warnings

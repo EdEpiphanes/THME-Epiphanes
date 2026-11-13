@@ -1,9 +1,119 @@
-# THME Engineering Backlog (v0.1.2 -> v0.2.4)
+# THME Engineering Backlog
 
-> **Epiphanes Engineering Backlog**
-> Actionable ticket ledger tracking engineering issues, acceptance criteria, and completion conditions through v0.2.4.
+> Source of truth for planned work. Tickets between the `backlog:start` and `backlog:end` markers
+> are mirrored to GitHub Issues by `scripts/sync_github_backlog.py`. Process: [docs/WORKFLOW.md](docs/WORKFLOW.md).
+> Milestones and exit criteria: [ROADMAP.md](ROADMAP.md).
+
+Each ticket lists: milestone, roadmap item, priority (p0 stop the line · p1 this milestone ·
+p2 next), area, type and status (triage · ready · blocked), plus the observable result that
+closes it.
+
+<!-- backlog:start -->
+
+## Active: v0.2.0 close-out
+
+### [THME-2001] Cross-check the forward pass against the Hugging Face reference
+- **Milestone**: v0.2.0 · **Roadmap**: v0.2.0.6 · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: blocked
+- **Problem**: Measured perplexities rely on THME's own forward pass, which is unit-tested but has never been compared with the reference implementation.
+- **Done means**: A script compares THME and Hugging Face logits on fixed prompts for SmolLM-135M and Pythia-14M; maximum absolute logit difference is reported and below an agreed tolerance. Blocked while new model runs are paused.
+
+### [THME-2002] Upgrade egui/eframe to clear RUSTSEC-2026-0194/0195
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: dependencies · **Type**: chore · **Status**: ready
+- **Problem**: eframe 0.31 pulls quick-xml 0.30 (two advisories, ignored in deny.toml with this ticket) and several unmaintained transitive crates.
+- **Done means**: eframe upgraded; the two `ignore` entries removed from deny.toml; `cargo deny check` passes; all Studio tabs recaptured and visually checked.
+
+### [THME-2003] Split src/gui/app.rs into tab modules
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p2 · **Area**: gui · **Type**: chore · **Status**: ready
+- **Problem**: app.rs is about 6,000 lines with ten tab renderers sharing mutable state (supersedes THME-910).
+- **Done means**: Each `render_tab_*` lives in `src/gui/tabs/<name>.rs`; no behaviour change; screenshots identical apart from timestamps.
+
+### [THME-2004] Publish the first measured recipe search and Pareto chart
+- **Milestone**: v0.2.0 · **Roadmap**: v0.2.1.7 · **Priority**: p2 · **Area**: research · **Type**: experiment · **Status**: blocked
+- **Problem**: `thme search` and the Pareto chart exist but no measured search report is committed.
+- **Done means**: `docs/benchmarks/<model>/data/search_report.json` committed for Pythia-14M and SmolLM-135M with five or more random controls; chart and dossier section regenerated. Blocked while new model runs are paused.
+
+### [THME-2005] Release v0.2.0
+- **Milestone**: v0.2.0 · **Roadmap**: v0.2.0.9 · **Priority**: p1 · **Area**: ci · **Type**: chore · **Status**: ready
+- **Problem**: The measured core is complete but unreleased.
+- **Done means**: CHANGELOG section `[0.2.0]`, Cargo version 0.2.0, tag `v0.2.0`; the release workflow publishes four signed archives with checksums.
+
+### [THME-2006] Configure repository protection and secrets
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: ci · **Type**: chore · **Status**: ready
+- **Problem**: Branch protection, required checks and the signing key live in GitHub settings.
+- **Done means**: Settings match docs/WORKFLOW.md section 7; a test pull request cannot merge with a failing required check.
+
+## Next: v0.2.2 Formats and calibration
+
+### [THME-2201] Per-tensor formats in the GGUF writer
+- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.1 · **Priority**: p1 · **Area**: exporter · **Type**: feature · **Status**: ready
+- **Problem**: The exporter writes every tensor as one format, so a recipe and its artifact differ.
+- **Done means**: Exporting a recipe writes each tensor in its assigned format; re-importing and evaluating the file reproduces `thme evaluate`'s perplexity for the same recipe.
+
+### [THME-2202] Q4_K, Q5_K and Q6_K encoders
+- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.2 · **Priority**: p1 · **Area**: exporter · **Type**: feature · **Status**: ready
+- **Problem**: Only Q8_0, Q4_0 and TQ1_0 can be encoded; K-quants are the common deployment formats.
+- **Done means**: Round-trip tests against the existing decoders; the formats are usable in recipes and `thme search --formats`.
+
+### [THME-2203] Capture calibration activations from the forward pass
+- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.3 · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: ready
+- **Problem**: Activation-aware methods need per-layer input statistics.
+- **Done means**: A probe records per-linear-tensor input channel statistics on calibration tokens and saves them; unit-tested on the synthetic model.
+
+### [THME-2204] Activation-aware scaling (AWQ-style)
+- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.4 · **Priority**: p1 · **Area**: byoa · **Type**: feature · **Status**: ready
+- **Problem**: Round-to-nearest 4-bit fails the gate on Pythia-14M (Δ +31 to +74).
+- **Done means**: A BYOA rule using captured activations; measured against plain Q4_0 on the same split with random controls.
+
+### [THME-2205] Second-order rounding (GPTQ-style)
+- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.5 · **Priority**: p2 · **Area**: byoa · **Type**: feature · **Status**: ready
+- **Problem**: Error compensation across columns is the strongest known post-training method.
+- **Done means**: Implemented as a BYOA rule using calibration activations; measured against THME-2204.
+
+### [THME-2206] Measure Hadamard rotation on real models
+- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.6 · **Priority**: p2 · **Area**: research · **Type**: experiment · **Status**: blocked
+- **Problem**: `RotatedQuantize` lowers rounding error on outlier-heavy weights in tests; its effect on perplexity is unmeasured.
+- **Done means**: `thme.hadamard_int4` and `thme.hadamard_ternary` compared with their unrotated rules via `thme evaluate` on both models; reports committed.
+
+### [THME-2207] SmoothQuant-style scale migration
+- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.7 · **Priority**: p2 · **Area**: byoa · **Type**: feature · **Status**: ready
+- **Problem**: The existing SmoothQuant rule clips weights only; true migration rescales weights and activations together.
+- **Done means**: Migration folded into the preceding norm so the model's function is preserved before quantization; a test confirms unchanged outputs without quantization.
+
+### [THME-2208] llama.cpp compatibility checks for exported files
+- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.8 · **Priority**: p2 · **Area**: exporter · **Type**: feature · **Status**: ready
+- **Problem**: Exported GGUF files are only re-read by THME itself.
+- **Done means**: The existing optional CI step runs a heterogeneous export through llama.cpp when the runtime is configured.
+
+### [THME-2209] Measured artifact size in every report
+- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.9 · **Priority**: p1 · **Area**: exporter · **Type**: feature · **Status**: ready
+- **Problem**: Recipe and search sizes are nominal bits per weight.
+- **Done means**: Reports include the written file size including scales and metadata alongside the nominal figure.
+
+## Later
+
+### [THME-2101] Live 3D: attention maps, drill-down and side-by-side
+- **Milestone**: v0.2.3 · **Roadmap**: v0.2.1.9 extensions · **Priority**: p2 · **Area**: gui · **Type**: feature · **Status**: ready
+- **Problem**: The Live 3D view shows per-tensor activity but not per-head attention, single weights, or source-vs-candidate differences.
+- **Done means**: The four extensions listed in ROADMAP.md under "Studio Live 3D view" are implemented and recaptured.
+
+### [THME-2300] Epic: Recovery and distillation
+- **Milestone**: v0.2.3 · **Roadmap**: v0.2.3.1-v0.2.3.9 · **Priority**: p2 · **Area**: research · **Type**: feature · **Status**: triage
+- **Problem**: Aggressive formats such as ternary fail without retraining.
+- **Done means**: Broken into tickets per ROADMAP.md v0.2.3 when v0.2.2 closes.
+
+### [THME-2400] Epic: Runtime, speed and KV cache
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.1-v0.2.4.9 · **Priority**: p2 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: No speed, memory or KV-cache figure is measured yet.
+- **Done means**: Broken into tickets per ROADMAP.md v0.2.4 when v0.2.3 closes.
+
+<!-- backlog:end -->
 
 ---
+
+# Archive
+
+Tickets below are the original sprint ledger. Sprints 1 to 9 are completed or superseded by the
+active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later (see ROADMAP.md).
 
 ## Sprint 1: Format Correctness & Fuzzing (Milestone v0.1.2) [COMPLETED]
 
@@ -434,7 +544,7 @@
 
 ---
 
-## Sprint 9: Production Core Release (Milestone v0.2.0) [ACTIVE]
+## Sprint 9: Production Core Release (Milestone v0.2.0) [SUPERSEDED by the active backlog]
 
 ### [THME-901] SmolLM-135M Open-Weights End-to-End Verification Pipeline
 - **Component**: `examples/production_verification.rs`
@@ -544,7 +654,7 @@
 
 ---
 
-## Sprint 10: Direct GPU Driver Execution Engine (Milestone v0.2.1) [SCHEDULED]
+## Sprint 10: Direct GPU Driver Execution Engine (former v0.2.1) [DEFERRED to v0.3+]
 
 ### [THME-1001] Hardware Abstraction Layer (HAL) Core Traits
 - **Component**: `thme::hardware::hal` (`src/hardware/hal.rs`)
@@ -635,7 +745,7 @@
 
 ---
 
-## Sprint 11: Tiered Out-of-Core NVMe SSD Streaming (Milestone v0.2.2) [SCHEDULED]
+## Sprint 11: Tiered Out-of-Core NVMe SSD Streaming (former v0.2.2) [DEFERRED to v0.3+]
 
 ### [THME-1101] Linux Direct Asynchronous I/O Engine (`io_uring`)
 - **Component**: `thme::storage::direct_io` (`src/storage/direct_io.rs`)
@@ -724,7 +834,7 @@
 
 ---
 
-## Sprint 12: Distributed Heterogeneous Multi-Node Clustering (Milestone v0.2.3) [SCHEDULED]
+## Sprint 12: Distributed Heterogeneous Multi-Node Clustering (former v0.2.3) [DEFERRED to v0.3+]
 
 ### [THME-1201] Intra-Node Tensor Parallelism (TP) Projection Splitter
 - **Component**: `thme::cluster::tensor_parallel` (`src/cluster/tensor_parallel.rs`)
@@ -813,7 +923,7 @@
 
 ---
 
-## Sprint 13: Universal Agentic AI Connectivity Gateway (Milestone v0.2.4) [SCHEDULED]
+## Sprint 13: Universal Agentic AI Connectivity Gateway (former v0.2.4) [DEFERRED to v0.3+]
 
 ### [THME-1301] High-Throughput Asynchronous WebSocket Event Streaming Daemon
 - **Component**: `thme::daemon::server` (`src/daemon/server.rs`)

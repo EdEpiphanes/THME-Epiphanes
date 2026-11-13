@@ -1,0 +1,37 @@
+name: Research experiment
+description: A falsifiable experiment to run with THME's measured pipeline
+labels: ["type:experiment", "area:research", "status:triage"]
+body:
+  - type: textarea
+    id: hypothesis
+    attributes:
+      label: Hypothesis
+      description: One sentence that the experiment can support or refute.
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Model(s)
+      placeholder: "Pythia-14M for iteration, SmolLM-135M for confirmation"
+    validations:
+      required: true
+  - type: textarea
+    id: method
+    attributes:
+      label: Method
+      description: Commands or recipe, corpus, calibration/validation/test split, number of random controls.
+    validations:
+      required: true
+  - type: textarea
+    id: criteria
+    attributes:
+      label: Acceptance criteria
+      description: Decided before running. What result supports the hypothesis, what refutes it?
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Result
+      description: Filled in afterwards. Link the committed report under docs/benchmarks/. Negative results are kept.

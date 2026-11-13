@@ -779,7 +779,7 @@ impl THMEApp {
         let start_instant = Instant::now();
 
         let mut app = Self {
-            theme: GuiTheme::ZincDark,
+            theme: GuiTheme::MangaNight,
             models: vec![initial_model],
             active_model_idx: 0,
             active_tab: 0,
@@ -1442,7 +1442,15 @@ impl eframe::App for THMEApp {
                         egui::Align2::CENTER_CENTER,
                         "THME v2.0",
                         egui::FontId::proportional(12.0),
-                        Color32::WHITE,
+                        if u32::from(p.primary.r())
+                            + u32::from(p.primary.g())
+                            + u32::from(p.primary.b())
+                            > 480
+                        {
+                            p.bg_dark
+                        } else {
+                            Color32::WHITE
+                        },
                     );
 
                     ui.add_space(8.0);
@@ -1497,7 +1505,7 @@ impl eframe::App for THMEApp {
                         if ui
                             .button(
                                 egui::RichText::new("Auto-Decide Plan")
-                                    .color(Color32::WHITE)
+                                    .color(p.text_main)
                                     .strong(),
                             )
                             .clicked()
@@ -1834,12 +1842,12 @@ impl THMEApp {
 
             // Dashboard Quick Action Bar
             ui.horizontal(|ui| {
-                if ui.button(egui::RichText::new("Run Auto-Decider For All Parameters").strong().color(Color32::WHITE)).clicked() {
+                if ui.button(egui::RichText::new("Run Auto-Decider For All Parameters").strong().color(p.text_main)).clicked() {
                     self.run_auto_decider_internal();
                     self.status_msg = "Evaluated all parameters and generated Pareto-optimal matrix & distillation plan!".to_string();
                 }
 
-                if ui.button(egui::RichText::new("Execute Global Transformation Plan").strong().color(Color32::WHITE)).clicked() {
+                if ui.button(egui::RichText::new("Execute Global Transformation Plan").strong().color(p.text_main)).clicked() {
                     self.execute_global_transformation_plan();
                 }
 
@@ -1896,7 +1904,7 @@ impl THMEApp {
                             egui::Align2::CENTER_CENTER,
                             f!("L{}", l),
                             egui::FontId::proportional(8.0),
-                            Color32::WHITE,
+                            if p.is_light() { p.text_main } else { Color32::WHITE },
                         );
                     }
 
@@ -2034,7 +2042,7 @@ impl THMEApp {
 
                             ui.add_space(6.0);
                             ui.horizontal(|ui| {
-                                if ui.button(egui::RichText::new("Assemble & Activate New Architecture").strong().color(Color32::WHITE)).clicked() {
+                                if ui.button(egui::RichText::new("Assemble & Activate New Architecture").strong().color(p.text_main)).clicked() {
                                     let bp = crate::ir::ArchitectureBlueprint::new_hybrid_llama(
                                         &self.rebuild_model_name,
                                         self.rebuild_num_layers,
@@ -2181,7 +2189,7 @@ impl THMEApp {
                                     .button(
                                         egui::RichText::new(format!("Execute Conversion to {}", target_paradigm.code()))
                                             .strong()
-                                            .color(Color32::WHITE),
+                                            .color(p.text_main),
                                     )
                                     .clicked()
                                 {
@@ -3044,7 +3052,7 @@ impl THMEApp {
                                 });
                         });
 
-                        if ui.button(egui::RichText::new("Apply Algorithm to Selected Sub-Block").strong().color(Color32::WHITE)).clicked() {
+                        if ui.button(egui::RichText::new("Apply Algorithm to Selected Sub-Block").strong().color(p.text_main)).clicked() {
                             apply_subblock_algo = true;
                         }
 
@@ -3331,7 +3339,7 @@ impl THMEApp {
                 .button(
                     egui::RichText::new("Run Automated Parameter Decider")
                         .strong()
-                        .color(Color32::WHITE),
+                        .color(p.text_main),
                 )
                 .clicked()
             {
@@ -3344,7 +3352,7 @@ impl THMEApp {
                 .button(
                     egui::RichText::new("Execute Global Transformation Plan")
                         .strong()
-                        .color(Color32::WHITE),
+                        .color(p.text_main),
                 )
                 .clicked()
             {
@@ -3589,7 +3597,7 @@ impl THMEApp {
                                 ui.add(egui::Slider::new(&mut self.new_byoa_bits, 0.5..=16.0).step_by(0.1));
                             });
                             ui.horizontal(|ui| {
-                                if ui.button(egui::RichText::new("Register Algorithm").strong().color(Color32::WHITE)).clicked()
+                                if ui.button(egui::RichText::new("Register Algorithm").strong().color(p.text_main)).clicked()
                                     && !self.new_byoa_id.is_empty()
                                     && !self.new_byoa_name.is_empty()
                                 {
@@ -3754,7 +3762,7 @@ impl THMEApp {
                 ui.horizontal(|ui| {
                     match snap.status {
                         crate::profiling::TokenFlowStatus::Idle | crate::profiling::TokenFlowStatus::Completed => {
-                            if ui.button(egui::RichText::new("Start Live Flow Benchmark").strong().color(Color32::WHITE)).clicked() {
+                            if ui.button(egui::RichText::new("Start Live Flow Benchmark").strong().color(p.text_main)).clicked() {
                                 self.simulator = crate::profiling::LiveFlowSimulator::new(
                                     &self.baseline_prompt,
                                     self.baseline_tokens,
@@ -3770,12 +3778,12 @@ impl THMEApp {
                             }
                         }
                         crate::profiling::TokenFlowStatus::Generating | crate::profiling::TokenFlowStatus::Prefill => {
-                            if ui.button(egui::RichText::new("Pause").strong().color(Color32::WHITE)).clicked() {
+                            if ui.button(egui::RichText::new("Pause").strong().color(p.text_main)).clicked() {
                                 self.simulator.pause();
                             }
                         }
                         crate::profiling::TokenFlowStatus::Paused => {
-                            if ui.button(egui::RichText::new("Resume").strong().color(Color32::WHITE)).clicked() {
+                            if ui.button(egui::RichText::new("Resume").strong().color(p.text_main)).clicked() {
                                 self.simulator.resume();
                             }
                         }
@@ -3985,7 +3993,7 @@ impl THMEApp {
 
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
-                    if ui.button(egui::RichText::new("Simulate Speculative Forward Pass").strong().color(Color32::WHITE)).clicked() {
+                    if ui.button(egui::RichText::new("Simulate Speculative Forward Pass").strong().color(p.text_main)).clicked() {
                         let source_ir = self.model().to_model_ir();
                         let draft_cfg = crate::speculative::DraftExtractionConfig {
                             strategy: if self.spec_apply_bitnet {
@@ -4194,7 +4202,7 @@ impl THMEApp {
 
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
-                    if ui.button(egui::RichText::new("Run Kernel Roofline Profiler").strong().color(Color32::WHITE)).clicked() {
+                    if ui.button(egui::RichText::new("Run Kernel Roofline Profiler").strong().color(p.text_main)).clicked() {
                         let hw = match self.roofline_hardware_idx {
                             0 => crate::profiling::hardware::HardwareSpec::predefined_h100(),
                             1 => crate::profiling::hardware::HardwareSpec::predefined_rtx4090(),
@@ -4624,7 +4632,7 @@ impl THMEApp {
                 ui.checkbox(&mut self.export_checksum, "Compute SHA-256 checksum");
 
                 ui.add_space(16.0);
-                if ui.button(egui::RichText::new("Export Source Model").strong().color(Color32::WHITE)).clicked() {
+                if ui.button(egui::RichText::new("Export Source Model").strong().color(p.text_main)).clicked() {
                     let source_model = self.model().source_model.clone();
                     let output_path = std::path::PathBuf::from(&self.export_path);
                     let output_name = output_path.file_name().and_then(|name| name.to_str()).unwrap_or("output").to_string();
@@ -4741,7 +4749,7 @@ impl THMEApp {
                 });
 
                 ui.add_space(6.0);
-                if ui.button(egui::RichText::new("Apply Teacher LLM Surgery Recipe").strong().color(Color32::WHITE)).clicked() {
+                if ui.button(egui::RichText::new("Apply Teacher LLM Surgery Recipe").strong().color(p.text_main)).clicked() {
                     match serde_json::from_str::<crate::surgery::TweakRecipe>(&self.tweak_recipe_text) {
                         Ok(recipe) => {
                             let mut model_ir = crate::ir::ModelIR::new(
@@ -4826,7 +4834,7 @@ impl THMEApp {
                             .button(
                                 egui::RichText::new("Load File")
                                     .strong()
-                                    .color(Color32::WHITE),
+                                    .color(p.text_main),
                             )
                             .clicked()
                         {
@@ -5164,7 +5172,7 @@ impl THMEApp {
                             .button(
                                 egui::RichText::new("Apply Transformation")
                                     .strong()
-                                    .color(Color32::WHITE),
+                                    .color(p.text_main),
                             )
                             .clicked()
                         {
@@ -5383,7 +5391,7 @@ impl THMEApp {
                         .button(
                             egui::RichText::new("Run 1 Step")
                                 .strong()
-                                .color(Color32::WHITE),
+                                .color(p.text_main),
                         )
                         .clicked()
                     {
@@ -5428,7 +5436,7 @@ impl THMEApp {
                         .button(
                             egui::RichText::new("Run 10 Steps")
                                 .strong()
-                                .color(Color32::WHITE),
+                                .color(p.text_main),
                         )
                         .clicked()
                     {
@@ -5643,7 +5651,7 @@ impl THMEApp {
                     }
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button(egui::RichText::new("> Run Autonomous Co-Surgery").color(Color32::WHITE)).clicked() {
+                        if ui.button(egui::RichText::new("> Run Autonomous Co-Surgery").color(p.text_main)).clicked() {
                             let mut model_ir = self.model().source_model.clone().unwrap_or_else(|| self.model().to_model_ir());
                             if model_ir.tensors.is_empty() {
                                 let bp = crate::ir::rebuilder::ArchitectureBlueprint::new_hybrid_llama("scaffold", 2, 128, 1);

@@ -1,0 +1,13 @@
+# Review routing. Every pull request needs an approval from a code owner (see docs/WORKFLOW.md).
+*                               @EdEpiphanes
+
+# Measurement integrity: anything that produces or publishes figures.
+/src/inference/                 @EdEpiphanes
+/src/quality/                   @EdEpiphanes
+/scripts/generate_*.py          @EdEpiphanes
+/docs/benchmarks/               @EdEpiphanes
+
+# Release and supply chain.
+/.github/                       @EdEpiphanes
+/deny.toml                      @EdEpiphanes
+/rust-toolchain.toml            @EdEpiphanes

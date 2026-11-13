@@ -91,6 +91,8 @@ impl SafetensorsScanner {
             ));
             tensors.push(tensor_ir);
         }
+        // The safetensors crate yields tensors in hash order; sort for a reproducible order.
+        tensors.sort_by(|a, b| a.name.cmp(&b.name));
 
         Ok(tensors)
     }
@@ -148,6 +150,9 @@ impl SafetensorsScanner {
             ));
             tensors.push(tensor_ir);
         }
+        // The safetensors crate yields tensors in hash order; use file order so every import of
+        // the same file produces the same tensor order (seeds, caches and reports depend on it).
+        tensors.sort_by_key(|t| t.source.as_ref().map_or(0, |s| s.byte_offset));
 
         Ok(tensors)
     }
@@ -197,5 +202,30 @@ mod tests {
         let mut actual = vec![0; payload.len()];
         file.read_exact(&mut actual).expect("read payload");
         assert_eq!(actual, payload);
+    }
+
+    #[test]
+    fn file_parse_order_is_file_order_and_reproducible() {
+        let mut writer = SafeTensorsWriter::new();
+        for name in ["zeta", "alpha", "mid", "beta", "omega"] {
+            writer.add_tensor(name, "U8", vec![4], vec![1, 2, 3, 4]);
+        }
+        let dir = tempfile::tempdir().expect("temp dir");
+        let path = dir.path().join("order.safetensors");
+        writer.write_to_file(&path).expect("write SafeTensors");
+        let first = SafetensorsScanner::parse_metadata_from_file(&path).expect("parse");
+        let offsets: Vec<u64> = first
+            .iter()
+            .map(|t| t.source.as_ref().unwrap().byte_offset)
+            .collect();
+        assert!(
+            offsets.windows(2).all(|w| w[0] < w[1]),
+            "sorted by payload offset"
+        );
+        for _ in 0..5 {
+            let again = SafetensorsScanner::parse_metadata_from_file(&path).expect("parse");
+            let names = |ts: &[TensorIR]| ts.iter().map(|t| t.name.clone()).collect::<Vec<_>>();
+            assert_eq!(names(&again), names(&first));
+        }
     }
 }

@@ -15,7 +15,7 @@ Before starting, ensure your host environment meets the following specifications
 | Requirement | Minimum Specification | Recommended Specification |
 |:---|:---|:---|
 | Operating System | Linux (Ubuntu 22.04+), macOS (12+), Windows 10/11 | Linux x86_64 or macOS Apple Silicon |
-| Rust Toolchain | Rust 2021 Edition (version >= 1.80) | Stable channel (`rustc --version` >= 1.80) |
+| Rust Toolchain | Rust 2021 Edition (version >= 1.89) | Stable channel (`rustc --version` >= 1.89) |
 | Build Tool | Cargo (bundled with Rust) | Latest stable Cargo |
 | System Memory | 4 GB available RAM | 8 GB+ RAM for larger model topologies |
 | C/C++ Compiler | Optional (pure Rust implementation) | GCC / Clang / MSVC for OS integrations |

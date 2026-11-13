@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/brand/thme_insignia_emblem.svg" alt="THME emblem" width="168" />
+  <img src="assets/brand/thme-banner.png" alt="THME, Topological Heterogeneous Manifold Engine: manga title panel with the mascot holding a Calabi-Yau manifold" width="900" />
 </p>
 
 <h1 align="center">THME</h1>
@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="https://github.com/EdEpiphanes/THME-Epiphanes/actions/workflows/ci.yml"><img src="https://github.com/EdEpiphanes/THME-Epiphanes/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <img src="https://img.shields.io/badge/Rust-2021%20%C2%B7%20MSRV%201.80-orange?logo=rust&style=flat-square" alt="Rust 2021, MSRV 1.80" />
+  <img src="https://img.shields.io/badge/Rust-2021%20%C2%B7%20MSRV%201.89-orange?logo=rust&style=flat-square" alt="Rust 2021, MSRV 1.89" />
   <img src="https://img.shields.io/badge/Formats-SafeTensors%20%C2%B7%20GGUF%20v2%2Fv3-10b981?style=flat-square" alt="Formats" />
   <img src="https://img.shields.io/badge/Measured%20on-SmolLM--135M%20%C2%B7%20Pythia--14M-2a78d6?style=flat-square" alt="Measured models" />
   <img src="https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square" alt="License" />
@@ -136,11 +136,13 @@ Interpretation against the research programme: **[measured findings](docs/resear
 | `thme validate --report`, `thme co-surgery MODEL --tokens` | **Measured** | Gate measured reports; co-surgery scores candidates with the forward pass |
 | Surgery recipes, BYOA registry | Implemented | Recipes are measured through the verification pipeline and co-surgery |
 | Layer sensitivity profiler (`thme profile`) | Estimate | Analytic model; not yet calibrated against measured sensitivity |
-| Pareto allocator (`thme plan`) | Estimate | Uses analytic costs; measured costs are the next milestone |
+| `thme evaluate --recipe`, `thme search` | **Measured** | Any recipe through the gate; mixed-precision search on measured costs with calibration/validation split and random controls |
+| Pareto allocator (`thme plan`) | Estimate | Analytic costs; superseded by `thme search` for measured allocation |
 | Co-surgery without tokens, Studio Co-Surgery tab | **Simulated** | Analytic proxy, labelled as simulated in the output |
 | Speculative decoding, roofline, energy | Model | Formulas over published hardware specs; no timing measured |
 | Paradigm converter | Implemented | Rewrites the IR; converted models are not evaluated |
 | PyTorch/CUDA scripts, LoRA merge, MCP server, VS Code extension | Implemented | Unit tests |
+| BYOA algorithms in recipes | **Measured** | Contract-checked; Hadamard-rotated ternary and 4-bit built-ins; invalid transforms refused |
 | Studio Live 3D view | **Measured** | Per-tensor activity, residual updates and anomalies from the forward-pass probe (`src/inference/probe.rs`) |
 | Other Studio tabs | Implemented | Real screenshots below; telemetry uses a synthetic demo model |
 
@@ -196,7 +198,7 @@ is illustrative rather than measured.
 
 ## Quickstart
 
-Requires Rust 1.80 or newer. Measuring perplexity also needs Python with `tokenizers`.
+Requires Rust 1.89 or newer. Measuring perplexity also needs Python with `tokenizers`.
 
 ```bash
 git clone https://github.com/EdEpiphanes/THME-Epiphanes.git
@@ -233,6 +235,12 @@ cargo run --release --example precision_sweep -- \
 # How early do predictions settle; what do repeated or skipped layers do?
 cargo run --release --example depth_probe -- \
     --model-path models/Pythia-14M --tokens target/eval/wikitext2_test.pythia-14m.u32
+
+# Search a mixed-precision recipe under a size budget, then re-check it
+./target/release/thme search models/Pythia-14M --tokens target/eval/wikitext2_test.pythia-14m.u32 \
+    --budget 0.5 --formats q8_0,q4_0 --emit-recipe target/searched.json
+./target/release/thme evaluate models/Pythia-14M --recipe target/searched.json \
+    --tokens target/eval/wikitext2_test.pythia-14m.u32
 
 # Closed-loop co-surgery with measured perplexity
 ./target/release/thme co-surgery models/Pythia-14M --tokens target/eval/wikitext2_test.pythia-14m.u32
@@ -318,7 +326,9 @@ THME is also a research programme into heterogeneous representations for languag
 
 ## Contributing
 
-Read [AGENTS.md](AGENTS.md) (rules for humans and AI agents) and [CONTRIBUTING.md](CONTRIBUTING.md).
+Read [AGENTS.md](AGENTS.md) (rules for humans and AI agents), [CONTRIBUTING.md](CONTRIBUTING.md)
+and the [production workflow](docs/WORKFLOW.md) (backlog, pull requests, CI gates, releases).
+Planned work lives in [BACKLOG.md](BACKLOG.md).
 Before any change: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`.
 New benchmark numbers must come from a committed report under `docs/benchmarks/`.
 

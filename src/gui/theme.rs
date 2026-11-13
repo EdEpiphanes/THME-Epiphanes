@@ -69,11 +69,23 @@ pub const ACCENT_CYAN: Color32 = Color32::from_rgb(6, 182, 212);
 // GuiTheme Enum
 // ============================================================================
 
+impl ThemePalette {
+    /// True for paper-ground themes such as Manga Ink.
+    pub fn is_light(&self) -> bool {
+        let c = self.bg_dark;
+        u32::from(c.r()) + u32::from(c.g()) + u32::from(c.b()) > 3 * 160
+    }
+}
+
 /// UI/UX Pro Max Multi-Theme Palette Engine for THME Studio
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum GuiTheme {
-    /// Default modern developer tool theme based on Tailwind Zinc (950/900/800/700)
+    /// Default brand theme: dark manga, paper-white ink on a grainy black ground, one spot red
     #[default]
+    MangaNight,
+    /// Paper variant of the brand theme: manga ink on paper, square panel frames
+    MangaInk,
+    /// Modern developer tool theme based on Tailwind Zinc (950/900/800/700)
     #[serde(alias = "ObsidianCyan")]
     ZincDark,
     /// Deep Slate theme with midnight navy undertones
@@ -92,6 +104,8 @@ pub enum GuiTheme {
 impl GuiTheme {
     /// Canonical list of all themes for selectors and iteration
     pub const ALL: &'static [GuiTheme] = &[
+        GuiTheme::MangaNight,
+        GuiTheme::MangaInk,
         GuiTheme::ZincDark,
         GuiTheme::DeepSlate,
         GuiTheme::ObsidianMono,
@@ -102,6 +116,8 @@ impl GuiTheme {
     /// Human-readable display label
     pub fn name(&self) -> &'static str {
         match self {
+            GuiTheme::MangaNight => "Manga Night",
+            GuiTheme::MangaInk => "Manga Ink",
             GuiTheme::ZincDark => "Zinc Dark",
             GuiTheme::DeepSlate => "Deep Slate",
             GuiTheme::ObsidianMono => "Obsidian Mono",
@@ -113,6 +129,34 @@ impl GuiTheme {
     /// Produce the calibrated 12-slot `ThemePalette`
     pub fn palette(&self) -> ThemePalette {
         match self {
+            GuiTheme::MangaNight => ThemePalette {
+                bg_dark: Color32::from_rgb(12, 12, 12),
+                bg_card: Color32::from_rgb(22, 22, 21),
+                bg_input: Color32::from_rgb(34, 34, 32),
+                border: Color32::from_rgb(200, 198, 192),
+                text_main: Color32::from_rgb(244, 242, 236),
+                text_muted: Color32::from_rgb(160, 158, 152),
+                primary: Color32::from_rgb(244, 242, 236),
+                secondary: Color32::from_rgb(190, 188, 182),
+                accent: Color32::from_rgb(224, 40, 74),
+                success: Color32::from_rgb(52, 199, 89),
+                warning: Color32::from_rgb(245, 158, 11),
+                danger: Color32::from_rgb(224, 40, 74),
+            },
+            GuiTheme::MangaInk => ThemePalette {
+                bg_dark: Color32::from_rgb(250, 249, 245),
+                bg_card: Color32::from_rgb(255, 255, 255),
+                bg_input: Color32::from_rgb(238, 236, 230),
+                border: Color32::from_rgb(17, 17, 17),
+                text_main: Color32::from_rgb(11, 11, 11),
+                text_muted: Color32::from_rgb(82, 81, 78),
+                primary: Color32::from_rgb(17, 17, 17),
+                secondary: Color32::from_rgb(63, 63, 70),
+                accent: Color32::from_rgb(200, 16, 46),
+                success: Color32::from_rgb(12, 122, 12),
+                warning: Color32::from_rgb(180, 83, 9),
+                danger: Color32::from_rgb(200, 16, 46),
+            },
             GuiTheme::ZincDark => ThemePalette {
                 bg_dark: ZINC_950,
                 bg_card: ZINC_900,
@@ -232,8 +276,13 @@ impl Default for ThemePalette {
 
 /// Apply full egui Visuals, widget states, and spacing calibration
 pub fn configure_visuals(ctx: &egui::Context, p: &ThemePalette) {
-    let mut visuals = egui::Visuals::dark();
-    visuals.dark_mode = true;
+    let light = p.is_light();
+    let mut visuals = if light {
+        egui::Visuals::light()
+    } else {
+        egui::Visuals::dark()
+    };
+    visuals.dark_mode = !light;
     visuals.panel_fill = p.bg_dark;
     visuals.window_fill = p.bg_card;
     visuals.window_stroke = Stroke::new(1.0_f32, p.border);
@@ -513,9 +562,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_default_theme_is_zinc_dark() {
-        assert_eq!(GuiTheme::default(), GuiTheme::ZincDark);
-        assert_eq!(GuiTheme::default().name(), "Zinc Dark");
+    fn test_default_theme_is_manga_night_and_ink_is_light() {
+        assert_eq!(GuiTheme::default(), GuiTheme::MangaNight);
+        assert_eq!(GuiTheme::default().name(), "Manga Night");
+        assert!(!GuiTheme::MangaNight.palette().is_light());
+        assert!(GuiTheme::MangaInk.palette().is_light());
+        assert!(!GuiTheme::ZincDark.palette().is_light());
     }
 
     #[test]

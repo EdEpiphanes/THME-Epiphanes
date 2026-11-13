@@ -8,7 +8,7 @@ use anyhow::{bail, Context, Result};
 use std::path::Path;
 
 use super::probe::{dead_fraction, rms, update_ratio, ForwardTrace, LayerTrace, TensorActivity};
-use super::weights::{fake_quantize, read_tensor_f32};
+use super::weights::{apply_selected_format, fake_quantize, read_tensor_f32};
 use crate::ir::{ModelIR, TensorFormat, TensorIR};
 
 /// Positions processed together per weight row, so each row is streamed once per block.
@@ -135,7 +135,7 @@ pub(crate) fn load_tensor(
     // Block formats apply to weight matrices; 1-D tensors (norms, biases) stay as stored,
     // as GGML-style exporters keep them.
     if precision == WeightPrecision::SelectedFormat && tensor.shape.len() >= 2 {
-        fake_quantize(&mut values, &tensor.selected_format).with_context(|| {
+        apply_selected_format(tensor, &mut values).with_context(|| {
             format!(
                 "Failed to apply {} to tensor '{}'",
                 tensor.selected_format.display_name(),

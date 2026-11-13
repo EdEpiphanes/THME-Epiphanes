@@ -10,6 +10,7 @@ use crate::exporter::conversion::{
 use crate::ir::{TensorFormat, TensorIR};
 use crate::parser::gguf::GgufBlockDecoder;
 use crate::profiling::{bf16_to_f32, f16_to_f32};
+use crate::transform::byoa::AlgorithmDefinition;
 
 const Q8_BLOCK_VALUES: usize = 32;
 const Q8_BLOCK_BYTES: usize = 34;
@@ -98,6 +99,33 @@ pub fn decode_payload(bytes: &[u8], dtype: &str, numel: usize) -> Result<Vec<f32
         other => bail!("Unsupported tensor dtype '{other}' for the reference forward pass"),
     }
     Ok(out)
+}
+
+/// Metadata key holding a BYOA `AlgorithmDefinition` (JSON) for tensors whose selected
+/// format is `TensorFormat::Custom(id)`. Attached by `thme evaluate` after resolving the id.
+pub const BYOA_METADATA_KEY: &str = "byoa_definition";
+
+/// Applies a tensor's selected format to its values: a built-in block format, or the BYOA
+/// algorithm attached to it. Algorithms that are not valid weight transforms are refused.
+pub fn apply_selected_format(tensor: &TensorIR, values: &mut [f32]) -> Result<()> {
+    match &tensor.selected_format {
+        TensorFormat::Custom(id) => {
+            let json = tensor.metadata.get(BYOA_METADATA_KEY).with_context(|| {
+                format!(
+                    "Tensor '{}' uses algorithm '{id}' but no definition is attached; resolve it with the BYOA registry first",
+                    tensor.name
+                )
+            })?;
+            let algorithm = AlgorithmDefinition::from_json(json)
+                .with_context(|| format!("Invalid definition for algorithm '{id}'"))?;
+            algorithm.measurable().map_err(|e| anyhow::anyhow!(e))?;
+            algorithm.apply_to_weights(values).map_err(|e| {
+                anyhow::anyhow!("Algorithm '{id}' failed on '{}': {e}", tensor.name)
+            })?;
+            Ok(())
+        }
+        other => fake_quantize(values, other),
+    }
 }
 
 /// Replaces `values` with what they become after being stored in `format`.

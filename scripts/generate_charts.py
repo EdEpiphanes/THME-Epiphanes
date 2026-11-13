@@ -21,7 +21,7 @@ FONT = 'system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'
 
 THEMES = {
     "light": {
-        "surface": "#fcfcfb", "border": "#e1e0d9", "ink": "#0b0b0b", "ink2": "#52514e",
+        "surface": "#ffffff", "border": "#0b0b0b", "ink": "#0b0b0b", "ink2": "#52514e",
         "muted": "#898781", "grid": "#e1e0d9", "axis": "#c3c2b7",
         "s1": "#2a78d6", "s2": "#eb6834", "deemph": "#898781",
         "good": "#0ca30c", "critical": "#d03b3b",
@@ -54,7 +54,7 @@ class Svg:
             f'height="{height}" role="img" font-family=\'{FONT}\'>',
             f"<title>{esc(title)}</title>",
             f"<desc>{esc(description)}</desc>",
-            f'<rect x="0.5" y="0.5" width="{width - 1}" height="{height - 1}" rx="8" '
+            f'<rect x="1" y="1" width="{width - 2}" height="{height - 2}" rx="2" stroke-width="2" '
             f'fill="{theme["surface"]}" stroke="{theme["border"]}"/>',
         ]
         self.text(24, 34, title, size=16, weight=600)
@@ -299,6 +299,52 @@ def chart_depth(probe, theme):
     return svg
 
 
+def chart_pareto(search, theme):
+    """Measured size vs quality: searched recipes against random placement of the same formats."""
+    s = search["search"]
+    tol = search["evaluation"]["max_ppl_delta"]
+    points = sorted(s["pareto"], key=lambda p: p["achieved_fraction"])
+    svg = Svg(
+        760, 400, theme,
+        f"Measured size vs quality, {search['model_name']}",
+        f"Validation slice, {s['validation_tokens']:,} tokens · formats {', '.join(s['formats'])} · "
+        f"Δ perplexity vs source · lower and further left is better",
+        "Perplexity increase against nominal linear-tensor size for searched recipes and random placements.",
+    )
+    left, right, top, bottom = 72, 730, 110, 330
+    values = [0.0, tol] + [p["validation_delta"] for p in points]
+    values += [d for p in points for d in p["control_deltas"]]
+    y_max = max(values) * 1.08 or 1.0
+    y_min = min(0.0, min(values))
+
+    def px(fraction):
+        return left + (right - left) * fraction
+
+    def py(delta):
+        return bottom - (bottom - top) * (delta - y_min) / (y_max - y_min)
+
+    for i in range(5):
+        value = y_min + (y_max - y_min) * i / 4
+        svg.line(left, py(value), right, py(value), theme["grid"] if i else theme["axis"])
+        svg.text(left - 8, py(value) + 4, f"{value:+.2f}" if abs(y_max) < 10 else f"{value:+,.0f}",
+                 size=11, color=theme["muted"], anchor="end")
+    for f in (0.0, 0.25, 0.5, 0.75, 1.0):
+        svg.text(px(f), bottom + 18, f"{int(f * 100)}%", size=11, color=theme["muted"], anchor="middle")
+    svg.text((left + right) / 2, bottom + 40, "Nominal size of the linear tensors, share of stored size",
+             size=12, color=theme["ink2"], anchor="middle")
+    svg.line(left, py(tol), right, py(tol), theme["critical"], 1.5)
+    svg.text(right, py(tol) - 6, f"Gate Δ ≤ {tol}", size=11, color=theme["ink2"], anchor="end")
+    for p in points:
+        for d in p["control_deltas"]:
+            svg.dot(px(p["achieved_fraction"]), py(d), theme["deemph"], r=3.5)
+    line = [(px(1.0), py(0.0))] + [(px(p["achieved_fraction"]), py(p["validation_delta"])) for p in reversed(points)]
+    svg.polyline(sorted(line), theme["s1"])
+    for x, y in line:
+        svg.dot(x, y, theme["s1"])
+    svg.line_key(left, 86, theme["s1"], "Searched recipe (and source at 100%)")
+    svg.swatch(left + 280, 86, theme["deemph"], "Random placement, same formats")
+    return svg
+
 def load(path):
     if not os.path.exists(path):
         return None
@@ -315,6 +361,7 @@ def main():
     report = load(os.path.join(args.data_dir, "verification_report.json"))
     sweep = load(os.path.join(args.data_dir, "precision_sweep.json"))
     probe = load(os.path.join(args.data_dir, "depth_probe.json"))
+    search = load(os.path.join(args.data_dir, "search_report.json"))
     charts = []
     if report and report.get("evaluation", {}).get("measured"):
         charts.append(("quality-gate", lambda t: chart_gate(report, t)))
@@ -328,6 +375,8 @@ def main():
             charts.append(("placement", lambda t: chart_placement(sweep, t)))
     if probe:
         charts.append(("depth-settling", lambda t: chart_depth(probe, t)))
+    if search and search.get("search", {}).get("pareto"):
+        charts.append(("pareto", lambda t: chart_pareto(search, t)))
     if not charts:
         print(f"error: no measured reports found in {args.data_dir}", file=sys.stderr)
         return 1

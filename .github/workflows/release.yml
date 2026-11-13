@@ -1,91 +1,112 @@
-﻿name: Release
+name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
-  build-release:
-    name: Build Release (${{ matrix.target }})
+  verify:
+    name: Verify tag and quality gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Tag matches Cargo.toml version
+        run: |
+          crate_version="$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)"
+          if [ "v${crate_version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match Cargo.toml version v${crate_version}"
+            exit 1
+          fi
+      - name: Changelog has a section for this version
+        run: grep -q "^## \[${GITHUB_REF_NAME#v}\]" CHANGELOG.md
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: verify
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            binary_name: thme
-            gui_name: thme-gui
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            binary_name: thme.exe
-            gui_name: thme-gui.exe
-          - os: macos-13
-            target: x86_64-apple-darwin
-            binary_name: thme
-            gui_name: thme-gui
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            binary_name: thme
-            gui_name: thme-gui
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu, ext: "" }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc, ext: ".exe" }
+          - { os: macos-latest, target: aarch64-apple-darwin, ext: "" }
+          - { os: macos-latest, target: x86_64-apple-darwin, ext: "" }
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v5
+      - name: Add target to the pinned toolchain
+        run: rustup target add ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
         with:
-          targets: ${{ matrix.target }}
+          key: release-${{ matrix.target }}
+      - run: cargo build --release --locked --target ${{ matrix.target }}
 
-      - name: Build Release Binaries
-        run: cargo build --release --target ${{ matrix.target }}
-
-      - name: Validate release binaries and size limits
+      - name: Check binary size limits (AGENTS.md)
         shell: bash
         run: |
           set -euo pipefail
-          cli="target/${{ matrix.target }}/release/${{ matrix.binary_name }}"
-          gui="target/${{ matrix.target }}/release/${{ matrix.gui_name }}"
-          test -s "$cli"
-          test -s "$gui"
-          cli_bytes=$(wc -c < "$cli")
-          gui_bytes=$(wc -c < "$gui")
-          test "$cli_bytes" -le $((10 * 1024 * 1024)) || { echo "CLI binary exceeds 10 MiB: ${cli_bytes} bytes"; exit 1; }
-          test "$gui_bytes" -le $((15 * 1024 * 1024)) || { echo "GUI binary exceeds 15 MiB: ${gui_bytes} bytes"; exit 1; }
+          dir="target/${{ matrix.target }}/release"
+          cli_bytes=$(wc -c < "$dir/thme${{ matrix.ext }}")
+          gui_bytes=$(wc -c < "$dir/thme-gui${{ matrix.ext }}")
+          echo "CLI ${cli_bytes} bytes, GUI ${gui_bytes} bytes"
+          test "$cli_bytes" -le $((10 * 1024 * 1024)) || { echo "::error::CLI binary exceeds 10 MiB"; exit 1; }
+          test "$gui_bytes" -le $((15 * 1024 * 1024)) || { echo "::error::GUI binary exceeds 15 MiB"; exit 1; }
 
-      - name: Package Distributables
+      - name: Package
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p dist
-          cp "target/${{ matrix.target }}/release/${{ matrix.binary_name }}" dist/
-          cp "target/${{ matrix.target }}/release/${{ matrix.gui_name }}" dist/
+          name="thme-${GITHUB_REF_NAME}-${{ matrix.target }}"
+          mkdir -p "dist/$name"
+          dir="target/${{ matrix.target }}/release"
+          cp "$dir/thme${{ matrix.ext }}" "$dir/thme-gui${{ matrix.ext }}" "dist/$name/"
+          cp LICENSE README.md CHANGELOG.md "dist/$name/"
           cd dist
-          archive="thme-${{ github.ref_name }}-${{ matrix.target }}.tar.gz"
-          tar -czf "$archive" "${{ matrix.binary_name }}" "${{ matrix.gui_name }}"
-          if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum "$archive" > SHA256SUMS.txt
-          else
-            shasum -a 256 "$archive" > SHA256SUMS.txt
-          fi
-          test -s "$archive"
-          test -s SHA256SUMS.txt
+          tar -czf "$name.tar.gz" "$name"
+          if command -v sha256sum >/dev/null; then sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"; else shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256"; fi
 
-      - name: Sign Release Assets (Minisign)
-        shell: bash
-        if: env.MINISIGN_KEY != ''
-        env:
-          MINISIGN_KEY: ${{ secrets.MINISIGN_KEY }}
-        run: |
-          set -euo pipefail
-          bash scripts/sign_artifacts.sh dist/
-
-      - name: Publish Release Assets
-        uses: softprops/action-gh-release@v2
+      - uses: actions/upload-artifact@v4
         with:
+          name: dist-${{ matrix.target }}
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+
+  publish:
+    name: Publish GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      # Password-less Minisign secret key (minisign -G -W). Signing is skipped when unset.
+      MINISIGN_KEY: ${{ secrets.MINISIGN_KEY }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Combined checksum manifest
+        run: cd dist && cat *.sha256 > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - name: Sign archives (Minisign)
+        if: env.MINISIGN_KEY != ''
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq minisign
+          bash scripts/sign_artifacts.sh dist/
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
           files: |
             dist/*.tar.gz
+            dist/*.sha256
             dist/*.minisig
-            dist/*.asc
             dist/SHA256SUMS.txt
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

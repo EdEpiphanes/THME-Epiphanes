@@ -1,14 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 392" width="760" height="392" role="img" font-family='system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>
 <title>How early do predictions settle?</title>
 <desc>Share of tokens whose top prediction matches the full-depth prediction, by number of layers applied.</desc>
-<rect x="0.5" y="0.5" width="759" height="391" rx="8" fill="#fcfcfb" stroke="#e1e0d9"/>
+<rect x="1" y="1" width="758" height="390" rx="2" stroke-width="2" fill="#ffffff" stroke="#0b0b0b"/>
 <text x="24.0" y="34.0" font-size="16" font-weight="600" fill="#0b0b0b" text-anchor="start">How early do predictions settle?</text>
 <text x="24.0" y="54.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">Share of 65,472 tokens · read out through the model's own output head after each layer · no trained exit heads</text>
 <line x1="64.0" y1="82.0" x2="82.0" y2="82.0" stroke="#2a78d6" stroke-width="2"/>
-<circle cx="73.0" cy="82.0" r="3" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="73.0" cy="82.0" r="3" fill="#2a78d6" stroke="#ffffff" stroke-width="2"/>
 <text x="90.0" y="86.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">Top prediction equals the full-depth prediction</text>
 <line x1="404.0" y1="82.0" x2="422.0" y2="82.0" stroke="#eb6834" stroke-width="2"/>
-<circle cx="413.0" cy="82.0" r="3" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="413.0" cy="82.0" r="3" fill="#eb6834" stroke="#ffffff" stroke-width="2"/>
 <text x="430.0" y="86.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">Settled: stays equal from this depth on</text>
 <line x1="64.0" y1="328.0" x2="716.0" y2="328.0" stroke="#c3c2b7" stroke-width="1"/>
 <text x="56.0" y="332.0" font-size="11" font-weight="400" fill="#898781" text-anchor="end">0%</text>
@@ -26,10 +26,10 @@
 <polyline points="64.0,327.0 172.7,321.8 281.3,304.8 390.0,309.7 498.7,297.7 607.3,292.5 716.0,112.0" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
 <polyline points="64.0,328.0 172.7,327.9 281.3,325.6 390.0,324.8 498.7,317.5 607.3,292.5 716.0,112.0" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
 <line x1="281.3" y1="263.2" x2="281.3" y2="319.6" stroke="#898781" stroke-width="1"/>
-<circle cx="281.3" cy="325.6" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="281.3" cy="325.6" r="4" fill="#eb6834" stroke="#ffffff" stroke-width="2"/>
 <text x="281.3" y="257.2" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">30% depth: 1.1% settled</text>
 <line x1="607.3" y1="251.0" x2="607.3" y2="286.5" stroke="#898781" stroke-width="1"/>
-<circle cx="607.3" cy="292.5" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="607.3" cy="292.5" r="4" fill="#eb6834" stroke="#ffffff" stroke-width="2"/>
 <text x="607.3" y="245.0" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">80% depth: 16.4% settled</text>
-<circle cx="716.0" cy="112.0" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="716.0" cy="112.0" r="4" fill="#2a78d6" stroke="#ffffff" stroke-width="2"/>
 </svg>

@@ -1,0 +1,29 @@
+name: Feature or task
+description: A capability to build, or an engineering task
+labels: ["type:feature", "status:triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is hard or impossible today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Done means
+      description: The observable result that closes this issue (a command, a test, a measured report).
+    validations:
+      required: true
+  - type: input
+    id: roadmap
+    attributes:
+      label: Roadmap item (if any)
+      placeholder: "v0.2.2.4"

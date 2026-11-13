@@ -12,6 +12,7 @@ placeholder values.
 """
 
 import argparse
+import glob
 import csv
 import json
 import os
@@ -168,7 +169,41 @@ def depth_section(probe, heading):
     return lines
 
 
-def generate_markdown(reports, output_md, sweep=None, probe=None):
+def search_section(report, heading):
+    """Renders a measured recipe search (thme search) and its Pareto front."""
+    s = report["search"]
+    ev = report["evaluation"]
+    lines = [
+        heading,
+        "",
+        f"Model: {report['model_name']}. Formats {', '.join(s['formats'])}, grouped by {s['granularity']}. "
+        f"Decisions used {s['calibration_tokens']:,} calibration tokens; every figure below is measured on "
+        f"{s['validation_tokens']:,} separate validation tokens. Gate: Δ PPL ≤ {ev['max_ppl_delta']}.",
+        "",
+        f"On calibration, the sum of per-group costs predicted Δ {s['predicted_delta_calibration']:+.4f}; "
+        f"the whole candidate measured Δ {s['measured_delta_calibration']:+.4f} "
+        f"({s['moves_reverted']} moves reverted by refinement).",
+        "",
+        "| Budget | Achieved size | Searched Δ PPL | Random placement Δ PPL (min / mean / max) | Gate |",
+        "| ---: | ---: | ---: | :--- | :--- |",
+    ]
+    for p in sorted(s["pareto"], key=lambda p: -p["achieved_fraction"]):
+        controls = p["control_deltas"]
+        spread = (f"{min(controls):+.3f} / {sum(controls) / len(controls):+.3f} / {max(controls):+.3f}"
+                  if controls else "none distinct")
+        verdict = "PASSED" if p["validation_delta"] <= ev["max_ppl_delta"] else "FAILED"
+        lines.append(
+            f"| {100 * p['budget']:.0f}% | {100 * p['achieved_fraction']:.1f}% | {p['validation_delta']:+.4f} | "
+            f"{spread} | {verdict} |"
+        )
+    lines.append("")
+    if s.get("test"):
+        t = s["test"]
+        lines += [f"Held-out test slice ({t['tokens']:,} tokens, never used by the search): Δ {t['delta_ppl']:+.4f}.", ""]
+    lines += ["Sizes are nominal (bits per weight of the linear tensors), not measured artifact sizes.", ""]
+    return lines
+
+def generate_markdown(reports, output_md, sweep=None, probe=None, searches=None):
     section = iter(range(1, 100))
 
     def h(title):
@@ -215,6 +250,8 @@ def generate_markdown(reports, output_md, sweep=None, probe=None):
 
     for s in sweep or []:
         lines.extend(sweep_section(s, h(f"Measured Precision Sensitivity: {s['model_name']}")))
+    for r in searches or []:
+        lines.extend(search_section(r, h(f"Measured Recipe Search: {r['model_name']}")))
     for d in probe or []:
         lines.extend(depth_section(d, h(f"Measured Depth Behaviour: {d['model_name']}")))
 
@@ -357,6 +394,8 @@ def main():
         "docs/benchmarks/pythia-14m/data/depth_probe.json",
     ],
                         help="Depth probe JSON from depth_probe (included when the file exists)")
+    parser.add_argument("--search", nargs="*", default=None,
+                        help="thme search reports (default: docs/benchmarks/*/data/search_report.json)")
     parser.add_argument("--output-md", default="docs/benchmark_dossier.md", help="Output Markdown file")
     parser.add_argument("--output-csv", default="docs/benchmark_dossier.csv", help="Output CSV file")
     args = parser.parse_args()
@@ -373,7 +412,8 @@ def main():
 
     sweep = load_all(args.sweep)
     probe = load_all(args.depth)
-    generate_markdown(reports, args.output_md, sweep, probe)
+    searches = load_all(args.search or sorted(glob.glob("docs/benchmarks/*/data/search_report.json")))
+    generate_markdown(reports, args.output_md, sweep, probe, searches)
     generate_csv(reports, args.output_csv)
     return 0
 

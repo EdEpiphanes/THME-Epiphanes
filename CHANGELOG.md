@@ -20,18 +20,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   variants) and `examples/depth_probe.rs` (exit readouts, repeated and skipped layers).
 - `scripts/generate_charts.py`: light and dark SVG charts rendered only from measured reports.
 - `thme validate --report <verification_report.json>` gates a measured report.
+- `thme evaluate MODEL --recipe R --tokens T`: measures any recipe with the forward pass; refuses
+  operations it cannot run unless `--allow-partial`, which lists them as not evaluated.
+- `thme search MODEL --tokens T --budget B`: mixed-precision search on a cached, measured cost
+  table with greedy allocation, whole-candidate refinement, a calibration/validation split,
+  random matched-placement controls and `--emit-recipe`.
 - Pluggable co-surgery quality evaluation (`QualityEvaluator`): `thme co-surgery MODEL --tokens`
   uses `MeasuredEvaluator` (reference forward pass); the analytic proxy remains the labelled fallback.
+- BYOA in recipes: `WeightContract` classification, `RotatedQuantize` (Hadamard rotate, quantize,
+  rotate back), built-ins `thme.hadamard_ternary` and `thme.hadamard_int4`, `thme evaluate --algorithms`.
+- `thme search --pareto-budgets` (measured size-vs-quality front) and `--test-tokens` (held-out slice);
+  Pareto chart and dossier section.
+- Studio recipe workbench in the Live 3D tab: recipe-applied runs and a measured gate.
 - Studio **Live 3D** tab (`src/gui/live.rs`): real-time 3D view of any LLaMA-family or GPT-NeoX
   model during evaluation, driven by a forward-pass probe (`src/inference/probe.rs`) that records
   per-tensor output activity, residual updates, dead MLP units and non-finite values. Includes a
   software 3D renderer (orbit, zoom, hover inspection) and a labelled synthetic demo model.
+- Manga brand system: mascot, README banner with screentone shading and speed lines, ink icon
+  (Studio window icon), default **Manga Night** Studio theme with a paper **Manga Ink** variant, ink-framed charts, and a computed
+  Calabi-Yau mark (`scripts/generate_brand_art.ps1`, `scripts/generate_logo.py`).
 - Studio capture mode (`THME_GUI_CAPTURE_DIR`) and `scripts/capture_studio.ps1`: real
   screenshots of every Studio tab under `assets/screenshots/`.
 - Measured reports for SmolLM-135M and Pythia-14M under `docs/benchmarks/`.
 - `docs/research/THME_measured_findings_2026-11.md` and `docs/subsystems.md`.
 
 ### Changed
+- Production workflow: pinned toolchain (`rust-toolchain.toml`); CI with hygiene, lint, three-OS
+  tests, MSRV, measured-claims regeneration, cargo-deny and a non-blocking latest-stable preview;
+  hardened release pipeline (tag/version and changelog checks, gates before build, four targets,
+  per-file and combined checksums); Dependabot; PR and issue templates (bug, feature, experiment);
+  CODEOWNERS; `docs/WORKFLOW.md`; active backlog in BACKLOG.md with `scripts/sync_github_backlog.py`.
 - `examples/production_verification.rs` runs a real perplexity gate on the source weights, the
   re-imported GGUF export and the surgery recipe. Without weights and tokens it reports
   NOT EVALUATED instead of a number, and it exits non-zero when a candidate fails.
@@ -52,6 +70,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   depict the application.
 
 ### Fixed
+- SafeTensors tensors are ordered by file offset; the safetensors crate returns hash order, which
+  made random-control placements and cached search plans irreproducible across runs.
+- MSRV corrected to 1.89, the highest `rust-version` in the locked dependency tree (the code itself
+  already needed 1.87 for `usize::is_multiple_of`).
 - The previous quality gate compared a weight sample with a scaled copy of itself, so it could
   not fail.
 - Studio: glyphs the font cannot render (arrows, combining marks) replaced; Layer Tweaker dataflow

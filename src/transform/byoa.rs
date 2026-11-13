@@ -60,6 +60,45 @@ pub enum TransformationRule {
     SmoothQuantOutlier { alpha: f32, threshold: f32 },
     /// Low-rank affine decomposition / projection
     AffineProject { target_dim: usize, rank: usize },
+    /// Rotate blocks of each weight row with a normalized Walsh-Hadamard transform, apply
+    /// `inner`, then rotate back. Equivalent to running `inner` on rotated weights with the
+    /// matching rotation applied to activations (QuaRot/QuIP#-style incoherence processing).
+    RotatedQuantize {
+        block_size: usize,
+        inner: Box<TransformationRule>,
+    },
+}
+
+/// What a rule means for a running model.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum WeightContract {
+    /// Each weight is replaced by the value the model will use: measurable as written.
+    Reconstruct,
+    /// Orthogonal change of basis: only valid when compensated (see `RotatedQuantize`).
+    Rotation,
+    /// Not a weight transform the forward pass can evaluate; the reason is given.
+    NotWeightOnly(&'static str),
+}
+
+impl TransformationRule {
+    pub fn contract(&self) -> WeightContract {
+        match self {
+            Self::AbsmeanTernary { .. }
+            | Self::QuantizeCodebook { .. }
+            | Self::StructuredSparsity { .. }
+            | Self::SmoothQuantOutlier { .. } => WeightContract::Reconstruct,
+            Self::OrthogonalRotation { .. } => WeightContract::Rotation,
+            Self::AffineProject { .. } => WeightContract::NotWeightOnly(
+                "AffineProject attenuates weights by position; it is not a low-rank projection",
+            ),
+            Self::RotatedQuantize { inner, .. } => match inner.contract() {
+                WeightContract::Reconstruct => WeightContract::Reconstruct,
+                _ => WeightContract::NotWeightOnly(
+                    "RotatedQuantize needs a reconstructing inner rule",
+                ),
+            },
+        }
+    }
 }
 
 /// Specification of a custom algorithm (BYOA)
@@ -106,6 +145,44 @@ impl AlgorithmDefinition {
         serde_json::from_str(json_str)
     }
 
+    /// Whether the reference forward pass can measure this algorithm, with the reason if not.
+    pub fn measurable(&self) -> Result<(), String> {
+        if self.category == AlgorithmCategory::SequenceMixer {
+            return Err(format!(
+                "'{}' replaces a sequence mixer; that needs an architecture change, not a weight transform",
+                self.id
+            ));
+        }
+        match self.rule.contract() {
+            WeightContract::Reconstruct => Ok(()),
+            WeightContract::Rotation => Err(format!(
+                "'{}' rotates weights without rotating activations, which changes what the model computes; wrap a quantizer in RotatedQuantize instead",
+                self.id
+            )),
+            WeightContract::NotWeightOnly(reason) => Err(format!("'{}': {reason}", self.id)),
+        }
+    }
+
+    /// Checks the declared contract on sample weights: length preserved, outputs finite,
+    /// deterministic. Returns the transform statistics.
+    pub fn verify_contract(&self, sample: &[f32]) -> Result<TransformResult, String> {
+        self.measurable()?;
+        let mut first = sample.to_vec();
+        let mut second = sample.to_vec();
+        let stats = self.apply_to_weights(&mut first)?;
+        self.apply_to_weights(&mut second)?;
+        if first.len() != sample.len() {
+            return Err(format!("'{}' changed the number of weights", self.id));
+        }
+        if first.iter().any(|v| !v.is_finite()) {
+            return Err(format!("'{}' produced non-finite weights", self.id));
+        }
+        if first != second {
+            return Err(format!("'{}' is not deterministic", self.id));
+        }
+        Ok(stats)
+    }
+
     /// Serializes this algorithm definition to a formatted JSON string
     pub fn to_json(&self) -> Result<String, serde_json::Error> {
         serde_json::to_string_pretty(self)
@@ -122,150 +199,7 @@ impl AlgorithmDefinition {
         let orig_l2 = orig_norm_sq.sqrt();
         let original_copy = weights.to_vec();
 
-        match &self.rule {
-            TransformationRule::AbsmeanTernary {
-                scale_gamma,
-                zero_band,
-            } => {
-                let mean_abs: f32 = weights.iter().map(|&x| x.abs()).sum::<f32>() / n as f32;
-                let gamma = if *scale_gamma > 0.0 {
-                    *scale_gamma
-                } else {
-                    mean_abs.max(1e-8)
-                };
-                let threshold = gamma * zero_band.max(0.1);
-
-                for w in weights.iter_mut() {
-                    let scaled = *w / gamma;
-                    if scaled.abs() < threshold {
-                        *w = 0.0;
-                    } else if scaled > 0.0 {
-                        *w = gamma;
-                    } else {
-                        *w = -gamma;
-                    }
-                }
-            }
-            TransformationRule::QuantizeCodebook { levels, scale_mode } => {
-                if levels.is_empty() {
-                    return Err("QuantizeCodebook requires at least one level".to_string());
-                }
-
-                // Compute scale factor based on mode
-                let scale = match scale_mode {
-                    ScaleMode::AbsMax => weights.iter().map(|&x| x.abs()).fold(0.0f32, f32::max),
-                    ScaleMode::AbsMean => weights.iter().map(|&x| x.abs()).sum::<f32>() / n as f32,
-                    ScaleMode::RMS => (orig_norm_sq / n as f32).sqrt(),
-                    ScaleMode::StandardDev => {
-                        let mean = weights.iter().sum::<f32>() / n as f32;
-                        let var =
-                            weights.iter().map(|&x| (x - mean).powi(2)).sum::<f32>() / n as f32;
-                        var.sqrt()
-                    }
-                }
-                .max(1e-8);
-
-                // Quantize to nearest codebook level
-                for w in weights.iter_mut() {
-                    let norm_val = *w / scale;
-                    let mut best_level = levels[0];
-                    let mut min_diff = (norm_val - levels[0]).abs();
-
-                    for &lvl in &levels[1..] {
-                        let diff = (norm_val - lvl).abs();
-                        if diff < min_diff {
-                            min_diff = diff;
-                            best_level = lvl;
-                        }
-                    }
-                    *w = best_level * scale;
-                }
-            }
-            TransformationRule::StructuredSparsity { m, n: group_sz } => {
-                let m = *m;
-                let group_sz = *group_sz;
-                if m == 0 || group_sz == 0 || m >= group_sz {
-                    return Err(
-                        "Invalid structured sparsity parameters: requires 0 < M < N".to_string()
-                    );
-                }
-
-                for chunk in weights.chunks_mut(group_sz) {
-                    if chunk.len() == group_sz {
-                        // Find the M smallest absolute elements in the group and zero them out
-                        let mut indexed: Vec<(usize, f32)> = chunk
-                            .iter()
-                            .enumerate()
-                            .map(|(i, &x)| (i, x.abs()))
-                            .collect();
-                        indexed.sort_by(|a, b| {
-                            a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)
-                        });
-
-                        for (idx_to_zero, _) in indexed.iter().take(m) {
-                            chunk[*idx_to_zero] = 0.0;
-                        }
-                    }
-                }
-            }
-            TransformationRule::SmoothQuantOutlier { alpha, threshold } => {
-                let max_abs = weights
-                    .iter()
-                    .map(|&x| x.abs())
-                    .fold(0.0f32, f32::max)
-                    .max(1e-8);
-                let scale = max_abs.powf(*alpha);
-
-                for w in weights.iter_mut() {
-                    let s = *w / scale;
-                    if s.abs() > *threshold {
-                        *w = s.clamp(-*threshold, *threshold) * scale;
-                    }
-                }
-            }
-            TransformationRule::OrthogonalRotation { block_size, .. } => {
-                let raw_b = (*block_size).max(2);
-                let b = if raw_b.is_power_of_two() {
-                    raw_b
-                } else {
-                    1usize << (usize::BITS - 1 - raw_b.leading_zeros()).max(1)
-                };
-                for chunk in weights.chunks_mut(b) {
-                    let len = chunk.len();
-                    if len >= 2 && (len & (len - 1)) == 0 {
-                        // In-place Walsh-Hadamard butterfly
-                        let mut step = 1;
-                        while step < len {
-                            let mut i = 0;
-                            while i < len {
-                                for j in 0..step {
-                                    let u = chunk[i + j];
-                                    let v = chunk[i + step + j];
-                                    chunk[i + j] = u + v;
-                                    chunk[i + step + j] = u - v;
-                                }
-                                i += 2 * step;
-                            }
-                            step *= 2;
-                        }
-                        let norm = 1.0 / (len as f32).sqrt();
-                        for x in chunk.iter_mut() {
-                            *x *= norm;
-                        }
-                    }
-                }
-            }
-            TransformationRule::AffineProject { target_dim, rank } => {
-                let r = (*rank).min(n).max(1);
-                let _ = target_dim;
-                // Truncated projection dampening
-                for (i, w) in weights.iter_mut().enumerate() {
-                    if i >= r {
-                        *w *= 0.1; // Energy attenuation on trailing spectral modes
-                    }
-                }
-            }
-        }
+        apply_rule(&self.rule, weights)?;
 
         // Compute metrics
         let trans_norm_sq: f32 = weights.iter().map(|&x| x * x).sum();
@@ -296,6 +230,189 @@ impl AlgorithmDefinition {
             sparsity_ratio,
         })
     }
+}
+
+/// Normalized in-place Walsh-Hadamard transform on each block of `b` values (`b` a power of two).
+fn wht_blocks(weights: &mut [f32], b: usize) {
+    for chunk in weights.chunks_exact_mut(b) {
+        let mut step = 1;
+        while step < b {
+            let mut i = 0;
+            while i < b {
+                for j in 0..step {
+                    let (u, v) = (chunk[i + j], chunk[i + step + j]);
+                    chunk[i + j] = u + v;
+                    chunk[i + step + j] = u - v;
+                }
+                i += 2 * step;
+            }
+            step *= 2;
+        }
+        let norm = 1.0 / (b as f32).sqrt();
+        for x in chunk.iter_mut() {
+            *x *= norm;
+        }
+    }
+}
+
+/// Applies one transformation rule in place (shared by plain and composed rules).
+fn apply_rule(rule: &TransformationRule, weights: &mut [f32]) -> Result<(), String> {
+    let n = weights.len();
+    let orig_norm_sq: f32 = weights.iter().map(|&x| x * x).sum();
+    match rule {
+        TransformationRule::AbsmeanTernary {
+            scale_gamma,
+            zero_band,
+        } => {
+            let mean_abs: f32 = weights.iter().map(|&x| x.abs()).sum::<f32>() / n as f32;
+            let gamma = if *scale_gamma > 0.0 {
+                *scale_gamma
+            } else {
+                mean_abs.max(1e-8)
+            };
+            let threshold = gamma * zero_band.max(0.1);
+
+            for w in weights.iter_mut() {
+                let scaled = *w / gamma;
+                if scaled.abs() < threshold {
+                    *w = 0.0;
+                } else if scaled > 0.0 {
+                    *w = gamma;
+                } else {
+                    *w = -gamma;
+                }
+            }
+        }
+        TransformationRule::QuantizeCodebook { levels, scale_mode } => {
+            if levels.is_empty() {
+                return Err("QuantizeCodebook requires at least one level".to_string());
+            }
+
+            // Compute scale factor based on mode
+            let scale = match scale_mode {
+                ScaleMode::AbsMax => weights.iter().map(|&x| x.abs()).fold(0.0f32, f32::max),
+                ScaleMode::AbsMean => weights.iter().map(|&x| x.abs()).sum::<f32>() / n as f32,
+                ScaleMode::RMS => (orig_norm_sq / n as f32).sqrt(),
+                ScaleMode::StandardDev => {
+                    let mean = weights.iter().sum::<f32>() / n as f32;
+                    let var = weights.iter().map(|&x| (x - mean).powi(2)).sum::<f32>() / n as f32;
+                    var.sqrt()
+                }
+            }
+            .max(1e-8);
+
+            // Quantize to nearest codebook level
+            for w in weights.iter_mut() {
+                let norm_val = *w / scale;
+                let mut best_level = levels[0];
+                let mut min_diff = (norm_val - levels[0]).abs();
+
+                for &lvl in &levels[1..] {
+                    let diff = (norm_val - lvl).abs();
+                    if diff < min_diff {
+                        min_diff = diff;
+                        best_level = lvl;
+                    }
+                }
+                *w = best_level * scale;
+            }
+        }
+        TransformationRule::StructuredSparsity { m, n: group_sz } => {
+            let m = *m;
+            let group_sz = *group_sz;
+            if m == 0 || group_sz == 0 || m >= group_sz {
+                return Err(
+                    "Invalid structured sparsity parameters: requires 0 < M < N".to_string()
+                );
+            }
+
+            for chunk in weights.chunks_mut(group_sz) {
+                if chunk.len() == group_sz {
+                    // Find the M smallest absolute elements in the group and zero them out
+                    let mut indexed: Vec<(usize, f32)> = chunk
+                        .iter()
+                        .enumerate()
+                        .map(|(i, &x)| (i, x.abs()))
+                        .collect();
+                    indexed
+                        .sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+
+                    for (idx_to_zero, _) in indexed.iter().take(m) {
+                        chunk[*idx_to_zero] = 0.0;
+                    }
+                }
+            }
+        }
+        TransformationRule::SmoothQuantOutlier { alpha, threshold } => {
+            let max_abs = weights
+                .iter()
+                .map(|&x| x.abs())
+                .fold(0.0f32, f32::max)
+                .max(1e-8);
+            let scale = max_abs.powf(*alpha);
+
+            for w in weights.iter_mut() {
+                let s = *w / scale;
+                if s.abs() > *threshold {
+                    *w = s.clamp(-*threshold, *threshold) * scale;
+                }
+            }
+        }
+        TransformationRule::RotatedQuantize { block_size, inner } => {
+            let b = *block_size;
+            if b < 2 || !b.is_power_of_two() || !n.is_multiple_of(b) {
+                return Err(format!(
+                    "RotatedQuantize needs a power-of-two block size dividing {n}, got {b}"
+                ));
+            }
+            wht_blocks(weights, b);
+            apply_rule(inner, weights)?;
+            wht_blocks(weights, b); // the normalized Hadamard matrix is its own inverse
+        }
+        TransformationRule::OrthogonalRotation { block_size, .. } => {
+            let raw_b = (*block_size).max(2);
+            let b = if raw_b.is_power_of_two() {
+                raw_b
+            } else {
+                1usize << (usize::BITS - 1 - raw_b.leading_zeros()).max(1)
+            };
+            for chunk in weights.chunks_mut(b) {
+                let len = chunk.len();
+                if len >= 2 && (len & (len - 1)) == 0 {
+                    // In-place Walsh-Hadamard butterfly
+                    let mut step = 1;
+                    while step < len {
+                        let mut i = 0;
+                        while i < len {
+                            for j in 0..step {
+                                let u = chunk[i + j];
+                                let v = chunk[i + step + j];
+                                chunk[i + j] = u + v;
+                                chunk[i + step + j] = u - v;
+                            }
+                            i += 2 * step;
+                        }
+                        step *= 2;
+                    }
+                    let norm = 1.0 / (len as f32).sqrt();
+                    for x in chunk.iter_mut() {
+                        *x *= norm;
+                    }
+                }
+            }
+        }
+        TransformationRule::AffineProject { target_dim, rank } => {
+            let r = (*rank).min(n).max(1);
+            let _ = target_dim;
+            // Truncated projection dampening
+            for (i, w) in weights.iter_mut().enumerate() {
+                if i >= r {
+                    *w *= 0.1; // Energy attenuation on trailing spectral modes
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Pluggable registry containing built-in and user-defined Bring Your Own Algorithm (BYOA) instances
@@ -349,6 +466,56 @@ impl AlgorithmRegistry {
             },
         });
 
+        // 1b. Hadamard-rotated variants (rotate, quantize, rotate back). Speedup is not
+        // claimed: no kernel for these formats has been measured.
+        let linear_roles = vec![
+            TensorRole::MlpGate,
+            TensorRole::MlpUp,
+            TensorRole::MlpDown,
+            TensorRole::AttentionQ,
+            TensorRole::AttentionK,
+            TensorRole::AttentionV,
+            TensorRole::AttentionOut,
+            TensorRole::AttentionQkv,
+        ];
+        self.register(AlgorithmDefinition {
+            id: "thme.hadamard_ternary".to_string(),
+            name: "Hadamard-rotated absmean ternary".to_string(),
+            author: "Epiphanes".to_string(),
+            version: "1.0.0".to_string(),
+            category: AlgorithmCategory::Quantization,
+            description: "Rotates 64-weight blocks with a normalized Walsh-Hadamard transform, ternarizes, and rotates back, spreading outliers before rounding.".to_string(),
+            effective_bits_per_param: 1.585,
+            compression_ratio: 16.0 / 1.585,
+            hardware_speedup_factor: 1.0,
+            target_roles: linear_roles.clone(),
+            rule: TransformationRule::RotatedQuantize {
+                block_size: 64,
+                inner: Box::new(TransformationRule::AbsmeanTernary {
+                    scale_gamma: 0.0,
+                    zero_band: 0.5,
+                }),
+            },
+        });
+        self.register(AlgorithmDefinition {
+            id: "thme.hadamard_int4".to_string(),
+            name: "Hadamard-rotated 4-bit codebook".to_string(),
+            author: "Epiphanes".to_string(),
+            version: "1.0.0".to_string(),
+            category: AlgorithmCategory::Quantization,
+            description: "Rotates 64-weight blocks, rounds to 15 symmetric levels scaled by the tensor's absolute maximum, and rotates back.".to_string(),
+            effective_bits_per_param: 4.0,
+            compression_ratio: 4.0,
+            hardware_speedup_factor: 1.0,
+            target_roles: linear_roles,
+            rule: TransformationRule::RotatedQuantize {
+                block_size: 64,
+                inner: Box::new(TransformationRule::QuantizeCodebook {
+                    levels: (-7..=7).map(|k| k as f32 / 7.0).collect(),
+                    scale_mode: ScaleMode::AbsMax,
+                }),
+            },
+        });
         // 2. Semi-Structured 2:4 Sparsity
         self.register(AlgorithmDefinition {
             id: "thme.sparse_2to4".to_string(),
@@ -479,5 +646,86 @@ impl AlgorithmRegistry {
             .get(id)
             .ok_or_else(|| format!("Algorithm with id '{id}' not found in registry"))?;
         serde_json::to_string_pretty(alg).map_err(|e| format!("JSON serialization failed: {e}"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn outlier_weights() -> Vec<f32> {
+        // Small weights with a few large outliers, as in real LLM projections.
+        (0..256)
+            .map(|i| {
+                if i % 61 == 0 {
+                    4.0
+                } else {
+                    ((i * 37 % 101) as f32 - 50.0) / 500.0
+                }
+            })
+            .collect()
+    }
+
+    #[test]
+    fn hadamard_is_its_own_inverse() {
+        let original = outlier_weights();
+        let mut w = original.clone();
+        wht_blocks(&mut w, 64);
+        assert_ne!(w, original);
+        wht_blocks(&mut w, 64);
+        for (a, b) in w.iter().zip(&original) {
+            assert!((a - b).abs() < 1e-5);
+        }
+    }
+
+    #[test]
+    fn contracts_classify_every_built_in() {
+        let registry = AlgorithmRegistry::new();
+        let get = |id: &str| registry.get(id).unwrap();
+        assert!(get("thme.bitnet_b158").measurable().is_ok());
+        assert!(get("thme.hadamard_ternary").measurable().is_ok());
+        assert!(get("thme.hadamard_int4").measurable().is_ok());
+        assert!(get("thme.hadamard_wht")
+            .measurable()
+            .unwrap_err()
+            .contains("activations"));
+        assert!(get("thme.gated_deltanet").measurable().is_err());
+        let sample = outlier_weights();
+        for alg in registry.list() {
+            if alg.measurable().is_ok() {
+                alg.verify_contract(&sample).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn rotation_reduces_codebook_error_on_outlier_weights() {
+        let registry = AlgorithmRegistry::new();
+        let rotated = registry.get("thme.hadamard_int4").unwrap();
+        let mut plain = rotated.clone();
+        if let TransformationRule::RotatedQuantize { inner, .. } = &rotated.rule {
+            plain.rule = (**inner).clone();
+        }
+        let mut a = outlier_weights();
+        let mut b = outlier_weights();
+        let rotated_mse = rotated.apply_to_weights(&mut a).unwrap().mean_squared_error;
+        let plain_mse = plain.apply_to_weights(&mut b).unwrap().mean_squared_error;
+        assert!(
+            rotated_mse < plain_mse,
+            "rotated {rotated_mse} vs plain {plain_mse}"
+        );
+    }
+
+    #[test]
+    fn rotated_quantize_rejects_bad_block_sizes() {
+        let rule = TransformationRule::RotatedQuantize {
+            block_size: 48,
+            inner: Box::new(TransformationRule::AbsmeanTernary {
+                scale_gamma: 0.0,
+                zero_band: 0.5,
+            }),
+        };
+        let mut w = vec![0.1; 96];
+        assert!(apply_rule(&rule, &mut w).is_err());
     }
 }

@@ -2,6 +2,7 @@
 name = "thme"
 version = "0.1.9"
 edition = "2021"
+rust-version = "1.89"
 authors = ["Epiphanes <https://github.com/EdEpiphanes>"]
 description = "THME: Topological Heterogeneous Manifold Engine by Epiphanes - Open-source framework for LLM memory profiling, weight sensitivity analysis, and Pareto precision optimization."
 license = "Apache-2.0"

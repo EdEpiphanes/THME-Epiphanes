@@ -1,0 +1,36 @@
+name: Bug report
+description: Something produces wrong results, crashes, or contradicts the documentation
+labels: ["type:bug", "status:triage"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Include the exact command and its output.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: THME version or commit
+      placeholder: "0.2.0 or a1b2c3d"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Windows, macOS, Linux]
+    validations:
+      required: true
+  - type: textarea
+    id: model
+    attributes:
+      label: Model and data
+      description: Model name and source (for example a Hugging Face repo). Do not attach weights.

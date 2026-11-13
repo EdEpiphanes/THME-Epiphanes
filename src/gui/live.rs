@@ -128,6 +128,8 @@ enum Source {
     Model {
         dir: PathBuf,
         tokens: Option<PathBuf>,
+        recipe: Option<PathBuf>,
+        algorithms: Option<PathBuf>,
     },
 }
 
@@ -146,6 +148,10 @@ struct Hover {
 pub struct LiveView {
     model_dir: String,
     tokens_path: String,
+    recipe_path: String,
+    algorithms_path: String,
+    gate: Option<Receiver<Result<Vec<String>, String>>>,
+    gate_lines: Vec<String>,
     context: usize,
     session: Option<Session>,
     status: String,
@@ -166,6 +172,10 @@ impl Default for LiveView {
         Self {
             model_dir: "models/Pythia-14M".to_string(),
             tokens_path: String::new(),
+            recipe_path: String::new(),
+            algorithms_path: String::new(),
+            gate: None,
+            gate_lines: Vec::new(),
             context: 256,
             session: None,
             status: "Idle".to_string(),
@@ -204,6 +214,49 @@ impl LiveView {
         self.latest = None;
         self.ppl_history.clear();
         self.status = "Loading...".to_string();
+    }
+
+    fn start_gate(&mut self, ctx: &egui::Context) {
+        let (Some(recipe), Some(tokens)) = (
+            optional_path(&self.recipe_path),
+            optional_path(&self.tokens_path),
+        ) else {
+            self.gate_lines = vec!["Error: the gate needs a recipe and a token file".to_string()];
+            return;
+        };
+        let args = crate::cli::evaluate::EvaluateArgs {
+            model: PathBuf::from(self.model_dir.trim()),
+            recipe,
+            tokens,
+            eval_context: self.context.max(64),
+            eval_max_tokens: Some(16_384),
+            max_ppl_delta: 0.45,
+            report: PathBuf::from("target/studio_gate_report.json"),
+            allow_partial: true,
+            algorithms: optional_path(&self.algorithms_path).into_iter().collect(),
+        };
+        let (tx, rx) = mpsc::channel();
+        let ctx = ctx.clone();
+        std::thread::spawn(move || {
+            let result = crate::cli::evaluate::evaluate(&args)
+                .map(|report| gate_summary(&report, &args.report))
+                .map_err(|e| format!("{e:#}"));
+            let _ = tx.send(result);
+            ctx.request_repaint();
+        });
+        self.gate = Some(rx);
+        self.gate_lines = vec!["Measuring source and recipe (first 16,384 tokens)...".to_string()];
+    }
+
+    fn poll_gate(&mut self) {
+        let Some(rx) = &self.gate else { return };
+        if let Ok(result) = rx.try_recv() {
+            self.gate_lines = match result {
+                Ok(lines) => lines,
+                Err(error) => vec![format!("Error: {error}")],
+            };
+            self.gate = None;
+        }
     }
 
     fn stop(&mut self) {
@@ -258,6 +311,7 @@ impl LiveView {
             self.start(&ctx, Source::Demo);
         }
         self.poll();
+        self.poll_gate();
         ctx.request_repaint();
 
         ui.heading(
@@ -280,13 +334,13 @@ impl LiveView {
             ui.add(egui::TextEdit::singleline(&mut self.tokens_path).desired_width(260.0));
             ui.add(egui::Slider::new(&mut self.context, 32..=1024).text("tokens/window"));
             if ui.button("Run model").clicked() {
-                let tokens = (!self.tokens_path.trim().is_empty())
-                    .then(|| PathBuf::from(self.tokens_path.trim()));
                 self.start(
                     &ctx,
                     Source::Model {
                         dir: PathBuf::from(self.model_dir.trim()),
-                        tokens,
+                        tokens: optional_path(&self.tokens_path),
+                        recipe: optional_path(&self.recipe_path),
+                        algorithms: optional_path(&self.algorithms_path),
                     },
                 );
             }
@@ -296,6 +350,20 @@ impl LiveView {
             if self.session.is_some() && ui.button("Stop").clicked() {
                 self.stop();
                 self.status = "Stopped".to_string();
+            }
+        });
+        ui.horizontal_wrapped(|ui| {
+            ui.label("Recipe (optional):");
+            ui.add(egui::TextEdit::singleline(&mut self.recipe_path).desired_width(260.0));
+            ui.label("BYOA algorithms (optional):");
+            ui.add(egui::TextEdit::singleline(&mut self.algorithms_path).desired_width(220.0));
+            let running = self.gate.is_some();
+            if ui
+                .add_enabled(!running, egui::Button::new(if running { "Gate running..." } else { "Run gate" }))
+                .on_hover_text("Measure the recipe against the source with the reference forward pass (thme evaluate)")
+                .clicked()
+            {
+                self.start_gate(&ctx);
             }
         });
         ui.add_space(4.0);
@@ -362,6 +430,18 @@ impl LiveView {
             ui.label(muted("Waiting for the first window...".to_string()));
         }
         ui.separator();
+        if !self.gate_lines.is_empty() {
+            ui.label(strong("Recipe gate (measured)"));
+            for line in &self.gate_lines {
+                let color = if line.starts_with("FAILED") || line.starts_with("Error") {
+                    ANOMALY
+                } else {
+                    p.text_muted
+                };
+                ui.label(egui::RichText::new(line).size(10.0).color(color));
+            }
+            ui.separator();
+        }
         ui.label(strong("Format families"));
         for family in ALL_FAMILIES {
             ui.horizontal(|ui| {
@@ -394,6 +474,22 @@ impl LiveView {
             Stroke::new(1.0_f32, p.border),
             egui::StrokeKind::Inside,
         );
+
+        {
+            // Manga screentone: halftone dots deepening toward the bottom of the panel.
+            let tone = with_alpha(p.text_main, if p.is_light() { 46 } else { 26 });
+            let start = rect.top() + rect.height() * 0.55;
+            let mut y = start;
+            while y < rect.bottom() - 4.0 {
+                let r = 2.4 * (y - start) / (rect.bottom() - start);
+                let mut x = rect.left() + 6.0;
+                while x < rect.right() - 4.0 {
+                    painter.circle_filled(Pos2::new(x, y), r, tone);
+                    x += 9.0;
+                }
+                y += 9.0;
+            }
+        }
 
         let drag = response.drag_delta();
         self.yaw += drag.x * 0.008;
@@ -675,12 +771,45 @@ fn run_worker(
                 true,
             )
         }
-        Source::Model { dir, tokens } => {
+        Source::Model {
+            dir,
+            tokens,
+            recipe,
+            algorithms,
+        } => {
             let ir = ModelImporter::import(&dir)
                 .map_err(|e| anyhow::anyhow!("Failed to import {dir:?}: {e:#}"))?;
             let arch = ArchConfig::detect(&ir, &dir)?;
-            let model = arch.load(&ir, WeightPrecision::AsStored)?;
-            let composition = composition_from_ir(&ir);
+            let (model, composition, recipe_note) = match recipe {
+                Some(path) => {
+                    let text = std::fs::read_to_string(&path)
+                        .map_err(|e| anyhow::anyhow!("Failed to read recipe {path:?}: {e}"))?;
+                    let recipe: crate::surgery::recipe::TweakRecipe =
+                        serde_json::from_str(&text)
+                            .map_err(|e| anyhow::anyhow!("Failed to parse recipe {path:?}: {e}"))?;
+                    let registry = crate::cli::evaluate::load_registry(
+                        &algorithms.into_iter().collect::<Vec<_>>(),
+                    )?;
+                    let prepared =
+                        crate::cli::evaluate::prepare_candidate(&ir, &recipe, &registry, true)?;
+                    let model = arch.load(&prepared.model, WeightPrecision::SelectedFormat)?;
+                    let skipped = if prepared.skipped.is_empty() {
+                        String::new()
+                    } else {
+                        format!("; not applied: {}", prepared.skipped.join(", "))
+                    };
+                    let note = format!(
+                        ", recipe '{}' applied to {} tensors{skipped}",
+                        recipe.name, prepared.relabelled
+                    );
+                    (model, composition_from_candidate(&prepared.model), note)
+                }
+                None => (
+                    arch.load(&ir, WeightPrecision::AsStored)?,
+                    composition_from_ir(&ir),
+                    String::new(),
+                ),
+            };
             let (tokens, meaningful, what) = match tokens {
                 Some(path) => (read_token_file(&path)?, true, "evaluation tokens"),
                 None => (
@@ -690,7 +819,7 @@ fn run_worker(
                 ),
             };
             let label = format!(
-                "{} ({}), {} layers, {what}",
+                "{} ({}), {} layers, {what}{recipe_note}",
                 ir.name,
                 arch.family(),
                 model.num_layers()
@@ -765,6 +894,96 @@ fn composition_from_ir(ir: &ModelIR) -> Composition {
         }
     }
     layers
+}
+
+/// Composition of a recipe-applied model: assigned formats, BYOA algorithms by their declared
+/// bits, and stored formats for untouched tensors.
+fn composition_from_candidate(ir: &ModelIR) -> Composition {
+    let mut layers = composition_from_ir(ir);
+    for tensor in &ir.tensors {
+        let (Some(layer), true) = (tensor.layer_index, tensor.shape.len() == 2) else {
+            continue;
+        };
+        let family = match &tensor.selected_format {
+            TensorFormat::FP32 => continue, // untouched: keep the stored family
+            TensorFormat::Custom(_) => {
+                let bits = tensor
+                    .metadata
+                    .get(crate::inference::BYOA_METADATA_KEY)
+                    .and_then(|json| {
+                        crate::transform::byoa::AlgorithmDefinition::from_json(json).ok()
+                    })
+                    .map_or(16.0, |a| a.effective_bits_per_param);
+                match bits {
+                    b if b <= 1.2 => Family::Binary,
+                    b if b <= 2.0 => Family::Ternary,
+                    b if b <= 4.5 => Family::Int4,
+                    b if b <= 8.5 => Family::Int8,
+                    _ => Family::Dense,
+                }
+            }
+            other => Family::of(other),
+        };
+        let name = role_short_name(tensor.role);
+        if let (Some(slot), Some(name)) = (layers.get_mut(layer), name) {
+            if let Some(entry) = slot.iter_mut().find(|(n, _)| n == name) {
+                entry.1 = family;
+            }
+        }
+    }
+    layers
+}
+
+fn role_short_name(role: TensorRole) -> Option<&'static str> {
+    Some(match role {
+        TensorRole::AttentionQ => "q",
+        TensorRole::AttentionK => "k",
+        TensorRole::AttentionV => "v",
+        TensorRole::AttentionOut => "o",
+        TensorRole::AttentionQkv => "qkv",
+        TensorRole::MlpGate => "gate",
+        TensorRole::MlpUp => "up",
+        TensorRole::MlpDown => "down",
+        _ => return None,
+    })
+}
+
+fn optional_path(text: &str) -> Option<PathBuf> {
+    let trimmed = text.trim();
+    (!trimmed.is_empty()).then(|| PathBuf::from(trimmed))
+}
+
+/// Short lines for the side panel from a `thme evaluate` report.
+fn gate_summary(report: &serde_json::Value, path: &std::path::Path) -> Vec<String> {
+    let variants = report["evaluation"]["variants"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let ppl = |i: usize| {
+        variants
+            .get(i)
+            .and_then(|v| v["perplexity"].as_f64())
+            .unwrap_or(f64::NAN)
+    };
+    let delta = ppl(1) - ppl(0);
+    let passed = report["evaluation"]["gate_passed"]
+        .as_bool()
+        .unwrap_or(false);
+    let mut lines = vec![
+        format!(
+            "{} Δ PPL {delta:+.4}",
+            if passed { "PASSED" } else { "FAILED" }
+        ),
+        format!("Source {:.4} -> recipe {:.4}", ppl(0), ppl(1)),
+    ];
+    if let Some(skipped) = report["recipe"]["operations_not_evaluated"].as_array() {
+        if !skipped.is_empty() {
+            let names: Vec<&str> = skipped.iter().filter_map(|s| s.as_str()).collect();
+            lines.push(format!("Not evaluated: {}", names.join(", ")));
+        }
+    }
+    lines.push(format!("Report: {}", path.display()));
+    lines
 }
 
 fn pseudo_random_tokens(vocab: usize, count: usize, seed: u64) -> Vec<u32> {
@@ -972,5 +1191,65 @@ mod tests {
         }
         stop.store(true, Ordering::Relaxed);
         assert_eq!(handle.join().unwrap().unwrap(), "Stopped");
+    }
+
+    #[test]
+    fn recipe_runs_show_their_composition_and_gate_summary_reads_reports() {
+        let dir = tempfile::tempdir().unwrap();
+        let (model, tokens) = crate::cli::evaluate::tests::synthetic_checkpoint(dir.path());
+        let recipe = dir.path().join("recipe.json");
+        std::fs::write(
+            &recipe,
+            r#"{"name":"r","author":"t","target_model":"tiny","version":"1","description":"","operations":[
+                {"type":"SetPrecision","params":{"start_layer":0,"end_layer":1,"role":"MlpDown","format":"Q4_0"}},
+                {"type":"ApplyCustomAlgorithm","params":{"start_layer":1,"end_layer":1,"role":"MlpUp","algorithm_id":"thme.hadamard_ternary"}}]}"#,
+        )
+        .unwrap();
+        let ctx = egui::Context::default();
+        let (tx, rx) = mpsc::channel();
+        let stop = AtomicBool::new(false);
+        let source = Source::Model {
+            dir: model,
+            tokens: Some(tokens),
+            recipe: Some(recipe),
+            algorithms: None,
+        };
+        let summary = run_worker(source, &ctx, &tx, &stop, 32).unwrap();
+        assert!(summary.starts_with("Finished"));
+        let mut composition = None;
+        let mut frames = 0;
+        while let Ok(message) = rx.try_recv() {
+            match message {
+                LiveMessage::Started {
+                    composition: c,
+                    label,
+                    ..
+                } => {
+                    assert!(label.contains("recipe 'r'"), "{label}");
+                    composition = Some(c);
+                }
+                LiveMessage::Frame(_) => frames += 1,
+                _ => {}
+            }
+        }
+        assert!(frames > 0);
+        let composition = composition.unwrap();
+        let family = |layer: usize, name: &str| {
+            composition[layer]
+                .iter()
+                .find(|(n, _)| n == name)
+                .map(|(_, f)| *f)
+        };
+        assert_eq!(family(0, "down"), Some(Family::Int4));
+        assert_eq!(family(1, "up"), Some(Family::Ternary));
+        assert_eq!(family(0, "q"), Some(Family::Dense));
+
+        let report = serde_json::json!({
+            "evaluation": {"gate_passed": false, "variants": [{"perplexity": 10.0}, {"perplexity": 12.5}]},
+            "recipe": {"operations_not_evaluated": ["ReplaceMixer"]}
+        });
+        let lines = gate_summary(&report, std::path::Path::new("r.json"));
+        assert!(lines[0].starts_with("FAILED"));
+        assert!(lines.iter().any(|l| l.contains("ReplaceMixer")));
     }
 }

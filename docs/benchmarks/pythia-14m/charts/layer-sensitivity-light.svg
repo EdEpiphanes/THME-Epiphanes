@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 360" width="760" height="360" role="img" font-family='system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif'>
 <title>Perplexity cost of ternarizing one layer at a time</title>
 <desc>Per-layer increase in perplexity when that layer alone is ternarized. Layer 0 is far more sensitive.</desc>
-<rect x="0.5" y="0.5" width="759" height="359" rx="8" fill="#fcfcfb" stroke="#e1e0d9"/>
+<rect x="1" y="1" width="758" height="358" rx="2" stroke-width="2" fill="#ffffff" stroke="#0b0b0b"/>
 <text x="24.0" y="34.0" font-size="16" font-weight="600" fill="#0b0b0b" text-anchor="start">Perplexity cost of ternarizing one layer at a time</text>
 <text x="24.0" y="54.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="start">Δ perplexity vs baseline 113.70 · all 4 linear tensors of the layer · log scale · no retraining</text>
 <line x1="64.0" y1="263.8" x2="736.0" y2="263.8" stroke="#e1e0d9" stroke-width="1"/>
@@ -21,12 +21,12 @@
 <text x="724.0" y="318.0" font-size="11" font-weight="400" fill="#898781" text-anchor="middle">5</text>
 <text x="400.0" y="340.0" font-size="12" font-weight="400" fill="#52514e" text-anchor="middle">Layer</text>
 <polyline points="76.0,125.7 205.6,139.4 335.2,125.8 464.8,104.4 594.4,144.1 724.0,140.1" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-<circle cx="76.0" cy="125.7" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="205.6" cy="139.4" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="335.2" cy="125.8" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="464.8" cy="104.4" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="594.4" cy="144.1" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
-<circle cx="724.0" cy="140.1" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="76.0" cy="125.7" r="4" fill="#2a78d6" stroke="#ffffff" stroke-width="2"/>
+<circle cx="205.6" cy="139.4" r="4" fill="#2a78d6" stroke="#ffffff" stroke-width="2"/>
+<circle cx="335.2" cy="125.8" r="4" fill="#2a78d6" stroke="#ffffff" stroke-width="2"/>
+<circle cx="464.8" cy="104.4" r="4" fill="#2a78d6" stroke="#ffffff" stroke-width="2"/>
+<circle cx="594.4" cy="144.1" r="4" fill="#2a78d6" stroke="#ffffff" stroke-width="2"/>
+<circle cx="724.0" cy="140.1" r="4" fill="#2a78d6" stroke="#ffffff" stroke-width="2"/>
 <text x="72.0" y="113.7" font-size="11" font-weight="400" fill="#52514e" text-anchor="start">Layer 0: +468</text>
 <text x="464.8" y="92.4" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">Layer 3: +1,209</text>
 <text x="594.4" y="164.1" font-size="11" font-weight="400" fill="#52514e" text-anchor="middle">Layer 4: +207</text>

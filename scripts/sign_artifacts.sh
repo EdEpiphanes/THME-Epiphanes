@@ -14,7 +14,8 @@ echo "Signing release artifacts in ${DIST_DIR}..."
 
 # Minisign signature
 if command -v minisign >/dev/null 2>&1 && [ -n "${MINISIGN_KEY:-}" ]; then
-    echo "${MINISIGN_KEY}" > /tmp/minisign.key
+    umask 077
+    printf '%s\n' "${MINISIGN_KEY}" > /tmp/minisign.key
     for f in "${DIST_DIR}"/*.tar.gz; do
         if [ -f "$f" ]; then
             echo "  [minisign] Signing $(basename "$f")..."
