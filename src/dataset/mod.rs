@@ -210,13 +210,12 @@ impl Dataset {
     }
 
     /// Creates a pre-packaged synthetic calibration dataset
-    pub fn create_synthetic_calibration() -> Self {
+    pub fn create_synthetic_calibration() -> Result<Self, String> {
         Self::from_content(
             "synthetic_calibration",
             "",
             DatasetFormat::SyntheticCalibration,
         )
-        .expect("Synthetic calibration is infallible")
     }
 
     /// Extracts clean training text from various standard JSON structures (OpenAI, Alpaca, etc.)

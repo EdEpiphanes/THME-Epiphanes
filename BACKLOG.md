@@ -38,8 +38,9 @@ closes it.
 - **Done means**: CHANGELOG section `[0.2.0]`, Cargo version 0.2.0, tag `v0.2.0`; the release workflow publishes four signed archives with checksums.
 
 ### [THME-2006] Configure repository protection and secrets
-- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: ci · **Type**: chore · **Status**: ready
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: ci · **Type**: chore · **Status**: done
 - **Problem**: Branch protection, required checks and the signing key live in GitHub settings.
+- **Progress**: Ruleset on `main` (pull requests, squash only, up-to-date branches, 11 required checks), `MINISIGN_KEY` secret and published public key are in place.
 - **Done means**: Settings match docs/WORKFLOW.md section 7; a test pull request cannot merge with a failing required check.
 
 ## Next: v0.2.2 Formats and calibration
