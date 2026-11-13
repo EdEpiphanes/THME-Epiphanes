@@ -3,8 +3,9 @@ pub mod config;
 pub mod gguf;
 pub mod safetensors;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::ir::{ModelArchitecture, ModelIR};
 use config::HfConfig;
@@ -13,10 +14,62 @@ pub use safetensors::SafetensorsScanner;
 
 pub struct ModelImporter;
 
+/// Set by the CLI's `--allow-unsafe-model`: a dangerous scan result is printed as a warning
+/// instead of refusing the import. Off by default; the MCP server and the Studio never set it.
+static ALLOW_UNSAFE: AtomicBool = AtomicBool::new(false);
+
+/// Lets this process load models whose scan finds high or critical issues (with a warning).
+pub fn allow_unsafe_models(allow: bool) {
+    ALLOW_UNSAFE.store(allow, Ordering::SeqCst);
+}
+
 impl ModelImporter {
-    /// Universal importer: auto-detects GGUF file, SafeTensors file, or Hugging Face model directory
+    /// Universal importer: auto-detects GGUF file, SafeTensors file, `.epiph` file or Hugging
+    /// Face model directory. Every import is scanned first (roadmap v0.2.7.3, `thme scan`
+    /// rules): a high or critical finding refuses the import unless the process allowed unsafe
+    /// models. Nothing in the files is executed either way.
     pub fn import<P: AsRef<Path>>(path: P) -> Result<ModelIR> {
         let p = path.as_ref();
+        Self::check_safety(p)?;
+        Self::import_unscanned(p)
+    }
+
+    /// Scans `path` with the model scanner and refuses on a high or critical finding.
+    pub fn check_safety(path: &Path) -> Result<()> {
+        let report = crate::scan::scan(path)?;
+        let dangerous: Vec<String> = report
+            .findings
+            .iter()
+            .filter(|f| f.severity >= crate::scan::Severity::High)
+            .map(|f| format!("  [{:?}] {} {}: {}", f.severity, f.rule, f.file, f.detail))
+            .collect();
+        if dangerous.is_empty() {
+            return Ok(());
+        }
+        if ALLOW_UNSAFE.load(Ordering::SeqCst) {
+            eprintln!(
+                "warning: loading {path:?} despite {} high or critical scan findings (--allow-unsafe-model):
+{}",
+                dangerous.len(),
+                dangerous.join("
+")
+            );
+            return Ok(());
+        }
+        bail!(
+            "refusing to load {path:?}: the scan found {} high or critical issues
+{}
+Run `thme scan {}` for details. Pass --allow-unsafe-model to load it anyway; nothing in the files is executed either way.",
+            dangerous.len(),
+            dangerous.join("
+"),
+            path.display()
+        )
+    }
+
+    /// Imports without the safety scan. For the scanner's own use and for files THME has just
+    /// written itself; everything else goes through [`ModelImporter::import`].
+    pub fn import_unscanned(p: &Path) -> Result<ModelIR> {
         if p.is_file() {
             let ext = p
                 .extension()

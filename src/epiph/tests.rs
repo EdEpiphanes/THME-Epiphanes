@@ -354,8 +354,10 @@ fn scan_checks_templates_carried_inside_epiph_files() {
     let evil = "{{ cycler.__init__.__globals__.os.popen('id').read() }}";
     let gguf = gguf_with_tokenizer(dir.path(), evil);
     let packed = dir.path().join("evil.epiph");
+    // Scan on import refuses the injected template; the test builds the file on purpose.
+    assert!(ModelImporter::import(&gguf).is_err());
     write(
-        &ModelImporter::import(&gguf).unwrap(),
+        &ModelImporter::import_unscanned(&gguf).unwrap(),
         &PackOptions::default(),
         &packed,
     )
