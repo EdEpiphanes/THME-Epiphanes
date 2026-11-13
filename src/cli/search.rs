@@ -200,7 +200,8 @@ struct Evaluator<'a> {
 }
 
 impl Evaluator<'_> {
-    fn measure(&self, assignment: &[Option<usize>], tokens: &[u32]) -> Result<PerplexityReport> {
+    /// The source model with an assignment applied as selected formats.
+    fn candidate(&self, assignment: &[Option<usize>]) -> ModelIR {
         let mut model = self.source.clone();
         for tensor in &mut model.tensors {
             tensor.selected_format = TensorFormat::FP32; // keep as stored
@@ -212,6 +213,11 @@ impl Evaluator<'_> {
                 }
             }
         }
+        model
+    }
+
+    fn measure(&self, assignment: &[Option<usize>], tokens: &[u32]) -> Result<PerplexityReport> {
+        let model = self.candidate(assignment);
         let dense = self.arch.load(&model, WeightPrecision::SelectedFormat)?;
         let config = PerplexityConfig {
             context_len: self.context,
@@ -661,9 +667,9 @@ pub fn search(args: &SearchArgs) -> Result<Value> {
             "name": format!("searched-{}", source.name),
             "format_counts": {},
             "estimated_bytes": ((source.original_byte_size as f64 * 8.0 - stored_bits + achieved) / 8.0) as u64,
-            "estimated_bytes_note": "Computed from nominal bits per weight; no artifact of this size is written.",
+            "estimated_bytes_note": "Computed from nominal bits per weight; export.artifact_bytes is the size of the written GGUF.",
         },
-        "export": Value::Null,
+        "export": crate::cli::evaluate::measure_artifact(&eval.candidate(&assignment), None),
         "evaluation": {
             "measured": true,
             "corpus": corpus,
@@ -814,6 +820,8 @@ mod tests {
         };
         let report = search(&args).unwrap();
         assert_eq!(report["search"]["budget_met"], Value::Bool(true));
+        assert_eq!(report["export"]["measured"], Value::Bool(true));
+        assert!(report["export"]["artifact_bytes"].as_u64().unwrap() > 0);
         let pareto = report["search"]["pareto"].as_array().unwrap();
         assert_eq!(pareto.len(), 3);
         let fractions: Vec<f64> = pareto

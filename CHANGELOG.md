@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **Measured artifact size** (v0.2.2.9): `thme evaluate` and `thme search` reports carry
+  `export.artifact_bytes`, the size of the candidate written as a per-tensor GGUF (scales,
+  metadata and alignment included), beside the nominal estimate. `thme evaluate --artifact F`
+  keeps the file. Candidates that cannot be written say why instead of reporting a size.
 - **Per-tensor GGUF export** (v0.2.2.1): `thme export MODEL -o out.gguf --recipe R` applies the
   recipe as `thme evaluate` does and writes each tensor in its assigned format (FP16, Q8_0, Q4_0,
   Q4_K, Q5_K, Q6_K, TQ1_0); FP32 and 1-D tensors keep their stored dtype. Re-importing the file

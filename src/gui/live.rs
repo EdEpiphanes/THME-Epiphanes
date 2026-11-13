@@ -581,6 +581,7 @@ impl LiveView {
             report: PathBuf::from("target/studio_gate_report.json"),
             allow_partial: true,
             algorithms: optional_path(&self.algorithms_path).into_iter().collect(),
+            artifact: None,
         };
         let (tx, rx) = mpsc::channel();
         let ctx = ctx.clone();

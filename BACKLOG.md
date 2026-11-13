@@ -85,7 +85,7 @@ closes it.
 - **Done means**: The existing optional CI step runs a heterogeneous export through llama.cpp when the runtime is configured.
 
 ### [THME-2209] Measured artifact size in every report
-- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.9 · **Priority**: p1 · **Area**: exporter · **Type**: feature · **Status**: ready
+- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.9 · **Priority**: p1 · **Area**: exporter · **Type**: feature · **Status**: done
 - **Problem**: Recipe and search sizes are nominal bits per weight.
 - **Done means**: Reports include the written file size including scales and metadata alongside the nominal figure.
 
