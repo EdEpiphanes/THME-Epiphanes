@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::Args;
 use std::path::PathBuf;
 
+use crate::quality::gate::{GateSpec, Measure};
 use crate::quality::{
     BenchmarkScore, EvaluationCorpus, ModelEvaluator, PerplexityGateDecision, QualityGate,
 };
@@ -37,8 +38,9 @@ pub struct ValidateArgs {
     #[arg(long)]
     pub candidate_ppl: Option<f64>,
 
-    /// Maximum allowable perplexity degradation (Delta PPL <= epsilon)
-    #[arg(long, default_value_t = 0.25)]
+    /// Maximum allowable perplexity degradation (Delta PPL <= epsilon); the same default as
+    /// every other command
+    #[arg(long, default_value_t = crate::quality::gate::DEFAULT_MAX_PPL_DELTA)]
     pub max_ppl_delta: f64,
 
     /// Gate a measured report written by the verification pipeline
@@ -56,13 +58,15 @@ pub struct ValidateArgs {
 pub struct ReportVariant {
     pub id: String,
     pub perplexity: f64,
+    pub cross_entropy_nats: Option<f64>,
     pub delta_ppl: Option<f64>,
     pub accepted: Option<bool>,
 }
 
-/// Reads the measured evaluation from a verification report and returns its variants
-/// and gate tolerance. Fails if the report holds no measured evaluation.
-pub fn read_measured_report(report: &serde_json::Value) -> Result<(f64, Vec<ReportVariant>)> {
+/// Reads the measured evaluation of a report, rebuilds the gate it records (checking the gate's
+/// hash), and re-judges every variant from its measured numbers. Older reports without a gate
+/// use their `max_ppl_delta`. A stored verdict that disagrees with the gate is an error.
+pub fn read_measured_report(report: &serde_json::Value) -> Result<(GateSpec, Vec<ReportVariant>)> {
     let evaluation = report
         .get("evaluation")
         .ok_or_else(|| anyhow::anyhow!("Report has no 'evaluation' section"))?;
@@ -73,11 +77,30 @@ pub fn read_measured_report(report: &serde_json::Value) -> Result<(f64, Vec<Repo
     {
         anyhow::bail!("Report holds no measured evaluation; run the verification pipeline with --model-path and --tokens");
     }
-    let tolerance = evaluation
-        .get("max_ppl_delta")
-        .and_then(serde_json::Value::as_f64)
-        .ok_or_else(|| anyhow::anyhow!("Report has no 'max_ppl_delta'"))?;
-    let variants = evaluation
+    let gate = match evaluation.get("gate") {
+        Some(recorded) => {
+            let spec: GateSpec = serde_json::from_value(recorded.clone())
+                .map_err(|e| anyhow::anyhow!("Report records an unreadable gate: {e}"))?;
+            spec.validate()?;
+            if let Some(hash) = recorded.get("hash").and_then(serde_json::Value::as_str) {
+                if hash != spec.hash() {
+                    anyhow::bail!(
+                        "Report's gate {} does not match its recorded hash; the report was edited",
+                        spec.id()
+                    );
+                }
+            }
+            spec
+        }
+        None => {
+            let tolerance = evaluation
+                .get("max_ppl_delta")
+                .and_then(serde_json::Value::as_f64)
+                .ok_or_else(|| anyhow::anyhow!("Report has neither a gate nor 'max_ppl_delta'"))?;
+            GateSpec::perplexity(tolerance)
+        }
+    };
+    let mut variants = evaluation
         .get("variants")
         .and_then(serde_json::Value::as_array)
         .ok_or_else(|| anyhow::anyhow!("Report has no 'variants' list"))?
@@ -93,12 +116,43 @@ pub fn read_measured_report(report: &serde_json::Value) -> Result<(f64, Vec<Repo
                     .get("perplexity")
                     .and_then(serde_json::Value::as_f64)
                     .ok_or_else(|| anyhow::anyhow!("Variant without perplexity"))?,
+                cross_entropy_nats: v
+                    .get("cross_entropy_nats")
+                    .and_then(serde_json::Value::as_f64),
                 delta_ppl: v.get("delta_ppl").and_then(serde_json::Value::as_f64),
                 accepted: v.get("accepted").and_then(serde_json::Value::as_bool),
             })
         })
         .collect::<Result<Vec<_>>>()?;
-    Ok((tolerance, variants))
+    let baseline = variants
+        .iter()
+        .find(|v| v.delta_ppl.is_none())
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("Report has no baseline variant"))?;
+    for v in variants.iter_mut().filter(|v| v.delta_ppl.is_some()) {
+        let mut measures = vec![Measure::new(
+            "perplexity",
+            baseline.perplexity,
+            v.perplexity,
+        )];
+        if let (Some(b), Some(c)) = (baseline.cross_entropy_nats, v.cross_entropy_nats) {
+            measures.push(Measure::new("cross_entropy_nats", b, c));
+        }
+        let judged = gate.judge(&measures).accepted;
+        if let Some(stored) = v.accepted {
+            if stored != judged {
+                anyhow::bail!(
+                    "Variant '{}' is recorded as {} but gate {} judges it {}",
+                    v.id,
+                    if stored { "accepted" } else { "rejected" },
+                    gate.id(),
+                    if judged { "accepted" } else { "rejected" }
+                );
+            }
+        }
+        v.accepted = Some(judged);
+    }
+    Ok((gate, variants))
 }
 
 pub fn execute(args: ValidateArgs) -> Result<()> {
@@ -106,7 +160,7 @@ pub fn execute(args: ValidateArgs) -> Result<()> {
         let text = std::fs::read_to_string(path)
             .map_err(|e| anyhow::anyhow!("Failed to read {path:?}: {e}"))?;
         let report: serde_json::Value = serde_json::from_str(&text)?;
-        let (tolerance, variants) = read_measured_report(&report)?;
+        let (gate, variants) = read_measured_report(&report)?;
         let failed: Vec<&str> = variants
             .iter()
             .filter(|v| v.accepted == Some(false))
@@ -117,13 +171,16 @@ pub fn execute(args: ValidateArgs) -> Result<()> {
                 "{}",
                 serde_json::to_string_pretty(&serde_json::json!({
                     "source": "measured report",
-                    "max_ppl_delta": tolerance,
+                    "gate": gate.to_report(),
                     "variants": variants,
                     "passed": failed.is_empty(),
                 }))?
             );
         } else {
-            println!("THME Perplexity Gate (measured report, tolerance Δ ≤ {tolerance})");
+            println!(
+                "THME quality gate {} (measured report; verdicts re-judged from the measurements)",
+                gate.id()
+            );
             for v in &variants {
                 let verdict = match v.accepted {
                     None => "baseline",
@@ -244,13 +301,74 @@ mod tests {
                 ]
             }
         });
-        let (tolerance, variants) = read_measured_report(&report).unwrap();
-        assert_eq!(tolerance, 0.45);
+        let (gate, variants) = read_measured_report(&report).unwrap();
+        assert_eq!(gate.max_ppl_delta(), Some(0.45));
         assert_eq!(variants.len(), 2);
         assert_eq!(variants[1].accepted, Some(false));
 
         let unmeasured = serde_json::json!({ "evaluation": { "measured": false } });
         assert!(read_measured_report(&unmeasured).is_err());
         assert!(read_measured_report(&serde_json::json!({})).is_err());
+    }
+
+    #[test]
+    fn recorded_gates_are_checked_and_verdicts_re_judged() {
+        let gate = GateSpec::perplexity(0.45);
+        let report = |accepted: bool, hash: String| {
+            let mut g = gate.to_report();
+            g["hash"] = serde_json::json!(hash);
+            serde_json::json!({
+                "evaluation": {
+                    "measured": true,
+                    "gate": g,
+                    "variants": [
+                        { "id": "baseline", "perplexity": 10.0, "delta_ppl": null },
+                        { "id": "recipe", "perplexity": 10.3, "delta_ppl": 0.3, "accepted": accepted }
+                    ]
+                }
+            })
+        };
+        let (g, v) = read_measured_report(&report(true, gate.hash())).unwrap();
+        assert_eq!(g.id(), "thme-perplexity@v1");
+        assert_eq!(v[1].accepted, Some(true));
+        // A stored verdict that disagrees with the gate is caught.
+        assert!(read_measured_report(&report(false, gate.hash())).is_err());
+        // An edited gate no longer matches its hash.
+        assert!(read_measured_report(&report(true, "0".repeat(64))).is_err());
+    }
+
+    /// Every committed measured report still validates, with its verdicts re-judged.
+    #[test]
+    fn committed_reports_re_judge_to_their_recorded_verdicts() {
+        let mut checked = 0;
+        for entry in walk(std::path::Path::new("docs/benchmarks")) {
+            let Ok(text) = std::fs::read_to_string(&entry) else {
+                continue;
+            };
+            let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) else {
+                continue;
+            };
+            if value["evaluation"]["variants"].is_array() && value["evaluation"]["measured"] == true
+            {
+                read_measured_report(&value).unwrap_or_else(|e| panic!("{entry:?}: {e:#}"));
+                checked += 1;
+            }
+        }
+        assert!(checked > 0, "no committed measured reports found");
+    }
+
+    fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+        let mut out = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for e in entries.flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    out.extend(walk(&p));
+                } else if p.extension().is_some_and(|x| x == "json") {
+                    out.push(p);
+                }
+            }
+        }
+        out
     }
 }

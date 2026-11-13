@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **Versioned quality gates** (THME-3003, v0.2.8.1): `quality::gate::GateSpec` holds a name, a
+  version and one or more criteria with absolute and/or relative margins; every report records
+  the gate, its SHA-256 and a per-criterion verdict. `thme evaluate` and `thme search` take
+  `--gate FILE`; gates may use `perplexity` or `cross_entropy_nats`. `thme validate --report`
+  rebuilds the recorded gate, checks its hash and re-judges every variant. Gate files live in
+  `configs/gates/`; guide in `docs/quality-gate.md`.
 - **Signed `.epiph` files** (THME-3019): `thme epiph sign FILE --secret-key KEY [--password-env VAR]`
   writes a Minisign signature over the manifest (which holds every payload digest);
   `thme epiph verify` checks it against the Epiphanes key in `minisign.pub` or `--public-key`,
@@ -118,6 +124,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/research/THME_measured_findings_2026-11.md` and `docs/subsystems.md`.
 
 ### Changed
+- One gate decision path: the legacy `QualityGate` functions, `assert_gate`, the co-surgery loop,
+  the rollback watchdog and the Studio's colour checks now call `GateSpec`; search's duplicate
+  report-row helper is gone. `thme validate --max-ppl-delta` now defaults to 0.45 like every
+  other command (was 0.25). The unread `configs/quality_gates.yaml` is replaced by
+  `configs/gates/*.json`.
 - Roadmap filled from v0.2.5 to v0.2.9 (math engine, Epiphanes model format, security and trust,
   quality gate and benchmarks, translation layer and convergence), nine sub-milestones each; v0.3
   now holds routing, distillation, GPU and scale-out. Every THME-30xx ticket is placed on its

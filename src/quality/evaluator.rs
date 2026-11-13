@@ -155,7 +155,8 @@ impl ModelEvaluator {
     ) -> PerplexityGateResult {
         let delta_ppl = candidate.perplexity - baseline.perplexity;
         let degradation_pct = (delta_ppl / baseline.perplexity.max(1e-6)) * 100.0;
-        let passed = delta_ppl <= max_delta_ppl;
+        let passed = super::gate::GateSpec::perplexity(max_delta_ppl)
+            .accepts_perplexity(baseline.perplexity, candidate.perplexity);
 
         let (decision, summary, recommended_action) = if passed {
             (
