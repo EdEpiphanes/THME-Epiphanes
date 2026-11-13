@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Measured depth probe: what the stored weights predict at each depth, and what
 //! happens when layers are repeated or skipped.
 //!

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use thme::allocator::ParetoAllocator;
 use thme::ir::{
     extract_layer_index, ModelArchitecture, ModelIR, TensorFormat, TensorIR, TensorRole,

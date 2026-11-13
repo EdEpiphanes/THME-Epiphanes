@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Reference CPU inference path for measured quality evaluation.
 //!
 //! Runs a real forward pass over file-backed LLaMA-family and GPT-NeoX weights so that

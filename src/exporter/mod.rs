@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Binary Model Exporter Subsystem (Milestone v0.1.8)
 //!
 //! Direct serialization of distilled and quantized models into deployable

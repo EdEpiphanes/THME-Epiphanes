@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 pub mod calibrate;
 pub mod co_surgery;
 pub mod convert;

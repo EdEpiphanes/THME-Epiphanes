@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Bounded-memory streaming helpers for exporter payloads.
 
 use anyhow::{Context, Result};

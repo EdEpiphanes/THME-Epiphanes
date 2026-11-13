@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Studio tab: TAB 2: Layer Tweaker & Sections (drill-down into parameters, weights, and sections)
 
 use super::*;

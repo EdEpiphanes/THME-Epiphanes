@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Exact multiple-choice allocation (dossier WP2).
 //!
 //! Each item (a tensor group) must take exactly one of its options; an option has an

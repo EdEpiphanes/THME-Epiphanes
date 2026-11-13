@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Measured precision sweep: how much perplexity each precision assignment actually costs.
 //!
 //! Every variant is evaluated with a real forward pass on the same tokens. Tensors

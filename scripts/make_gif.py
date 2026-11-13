@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
 """
 Turn a THME Studio frame recording (rec-000.bmp, rec-001.bmp, ...) into a README GIF.
 

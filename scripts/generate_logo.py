@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-only
 """Renders a Calabi-Yau quintic slice (Hanson's construction) as a flat-shaded SVG mark.
 
 The Fermat quintic slice z1^5 + z2^5 = 1 is covered by 25 patches. Patch (k1, k2) is

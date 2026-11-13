@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Bring Your Own Algorithm (BYOA) Engine for THME
 //!
 //! Allows researchers, developers, and automated Teacher LLMs to:

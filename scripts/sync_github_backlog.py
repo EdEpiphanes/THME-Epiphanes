@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
 """
 Mirror the active backlog (BACKLOG.md, between the backlog:start/end markers) to GitHub.
 

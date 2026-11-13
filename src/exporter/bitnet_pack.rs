@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! BitNet b1.58 Vectorized Bitstream Packer (Milestone v0.1.8.1)
 //!
 //! Encodes 1.58-bit ternary states {-1, 0, +1} into dense 2-bit representations

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Studio tab: TAB 3: Distillation & Matrix Engine (All algorithms + Automated Parameter Decider)
 
 use super::*;

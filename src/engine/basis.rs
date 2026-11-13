@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Orthonormal bases (dossier WP5). The one Walsh-Hadamard transform in THME lives here;
 //! every caller (BYOA rotated quantization, `MatrixMath`) uses it, so two code paths that
 //! must rotate identically cannot drift apart.

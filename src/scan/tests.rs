@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Fixtures are built in temporary folders from bytes. They imitate the shape of known attack
 //! patterns (an `os.system` import, a template-injection string, an ELF header) but contain no
 //! working payload, and nothing is ever loaded or executed.

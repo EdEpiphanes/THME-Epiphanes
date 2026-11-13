@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Documentation capture mode for THME Studio.
 //!
 //! When `THME_GUI_CAPTURE_DIR` is set, the Studio opens, shows each tab in turn, saves

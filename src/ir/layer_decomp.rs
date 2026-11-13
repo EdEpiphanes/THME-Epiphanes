@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Layer Deconstruction & Topological Component Disassembly Engine
 //!
 //! Deconstructs any Transformer/LLM layer into its discrete mathematical anatomy:

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! `thme calibrate`: record per-input-channel activation statistics of every linear tensor
 //! on calibration tokens (roadmap v0.2.2.3), for activation-aware quantization.
 

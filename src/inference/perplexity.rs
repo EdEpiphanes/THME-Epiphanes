@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Measured perplexity over a pre-tokenized corpus.
 //!
 //! The corpus is split into consecutive, non-overlapping windows of

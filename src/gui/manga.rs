@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Manga x liquid-glass style kit for THME Studio, and the Calabi-Yau manifold geometry
 //! behind the Live 3D "Manifold" view.
 //!

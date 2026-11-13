@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use crate::ir::WeightProfile;
 
 /// IEEE half precision to f32 (shared implementation in `engine::minifloat`).

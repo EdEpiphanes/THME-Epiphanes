@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Number formats (dossier WP3). The one absmean-ternary quantizer in THME lives here; the
 //! BitNet packer, `MatrixMath` and the BYOA `AbsmeanTernary` rule all call it.
 //!

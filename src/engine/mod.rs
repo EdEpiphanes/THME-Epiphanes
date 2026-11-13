@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Math engine (research dossier v3.1, Appendix M).
 //!
 //! Validated numerical primitives live here, each tested against an oracle outside its own

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! GGML K-quant block codecs: Q4_K, Q5_K and Q6_K (256 values per super-block).
 //!
 //! Byte layouts follow GGML's `block_q4_K` (144 bytes), `block_q5_K` (176 bytes) and

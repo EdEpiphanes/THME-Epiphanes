@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! `thme search`: find a mixed-precision recipe from measured costs.
 //!
 //! 1. The token file is split into a calibration slice (used for every search decision) and a

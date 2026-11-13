@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use thme::trainer::{MicroTrainer, OptimizerType, TrainingConfig, TrainingLossType};
 
 #[test]

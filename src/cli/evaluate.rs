@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! `thme evaluate`: run a surgery recipe through the measured quality gate.
 //!
 //! The recipe is applied to the model's IR, every targeted tensor is round-tripped through

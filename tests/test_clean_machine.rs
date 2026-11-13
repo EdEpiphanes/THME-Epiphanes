@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Clean-Machine Standalone Verification Integration Test (Milestone v0.2.0.9).
 //! Verifies that THME executes cleanly on ephemeral environments without
 //! external dynamic dependencies, cache assumptions, or hardcoded paths.

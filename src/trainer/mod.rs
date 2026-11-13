@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Micro-Trainer & On-Device Adaptation Engine
 //!
 //! Provides in-engine lightweight parameter adaptation, fine-tuning, and calibration training loops:

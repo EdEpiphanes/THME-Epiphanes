@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! 8 Specialized AI Model Paradigms & Universal Conversion Manifold
 //!
 //! Categorization and conversion engine covering the complete 8-model taxonomy:

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Adversarial Stress & Empirical Challenge Test Suite for Pure-Rust GGUF v3 Binary Writer (v0.1.8.2 / v0.1.8.3)
 //!
 //! EMPIRICAL CHALLENGER 1 ADVERSARIAL HARNESS:

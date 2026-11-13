@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! Pure-Rust GGUF v3 Binary Writer (Milestone v0.1.8.2)
 //!
 //! Direct serialization of tensors and model metadata into binary GGUF v3
