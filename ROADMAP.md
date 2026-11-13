@@ -32,7 +32,7 @@ flowchart LR
     classDef later fill:#ffffff,stroke:#0b0b0b,stroke-width:1.5px,stroke-dasharray:4 3,color:#52514e;
 
     subgraph NOW["Now"]
-        N4["Scan on import"]:::now
+        N4["Scanner coverage (flate2)"]:::now
         N5["Transport and ODE steppers"]:::now
     end
     subgraph NEXT["Next"]
@@ -68,6 +68,7 @@ flowchart LR
 | SPDX headers (THME-3005) | `AGPL-3.0-only` header on all 168 source files; `scripts/spdx.py --check` in CI | Tested in CI |
 | Signed `.epiph` (THME-3019) | Minisign signature over the manifest; `thme epiph sign`, `verify --require-signature`; Epiphanes key by default | Tested: tamper, wrong key, broken trailer |
 | Benchmark registry (THME-3024) | `src/bench`: strict task files and result records with every Table R2 field; `thme bench list/validate/verify-dataset` | Tested: malformed files refused, records round-trip, record-task mismatch caught |
+| Scan on import (v0.2.7.3) | Every model load (CLI, MCP server, Studio) runs the scanner first and refuses on a high or critical finding; `--allow-unsafe-model` turns that into a warning | Tested: clean model loads; planted pickle refused, allowed with the override; injected template refused |
 | Benchmark charts (THME-3032) | `thme bench chart`: scores with intervals, paired changes against a baseline, a model-by-benchmark heatmap; `engine::viz` interval plot | Tested: row and cell counts, signs of paired changes, evidence labels; rendered and checked |
 | Benchmark runner, imported mode (THME-3031) | `thme bench score`: outputs from any tool (answers, log-likelihoods or pass counts) scored with the metric library into a complete result record, labelled imported | Tested: generation, likelihood and pass@k outputs; partial, duplicate and unknown outputs refused; Table R3 interval reproduced |
 | SVG visual engine (THME-3007) | `engine::viz`: deterministic SVG line plots (log axis), heatmaps, scatter with a required caption, layered dataflow graphs, Pareto fronts; evidence label on every chart; palette in `assets/chart-themes.json`, shared with the chart script | Tested: element counts match data, byte-identical output, log-axis and cycle errors; rendered and checked in light and dark |
@@ -84,7 +85,8 @@ flowchart LR
 
 | Track | Item | Status | Depends on |
 | :--- | :--- | :--- | :--- |
-| Security | **Scan on import** (v0.2.7.3): every command that loads a model scans it first and refuses on a high finding unless overridden explicitly | Not started | Scanner v1 |
+| Security | **Scanner coverage** (THME-3022, v0.2.7.2): deflate-compressed pickles and zip entries through `flate2` (approved, already in the tree); ONNX, Keras and NumPy object arrays | Not started | Scanner v1 |
+| Tooling | **Toolchain 1.100.0** (approved): bump the pinned compiler from 1.99.1; MSRV stays 1.89 | Not started | None |
 | Engine | **Transport and ODE steppers** (dossier WP4, WP6): Sinkhorn transport with mass conservation; Euler, RK4 and adaptive RK with error-order tests | Not started | Engine core |
 | Quality and evidence | **Benchmark runner, native and bridged modes** (v0.2.8.3): produce outputs with THME's forward pass or an external tool; resume and cache | Blocked | Model runs paused |
 
@@ -92,13 +94,13 @@ flowchart LR
 
 | Track | Item | Depends on |
 | :--- | :--- | :--- |
-| Security | Scanner for compressed pickles, ONNX, Keras, NumPy (THME-3022) | Owner approval of an inflate dependency |
 | Formats and calibration | GPTQ-style rounding (THME-2205); llama.cpp compatibility check on synthetic files (THME-2208) | Calibration |
 
 ### Later: direction
 
 | Track | Item |
 | :--- | :--- |
+| Rust everywhere | Owner direction: engine, 3D visuals and speed in Rust. Port `scripts/*.py` to Rust commands (charts already in `engine::viz`), parallel CPU paths with a pure-Rust thread pool, 3D model and manifold views in the Studio on its existing GPU stack |
 | Epiphanes model format | Lossless compression (THME-3015); GPU/CPU placement plan from the exact allocator (THME-3016) |
 | Translation layer | Architecture-neutral graph, exact symmetries, weight layout, architecture inference, compatibility reports (dossier WP14-18), behind a permission record (WP19) |
 | Routing and needles | Calibration metrics, routers, hierarchical scoring, needle training (WP21-25) |
@@ -348,7 +350,7 @@ with signatures and a dependency report.
 | :--- | :--- | :--- |
 | v0.2.7.1 | Static model scanner: pickles, headers, hidden bytes, templates, remote code (THME-3018) | **Done**: rule fixtures tested; nothing loaded or run |
 | v0.2.7.2 | Scanner coverage: compressed pickles, ONNX, Keras, NumPy object arrays (THME-3022) | |
-| v0.2.7.3 | Scan on import: every command that loads a model scans it first, with an explicit override | |
+| v0.2.7.3 | Scan on import: every command that loads a model scans it first, with an explicit override | **Done**: in `ModelImporter::import`; `--allow-unsafe-model` |
 | v0.2.7.4 | Permission and ownership record for reverse-engineering features (WP19, THME-3008) | |
 | v0.2.7.5 | Developer sandbox design: process isolation, no network, file and time limits per OS (THME-3020) | **Done**: [design](docs/sandbox.md) with threat model, layers per OS and escape tests |
 | v0.2.7.6 | Sandbox implementation with escape tests; remote-code models and plugins run only inside it | **Commercial version**: shelved by the owner; the open-source version does not run untrusted code |
