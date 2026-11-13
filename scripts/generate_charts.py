@@ -18,24 +18,12 @@ import math
 import os
 import sys
 
-FONT = '"Chakra Petch", Bahnschrift, "Arial Narrow", "Segoe UI", sans-serif'
-
-THEMES = {
-    # Black-and-white manga panel style (docs/brand-guidelines.md): ink, paper and greys.
-    # Series are told apart by tone (solid ink vs mid grey) and always labelled directly.
-    "light": {
-        "surface": "#ffffff", "border": "#0b0b0b", "ink": "#0b0b0b", "ink2": "#3d3d3d",
-        "muted": "#7a7a7a", "grid": "#e4e4e2", "axis": "#9a9a98", "shadow": "#0b0b0b",
-        "s1": "#0b0b0b", "s2": "#8c8c8c", "deemph": "#b4b4b2",
-        "good": "#0b0b0b", "critical": "#0b0b0b", "mark": "#ffffff",
-    },
-    "dark": {
-        "surface": "#141414", "border": "#f4f2ec", "ink": "#f4f2ec", "ink2": "#c9c7c1",
-        "muted": "#8f8d88", "grid": "#2a2a29", "axis": "#5a5956", "shadow": "#f4f2ec",
-        "s1": "#f4f2ec", "s2": "#8c8c8c", "deemph": "#4e4e4c",
-        "good": "#f4f2ec", "critical": "#f4f2ec", "mark": "#141414",
-    },
-}
+# One palette for this script and thme::engine::viz: assets/chart-themes.json.
+_THEME_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "chart-themes.json")
+with open(_THEME_FILE, encoding="utf-8") as _f:
+    _THEME_DATA = json.load(_f)
+FONT = _THEME_DATA["font"]
+THEMES = {name: _THEME_DATA[name] for name in ("light", "dark")}
 
 ROLE_NAMES = {
     "attention_q": "Attention Q", "attention_k": "Attention K", "attention_v": "Attention V",

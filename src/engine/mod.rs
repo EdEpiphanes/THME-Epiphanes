@@ -15,5 +15,6 @@ pub mod basis;
 pub mod error;
 pub mod minifloat;
 pub mod numfmt;
+pub mod viz;
 
 pub use error::{ensure_finite, EngineError, EngineResult};
