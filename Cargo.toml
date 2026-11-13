@@ -53,8 +53,8 @@ memmap2 = "0.9"
 comfy-table = "7.1"
 sysinfo = "0.33"
 anyhow = "1.0"
-eframe = { version = "0.31", default-features = true }
-rfd = "0.15"
+eframe = { version = "0.37", default-features = true }
+rfd = "0.18"
 
 [dev-dependencies]
 tempfile = "3.17"
