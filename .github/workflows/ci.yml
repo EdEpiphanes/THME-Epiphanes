@@ -1,4 +1,4 @@
-﻿name: CI
+name: CI
 
 on:
   push:
@@ -115,6 +115,13 @@ jobs:
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check advisories bans licenses sources
+      # Release archives ship THIRD_PARTY_LICENSES.html; fail here, not at release time,
+      # if a dependency's licence text cannot be found.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-about@0.9.3
+      - name: Third-party licence notices generate
+        run: cargo about generate --locked about.hbs -o THIRD_PARTY_LICENSES.html
 
   latest-stable:
     name: Preview on latest stable (non-blocking)
