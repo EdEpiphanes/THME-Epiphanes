@@ -10,8 +10,8 @@
 //! [`SandboxError::Unsupported`] and starts nothing. There is no flag that turns layers off.
 //! [`check`] reports, layer by layer, what this host can enforce.
 //!
-//! Backends: Windows (AppContainer and job object), Linux (Landlock, seccomp, rlimits). macOS is
-//! refused until its backend lands; see the roadmap.
+//! Backends: Windows (AppContainer and job object), Linux (Landlock, seccomp, rlimits) and macOS
+//! (Seatbelt, rlimits). Other systems are refused.
 
 use std::ffi::OsString;
 use std::fmt;
@@ -20,7 +20,11 @@ use std::time::Duration;
 
 #[cfg(target_os = "linux")]
 mod linux;
+#[cfg(target_os = "macos")]
+mod macos;
 pub mod probe;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+mod unix;
 #[cfg(windows)]
 mod windows;
 
@@ -190,7 +194,11 @@ pub fn check() -> Support {
     {
         linux::check()
     }
-    #[cfg(not(any(windows, target_os = "linux")))]
+    #[cfg(target_os = "macos")]
+    {
+        macos::check()
+    }
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
     {
         Support {
             os: std::env::consts::OS,
@@ -223,7 +231,11 @@ pub fn run(
     {
         linux::run(policy, program, args, stdin)
     }
-    #[cfg(not(any(windows, target_os = "linux")))]
+    #[cfg(target_os = "macos")]
+    {
+        macos::run(policy, program, args, stdin)
+    }
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
     {
         let _ = (args, stdin);
         Err(SandboxError::Unsupported {
@@ -236,7 +248,10 @@ pub fn run(
 /// Collects a pipe into memory up to `cap` bytes; returns the bytes and whether the cap was hit.
 /// Keeps reading (and discarding) after the cap is hit so the writer is never blocked; the
 /// caller stops the run when it sees the flag.
-#[cfg_attr(not(any(windows, target_os = "linux")), allow(dead_code))]
+#[cfg_attr(
+    not(any(windows, target_os = "linux", target_os = "macos")),
+    allow(dead_code)
+)]
 fn drain(
     mut reader: impl std::io::Read,
     cap: u64,
@@ -259,7 +274,10 @@ fn drain(
 }
 
 /// Sizes of every file under `dir`, recursively, without following links.
-#[cfg_attr(not(any(windows, target_os = "linux")), allow(dead_code))]
+#[cfg_attr(
+    not(any(windows, target_os = "linux", target_os = "macos")),
+    allow(dead_code)
+)]
 fn file_sizes(dir: &Path) -> std::collections::HashMap<PathBuf, u64> {
     let mut sizes = std::collections::HashMap::new();
     let mut stack = vec![dir.to_path_buf()];
@@ -283,7 +301,10 @@ fn file_sizes(dir: &Path) -> std::collections::HashMap<PathBuf, u64> {
 
 /// Whether the run wrote a file over `cap`: a file that is new or grew since `before` and is
 /// now larger than `cap`. Files that were already there unchanged do not count.
-#[cfg_attr(not(any(windows, target_os = "linux")), allow(dead_code))]
+#[cfg_attr(
+    not(any(windows, target_os = "linux", target_os = "macos")),
+    allow(dead_code)
+)]
 fn wrote_over(dir: &Path, before: &std::collections::HashMap<PathBuf, u64>, cap: u64) -> bool {
     file_sizes(dir)
         .into_iter()

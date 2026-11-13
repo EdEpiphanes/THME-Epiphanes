@@ -15,14 +15,11 @@
 
 use std::collections::BTreeMap;
 use std::ffi::OsString;
-use std::io::Write;
 use std::os::fd::{AsRawFd, OwnedFd};
-use std::os::unix::process::{CommandExt, ExitStatusExt};
+use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use landlock::{
     Access, AccessFs, AccessNet, CompatLevel, Compatible, PathBeneath, PathFd, Ruleset,
@@ -33,7 +30,7 @@ use seccompiler::{
     SeccompRule,
 };
 
-use super::{drain, file_sizes, wrote_over, Ended, Layer, Outcome, Policy, SandboxError, Support};
+use super::{file_sizes, Layer, Outcome, Policy, SandboxError, Support};
 
 /// Lowest Landlock ABI accepted: 3 adds `Truncate`, without which a file outside the work folder
 /// could still be truncated.
@@ -394,86 +391,9 @@ pub(super) fn run(
         });
     }
     let started = Instant::now();
-    let mut child = cmd
+    let child = cmd
         .spawn()
         .map_err(|e| SandboxError::Os(format!("starting {program:?} failed: {e}")))?;
     drop(ruleset);
-    let pgid = child.id() as i32;
-    let kill_group = || {
-        // SAFETY: signals only our own process group.
-        unsafe { libc::killpg(pgid, libc::SIGKILL) };
-    };
-
-    let over = Arc::new(AtomicBool::new(false));
-    let cap = policy.max_output_bytes;
-    let (o1, o2) = (over.clone(), over.clone());
-    let out_pipe = child.stdout.take();
-    let err_pipe = child.stderr.take();
-    let out_thread =
-        std::thread::spawn(move || out_pipe.map(|p| drain(p, cap, &o1)).unwrap_or_default());
-    let err_thread =
-        std::thread::spawn(move || err_pipe.map(|p| drain(p, cap, &o2)).unwrap_or_default());
-    let mut in_pipe = child.stdin.take();
-    let input = stdin.to_vec();
-    let in_thread = std::thread::spawn(move || {
-        if let Some(p) = in_pipe.as_mut() {
-            let _ = p.write_all(&input);
-        }
-    });
-
-    let cpu_cap = policy.cpu_time.as_secs_f64();
-    let mut ended = None;
-    let status = loop {
-        let exited = child
-            .try_wait()
-            .map_err(|e| SandboxError::Os(format!("waiting failed: {e}")))?;
-        let (rss, cpu_used, procs) = sample_group(pgid);
-        let reason = if rss > policy.memory_bytes {
-            Some(Ended::MemoryLimit)
-        } else if procs >= policy.max_processes {
-            Some(Ended::ProcessLimit)
-        } else if cpu_used > cpu_cap {
-            Some(Ended::CpuLimit)
-        } else if over.load(Ordering::SeqCst)
-            || wrote_over(&policy.work_dir, &before, policy.max_file_bytes)
-        {
-            Some(Ended::OutputLimit)
-        } else if started.elapsed() >= policy.wall_time {
-            Some(Ended::TimeLimit)
-        } else {
-            None
-        };
-        if reason.is_some() && exited.is_none() {
-            ended = reason;
-            kill_group();
-            break child.wait().ok();
-        }
-        if let Some(status) = exited {
-            break Some(status);
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    };
-    let wall = started.elapsed();
-    kill_group();
-    let stdout = out_thread.join().unwrap_or_default();
-    let stderr = err_thread.join().unwrap_or_default();
-    let _ = in_thread.join();
-    let ended = ended.unwrap_or_else(|| match status {
-        _ if over.load(Ordering::SeqCst) => Ended::OutputLimit,
-        _ if wrote_over(&policy.work_dir, &before, policy.max_file_bytes) => Ended::OutputLimit,
-        Some(s) => match (s.code(), s.signal()) {
-            (Some(c), _) => Ended::Exited(c),
-            (None, Some(libc::SIGXCPU)) => Ended::CpuLimit,
-            (None, Some(libc::SIGXFSZ)) => Ended::OutputLimit,
-            (None, Some(sig)) => Ended::Signalled(sig),
-            (None, None) => Ended::Signalled(0),
-        },
-        None => Ended::Signalled(libc::SIGKILL),
-    });
-    Ok(Outcome {
-        ended,
-        stdout,
-        stderr,
-        wall,
-    })
+    super::unix::supervise(child, started, policy, stdin, &before, sample_group)
 }

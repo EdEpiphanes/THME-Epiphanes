@@ -6,7 +6,7 @@
 
 // Most helpers serve the backend suites; other OSes only check the refusal until theirs lands.
 #![cfg_attr(
-    not(any(windows, target_os = "linux")),
+    not(any(windows, target_os = "linux", target_os = "macos")),
     allow(dead_code, unused_imports)
 )]
 
@@ -66,7 +66,7 @@ fn s(p: &Path) -> &str {
     p.to_str().unwrap()
 }
 
-#[cfg(not(any(windows, target_os = "linux")))]
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 #[test]
 fn refuses_to_start_without_a_backend() {
     let rig = Rig::new();
@@ -77,7 +77,7 @@ fn refuses_to_start_without_a_backend() {
     assert!(!thme::sandbox::check().all_supported());
 }
 
-#[cfg(any(windows, target_os = "linux"))]
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 mod escapes {
     use super::*;
 
