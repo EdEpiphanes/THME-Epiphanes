@@ -19,7 +19,7 @@ jobs:
     name: Repository hygiene
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: No absolute developer paths
         run: |
@@ -39,7 +39,7 @@ jobs:
     name: Format and clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       # rust-toolchain.toml pins the compiler, rustfmt and clippy.
       - run: rustup show active-toolchain
       - uses: Swatinem/rust-cache@v2
@@ -55,7 +55,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --locked
 
@@ -72,7 +72,7 @@ jobs:
     name: Minimum supported Rust (Cargo.toml rust-version)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Read rust-version
         id: msrv
         run: echo "version=$(grep -m1 '^rust-version' Cargo.toml | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
@@ -87,8 +87,8 @@ jobs:
     name: Published figures regenerate from committed reports
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Scripts compile
@@ -111,7 +111,7 @@ jobs:
     name: Dependency advisories, licences and sources
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check advisories bans licenses sources
@@ -121,7 +121,7 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Override the pinned toolchain
         run: |
           rustup toolchain install stable --profile minimal --component clippy
