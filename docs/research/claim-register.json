@@ -1,0 +1,1231 @@
+{
+ "source": "docs/research/THME_Research_Dossier_v3.1_2026-11-13.pdf",
+ "extracted": "2026-11-13",
+ "labels": {
+  "S": "Standard: established in the literature or by elementary derivation (dossier Table 1)",
+  "M": "Modified: appeared in earlier drafts and has been corrected (Table 1)",
+  "U": "Unverified: plausible design hypothesis without supporting evidence (Table 1)",
+  "C": "Contradicted: cannot hold as originally stated (Table 1)",
+  "T": "Used in Appendices M to R for results checked in a prototype or test; not defined in Table 1",
+  "Design decision": "Used once (V-101); not defined in Table 1",
+  "not stated": "No status appears for this claim in the dossier text"
+ },
+ "citations_checked": false,
+ "claims": [
+  {
+   "id": "V-01",
+   "claim": "Attention compute O(N²); KV memory grows as O(N²)",
+   "status": "M",
+   "status_qualified": false,
+   "section": "2.1",
+   "page": 29,
+   "note": "Compute O(N²) per sequence; cache O(N)"
+  },
+  {
+   "id": "V-02",
+   "claim": "32 GB KV cache at 32k tokens for 70B",
+   "status": "M",
+   "status_qualified": false,
+   "section": "2.1",
+   "page": 29,
+   "note": "10.7 GB (GQA) or 85.9 GB (MHA); recompute per config"
+  },
+  {
+   "id": "V-03",
+   "claim": "FP arithmetic is non-associative",
+   "status": "S",
+   "status_qualified": false,
+   "section": "2.2",
+   "page": 29,
+   "note": "None"
+  },
+  {
+   "id": "V-04",
+   "claim": "Multipliers use 70–80% of AI processor energy",
+   "status": "C",
+   "status_qualified": false,
+   "section": "2.2, 5.3",
+   "page": 29,
+   "note": "Drop; weight movement dominates at batch 1"
+  },
+  {
+   "id": "V-05",
+   "claim": "Backward locking and weight transport",
+   "status": "S",
+   "status_qualified": false,
+   "section": "2.3",
+   "page": 30,
+   "note": "Frame as plausibility problem, not GPU accuracy problem"
+  },
+  {
+   "id": "V-06",
+   "claim": "dim Cl(p,q) = 2ⁿ; grade dimensions are binomial",
+   "status": "S",
+   "status_qualified": false,
+   "section": "4.2",
+   "page": 30,
+   "note": "Unit test"
+  },
+  {
+   "id": "V-07",
+   "claim": "Rotors preserve norm and prevent explosion",
+   "status": "M",
+   "status_qualified": false,
+   "section": "4.2",
+   "page": 30,
+   "note": "True only for same-sign bivectors; test"
+  },
+  {
+   "id": "V-08",
+   "claim": "Signature (3,2) enforces a causal cone",
+   "status": "C",
+   "status_qualified": false,
+   "section": "4.3",
+   "page": 30,
+   "note": "Use (m+1, 1)"
+  },
+  {
+   "id": "V-09",
+   "claim": "Light cone replaces masking; topological invariance",
+   "status": "M",
+   "status_qualified": false,
+   "section": "4.3",
+   "page": 30,
+   "note": "Learned extra restriction on stored events"
+  },
+  {
+   "id": "V-10",
+   "claim": "Stabilizer correction Ψ − Σσ _kS_k Ψ",
+   "status": "M",
+   "status_qualified": false,
+   "section": "4.4",
+   "page": 30,
+   "note": "Use Equations 11/13; test idempotence"
+  },
+  {
+   "id": "V-11",
+   "claim": "Topological protection against rounding noise",
+   "status": "U",
+   "status_qualified": false,
+   "section": "4.4",
+   "page": 30,
+   "note": "Test H-S"
+  },
+  {
+   "id": "V-12",
+   "claim": "4-bit phase LUT removes all floating-point logic",
+   "status": "M",
+   "status_qualified": false,
+   "section": "4.5",
+   "page": 30,
+   "note": "Accumulation needs Cartesian adders"
+  },
+  {
+   "id": "V-13",
+   "claim": "Calabi–Yau cycles store information without using memory",
+   "status": "C",
+   "status_qualified": false,
+   "section": "4.5",
+   "page": 30,
+   "note": "Drop; test H-K surrogate"
+  },
+  {
+   "id": "V-14",
+   "claim": "CY Laplacian spectrum m² ∝ n(n+d)/R²",
+   "status": "C",
+   "status_qualified": false,
+   "section": "4.5",
+   "page": 30,
+   "note": "Sphere formula; drop"
+  },
+  {
+   "id": "V-15",
+   "claim": "Eleven dimensions is the natural limit for the manifold",
+   "status": "C",
+   "status_qualified": false,
+   "section": "4.2",
+   "page": 30,
+   "note": "No ML basis; n is a hyperparameter"
+  },
+  {
+   "id": "V-16",
+   "claim": "Schedule yields 80/15/5, 20/60/20, 5/15/80",
+   "status": "M",
+   "status_qualified": false,
+   "section": "4.6",
+   "page": 30,
+   "note": "Approximate at λ ≈ 0.15, 0.5, 0.85 only"
+  },
+  {
+   "id": "V-17",
+   "claim": "80% of tokens take a free fast path",
+   "status": "U",
+   "status_qualified": false,
+   "section": "4.6",
+   "page": 30,
+   "note": "Design target; f̄ = 0.44, not 0.2"
+  },
+  {
+   "id": "V-18",
+   "claim": "Skew-Hermitian coupling gives a Hopfield energy",
+   "status": "C",
+   "status_qualified": false,
+   "section": "4.7",
+   "page": 30,
+   "note": "Replace with Equation 23"
+  },
+  {
+   "id": "V-19",
+   "claim": "Langevin noise scale √(2T dt)",
+   "status": "S",
+   "status_qualified": false,
+   "section": "4.7",
+   "page": 30,
+   "note": "Unit test"
+  },
+  {
+   "id": "V-20",
+   "claim": "Predictive coding removes weight transport",
+   "status": "C",
+   "status_qualified": false,
+   "section": "4.8",
+   "page": 30,
+   "note": "Errors still use W ᵀ"
+  },
+  {
+   "id": "V-21",
+   "claim": "Energy table for 7/5 nm with MAC entries",
+   "status": "M",
+   "status_qualified": false,
+   "section": "5.3",
+   "page": 31,
+   "note": "45 nm multiply/add figures; relabeled"
+  },
+  {
+   "id": "V-22",
+   "claim": "0.42 mJ/token; 80× energy reduction",
+   "status": "C",
+   "status_qualified": false,
+   "section": "5.3",
+   "page": 31,
+   "note": "Off-chip DRAM at batch 1: ≈ 0.25–1.2 J; weight-byte gain 8– 18×"
+  },
+  {
+   "id": "V-23",
+   "claim": "17.5 GB total inference memory",
+   "status": "M",
+   "status_qualified": false,
+   "section": "5.2",
+   "page": 31,
+   "note": "Packed body only; add embeddings, state, scales"
+  },
+  {
+   "id": "V-24",
+   "claim": "720 Wh pack gives 28.8 h at 25 W",
+   "status": "S",
+   "status_qualified": false,
+   "section": "5.4",
+   "page": 31,
+   "note": "Arithmetic correct; earlier “18+ h” inconsistent"
+  },
+  {
+   "id": "V-25",
+   "claim": "25 W runs full 70B-grade reasoning",
+   "status": "U",
+   "status_qualified": false,
+   "section": "5.4",
+   "page": 31,
+   "note": "Measure"
+  },
+  {
+   "id": "V-26",
+   "claim": "5–15B-token distillation in days on one GPU",
+   "status": "C",
+   "status_qualified": false,
+   "section": "6.4",
+   "page": 31,
+   "note": "About 85 days at assumed 10 TFLOP/s"
+  },
+  {
+   "id": "V-27",
+   "claim": "Training fits under 9.5 GB VRAM",
+   "status": "U",
+   "status_qualified": false,
+   "section": "6.4",
+   "page": 31,
+   "note": "About 16 B/param without 8-bit states"
+  },
+  {
+   "id": "V-28",
+   "claim": "SVD maps top singular vectors to ternary, rotations to skew",
+   "status": "U",
+   "status_qualified": false,
+   "section": "6.2",
+   "page": 31,
+   "note": "Use absmean and polar decomposition"
+  },
+  {
+   "id": "V-29",
+   "claim": "Ternary packing; 1B model in 250 MB",
+   "status": "M",
+   "status_qualified": false,
+   "section": "5.2, 6.5",
+   "page": 31,
+   "note": "Packing is standard; add embeddings (about 0.8 GB)"
+  },
+  {
+   "id": "V-30",
+   "claim": "CPU ternary inference 2–4× faster than GPU at 1/10 power",
+   "status": "M",
+   "status_qualified": false,
+   "section": "6.5",
+   "page": 31,
+   "note": "Gains were relative to CPU baselines"
+  },
+  {
+   "id": "V-31",
+   "claim": "State-space models have O(1) per-token inference",
+   "status": "S",
+   "status_qualified": false,
+   "section": "3",
+   "page": 31,
+   "note": "None"
+  },
+  {
+   "id": "V-32",
+   "claim": "2,048 components per channel with memory savings",
+   "status": "C",
+   "status_qualified": false,
+   "section": "4.2",
+   "page": 31,
+   "note": "Truncate grades or restrict to even subalgebra"
+  },
+  {
+   "id": "V-33",
+   "claim": "Averaging K readings reduces noise as 1/K",
+   "status": "S",
+   "status_qualified": true,
+   "section": "Appendix E",
+   "page": 48,
+   "note": "for independent noise; C for state error Table E2: floor from shared error"
+  },
+  {
+   "id": "V-34",
+   "claim": "Keeping the best half of readings improves accuracy",
+   "status": "U",
+   "status_qualified": false,
+   "section": "Appendix E",
+   "page": 48,
+   "note": "Better only for heavy-tailed noise (Table E1)"
+  },
+  {
+   "id": "V-35",
+   "claim": "Multiple stochastic readings are cheaper than extra precision",
+   "status": "C",
+   "status_qualified": true,
+   "section": "Appendix E",
+   "page": 48,
+   "note": "on digital hardware Table E3"
+  },
+  {
+   "id": "V-36",
+   "claim": "Dispersion of dithered readings signals token difficulty",
+   "status": "C",
+   "status_qualified": false,
+   "section": "Appendix E",
+   "page": 48,
+   "note": "Only head disagreement can; H-E"
+  },
+  {
+   "id": "V-37",
+   "claim": "Loop-back as adaptive re-reading saves computation",
+   "status": "U",
+   "status_qualified": false,
+   "section": "Appendix E",
+   "page": 48,
+   "note": "H-C3"
+  },
+  {
+   "id": "V-38",
+   "claim": "Gated delta state is bounded",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix E",
+   "page": 48,
+   "note": "Derivation after Equation E1"
+  },
+  {
+   "id": "V-39",
+   "claim": "LP gives the best mix of α , β , γ per layer",
+   "status": "M",
+   "status_qualified": false,
+   "section": "Appendix F",
+   "page": 54,
+   "note": "Linear objective gives at most one mixed layer; use channel-level allocation (F.1, F.2)"
+  },
+  {
+   "id": "V-40",
+   "claim": "Optimal bit allocation has a closed form",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix F",
+   "page": 54,
+   "note": "Reverse water-filling (Equation F2), high-resolution approximation"
+  },
+  {
+   "id": "V-41",
+   "claim": "Northwest-corner method solves the allocation",
+   "status": "C",
+   "status_qualified": false,
+   "section": "Appendix F",
+   "page": 54,
+   "note": "Starting solution only; 48% above optimum in toy case"
+  },
+  {
+   "id": "V-42",
+   "claim": "Optimal transport / Sinkhorn can enforce routing capacity",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix F",
+   "page": 54,
+   "note": "Used for balanced routing; to be tested here (H-A3)"
+  },
+  {
+   "id": "V-43",
+   "claim": "TSP improves the architecture",
+   "status": "U",
+   "status_qualified": false,
+   "section": "Appendix F",
+   "page": 54,
+   "note": "Narrow hardware-layout use only"
+  },
+  {
+   "id": "V-44",
+   "claim": "Self-tuning loop converges and can be frozen",
+   "status": "U",
+   "status_qualified": false,
+   "section": "Appendix F",
+   "page": 54,
+   "note": "Requires external evaluator and three splits (F.5)"
+  },
+  {
+   "id": "V-45",
+   "claim": "Accuracy approaches 1 as tuning continues",
+   "status": "C",
+   "status_qualified": false,
+   "section": "Appendix F",
+   "page": 54,
+   "note": "Ceiling a_∞ < 1 in general; achievable only for verifiable tasks (F.6)"
+  },
+  {
+   "id": "V-46",
+   "claim": "More complex formulas improve precision, speed, and energy",
+   "status": "C",
+   "status_qualified": false,
+   "section": "Appendix G",
+   "page": 60,
+   "note": "Only mechanisms passing Equation G1 do; complexity has a cost"
+  },
+  {
+   "id": "V-47",
+   "claim": "Tropical (max-plus) layers are multiplier-free and useful",
+   "status": "U",
+   "status_qualified": false,
+   "section": "Appendix G",
+   "page": 60,
+   "note": "No energy advantage over ternary; quality at scale untested"
+  },
+  {
+   "id": "V-48",
+   "claim": "Adaptive solver step size gives adaptive depth",
+   "status": "U",
+   "status_qualified": false,
+   "section": "Appendix G",
+   "page": 60,
+   "note": "H-D1"
+  },
+  {
+   "id": "V-49",
+   "claim": "Unrolled optimization layers reduce depth",
+   "status": "S",
+   "status_qualified": true,
+   "section": "Appendix G",
+   "page": 60,
+   "note": "for sparse recovery (LISTA); U for language H-D2"
+  },
+  {
+   "id": "V-50",
+   "claim": "MIP/LP/QP solvers inside the forward pass",
+   "status": "C",
+   "status_qualified": true,
+   "section": "Appendix G",
+   "page": 60,
+   "note": "for MIP; U for LP/QP Not differentiable or O(n³); use offline"
+  },
+  {
+   "id": "V-51",
+   "claim": "OR tools applied to deployment (placement, partitioning, tiling) lower cost",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix G",
+   "page": 60,
+   "note": "Established practice; H-D4 to measure"
+  },
+  {
+   "id": "V-52",
+   "claim": "Attractor layer with large FP16 memory is cheap",
+   "status": "C",
+   "status_qualified": false,
+   "section": "Appendix G",
+   "page": 60,
+   "note": "About 24 times a ternary layer under stated assumptions"
+  },
+  {
+   "id": "V-53",
+   "claim": "Trial and error can reach a breakthrough without a formal protocol",
+   "status": "C",
+   "status_qualified": false,
+   "section": "Appendix H",
+   "page": 68,
+   "note": "Multiple comparisons inflate false positives (Equation H1)"
+  },
+  {
+   "id": "V-54",
+   "claim": "Component gains are real if they appear in one run",
+   "status": "C",
+   "status_qualified": false,
+   "section": "Appendix H",
+   "page": 68,
+   "note": "Needs at least 5 seeds and matched budgets"
+  },
+  {
+   "id": "V-55",
+   "claim": "AI-generated critique counts as validation",
+   "status": "C",
+   "status_qualified": false,
+   "section": "Appendix H",
+   "page": 68,
+   "note": "Useful for ideas; measurements decide"
+  },
+  {
+   "id": "V-56",
+   "claim": "A stage-gated program with kill rules can establish or refute THME",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix H",
+   "page": 68,
+   "note": "Standard experimental practice"
+  },
+  {
+   "id": "V-57",
+   "claim": "A looped shared block with elastic depth improves accuracy",
+   "status": "S",
+   "status_qualified": true,
+   "section": "Appendix I",
+   "page": 81,
+   "note": "at 4B scale (reported); U for ternary nano Dory: 35.2 to 39.7 to 40.6 at k = 1, 2, 4"
+  },
+  {
+   "id": "V-58",
+   "claim": "Last-loop KV caching keeps KV memory at one-loop size",
+   "status": "S",
+   "status_qualified": true,
+   "section": "Appendix I",
+   "page": 81,
+   "note": "(reported) Score change −2.1 to +0.4 at k = 4"
+  },
+  {
+   "id": "V-59",
+   "claim": "Self-speculation with k = 1 draft and k = 4 verify speeds decoding",
+   "status": "S",
+   "status_qualified": true,
+   "section": "Appendix I",
+   "page": 81,
+   "note": "(reported) 1.37–1.71×; Equation D1 consistent with acceptance 0.81–0.92"
+  },
+  {
+   "id": "V-60",
+   "claim": "Early exit saves 56% of compute at nano scale",
+   "status": "M",
+   "status_qualified": false,
+   "section": "Appendix I",
+   "page": 81,
+   "note": "38% once the output head is counted"
+  },
+  {
+   "id": "V-61",
+   "claim": "Integrate-and-fire time-to-threshold gives adaptive halting",
+   "status": "U",
+   "status_qualified": false,
+   "section": "Appendix I",
+   "page": 81,
+   "note": "H-N2"
+  },
+  {
+   "id": "V-62",
+   "claim": "The delta memory is Hopfield’s synapse rule with decay and error correction",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix I",
+   "page": 81,
+   "note": "Algebra, Equation I3"
+  },
+  {
+   "id": "V-63",
+   "claim": "Majority error of K independent readings is at most exp(−2K(½ − p)²)",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix I",
+   "page": 81,
+   "note": "Requires independence and p < ½"
+  },
+  {
+   "id": "V-64",
+   "claim": "Quantum readings reduce noise beyond classical readings",
+   "status": "C",
+   "status_qualified": false,
+   "section": "Appendix I",
+   "page": 81,
+   "note": "Shot noise obeys the same 1/√K law"
+  },
+  {
+   "id": "V-65",
+   "claim": "Hybrid quantum models beat classical baselines",
+   "status": "U",
+   "status_qualified": false,
+   "section": "Appendix I",
+   "page": 81,
+   "note": "Classical GP baseline worse than persistence"
+  },
+  {
+   "id": "V-66",
+   "claim": "Fly-brain sparsity supports sparse language-model layers",
+   "status": "U",
+   "status_qualified": false,
+   "section": "Appendix I",
+   "page": 81,
+   "note": "Structural analogy; H-N7"
+  },
+  {
+   "id": "V-67",
+   "claim": "Effective H100 training throughput of 2.3 × 10¹⁴ FLOP/s",
+   "status": "M",
+   "status_qualified": false,
+   "section": "Appendix I",
+   "page": 81,
+   "note": "Derived from the reported 9 hours; extrapolated to other sizes"
+  },
+  {
+   "id": "V-68",
+   "claim": "Low-rank plus ternary residual is a well-posed transmutation",
+   "status": "S",
+   "status_qualified": true,
+   "section": "Appendix I",
+   "page": 81,
+   "note": "for rank-r optimality; U for downstream quality Eckart–Young–Mirsky; H-N9"
+  },
+  {
+   "id": "V-69",
+   "claim": "The ARE metric applies directly to activations",
+   "status": "M",
+   "status_qualified": false,
+   "section": "Appendix I",
+   "page": 81,
+   "note": "Scaled form needed near zero"
+  },
+  {
+   "id": "V-70",
+   "claim": "Quantitative evidence for the GBM/LSTM/Transformer ranking in the Acta paper",
+   "status": "C",
+   "status_qualified": true,
+   "section": "Appendix I",
+   "page": 82,
+   "note": "in the sections read Qualitative ratings only"
+  },
+  {
+   "id": "V-71",
+   "claim": "Per-layer perplexity increases add across layers",
+   "status": "C",
+   "status_qualified": true,
+   "section": "Appendix J",
+   "page": 91,
+   "note": "in perplexity; M in cross-entropy 1,509 against 15.9 million; 8.36 against 13.69 nats (1.64×)"
+  },
+  {
+   "id": "V-72",
+   "claim": "All-linear ternary without retraining gives a usable model",
+   "status": "C",
+   "status_qualified": false,
+   "section": "Appendix J",
+   "page": 91,
+   "note": "Perplexity 1.59 × 10⁷, worse than uniform guessing"
+  },
+  {
+   "id": "V-73",
+   "claim": "Q8_0 export is near-lossless",
+   "status": "S",
+   "status_qualified": true,
+   "section": "Appendix J",
+   "page": 91,
+   "note": "on SmolLM-135M; M on Pythia-14M Δ +0.03 and +0.83; verdict depends on gate (J.4b)"
+  },
+  {
+   "id": "V-74",
+   "claim": "Sensitivity-guided placement beats random placement",
+   "status": "U",
+   "status_qualified": false,
+   "section": "Appendix J",
+   "page": 92,
+   "note": "3 of 3; smallest attainable p is 0.25"
+  },
+  {
+   "id": "V-75",
+   "claim": "73% size reduction",
+   "status": "M",
+   "status_qualified": false,
+   "section": "Appendix J",
+   "page": 92,
+   "note": "Relative to FP32; 47% relative to FP16"
+  },
+  {
+   "id": "V-76",
+   "claim": "Early exit is available without training",
+   "status": "C",
+   "status_qualified": false,
+   "section": "Appendix J",
+   "page": 92,
+   "note": "1.6% settled at 30% depth"
+  },
+  {
+   "id": "V-77",
+   "claim": "Looping an untrained block is harmless",
+   "status": "C",
+   "status_qualified": false,
+   "section": "Appendix J",
+   "page": 92,
+   "note": "Δ +37.3"
+  },
+  {
+   "id": "V-78",
+   "claim": "Distribution shift in token difficulty cannot change output quality under speculation",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix J",
+   "page": 92,
+   "note": "Speed floor 0.40×; break-even acceptance 0.64 (c = 0.375, γ = 4)"
+  },
+  {
+   "id": "V-79",
+   "claim": "Deep-layer read weight under speculation is (1 − a)/(1 − a^( γ +1))",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix J",
+   "page": 92,
+   "note": "Derivation, J.5"
+  },
+  {
+   "id": "V-80",
+   "claim": "Attention V is the most fragile role per weight",
+   "status": "S",
+   "status_qualified": true,
+   "section": "Appendix J",
+   "page": 92,
+   "note": "for this model and regime 143 Δ perplexity per percent of weights; may change after QAT"
+  },
+  {
+   "id": "V-81",
+   "claim": "A fixed absolute gate of 0.45 is scale-free",
+   "status": "C",
+   "status_qualified": false,
+   "section": "Appendix J",
+   "page": 92,
+   "note": "2.3% of SmolLM perplexity, 0.39% of Pythia"
+  },
+  {
+   "id": "V-82",
+   "claim": "The critique’s “guaranteed catastrophic failure” from additive screening",
+   "status": "C",
+   "status_qualified": false,
+   "section": "Appendix J",
+   "page": 92,
+   "note": "Interaction is 1.64× in cross-entropy energy"
+  },
+  {
+   "id": "V-83",
+   "claim": "Equal-coupling matrix has eigenvalues 1 - r (L - 1 times) and 1 + (L - 1) r",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix K",
+   "page": 97,
+   "note": "Symbolic check, L = 6; general form is standard"
+  },
+  {
+   "id": "V-84",
+   "claim": "Simultaneous unit-step updates diverge when r > 1/(L - 1)",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix K",
+   "page": 97,
+   "note": "Toy: converged at 0.03, diverged at 0.05 for L = 30"
+  },
+  {
+   "id": "V-85",
+   "claim": "Lock-one (Gauss-Seidel) converges for every symmetric positive definite coupling",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix K",
+   "page": 97,
+   "note": "Standard result; toy agrees"
+  },
+  {
+   "id": "V-86",
+   "claim": "Lock-one is cheaper than simultaneous updates when gradients cost L + 1 evaluations",
+   "status": "M",
+   "status_qualified": false,
+   "section": "Appendix K",
+   "page": 97,
+   "note": "Toy only, one seed; depends on the 31-evaluation assumption"
+  },
+  {
+   "id": "V-87",
+   "claim": "A language-model proposer beats random search",
+   "status": "U",
+   "status_qualified": false,
+   "section": "Appendix K",
+   "page": 97,
+   "note": "No test yet (H-K1)"
+  },
+  {
+   "id": "V-88",
+   "claim": "The toy threshold applies to real layers",
+   "status": "U",
+   "status_qualified": false,
+   "section": "Appendix K",
+   "page": 97,
+   "note": "Real coupling not measured pairwise"
+  },
+  {
+   "id": "V-89",
+   "claim": "The repository already has dual-licence files, a permissive-only dependency policy, and contributor terms",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix L",
+   "page": 103,
+   "note": "Observed at commit c83a236; legal sufficiency not assessed"
+  },
+  {
+   "id": "V-90",
+   "claim": "BYOA is declarative, with seven rule variants and no foreign code",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix L",
+   "page": 103,
+   "note": "Observed in the BYOA source file"
+  },
+  {
+   "id": "V-91",
+   "claim": "No search report is committed",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix L",
+   "page": 103,
+   "note": "Benchmark folders list three report types per model"
+  },
+  {
+   "id": "V-92",
+   "claim": "Copies before commit 56ae520 stay available under Apache-2.0",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix L",
+   "page": 103,
+   "note": "As stated in LICENSING.md; legal effect to confirm"
+  },
+  {
+   "id": "V-93",
+   "claim": "Table J7 entry for H1 (per-tensor export not yet written)",
+   "status": "C",
+   "status_qualified": false,
+   "section": "Appendix L",
+   "page": 103,
+   "note": "Superseded by v0.2.2.1"
+  },
+  {
+   "id": "V-94",
+   "claim": "The existing allocator is a dynamic-programming knapsack solver",
+   "status": "C",
+   "status_qualified": true,
+   "section": "Appendix M",
+   "page": 112,
+   "note": "for the part read First 70 lines use sensitivity thresholds; rest unread; documentation says DP"
+  },
+  {
+   "id": "V-95",
+   "claim": "Exact DP allocation equals exhaustive search",
+   "status": "T",
+   "status_qualified": false,
+   "section": "Appendix M",
+   "page": 112,
+   "note": "300 random instances, prototype"
+  },
+  {
+   "id": "V-96",
+   "claim": "Greedy upgrade allocation can be strictly worse than exact",
+   "status": "T",
+   "status_qualified": false,
+   "section": "Appendix M",
+   "page": 113,
+   "note": "110 against 100 on a constructed instance; never better on 200 random"
+  },
+  {
+   "id": "V-97",
+   "claim": "Absmax integer quantization error is at most scale / 2",
+   "status": "T",
+   "status_qualified": false,
+   "section": "Appendix M",
+   "page": 113,
+   "note": "Bit widths 2, 4, 8, 12; 20 seeds each"
+  },
+  {
+   "id": "V-98",
+   "claim": "Mean absolute value is the MSE-optimal scale for sign quantization",
+   "status": "T",
+   "status_qualified": false,
+   "section": "Appendix M",
+   "page": 113,
+   "note": "Compared with 39 alternative scales"
+  },
+  {
+   "id": "V-99",
+   "claim": "A Walsh-Hadamard transform already exists in the repository",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix M",
+   "page": 113,
+   "note": "Observed in the BYOA transform code; must be shared, not copied"
+  },
+  {
+   "id": "V-100",
+   "claim": "The prototype is verified for the repository toolchain",
+   "status": "U",
+   "status_qualified": false,
+   "section": "Appendix M",
+   "page": 113,
+   "note": "Compiled on rustc 1.97 only; pinned 1.99.1, MSRV 1.89, fmt and clippy not run"
+  },
+  {
+   "id": "V-101",
+   "claim": "THME's contribution is an integration layer plus new tools",
+   "status": "Design decision",
+   "status_qualified": false,
+   "section": "Appendix N",
+   "page": 116,
+   "note": "Stated by the owner; guides claims in all appendices"
+  },
+  {
+   "id": "V-102",
+   "claim": "The candidates in Table N3 are new",
+   "status": "U",
+   "status_qualified": false,
+   "section": "Appendix N",
+   "page": 116,
+   "note": "No prior-art search done"
+  },
+  {
+   "id": "V-103",
+   "claim": "A native reimplementation matches its reference",
+   "status": "U",
+   "status_qualified": false,
+   "section": "Appendix N",
+   "page": 116,
+   "note": "Required differential test per technique"
+  },
+  {
+   "id": "V-104",
+   "claim": "Permuting feed-forward units or heads, and folding normalization weights, leave the output unchanged",
+   "status": "T",
+   "status_qualified": false,
+   "section": "Appendix O",
+   "page": 123,
+   "note": "Tiny random model, 64-bit, one seed; differences about 4e-15"
+  },
+  {
+   "id": "V-105",
+   "claim": "Rotating the residual stream is exact only after the normalization weights are folded",
+   "status": "T",
+   "status_qualified": false,
+   "section": "Appendix O",
+   "page": 123,
+   "note": "Folded: 1.2e-14; unfolded: 4.7"
+  },
+  {
+   "id": "V-106",
+   "claim": "Layer swap, skip, and repeat change the output",
+   "status": "T",
+   "status_qualified": false,
+   "section": "Appendix O",
+   "page": 123,
+   "note": "Random weights; says nothing about trained models"
+  },
+  {
+   "id": "V-107",
+   "claim": "The attention head count cannot be read from tensor shapes",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix O",
+   "page": 123,
+   "note": "Any divisor of the hidden width is consistent with the shapes"
+  },
+  {
+   "id": "V-108",
+   "claim": "Permutations and rotations are inexact after block quantization",
+   "status": "U",
+   "status_qualified": false,
+   "section": "Appendix O",
+   "page": 123,
+   "note": "Reasoned, not measured"
+  },
+  {
+   "id": "V-109",
+   "claim": "The repository's forward pass covers LLaMA-family and GPT-NeoX models only",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix O",
+   "page": 124,
+   "note": "Roadmap item v0.2.0.1"
+  },
+  {
+   "id": "V-110",
+   "claim": "Symmetries hold with rotary embeddings, grouped-query attention, biases, and tied embeddings",
+   "status": "U",
+   "status_qualified": false,
+   "section": "Appendix O",
+   "page": 124,
+   "note": "Not in the toy; each needs its own test"
+  },
+  {
+   "id": "V-111",
+   "claim": "The repository's gate tolerances are consistent",
+   "status": "C",
+   "status_qualified": false,
+   "section": "Appendix P",
+   "page": 130,
+   "note": "0.25 in the tolerances file and tests; 0.45 in measured reports; default not traced"
+  },
+  {
+   "id": "V-112",
+   "claim": "Tiny needles exist in the repository",
+   "status": "C",
+   "status_qualified": false,
+   "section": "Appendix P",
+   "page": 130,
+   "note": "The repository's findings note says the concept is not implemented"
+  },
+  {
+   "id": "V-113",
+   "claim": "A linear needle costs K / 12d of a block",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix P",
+   "page": 130,
+   "note": "Arithmetic; order of magnitude"
+  },
+  {
+   "id": "V-114",
+   "claim": "A needle saves compute when p (1 - c) exceeds rho",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix P",
+   "page": 130,
+   "note": "Derivation, Equation P1"
+  },
+  {
+   "id": "V-115",
+   "claim": "Identity-initialised injection preserves the model",
+   "status": "U",
+   "status_qualified": false,
+   "section": "Appendix P",
+   "page": 130,
+   "note": "True by construction; not yet tested"
+  },
+  {
+   "id": "V-116",
+   "claim": "Teacher-label needles need no backward pass through the model",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix P",
+   "page": 130,
+   "note": "Reasoning; to confirm in H-P5"
+  },
+  {
+   "id": "V-117",
+   "claim": "Educational purpose removes the permission requirement",
+   "status": "C",
+   "status_qualified": false,
+   "section": "Appendix P",
+   "page": 130,
+   "note": "Policy is the opposite (P.1); legal effect varies"
+  },
+  {
+   "id": "V-118",
+   "claim": "Two-stage scoring has minimum cost near 2 times the square root of K",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix P",
+   "page": 132,
+   "note": "Derivation; K = 255 gives about 32"
+  },
+  {
+   "id": "V-119",
+   "claim": "Threshold routing needs calibrated confidence",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix P",
+   "page": 132,
+   "note": "Reasoning; the early-exit operation uses a confidence threshold"
+  },
+  {
+   "id": "V-120",
+   "claim": "Calibration measured on the tune split transfers to the final split",
+   "status": "U",
+   "status_qualified": false,
+   "section": "Appendix P",
+   "page": 132,
+   "note": "Part of H-P6; to test"
+  },
+  {
+   "id": "V-121",
+   "claim": "KL(q p) equals minus the log of the top-k mass for renormalised top-k",
+   "status": "not stated",
+   "status_qualified": false,
+   "section": "Appendix Q",
+   "page": 137,
+   "note": ""
+  },
+  {
+   "id": "V-122",
+   "claim": "A top-64 cache with 2-byte index and probability costs 256 bytes per position",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix Q",
+   "page": 137,
+   "note": "Arithmetic; 256 GB per billion positions"
+  },
+  {
+   "id": "V-123",
+   "claim": "The soft-target loss has the form of Equation Q1",
+   "status": "U",
+   "status_qualified": false,
+   "section": "Appendix Q",
+   "page": 137,
+   "note": "From memory; check the original definition"
+  },
+  {
+   "id": "V-124",
+   "claim": "The repository already has a distillation loss type and a feature-distillation category",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix Q",
+   "page": 137,
+   "note": "Observed in the trainer and BYOA code; not run"
+  },
+  {
+   "id": "V-125",
+   "claim": "A teacher-led recipe search beats random search",
+   "status": "U",
+   "status_qualified": false,
+   "section": "Appendix Q",
+   "page": 137,
+   "note": "No test"
+  },
+  {
+   "id": "V-126",
+   "claim": "A student reaches a stated fraction of teacher quality",
+   "status": "U",
+   "status_qualified": false,
+   "section": "Appendix Q",
+   "page": 138,
+   "note": "No student has been trained"
+  },
+  {
+   "id": "V-127",
+   "claim": "The Wilson interval for 7 of 10 is 0.397 to 0.892",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix R",
+   "page": 146,
+   "note": "Computed"
+  },
+  {
+   "id": "V-128",
+   "claim": "The simple interval undercovers at small n: 80.1% at 30 items, accuracy 0.9; Wilson 97.0%; bootstrap 95.0%",
+   "status": "T",
+   "status_qualified": false,
+   "section": "Appendix R",
+   "page": 146,
+   "note": "4,000 repeats, one seed"
+  },
+  {
+   "id": "V-129",
+   "claim": "Half-widths at accuracy 0.70 are 7.0, 2.8, and 0.76 points for 164, 1,000, and 14,000 items",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix R",
+   "page": 146,
+   "note": "Arithmetic"
+  },
+  {
+   "id": "V-130",
+   "claim": "Resolving one point needs about 16,100 items unpaired and 1,900 paired at 5% discordance",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix R",
+   "page": 147,
+   "note": "Under the stated assumptions"
+  },
+  {
+   "id": "V-131",
+   "claim": "The pass@k estimator equals enumeration",
+   "status": "T",
+   "status_qualified": false,
+   "section": "Appendix R",
+   "page": 147,
+   "note": "n = 6, c = 2 only; formula from memory"
+  },
+  {
+   "id": "V-132",
+   "claim": "Exact McNemar for 12 and 3 gives p = 0.035",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix R",
+   "page": 147,
+   "note": "Computed"
+  },
+  {
+   "id": "V-133",
+   "claim": "The repository's task score carries no item count or interval",
+   "status": "S",
+   "status_qualified": false,
+   "section": "Appendix R",
+   "page": 147,
+   "note": "Observed in the gate structure"
+  },
+  {
+   "id": "V-134",
+   "claim": "Benchmark names and metrics in Table R1",
+   "status": "U",
+   "status_qualified": false,
+   "section": "Appendix R",
+   "page": 147,
+   "note": "From memory; verify"
+  },
+  {
+   "id": "V-135",
+   "claim": "The repository's benchmark script reports only measured quantities",
+   "status": "U",
+   "status_qualified": false,
+   "section": "Appendix R",
+   "page": 147,
+   "note": "Its header mentions simulated token generation; contents not audited"
+  }
+ ]
+}
