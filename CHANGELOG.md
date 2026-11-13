@@ -95,6 +95,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/research/THME_measured_findings_2026-11.md` and `docs/subsystems.md`.
 
 ### Changed
+- Studio code: `src/gui/app.rs` (5,787 lines) is split into one module per tab under
+  `src/gui/app/` (THME-2003); `app.rs` keeps state, shared logic and the frame loop (1,812 lines).
+  No behaviour change: tab captures match the committed screenshots.
 - Production workflow: pinned toolchain (`rust-toolchain.toml`); CI with hygiene, lint, three-OS
   tests, MSRV, measured-claims regeneration, cargo-deny and a non-blocking latest-stable preview;
   hardened release pipeline (tag/version and changelog checks, gates before build, four targets,
