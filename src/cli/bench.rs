@@ -34,6 +34,28 @@ pub enum BenchCommand {
         #[arg(value_name = "TASK")]
         task: PathBuf,
     },
+    /// Judge a candidate record against a baseline record: pass, fail or inconclusive
+    Gate {
+        /// Gate file; criteria name benchmark metrics as `bench:<id>@v<version>`
+        #[arg(long)]
+        gate: PathBuf,
+        #[arg(long)]
+        baseline: PathBuf,
+        #[arg(long)]
+        candidate: PathBuf,
+        /// Confidence level of the degradation interval
+        #[arg(long, default_value_t = 0.95)]
+        level: f64,
+        /// Bootstrap resamples
+        #[arg(long, default_value_t = 2000)]
+        resamples: usize,
+        /// Bootstrap seed, recorded in the verdict
+        #[arg(long, default_value_t = 0)]
+        seed: u64,
+        /// Also write the verdict as JSON
+        #[arg(long)]
+        report: Option<PathBuf>,
+    },
 }
 
 pub fn execute(args: BenchArgs) -> Result<()> {
@@ -70,6 +92,58 @@ pub fn execute(args: BenchArgs) -> Result<()> {
                 path.display()
             );
             Ok(())
+        }
+        BenchCommand::Gate {
+            gate,
+            baseline,
+            candidate,
+            level,
+            resamples,
+            seed,
+            report,
+        } => {
+            let spec = crate::quality::gate::GateSpec::load(&gate)?;
+            let base = ResultRecord::load(&baseline)?;
+            let cand = ResultRecord::load(&candidate)?;
+            let measure = crate::bench::compare::compare(&base, &cand, level, resamples, seed)?;
+            let verdict = spec.judge(&[measure]);
+            println!("Gate {} ({:?} evidence)", verdict.gate, base.evidence);
+            for o in &verdict.outcomes {
+                let interval = o
+                    .degradation_interval
+                    .map(|(l, h)| format!(" [{l:+.4}, {h:+.4}]"))
+                    .unwrap_or_default();
+                println!(
+                    "  {:<28} {:<13} degradation {:+.4}{interval}",
+                    o.metric,
+                    o.status,
+                    o.degradation.unwrap_or(f64::NAN)
+                );
+            }
+            let decision = verdict.decision();
+            println!("Decision: {decision:?}");
+            if let Some(path) = report {
+                let json = serde_json::json!({
+                    "tool": "thme bench gate",
+                    "thme_version": env!("CARGO_PKG_VERSION"),
+                    "level": level,
+                    "resamples": resamples,
+                    "seed": seed,
+                    "evidence": base.evidence,
+                    "verdict": verdict,
+                    "decision": decision,
+                });
+                std::fs::write(
+                    &path,
+                    serde_json::to_string_pretty(&json)?
+                        + "
+",
+                )?;
+            }
+            match decision {
+                crate::quality::gate::Decision::Pass => Ok(()),
+                other => bail!("gate decision: {other:?}"),
+            }
         }
     }
 }

@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **Three-state quality gate** (THME-3029, v0.2.8.6): when a criterion's degradation has a
+  confidence interval, the gate decides pass, fail or inconclusive from it; point measurements
+  decide exactly as before. `thme bench gate` compares two comparable result records with a
+  paired bootstrap and judges them. See docs/quality-gate.md.
 - **Benchmark statistics** (THME-3028, v0.2.8.5): `bench::stats` gives Wilson and
   percentile-bootstrap intervals, a paired bootstrap, the exact McNemar test, the number of items
   a comparison needs, and the Holm correction, with seeded resampling. It reproduces every value

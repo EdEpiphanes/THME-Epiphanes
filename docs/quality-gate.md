@@ -38,6 +38,34 @@ thme search   MODEL --tokens tokens.u32 --budget 0.5 --gate configs/gates/exampl
 Without `--gate`, the default gate is used with `--max-ppl-delta` as its margin (0.45 unless
 given). The two options cannot be combined.
 
+## Three states: pass, fail, inconclusive
+
+A point estimate can pass a candidate whose measured drop is under the margin while its
+interval says the drop could be several times larger. When a criterion's degradation comes with
+a confidence interval, the gate decides from the interval (dossier R.5):
+
+| Interval of the degradation | Decision |
+| :--- | :--- |
+| Entirely within the margin (high end <= allowed) | **pass** |
+| Entirely beyond it (low end > allowed) | **fail** |
+| Straddles the margin | **inconclusive** |
+
+A metric that was not measured is a failure, never inconclusive. A point measurement is the
+zero-width case, so `thme evaluate`, `thme search` and `thme validate` decide exactly as before.
+
+Benchmark results are judged this way:
+
+```bash
+thme bench gate --gate gate.json --baseline base-record.json --candidate cand-record.json
+```
+
+The criterion names the benchmark as `bench:<id>@v<version>` with `lower_is_better: false`. The
+two records must be comparable (same task, dataset and prompt-template hashes, split, harness
+version, decoding settings, items and evidence status), and the interval comes from a paired
+bootstrap over the shared items (seeded, recorded in the verdict). Small sets report
+inconclusive instead of passing by luck; `thme::bench::stats::required_items_paired` says how
+many items would decide.
+
 ## What a report records
 
 Every report carries the gate's name, version, criteria and **content hash** (SHA-256 of the

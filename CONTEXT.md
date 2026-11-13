@@ -79,6 +79,10 @@ _Avoid_: gate (unqualified), threshold
 One metric of a quality gate and the degradation it allows, as an absolute and/or a relative margin.
 _Avoid_: tolerance, gate value
 
+**Decision**:
+The outcome of a quality gate: pass, fail, or inconclusive when a criterion's degradation interval straddles its margin.
+_Avoid_: verdict (for the three-way outcome), result
+
 **Benchmark task**:
 A declarative file naming a dataset by hash, its split and licence, a prompt template, an answer-extraction rule and a metric; identified by `id@vN`.
 _Avoid_: eval, test (for this)
