@@ -287,6 +287,12 @@ closes it.
 - **Problem**: Dossier WP33: the runner needs one tested implementation of each extraction rule and metric a task file can name.
 - **Done means**: Extraction (exact, first line, last number, choice letter, after marker), exact and normalized match, numeric tolerance, likelihood choice, unbiased pass@k; Table R3 pass@k values reproduced; pass@k equal to enumeration.
 
+### [THME-3028] Benchmark statistics library
+
+- **Milestone**: v0.2.8 · **Roadmap**: v0.2.8.5 · **Priority**: p1 · **Area**: quality · **Type**: feature · **Status**: done
+- **Problem**: Dossier WP34 and R.5: every score needs an interval, comparisons on the same items need paired tests, and small sets must be recognised as too small.
+- **Done means**: Wilson, percentile bootstrap, paired bootstrap, exact McNemar, required-items calculator, Holm correction; Table R3 values reproduced; simulated coverage near nominal.
+
 ### [THME-3023] Re-measure reports affected by the FP16 rounding fix
 
 - **Milestone**: v0.2.2 · **Roadmap**: none · **Priority**: p1 · **Area**: research · **Type**: chore · **Status**: blocked

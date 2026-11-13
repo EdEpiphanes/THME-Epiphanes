@@ -18,6 +18,7 @@ use std::path::{Component, Path, PathBuf};
 use crate::exporter::compute_sha256;
 
 pub mod metrics;
+pub mod stats;
 
 /// `schema` value of a task file.
 pub const TASK_SCHEMA: &str = "thme-bench-task/v1";
