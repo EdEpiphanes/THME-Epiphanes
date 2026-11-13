@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **Signed `.epiph` files** (THME-3019): `thme epiph sign FILE --secret-key KEY [--password-env VAR]`
+  writes a Minisign signature over the manifest (which holds every payload digest);
+  `thme epiph verify` checks it against the Epiphanes key in `minisign.pub` or `--public-key`,
+  and `--require-signature` fails unsigned files. Never prompts for a password. New dependency:
+  `minisign` 0.10 (MIT, pure Rust); release CLI grows from 6.57 to 6.72 MB.
 - **`thme scan`** (THME-3018): static security scan of model files and folders. Walks pickle
   opcodes without loading them (plain and PyTorch zip) and flags code-executing imports; checks
   GGUF and SafeTensors headers, unused bytes and hidden executables; flags template injection in

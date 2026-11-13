@@ -53,6 +53,7 @@ comfy-table = "7.1"
 anyhow = "1.0"
 eframe = { version = "0.31", default-features = true }
 rfd = "0.15"
+minisign = "0.10.0"
 
 [dev-dependencies]
 tempfile = "3.17"

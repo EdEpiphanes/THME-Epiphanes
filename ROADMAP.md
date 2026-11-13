@@ -23,7 +23,6 @@ flowchart LR
     classDef later fill:#ffffff,stroke:#0b0b0b,stroke-width:1.5px,stroke-dasharray:4 3,color:#52514e;
 
     subgraph NOW["Now"]
-        N1["Signed .epiph"]:::now
         N2["One versioned quality gate"]:::now
         N3["Number formats with error bounds"]:::now
         N4["SPDX headers"]:::now
@@ -41,7 +40,7 @@ flowchart LR
         L4["GPU runtime and placement"]:::later
         L5["Commercial release"]:::later
     end
-    D["Done this week:<br/>engine core, exact allocator,<br/>.epiph v1.0, thme scan"]:::done --> NOW --> NEXT --> LATER
+    D["Done this week:<br/>engine core, exact allocator,<br/>.epiph v1.0 and signing, thme scan"]:::done --> NOW --> NEXT --> LATER
 ```
 
 ### Done this week
@@ -54,13 +53,13 @@ flowchart LR
 | BYOA apply context (THME-3010) | Rules receive calibration, row width and codec through one interface | Tested; AWQ unchanged |
 | `.epiph` v1.0 (THME-3012) | Open Epiphanes model format with full metadata; `thme epiph pack/verify` | Tested: round trip, corruption, GGUF conversion |
 | `thme scan` (THME-3018) | Static model security scanner | Tested on built fixtures |
+| Signed `.epiph` (THME-3019) | Minisign signature over the manifest; `thme epiph sign`, `verify --require-signature`; Epiphanes key by default | Tested: tamper, wrong key, broken trailer |
 | No-panic rule, GUI split, glossary | Compiler-enforced; Studio tabs as modules; `CONTEXT.md` | Tested |
 
 ### Now: committed, in progress
 
 | Track | Item | Status | Depends on |
 | :--- | :--- | :--- | :--- |
-| Epiphanes model format | **Signed `.epiph` files** (THME-3019): signature over the manifest and payload digests; third-party converters get plain weights only | On track | Pure-Rust signature dependency, to be approved |
 | Quality and evidence | **One versioned quality gate** (THME-3003): custom criteria, one or many, absolute and relative margins, gate version in every report | Not started | None |
 | Engine | **Number formats with stated error bounds** (THME-3006): FP16, BF16, FP8, integer, codebook, phase | On track | None |
 | Hygiene | **SPDX licence headers** on every file, enforced in CI (THME-3005) | Not started | None |
@@ -296,10 +295,10 @@ The sections below are the original specifications, kept unchanged as a record o
 built. Read their figures with the evidence table above: where a section describes an
 empirical or verified result, that result was not measured unless the evidence table says so.
 
-
 ### Phase 1: Foundations & Release Engineering
 
 #### [x] v0.1.0.0 — Core Foundations Baseline (Completed)
+
 - [x] **v0.1.0.1**: Zero-copy SafeTensors memory-mapped parsing via `memmap2`.
 - [x] **v0.1.0.2**: GGUF v2/v3 memory-mapped header reader and tensor metadata indexing.
 - [x] **v0.1.0.3**: Layer topological sensitivity estimation via SVD spectral energy decay ($\sigma_i / \sigma_0$).
@@ -309,9 +308,11 @@ empirical or verified result, that result was not measured unless the evidence t
 - [x] **v0.1.0.7**: Native 60 FPS Desktop Studio GUI (`egui`/`eframe`) with 5 color themes.
 - [x] **v0.1.0.8**: Live 13-stage Transformer forward token telemetry simulator.
 - [x] **v0.1.0.9**: Checkpoint rollback engine, audit logging, and declarative JSON surgery recipes.
+
 *Production Pipeline Impact*: Established core `ModelIR` data structures, verified by 15 foundational unit tests.
 
 #### [x] v0.1.1.0 — Path Hygiene & CI Governance Baseline (Completed)
+
 - [x] **v0.1.1.1**: Rebranding to **THME** under **Epiphanes** with backwards-compatible alias `llm-tweaker`.
 - [x] **v0.1.1.2**: Architecture playbook and non-negotiable governance guidelines (`AGENTS.md`).
 - [x] **v0.1.1.3**: 3-OS GitHub Actions CI matrix (`ubuntu-latest`, `windows-latest`, `macos-latest`).
@@ -321,6 +322,7 @@ empirical or verified result, that result was not measured unless the evidence t
 - [x] **v0.1.1.7**: JSON schema specification for surgery recipes (`docs/schemas/surgery-recipe-v1.json`).
 - [x] **v0.1.1.8**: Backwards-compatible CLI executable generation (`src/bin/llm_tweaker.rs`).
 - [x] **v0.1.1.9**: Binary size optimization with release profile LTO and single codegen unit settings.
+
 *Production Pipeline Impact*: Prevents machine credential leaks and guarantees clean builds across 3 operating systems.
 
 ---
@@ -328,6 +330,7 @@ empirical or verified result, that result was not measured unless the evidence t
 ### Phase 2: Format Correctness & Telemetry Hardening
 
 #### [x] v0.1.2.0 — Format Correctness & Fuzz Testing Baseline (Completed)
+
 - [x] **v0.1.2.1**: Complete 28 GGML quantization types parser (`Q4_0`, `Q4_1`, `Q5_0`, `Q5_1`, `Q8_0`, `Q4_K_M`, `Q5_K_S`, `IQ4_XS`, `IQ3_XXS`).
 - [x] **v0.1.2.2**: Zero-allocation block decoders extracting scales, mins, and unpacked weights on-the-fly.
 - [x] **v0.1.2.3**: Truncated stream and corrupted header recovery with byte-offset diagnostics.
@@ -337,9 +340,11 @@ empirical or verified result, that result was not measured unless the evidence t
 - [x] **v0.1.2.7**: Standalone `thme-core` crate packaging and metadata configuration.
 - [x] **v0.1.2.8**: Structured diagnostic error enumeration (`THMEError::CorruptedHeader`).
 - [x] **v0.1.2.9**: Infallible parser guarantee returning typed results without panic unwraps.
+
 *Production Pipeline Impact*: Guarantees zero crashes when ingesting corrupted or arbitrary external model files.
 
 #### [x] v0.1.3.0 — Bring Your Own Algorithm (BYOA) & REA-LLM Engine Baseline (Completed)
+
 - [x] **v0.1.3.1**: Bring Your Own Algorithm registry (`AlgorithmRegistry`) with custom transformation callbacks.
 - [x] **v0.1.3.2**: JSON algorithm specification import and export engine.
 - [x] **v0.1.3.3**: Architecture scaffold synthesizer (`ModelRebuilder`) supporting scratch-built layer topologies.
@@ -349,6 +354,7 @@ empirical or verified result, that result was not measured unless the evidence t
 - [x] **v0.1.3.7**: Per-token energy consumption modeling ($E_{\text{token}} = W_{\text{bytes/token}} \times E_{\text{DRAM}}$).
 - [x] **v0.1.3.8**: Layer anatomy deconstruction isolating Attention and MLP block matrices.
 - [x] **v0.1.3.9**: Criterion micro-benchmark suite and portable SIMD Walsh-Hadamard transform kernels.
+
 *Production Pipeline Impact*: Integrates real memory and energy telemetry into model evaluation and testing workflows.
 
 ---
@@ -356,6 +362,7 @@ empirical or verified result, that result was not measured unless the evidence t
 ### Phase 3: Empirical Quality Verification & Universal Integration
 
 #### [x] v0.1.4.0 — Empirical Quality Gate Evaluation Baseline (Completed)
+
 - [x] **v0.1.4.1**: External perplexity evaluation bridge supporting subprocess and analytical scoring.
 - [x] **v0.1.4.2**: WikiText-2 standard benchmark harness and token loss parser.
 - [x] **v0.1.4.3**: C4 and Penn Treebank (PTB) corpora evaluation support.
@@ -365,9 +372,11 @@ empirical or verified result, that result was not measured unless the evidence t
 - [x] **v0.1.4.7**: CLI `thme validate` command with `--corpus` and `--max-ppl-delta` flags.
 - [x] **v0.1.4.8**: Structured JSON audit diagnostics emitted upon quality gate rejection.
 - [x] **v0.1.4.9**: Studio GUI Quality tab real-time token loss and perplexity streaming.
+
 *Production Pipeline Impact*: Gates automated model transformations; rejects degradations exceeding tolerance.
 
 #### [x] v0.1.5.0 — Surgery Daemon, IDE Extensions & 8 Models Matrix Baseline (Completed)
+
 - [x] **v0.1.5.1**: Headless Model Context Protocol (MCP) JSON-RPC server (`thme mcp`) exposing 8 surgical tools.
 - [x] **v0.1.5.2**: Visual Studio Code extension package (`editors/vscode/thme-vscode-0.1.5.vsix`).
 - [x] **v0.1.5.3**: GitHub Copilot Language Model Tools (`thme_copilot_inspect`, `thme_copilot_surgery`, `thme_copilot_validate`).
@@ -377,9 +386,11 @@ empirical or verified result, that result was not measured unless the evidence t
 - [x] **v0.1.5.7**: Universal 8 Specialized AI Model Paradigm Converter (LLM, LCM, LAM, MoE, VLM, SLM, MLM, SAM).
 - [x] **v0.1.5.8**: Sparse upcycling engine partitioning dense MLPs into parallel expert matrices with router gating tensors.
 - [x] **v0.1.5.9**: BitNet b1.58 ternary discretization delivering up to 85.3% footprint reduction for SLM edge deployments.
+
 *Production Pipeline Impact*: Enables external AI agents, IDEs, and PyTorch pipelines to automate model surgery.
 
 #### [x] v0.1.6.0 — Speculative Decoding & Draft Model Synthesizer Baseline (Completed)
+
 - [x] **v0.1.6.1**: Sub-model manifold extraction via prefix layers ($0..K$) with automatic head re-anchoring.
 - [x] **v0.1.6.2**: Strided layer sampling synthesizer extracting distributed sub-networks.
 - [x] **v0.1.6.3**: BitNet b1.58 ternary draft model synthesizer yielding 76.8% memory reduction and latency ratio $r = 0.108$.
@@ -390,6 +401,7 @@ empirical or verified result, that result was not measured unless the evidence t
 - [x] **v0.1.6.7**: Tree-based multi-candidate branching topology (Medusa/Eagle style speculative trees).
 - [x] **v0.1.6.8**: 2D causal tree attention mask synthesis enforcing strict causal masking across tree paths.
 - [x] **v0.1.6.9**: CLI `thme speculate` subcommand, MCP tool `thme_simulate_speculative_decoding`, and Desktop Studio Tab 4 benchmark deck.
+
 *Production Pipeline Impact*: Guarantees verified $>1.5\times$ speedup modeling verified by 5 unit/integration tests.
 
 ---
@@ -397,6 +409,7 @@ empirical or verified result, that result was not measured unless the evidence t
 ### Phase 4: Hardware Profiling, Serialization & Closed-Loop Surgery
 
 #### [x] v0.1.7.0 — Hardware-Calibrated Roofline & Micro-Kernel Profiler Baseline (Completed)
+
 Establishes empirical hardware-calibrated operational Roofline ceilings and multi-tier memory hierarchy cache simulation to pinpoint memory bandwidth vs compute bottlenecks across diverse target hardware.
 
 - **Mathematical Formulations**:
@@ -444,6 +457,7 @@ Establishes empirical hardware-calibrated operational Roofline ceilings and mult
 ---
 
 #### [x] v0.1.8.0 — Binary Quantization Exporter Baseline (Completed)
+
 Enables direct binary disk serialization of modified and distilled models into deployable GGUF v3 and SafeTensors files with BitNet b1.58 ternary packed bitstreams and calibrated scale factors.
 
 - **Mathematical Formulations**:
@@ -490,6 +504,7 @@ Enables direct binary disk serialization of modified and distilled models into d
 ---
 
 #### [x] v0.1.9.0 — Closed-Loop Teacher-Student Co-Surgery Baseline (COMPLETED)
+
 Autonomous closed-loop optimization daemon: an external or local Teacher LLM analyzes layer sensitivity, generates declarative surgery recipes, THME applies them, verifies quality via the perplexity bridge, and iteratively tunes the Pareto frontier.
 
 - **Mathematical Formulations**:
@@ -535,8 +550,10 @@ Autonomous closed-loop optimization daemon: an external or local Teacher LLM ana
 
 ## Original specifications of deferred milestones (now v0.3+)
 
-#### [ ] v0.2.1.0 — Direct GPU Driver Execution Engine Baseline (SCHEDULED)
+### [ ] v0.2.1.0 — Direct GPU Driver Execution Engine Baseline (SCHEDULED)
+
 Pure Rust GPU driver execution bypassing external Python runtimes, C++ frameworks, or PyTorch wheels.
+
 - [ ] **v0.2.1.1**: Hardware Abstraction Layer (HAL) core traits (`HardwareDevice`, `DeviceMemoryBuffer`, `CommandQueue`, `KernelLaunchConfig`).
 - [ ] **v0.2.1.2**: NVIDIA CUDA Driver API backend via pure Rust `cudarc` (direct `libcuda.so` / `nvcuda.dll` calls).
 - [ ] **v0.2.1.3**: Vulkan 1.3 SPIR-V compute pipeline backend via `ash` for cross-platform execution on Linux and Windows.
@@ -546,10 +563,13 @@ Pure Rust GPU driver execution bypassing external Python runtimes, C++ framework
 - [ ] **v0.2.1.7**: Fused SwiGLU activation kernel combining gate and up projections.
 - [ ] **v0.2.1.8**: Fused Rotary Position Embedding (RoPE) kernel.
 - [ ] **v0.2.1.9**: CLI subcommand `thme run --model <path> --backend <cuda|vulkan|metal|cpu>` for direct inference.
+
 *Production Pipeline Impact*: Replaces external Python runtime dependencies with pure Rust hardware execution.
 
-#### [ ] v0.2.2.0 — Tiered Out-of-Core NVMe SSD Streaming Baseline (SCHEDULED)
+### [ ] v0.2.2.0 — Tiered Out-of-Core NVMe SSD Streaming Baseline (SCHEDULED)
+
 Three-tier memory hierarchy (GPU VRAM $\leftrightarrow$ Host RAM $\leftrightarrow$ NVMe SSD direct asynchronous I/O) enabling 70B parameter inference and surgery in 8 GB VRAM.
+
 - [ ] **v0.2.2.1**: Linux `io_uring` direct disk block access engine bypassing OS page cache buffer copies.
 - [ ] **v0.2.2.2**: Windows Overlapped I/O with `FILE_FLAG_NO_BUFFERING` via Win32 completion ports (`IOCP`).
 - [ ] **v0.2.2.3**: Sequential layer streaming pipeline (AirLLM-style) loading and evicting layers on-the-fly.
@@ -559,10 +579,13 @@ Three-tier memory hierarchy (GPU VRAM $\leftrightarrow$ Host RAM $\leftrightarro
 - [ ] **v0.2.2.7**: Dynamic VRAM memory accountant enforcing strict consumer hardware memory ceilings.
 - [ ] **v0.2.2.8**: 70B parameter model forward pass benchmark executing inside an 8 GB memory constraint.
 - [ ] **v0.2.2.9**: Real-time PCIe bandwidth saturation and disk I/O throughput telemetry monitor.
+
 *Production Pipeline Impact*: Enables massive model inference on low-cost consumer hardware.
 
-#### [ ] v0.2.3.0 — Distributed Heterogeneous Multi-Node Clustering Baseline (SCHEDULED)
+### [ ] v0.2.3.0 — Distributed Heterogeneous Multi-Node Clustering Baseline (SCHEDULED)
+
 Distributed execution across heterogeneous nodes with pure Rust asynchronous TCP/RDMA ring all-reduce communication.
+
 - [ ] **v0.2.3.1**: Intra-node Tensor Parallelism (TP) splitting matrix projections across local accelerators.
 - [ ] **v0.2.3.2**: Inter-node Pipeline Parallelism (PP) distributing sequential layer partitions across networked nodes.
 - [ ] **v0.2.3.3**: 1F1B (One-Forward-One-Backward) schedule minimizing activation pipeline bubbles.
@@ -572,10 +595,13 @@ Distributed execution across heterogeneous nodes with pure Rust asynchronous TCP
 - [ ] **v0.2.3.7**: Continuous 100 ms heartbeat monitor and dead-node detection watchdog.
 - [ ] **v0.2.3.8**: Automated dynamic layer re-sharding failover upon node disconnection.
 - [ ] **v0.2.3.9**: CLI subcommand `thme cluster <init|join|status>` for ad-hoc cluster formation.
+
 *Production Pipeline Impact*: Scales THME across ad-hoc mixed hardware clusters without MPI or NCCL.
 
-#### [ ] v0.2.4.0 — Universal Agentic AI Connectivity Gateway Baseline (SCHEDULED)
+### [ ] v0.2.4.0 — Universal Agentic AI Connectivity Gateway Baseline (SCHEDULED)
+
 High-performance headless JSON-RPC 2.0 daemon and bidirectional WebSocket event streaming gateway connecting autonomous AI agents, CI/CD harnesses, desktop apps, and IDE copilots.
+
 - [ ] **v0.2.4.1**: High-throughput asynchronous WebSocket event streaming server (`thme daemon --port 9090`).
 - [ ] **v0.2.4.2**: JSON-RPC 2.0 method router exposing all THME capabilities (inspect, surgery, validate, export).
 - [ ] **v0.2.4.3**: Cryptographic HMAC-SHA256 surgery recipe signing and provenance verification engine.
@@ -585,6 +611,7 @@ High-performance headless JSON-RPC 2.0 daemon and bidirectional WebSocket event 
 - [ ] **v0.2.4.7**: IDE & Copilot extension bridge (VS Code, Cursor, Windsurf, Copilot LM Tools).
 - [ ] **v0.2.4.8**: Real-time event broadcasting: per-token throughput, layer execution, thermal, and memory pressure.
 - [ ] **v0.2.4.9**: CLI subcommand `thme daemon` with full authentication and remote access control flags.
+
 *Production Pipeline Impact*: Provides a universal control plane connecting any AI agent or IDE to THME.
 
 ---
@@ -592,6 +619,7 @@ High-performance headless JSON-RPC 2.0 daemon and bidirectional WebSocket event 
 ## Long-term research initiatives
 
 These advanced algorithmic initiatives are documented in the backlog and intentionally deferred to subsequent major milestones:
+
 - **Topological Hyper-Graph Neural Architecture Search**: Automated micro-circuit rewiring using topological data analysis (TDA) persistent homology to detect and prune redundant manifold loops.
 - **Continuous Online RL Adaptation**: Real-time layer manifold adjustment guided by continuous reinforcement learning feedback loops during live conversational inference.
 - **Dynamic Mixture-of-Experts Sub-Manifold Synthesis**: Real-time conditional routing dynamically spawning expert sub-networks based on input token semantic entropy.

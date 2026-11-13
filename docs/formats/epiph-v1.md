@@ -112,7 +112,25 @@ Any model THME can import (SafeTensors directory, GGUF file) can be packed with
 `thme epiph pack`. A `.epiph` file is imported like any other model, so `thme export` writes it
 to GGUF or SafeTensors, and every other command reads it directly.
 
-## 6. Planned extensions (not in 1.0)
+## 6. Signature
+
+A file may end with a Minisign signature over the **manifest bytes**. Because the manifest holds
+every payload's SHA-256, the signature binds the whole file. Layout, after the last payload
+rounded up to 64 bytes:
+
+| Field | Size |
+| :--- | :--- |
+| Minisign signature text (prehashed Ed25519, as written by Minisign) | `S` |
+| `S` as an unsigned 64-bit little-endian integer | 8 |
+| `EPIPHSIG` | 8 |
+
+The trusted comment is `epiph-manifest-sha256:<hex>`. Readers that do not check signatures
+ignore the trailer. Signing again replaces it. Official Epiphanes files are signed with the key in
+`minisign.pub`; `thme epiph verify` checks against that key unless another is given, and
+`--require-signature` makes an unsigned or unverifiable file an error. Converters that do not
+implement this section still read the weights; they lose only the signature.
+
+## 7. Planned extensions (not in 1.0)
 
 Each lands as a minor version with tests before it is used:
 
@@ -128,7 +146,7 @@ Each lands as a minor version with tests before it is used:
 - **Tokenizer and GGUF metadata** attachments, so a GGUF to `.epiph` to GGUF round trip keeps
   the tokenizer.
 
-## 7. Versioning
+## 8. Versioning
 
 A minor version adds optional manifest fields or attachment kinds; older readers still read the
 file. A major version may change the layout; readers refuse majors they do not implement.

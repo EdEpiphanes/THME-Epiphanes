@@ -213,7 +213,7 @@ closes it.
 - **Done means**: `src/scan`: pickle opcode walker (plain and PyTorch zip), GGUF/SafeTensors header and coverage checks, metadata and chat-template rules, code and executable files, `.epiph` verification; `--fail-on` exit code; tests on built fixtures, no file loaded or run.
 
 ### [THME-3019] Signed `.epiph` files
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: security · **Type**: feature · **Status**: triage
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: security · **Type**: feature · **Status**: done
 - **Problem**: Owner wants files signed by Epiphanes. Third-party converters can read the open format but get plain weights only; signature, provenance, quality evidence and placement are THME features.
 - **Done means**: Optional signature section over the manifest and payload digests; `thme epiph sign` / `verify` check it; key handling documented; a pure-Rust signature dependency proposed and approved first.
 
