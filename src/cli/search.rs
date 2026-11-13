@@ -15,6 +15,7 @@
 //! The result is written as a measured report (same schema as the verification pipeline) and
 //! optionally as a recipe that `thme evaluate` can re-check.
 
+use crate::cli::evaluate::{judge_reports, variant_json, MEASURED_METRICS};
 use anyhow::{bail, Context, Result};
 use clap::Args;
 use serde_json::{json, Value};
@@ -61,9 +62,13 @@ pub struct SearchArgs {
     #[arg(long, default_value_t = 1024)]
     pub eval_context: usize,
 
-    /// Maximum allowed perplexity increase
+    /// Maximum allowed perplexity increase (the default gate's absolute margin)
     #[arg(long, default_value_t = 0.45)]
     pub max_ppl_delta: f64,
+
+    /// Quality gate file (JSON: name, version, criteria); replaces --max-ppl-delta
+    #[arg(long, conflicts_with = "max_ppl_delta", value_name = "GATE_JSON")]
+    pub gate: Option<PathBuf>,
 
     /// Random matched-placement controls measured on the validation slice
     #[arg(long, default_value_t = 5)]
@@ -465,33 +470,12 @@ pub fn greedy(
     (assignment, moves)
 }
 
-fn variant(
-    id: &str,
-    description: String,
-    report: &PerplexityReport,
-    base: Option<f64>,
-    tolerance: f64,
-) -> Value {
-    let delta = base.map(|b| report.perplexity - b);
-    json!({
-        "id": id,
-        "description": description,
-        "perplexity": report.perplexity,
-        "cross_entropy_nats": report.cross_entropy_nats,
-        "scored_tokens": report.scored_tokens,
-        "corpus_tokens_used": report.corpus_tokens_used,
-        "windows": report.windows,
-        "elapsed_secs": report.elapsed_secs,
-        "tokens_per_sec": report.tokens_per_sec,
-        "delta_ppl": delta,
-        "accepted": delta.map(|d| d <= tolerance),
-    })
-}
-
 pub fn search(args: &SearchArgs) -> Result<Value> {
     if !(0.0..=1.0).contains(&args.budget) {
         bail!("--budget must be between 0 and 1");
     }
+    let gate = crate::quality::gate::resolve(args.gate.as_deref(), args.max_ppl_delta)?;
+    gate.require_metrics(&MEASURED_METRICS, "thme search")?;
     let formats = parse_formats(&args.formats)?;
     let source = ModelImporter::import(&args.model)
         .with_context(|| format!("Failed to import {:?}", args.model))?;
@@ -559,7 +543,8 @@ pub fn search(args: &SearchArgs) -> Result<Value> {
     let stored_bits: f64 = groups.iter().map(|g| g.stored_bits).sum();
     let budget_bits = stored_bits * args.budget;
     let none = vec![None; groups.len()];
-    let calib_base = eval.measure(&none, calib)?.perplexity;
+    let calib_base_report = eval.measure(&none, calib)?;
+    let calib_base = calib_base_report.perplexity;
     println!(
         "  calibration baseline PPL {calib_base:.4} on {} tokens",
         calib.len()
@@ -573,45 +558,46 @@ pub fn search(args: &SearchArgs) -> Result<Value> {
         .enumerate()
         .filter_map(|(g, a)| a.map(|f| costs[g][f]))
         .sum();
-    let mut measured = eval.measure(&assignment, calib)?.perplexity - calib_base;
+    let mut calib_report = eval.measure(&assignment, calib)?;
+    let mut measured = calib_report.perplexity - calib_base;
     println!(
         "  {}: predicted Δ {predicted:+.4} (sum of group costs), measured Δ {measured:+.4}",
         args.solver
     );
     let mut reverted = 0usize;
-    while measured > args.max_ppl_delta {
+    while !judge_reports(&gate, &calib_base_report, &calib_report).accepted {
         let Some((g, previous)) = moves.pop() else {
             break;
         };
         assignment[g] = previous;
         reverted += 1;
-        measured = eval.measure(&assignment, calib)?.perplexity - calib_base;
+        calib_report = eval.measure(&assignment, calib)?;
+        measured = calib_report.perplexity - calib_base;
         println!("  refine: reverted {} -> Δ {measured:+.4}", groups[g].name);
     }
     let achieved = nominal_bits(&groups, &assignment, &formats);
     let budget_met = achieved <= budget_bits + 1e-6;
 
     println!("  validating on {} held-out tokens", validation.len());
-    let tolerance = args.max_ppl_delta;
     let base = eval.measure(&none, validation)?;
     let searched = eval.measure(&assignment, validation)?;
     let mut variants = vec![
-        variant(
+        variant_json(
             "baseline",
-            "Source weights exactly as stored on disk".into(),
+            "Source weights exactly as stored on disk",
             &base,
             None,
-            tolerance,
+            &gate,
         ),
-        variant(
+        variant_json(
             "searched",
-            format!(
+            &format!(
                 "Searched assignment: {:.0}% of linear storage",
                 100.0 * achieved / stored_bits
             ),
             &searched,
-            Some(base.perplexity),
-            tolerance,
+            Some(&base),
+            &gate,
         ),
     ];
     for seed in 1..=args.controls {
@@ -620,14 +606,14 @@ pub fn search(args: &SearchArgs) -> Result<Value> {
             continue;
         }
         let report = eval.measure(&shuffled, validation)?;
-        variants.push(variant(
+        variants.push(variant_json(
             &format!("random_matched_seed{seed}"),
-            format!(
+            &format!(
                 "Same formats as the search, placed at random over same-sized groups (seed {seed})"
             ),
             &report,
-            Some(base.perplexity),
-            tolerance,
+            Some(&base),
+            &gate,
         ));
     }
     for v in &variants {
@@ -665,11 +651,11 @@ pub fn search(args: &SearchArgs) -> Result<Value> {
                 continue;
             }
             let (mut a, mut mv) = allocate(args, &groups, &formats, &costs, stored_bits * budget)?;
-            let mut d = eval.measure(&a, calib)?.perplexity - calib_base;
-            while d > args.max_ppl_delta {
+            let mut r = eval.measure(&a, calib)?;
+            while !judge_reports(&gate, &calib_base_report, &r).accepted {
                 let Some((g, previous)) = mv.pop() else { break };
                 a[g] = previous;
-                d = eval.measure(&a, calib)?.perplexity - calib_base;
+                r = eval.measure(&a, calib)?;
             }
             let got = nominal_bits(&groups, &a, &formats);
             let point = eval.measure(&a, validation)?;
@@ -740,7 +726,8 @@ pub fn search(args: &SearchArgs) -> Result<Value> {
         .ok()
         .and_then(|text| serde_json::from_str(&text).ok())
         .unwrap_or(Value::Null);
-    let searched_passed = searched.perplexity - base.perplexity <= tolerance;
+    let searched_verdict = judge_reports(&gate, &base, &searched);
+    let searched_passed = searched_verdict.accepted;
     let report = json!({
         "thme_version": env!("CARGO_PKG_VERSION"),
         "generated_unix_secs": std::time::SystemTime::now()
@@ -780,7 +767,9 @@ pub fn search(args: &SearchArgs) -> Result<Value> {
             "corpus": corpus,
             "context_len": args.eval_context,
             "max_tokens": validation.len(),
-            "max_ppl_delta": tolerance,
+            "max_ppl_delta": gate.max_ppl_delta(),
+            "gate": gate.to_report(),
+            "gate_verdict": searched_verdict,
             "gate_passed": searched_passed,
             "variants": variants,
         },
@@ -982,6 +971,7 @@ mod tests {
             test_tokens: 0,
             solver: "greedy".into(),
             dp_grid: 10_000,
+            gate: None,
         };
         let mut dp_args = args.clone();
         let report = search(&args).unwrap();

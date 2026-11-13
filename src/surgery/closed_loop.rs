@@ -288,7 +288,11 @@ impl CoSurgeryController {
                 match self.evaluator.candidate_perplexity(candidate) {
                     Ok(ppl) => {
                         self.current_ppl = ppl;
-                        self.state = if ppl - self.baseline_ppl <= self.budget.max_ppl_delta {
+                        self.state = if crate::quality::gate::GateSpec::perplexity(
+                            self.budget.max_ppl_delta,
+                        )
+                        .accepts_perplexity(self.baseline_ppl, ppl)
+                        {
                             CoSurgeryState::EvaluatePareto
                         } else {
                             CoSurgeryState::SelfHealingRelaxation

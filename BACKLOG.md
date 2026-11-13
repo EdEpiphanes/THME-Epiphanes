@@ -152,7 +152,7 @@ closes it.
 
 ### [THME-3003] One versioned quality gate; retire the stale 0.25 tolerance (dossier WP20)
 
-- **Milestone**: v0.2.8 · **Roadmap**: v0.2.8.1 · **Priority**: p1 · **Area**: quality · **Type**: fix · **Status**: triage
+- **Milestone**: v0.2.8 · **Roadmap**: v0.2.8.1 · **Priority**: p1 · **Area**: quality · **Type**: fix · **Status**: done
 - **Problem**: The threshold lives in three places: CLI defaults (0.45), `configs/quality_gates.yaml` (0.25, unread) and evaluator tests (0.25).
 - **Owner decision (2026-11-13)**: thresholds are customizable; a quality gate may hold one criterion or many.
 - **Done means**: A gate is versioned data with a content hash, absolute and relative margins; every report records its gate version; MMLU/GSM8K marked not measured.

@@ -9,6 +9,7 @@
 //! recipe with other operations is refused unless `--allow-partial` is given, in which case
 //! the skipped operations are listed in the report.
 
+use crate::quality::gate::{GateSpec, GateVerdict, Measure};
 use anyhow::{bail, Context, Result};
 use clap::Args;
 use serde_json::{json, Value};
@@ -46,9 +47,13 @@ pub struct EvaluateArgs {
     #[arg(long)]
     pub eval_max_tokens: Option<usize>,
 
-    /// Maximum allowed perplexity increase
+    /// Maximum allowed perplexity increase (the default gate's absolute margin)
     #[arg(long, default_value_t = 0.45)]
     pub max_ppl_delta: f64,
+
+    /// Quality gate file (JSON: name, version, criteria); replaces --max-ppl-delta
+    #[arg(long, conflicts_with = "max_ppl_delta", value_name = "GATE_JSON")]
+    pub gate: Option<PathBuf>,
 
     /// Where to write the measured report
     #[arg(long, default_value = "target/evaluate_report.json")]
@@ -186,14 +191,35 @@ pub fn measurable_part(recipe: &TweakRecipe) -> (TweakRecipe, Vec<&'static str>)
     (kept, skipped)
 }
 
-fn variant_json(
+/// Metrics a perplexity evaluation measures, for the quality gate.
+pub(crate) const MEASURED_METRICS: [&str; 2] = ["perplexity", "cross_entropy_nats"];
+
+/// Judges `candidate` against `baseline` on every metric a perplexity run measures.
+pub(crate) fn judge_reports(
+    gate: &GateSpec,
+    baseline: &PerplexityReport,
+    candidate: &PerplexityReport,
+) -> GateVerdict {
+    gate.judge(&[
+        Measure::new("perplexity", baseline.perplexity, candidate.perplexity),
+        Measure::new(
+            "cross_entropy_nats",
+            baseline.cross_entropy_nats,
+            candidate.cross_entropy_nats,
+        ),
+    ])
+}
+
+/// One report row: a measured variant and, when it has a baseline, the gate's verdict on it.
+pub(crate) fn variant_json(
     id: &str,
     description: &str,
     report: &PerplexityReport,
-    base: Option<f64>,
-    tolerance: f64,
+    base: Option<&PerplexityReport>,
+    gate: &GateSpec,
 ) -> Value {
-    let delta = base.map(|b| report.perplexity - b);
+    let delta = base.map(|b| report.perplexity - b.perplexity);
+    let accepted = base.map(|b| judge_reports(gate, b, report).accepted);
     json!({
         "id": id,
         "description": description,
@@ -205,7 +231,7 @@ fn variant_json(
         "elapsed_secs": report.elapsed_secs,
         "tokens_per_sec": report.tokens_per_sec,
         "delta_ppl": delta,
-        "accepted": delta.map(|d| d <= tolerance),
+        "accepted": accepted,
     })
 }
 
@@ -325,6 +351,8 @@ pub fn evaluate(args: &EvaluateArgs) -> Result<Value> {
     if source.tensors.iter().any(|t| t.source.is_none()) {
         bail!("Model has tensors without on-disk payloads; evaluation needs real weights");
     }
+    let gate = crate::quality::gate::resolve(args.gate.as_deref(), args.max_ppl_delta)?;
+    gate.require_metrics(&MEASURED_METRICS, "thme evaluate")?;
     let PreparedCandidate {
         model: mut candidate,
         skipped,
@@ -364,7 +392,8 @@ pub fn evaluate(args: &EvaluateArgs) -> Result<Value> {
     let candidate_model = arch.load(&candidate, WeightPrecision::SelectedFormat)?;
     let measured = evaluate_perplexity(&*candidate_model, &tokens, &eval, |_, _, _| {})?;
     let delta = measured.perplexity - baseline.perplexity;
-    let passed = delta <= args.max_ppl_delta;
+    let verdict = judge_reports(&gate, &baseline, &measured);
+    let passed = verdict.accepted;
     println!(
         "  candidate  PPL {:.4}  Δ {delta:+.4}  {}",
         measured.perplexity,
@@ -413,16 +442,18 @@ pub fn evaluate(args: &EvaluateArgs) -> Result<Value> {
             "corpus": corpus,
             "context_len": args.eval_context,
             "max_tokens": args.eval_max_tokens,
-            "max_ppl_delta": args.max_ppl_delta,
+            "max_ppl_delta": gate.max_ppl_delta(),
+            "gate": gate.to_report(),
+            "gate_verdict": verdict,
             "gate_passed": passed,
             "variants": [
-                variant_json("baseline", "Source weights exactly as stored on disk", &baseline, None, args.max_ppl_delta),
+                variant_json("baseline", "Source weights exactly as stored on disk", &baseline, None, &gate),
                 variant_json(
                     "recipe",
                     &format!("Recipe '{}': targeted tensors round-tripped through their assigned formats", recipe.name),
                     &measured,
-                    Some(baseline.perplexity),
-                    args.max_ppl_delta,
+                    Some(&baseline),
+                    &gate,
                 ),
             ],
         },
@@ -450,8 +481,8 @@ pub fn execute(args: EvaluateArgs) -> Result<()> {
     println!("Report written to {:?}", args.report);
     if report["evaluation"]["gate_passed"] != Value::Bool(true) {
         bail!(
-            "Measured quality gate failed (Δ PPL above {})",
-            args.max_ppl_delta
+            "Measured quality gate {} failed",
+            report["evaluation"]["gate"]["id"].as_str().unwrap_or("?")
         );
     }
     Ok(())
@@ -602,6 +633,7 @@ pub(crate) mod tests {
             algorithms: Vec::new(),
             artifact: None,
             calibration: None,
+            gate: None,
         }
     }
 
@@ -615,8 +647,10 @@ pub(crate) mod tests {
         assert_eq!(report["evaluation"]["measured"], Value::Bool(true));
         assert_eq!(report["recipe"]["format_counts"]["Q8_0"], json!(2));
         let written: Value = serde_json::from_str(&std::fs::read_to_string(out).unwrap()).unwrap();
-        let (tolerance, variants) = crate::cli::validate::read_measured_report(&written).unwrap();
-        assert_eq!(tolerance, 0.45);
+        let (gate, variants) = crate::cli::validate::read_measured_report(&written).unwrap();
+        assert_eq!(gate.max_ppl_delta(), Some(0.45));
+        assert_eq!(gate.id(), "thme-perplexity@v1");
+        assert_eq!(report["evaluation"]["gate"]["hash"], json!(gate.hash()));
         assert_eq!(variants.len(), 2);
         assert!(variants
             .iter()
@@ -695,6 +729,58 @@ pub(crate) mod tests {
             .unwrap();
         assert!(recipe_ppl.is_finite() && recipe_ppl > 1.0);
         assert_eq!(report["export"]["measured"], json!(false));
+    }
+
+    /// THME-3003: a gate file replaces the default; its identity, hash and verdict land in the
+    /// report; a metric this tool cannot measure is refused before any work.
+    #[test]
+    fn gate_file_decides_and_is_recorded() {
+        let dir = tempfile::tempdir().unwrap();
+        let (model, tokens) = synthetic_checkpoint(dir.path());
+        let recipe = write_recipe(dir.path(), false);
+        let gate_path = dir.path().join("gate.json");
+        std::fs::write(
+            &gate_path,
+            r#"{"name": "strict-ce", "version": 2, "criteria": [
+                {"metric": "cross_entropy_nats", "lower_is_better": true, "max_rel": 1e-12}]}"#,
+        )
+        .unwrap();
+        let mut gated = args(
+            model.clone(),
+            recipe.clone(),
+            tokens.clone(),
+            dir.path().join("r.json"),
+            false,
+        );
+        gated.gate = Some(gate_path.clone());
+        let report = evaluate(&gated).unwrap();
+        let evaluation = &report["evaluation"];
+        assert_eq!(evaluation["gate"]["id"], json!("strict-ce@v2"));
+        assert_eq!(
+            evaluation["gate"]["hash"],
+            json!(crate::quality::gate::GateSpec::load(&gate_path)
+                .unwrap()
+                .hash())
+        );
+        assert_eq!(
+            evaluation["gate_verdict"]["outcomes"][0]["metric"],
+            json!("cross_entropy_nats")
+        );
+        // Q8_0 changes the loss, so a near-zero relative margin rejects it.
+        assert_eq!(evaluation["gate_passed"], json!(false));
+        assert_eq!(evaluation["max_ppl_delta"], Value::Null);
+        assert!(execute(gated).is_err());
+
+        std::fs::write(
+            &gate_path,
+            r#"{"name": "acc", "version": 1, "criteria": [
+                {"metric": "mmlu_accuracy", "lower_is_better": false, "max_abs": 1.0}]}"#,
+        )
+        .unwrap();
+        let mut unmeasurable = args(model, recipe, tokens, dir.path().join("u.json"), false);
+        unmeasurable.gate = Some(gate_path);
+        let err = evaluate(&unmeasurable).unwrap_err();
+        assert!(format!("{err:#}").contains("does not measure"));
     }
 
     fn write_custom_recipe(dir: &Path, algorithm: &str) -> PathBuf {

@@ -85,7 +85,7 @@ impl THMEApp {
                     render_stat_box(&mut cols[0], "ITERATIONS / COMMITS", format!("{} / {}", report.total_iterations, report.successful_commits), p.success, &p);
                     render_stat_box(&mut cols[1], "ROLLBACKS / RELAX", format!("{} / {}", report.total_rollbacks, report.total_relaxations), p.warning, &p);
                     render_stat_box(&mut cols[2], "BASELINE PPL", format!("{:.4}", report.baseline_ppl), p.text_main, &p);
-                    let delta_color = if report.final_ppl - report.baseline_ppl <= self.cosurgery_max_ppl_delta { p.success } else { p.danger };
+                    let delta_color = if crate::quality::gate::GateSpec::perplexity(self.cosurgery_max_ppl_delta).accepts_perplexity(report.baseline_ppl, report.final_ppl) { p.success } else { p.danger };
                     render_stat_box(&mut cols[3], "FINAL PPL (Δ)", format!("{:.4} ({:+.3})", report.final_ppl, report.final_ppl - report.baseline_ppl), delta_color, &p);
                     render_stat_box(&mut cols[4], "SIZE REDUCTION", format!("{:.1}%", report.final_reduction_ratio * 100.0), p.accent, &p);
                 });
@@ -123,7 +123,7 @@ impl THMEApp {
                                     for cp in &report.history {
                                         ui.label(egui::RichText::new(format!("#{}", cp.iteration)).size(9.0));
                                         ui.label(egui::RichText::new(format!("{:.4}", cp.candidate_ppl)).size(9.0).color(p.accent));
-                                        let delta_color = if cp.ppl_delta <= self.cosurgery_max_ppl_delta { p.success } else { p.warning };
+                                        let delta_color = if crate::quality::gate::GateSpec::perplexity(self.cosurgery_max_ppl_delta).accepts_perplexity(0.0, cp.ppl_delta) { p.success } else { p.warning };
                                         ui.label(egui::RichText::new(format!("{:+.4}", cp.ppl_delta)).size(9.0).color(delta_color));
                                         ui.label(egui::RichText::new(format!("{:.1}%", cp.reduction_ratio * 100.0)).size(9.0).color(p.success));
                                         ui.label(egui::RichText::new(&cp.recipe.name).size(9.0).color(p.text_muted));

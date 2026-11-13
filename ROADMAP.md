@@ -32,7 +32,6 @@ flowchart LR
     classDef later fill:#ffffff,stroke:#0b0b0b,stroke-width:1.5px,stroke-dasharray:4 3,color:#52514e;
 
     subgraph NOW["Now"]
-        N2["One versioned quality gate"]:::now
         N3["Number formats with error bounds"]:::now
         N4["SPDX headers"]:::now
     end
@@ -49,7 +48,7 @@ flowchart LR
         L4["GPU runtime and placement"]:::later
         L5["Commercial release"]:::later
     end
-    D["Done this week:<br/>engine core, exact allocator,<br/>.epiph v1.0 and signing, thme scan"]:::done --> NOW --> NEXT --> LATER
+    D["Done this week:<br/>engine core, exact allocator,<br/>.epiph and signing, thme scan,<br/>versioned quality gate"]:::done --> NOW --> NEXT --> LATER
 ```
 
 ### Done this week
@@ -62,6 +61,7 @@ flowchart LR
 | BYOA apply context (THME-3010) | Rules receive calibration, row width and codec through one interface | Tested; AWQ unchanged |
 | `.epiph` v1.0 (THME-3012) | Open Epiphanes model format with full metadata; `thme epiph pack/verify` | Tested: round trip, corruption, GGUF conversion |
 | `thme scan` (THME-3018) | Static model security scanner | Tested on built fixtures |
+| Versioned quality gate (THME-3003) | `GateSpec`: custom criteria, absolute and relative margins, hash in every report; `--gate FILE`; validate re-judges; five inline copies removed; validate default now 0.45, like every other command | Tested, including every committed report |
 | Signed `.epiph` (THME-3019) | Minisign signature over the manifest; `thme epiph sign`, `verify --require-signature`; Epiphanes key by default | Tested: tamper, wrong key, broken trailer |
 | No-panic rule, GUI split, glossary | Compiler-enforced; Studio tabs as modules; `CONTEXT.md` | Tested |
 
@@ -69,7 +69,6 @@ flowchart LR
 
 | Track | Item | Status | Depends on |
 | :--- | :--- | :--- | :--- |
-| Quality and evidence | **One versioned quality gate** (THME-3003): custom criteria, one or many, absolute and relative margins, gate version in every report | Not started | None |
 | Engine | **Number formats with stated error bounds** (THME-3006): FP16, BF16, FP8, integer, codebook, phase | On track | None |
 | Hygiene | **SPDX licence headers** on every file, enforced in CI (THME-3005) | Not started | None |
 
@@ -352,7 +351,7 @@ interval, a three-state verdict and a chart; harness self-tests pass.
 
 | # | Item | Status |
 | :--- | :--- | :--- |
-| v0.2.8.1 | One versioned quality gate: custom criteria, one or many, absolute and relative margins (WP20, THME-3003) | |
+| v0.2.8.1 | One versioned quality gate: custom criteria, one or many, absolute and relative margins (WP20, THME-3003) | **Done**: every gate decision goes through `GateSpec`; reports record the gate hash; `thme validate` re-judges |
 | v0.2.8.2 | Benchmark registry: declarative task files and result records (WP31) | |
 | v0.2.8.3 | Benchmark runner: native, bridged and imported modes; resume and cache (WP32) | |
 | v0.2.8.4 | Metrics library: exact and normalized match, numeric tolerance, likelihood choice, pass@k (WP33) | |
@@ -673,7 +672,7 @@ Pure Rust GPU driver execution bypassing external Python runtimes, C++ framework
 - [ ] **v0.2.1.1**: Hardware Abstraction Layer (HAL) core traits (`HardwareDevice`, `DeviceMemoryBuffer`, `CommandQueue`, `KernelLaunchConfig`).
 - [ ] **v0.2.1.2**: NVIDIA CUDA Driver API backend via pure Rust `cudarc` (direct `libcuda.so` / `nvcuda.dll` calls).
 - [ ] **v0.2.1.3**: Vulkan 1.3 SPIR-V compute pipeline backend via `ash` for cross-platform execution on Linux and Windows.
-- [ ] **v0.2.1.4**: Apple Metal 3 Performance Shaders backend via `metal-rs` leveraging Apple Silicon unified memory.
+- [ ] **v0.2.1.4**: Apple Metal 3 Performance Shaders backend via `metal-rs`, using Apple Silicon unified memory.
 - [ ] **v0.2.1.5**: Fused BitNet b1.58 GEMV / GEMM kernel with register-level 2-bit weight unpacking.
 - [ ] **v0.2.1.6**: Fused RMSNorm kernel computing variance and scaling in a single thread block pass.
 - [ ] **v0.2.1.7**: Fused SwiGLU activation kernel combining gate and up projections.

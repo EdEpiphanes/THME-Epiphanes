@@ -147,6 +147,7 @@ mod tests {
             algorithms: Vec::new(),
             artifact: None,
             calibration: None,
+            gate: None,
         })
         .unwrap();
         let measured = report["evaluation"]["variants"][1]["perplexity"]

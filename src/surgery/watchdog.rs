@@ -33,7 +33,8 @@ impl RollbackWatchdog {
     /// Evaluates candidate perplexity against baseline.
     pub fn evaluate(&self, baseline_ppl: f32, candidate_ppl: f32) -> WatchdogDecision {
         let delta = candidate_ppl - baseline_ppl;
-        if delta <= self.max_ppl_delta {
+        let gate = crate::quality::gate::GateSpec::perplexity(f64::from(self.max_ppl_delta));
+        if gate.accepts_perplexity(f64::from(baseline_ppl), f64::from(candidate_ppl)) {
             WatchdogDecision {
                 allow_commit: true,
                 observed_delta: delta,
