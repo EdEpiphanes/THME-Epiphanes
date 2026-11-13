@@ -19,6 +19,7 @@
 </p>
 
 <p align="center">
+  <a href="#now-building">Now building</a> ·
   <a href="#measured-results">Measured results</a> ·
   <a href="#what-is-real-today">What is real today</a> ·
   <a href="#thme-studio">Studio</a> ·
@@ -42,6 +43,21 @@ it back.
 
 Every number below comes from a real forward pass and can be regenerated with one command.
 Anything THME cannot yet measure is labelled as an estimate or a simulation.
+
+## Now building
+
+THME is open source (AGPL-3.0-only) and is finishing its **engine and tools first**; a
+commercial release follows later. This week's work, all tested on synthetic data:
+
+| Track | Shipped | In progress |
+| :--- | :--- | :--- |
+| **Epiphanes model format** | [`.epiph` v1.0](docs/formats/epiph-v1.md): one verifiable file with weights, model description, recipe, provenance, quality results and calibration (`thme epiph pack`, `thme epiph verify`); converts to GGUF and SafeTensors | Signed files; quantized payloads |
+| **Model security** | `thme scan PATH`: finds code-executing pickles, chat-template injection, `trust_remote_code` files, hidden executables and malformed headers without loading anything | Developer sandbox; more formats |
+| **Math engine** | `src/engine`: one shared Walsh-Hadamard transform, one ternary quantizer, an exact DP allocator (`thme search --solver dp`) beside greedy and thresholds | Number formats with error bounds |
+| **Quality and evidence** | Every figure labelled Measured, Tested, Estimate or Simulated; project glossary in [CONTEXT.md](CONTEXT.md) | One versioned quality gate with custom criteria |
+
+Model runs are paused, so work that needs a real-model measurement is marked *measurement
+pending*. Full plan: **[Now, next, later](ROADMAP.md#now-next-later)**.
 
 ## Measured results
 
@@ -132,7 +148,7 @@ Interpretation against the research programme: **[measured findings](docs/resear
 | SafeTensors and GGUF v2/v3 import, 28 GGML types | Implemented | Unit and fuzz tests |
 | Reference forward pass (LLaMA family, GPT-NeoX) | **Measured** | WikiText-2 perplexity on 2 models |
 | Precision round trips: FP16, BF16, Q8_0, Q4_0, ternary TQ1_0 | **Measured** | [Precision sweeps](docs/benchmark_dossier.md) |
-| GGUF v3 export | **Measured** | Uniform Q8_0 re-imported and evaluated; per-tensor formats not yet written |
+| GGUF v3 export | **Measured** | Uniform Q8_0 re-imported and evaluated; per-tensor formats (Q4_K, Q5_K, Q6_K, ternary) Tested |
 | Precision sweep, random-placement control, depth probe | **Measured** | `examples/precision_sweep.rs`, `examples/depth_probe.rs` |
 | `thme validate --report`, `thme co-surgery MODEL --tokens` | **Measured** | Gate measured reports; co-surgery scores candidates with the forward pass |
 | Surgery recipes, BYOA registry | Implemented | Recipes are measured through the verification pipeline and co-surgery |
@@ -145,6 +161,9 @@ Interpretation against the research programme: **[measured findings](docs/resear
 | PyTorch/CUDA scripts, LoRA merge, MCP server, VS Code extension | Implemented | Unit tests |
 | BYOA algorithms in recipes | **Measured** | Contract-checked; Hadamard-rotated ternary and 4-bit built-ins; invalid transforms refused |
 | Studio Live 3D view | **Measured** | Per-tensor activity, residual updates and anomalies from the forward-pass probe (`src/inference/probe.rs`) |
+| `.epiph` model files | Tested | Round trip, corruption and truncation, GGUF conversion byte-identical to the source |
+| `thme scan` security scanner | Tested | Built fixtures for each rule; nothing is loaded or run |
+| Engine primitives (`src/engine`) | Tested | Oracles: explicit Hadamard matrix, exhaustive search, round-and-clamp |
 | Other Studio tabs | Implemented | Real screenshots below; telemetry uses a synthetic demo model |
 
 ## THME Studio
@@ -223,6 +242,9 @@ cargo build --release
 ```bash
 cargo run --example generate_mock_model
 ./target/release/thme inspect examples/mock_llama
+./target/release/thme scan examples/mock_llama                       # security scan, loads nothing
+./target/release/thme epiph pack examples/mock_llama --out target/mock.epiph
+./target/release/thme epiph verify target/mock.epiph                 # digests, shapes, types
 ./target/release/thme gui
 ```
 
@@ -314,8 +336,9 @@ is in **[docs/subsystems.md](docs/subsystems.md)**.
 
 ## Roadmap
 
-v0.2 is redefined around one rule: **every claim is measured, or labelled as not measured.**
-Recipes and BYOA algorithms become experiments, and the gate decides what ships.
+Two views of one plan. The **[now, next, later](ROADMAP.md#now-next-later)** view groups work by
+track (math engine, Epiphanes model format, security, quality and evidence). The numbered
+milestones below track the measured-model programme, which waits while model runs are paused.
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'fontFamily': 'Chakra Petch, Bahnschrift, Arial Narrow, sans-serif', 'primaryColor': '#ffffff', 'primaryTextColor': '#0b0b0b', 'primaryBorderColor': '#0b0b0b', 'lineColor': '#0b0b0b', 'secondaryColor': '#f6f6f4', 'tertiaryColor': '#ffffff', 'clusterBkg': '#f6f6f4', 'clusterBorder': '#0b0b0b', 'edgeLabelBackground': '#ffffff', 'noteBkgColor': '#ffffff', 'noteBorderColor': '#0b0b0b', 'actorBkg': '#ffffff', 'actorBorder': '#0b0b0b', 'signalColor': '#0b0b0b', 'labelBoxBkgColor': '#ffffff'}}}%%
@@ -354,8 +377,6 @@ THME is also a research programme into heterogeneous representations for languag
 
 - [Research Programme v2](docs/research/THME_Research_Programme_v2.pdf): hypotheses, method, controls
 - [Measured findings, November 2026](docs/research/THME_measured_findings_2026-11.md): what the first experiments support and refute
-- Model security scan: `thme scan PATH` statically checks model files and folders for pickle code execution, template injection in chat templates, `trust_remote_code` files, executables, hidden bytes and malformed headers (nothing is loaded; a clean result is not proof of safety)
-- [The `.epiph` format](docs/formats/epiph-v1.md): Epiphanes model files holding weights, recipe, provenance, quality results and calibration in one verifiable file (`thme epiph pack`, `thme epiph verify`)
 - [Research Dossier v3.1](docs/research/THME_Research_Dossier_v3.1_2026-11-13.pdf) (theoretical proposal and engineering brief; no measurements of its own) and its [review against the repository](docs/research/REVIEW_dossier_v3.1.md)
 
 ## Contributing

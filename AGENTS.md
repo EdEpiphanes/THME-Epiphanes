@@ -92,6 +92,8 @@ $$v0.1.x.0 \longrightarrow \left[ v0.1.x.1, v0.1.x.2, v0.1.x.3, \dots, v0.1.x.9 
 
 ### 5.2 Milestone Progress Ledger
 
+Current focus and priorities live in the **now / next / later** view at the top of [ROADMAP.md](ROADMAP.md#now-next-later); pick work from its *Now* table.
+
 | Version | Focus Area | Sub-Milestones [1-9] Summary | Status |
 | :--- | :--- | :--- | :--- |
 | **v0.1.0.0** | Core Foundations | [v0.1.0.1 - v0.1.0.9] SafeTensors/GGUF mmap, SVD decay, condition number, Fisher proxy, Pareto allocator (threshold-based; exact DP added later as `thme search --solver dp`), 60 FPS studio, token simulator, recipe engine. | Completed |
