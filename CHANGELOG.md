@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **Benchmark runner, imported mode** (THME-3031, v0.2.8.3): `thme bench score` scores outputs
+  produced by any tool (generated answers, log-likelihoods, or pass counts for code tasks) with
+  the metric library and writes a complete result record whose run mode and evidence are
+  `imported`. Partial or mismatched outputs are refused.
 - **SVG visual engine** (THME-3007, v0.2.5.8): `engine::viz` writes deterministic SVG line plots
   with an optional log axis, heatmaps, scatter plots with a required caption, layered dataflow
   graphs and Pareto fronts. Every chart prints its evidence label; NaN, non-positive log values,

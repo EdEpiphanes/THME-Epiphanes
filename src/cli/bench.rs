@@ -34,6 +34,39 @@ pub enum BenchCommand {
         #[arg(value_name = "TASK")]
         task: PathBuf,
     },
+    /// Score outputs produced by any tool into a result record (run mode and evidence: imported)
+    Score {
+        /// Task file; its dataset is checked against its hash first
+        #[arg(long)]
+        task: PathBuf,
+        /// Outputs, JSONL: one line per dataset item (see docs/benchmark-registry.md)
+        #[arg(long)]
+        outputs: PathBuf,
+        /// SHA-256 of the model the outputs came from
+        #[arg(long)]
+        model_sha256: String,
+        /// Recipe or conversion that produced the model, if any
+        #[arg(long)]
+        transformation: Option<String>,
+        /// Sampling temperature the outputs were produced with (0 = greedy)
+        #[arg(long, default_value_t = 0.0)]
+        temperature: f64,
+        /// Sampling seed; required when temperature > 0
+        #[arg(long)]
+        seed: Option<u64>,
+        /// Generation length cap the outputs were produced with
+        #[arg(long)]
+        max_new_tokens: Option<u32>,
+        /// Hardware the outputs were produced on, as stated by you
+        #[arg(long, default_value = "not stated")]
+        hardware: String,
+        /// Confidence level of the interval
+        #[arg(long, default_value_t = 0.95)]
+        level: f64,
+        /// Where to write the result record
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Check a task's items against training or teacher data; fails if any item appears
     Contamination {
         /// Task file; its dataset is checked against its hash first
@@ -105,6 +138,59 @@ pub fn execute(args: BenchArgs) -> Result<()> {
                 "{}: dataset {} matches its hash",
                 spec.key(),
                 path.display()
+            );
+            Ok(())
+        }
+        BenchCommand::Score {
+            task,
+            outputs,
+            model_sha256,
+            transformation,
+            temperature,
+            seed,
+            max_new_tokens,
+            hardware,
+            level,
+            out,
+        } => {
+            use crate::bench::score::{
+                imported_record, read_dataset, read_outputs, score_outputs, today_utc, ImportedRun,
+            };
+            let started = std::time::Instant::now();
+            let spec = TaskSpec::load(&task)?;
+            let dataset = spec.verify_dataset(task.parent().unwrap_or(Path::new(".")))?;
+            let items = read_dataset(&dataset)?;
+            let scored = score_outputs(&spec, &items, &read_outputs(&outputs)?)?;
+            let run = ImportedRun {
+                model_sha256,
+                transformation,
+                decoding: crate::bench::Decoding {
+                    temperature,
+                    seed,
+                    max_new_tokens,
+                },
+                hardware,
+                run_date: today_utc(),
+                level,
+                seed: 0,
+            };
+            let record = imported_record(&spec, scored, &run, started.elapsed().as_secs_f64())?;
+            std::fs::write(
+                &out,
+                serde_json::to_string_pretty(&record)?
+                    + "
+",
+            )?;
+            println!(
+                "{}: {} items, score {:.4} [{:.4}, {:.4}] ({:?}, {:.0}%), evidence imported -> {}",
+                spec.key(),
+                record.items.len(),
+                record.score,
+                record.interval.low,
+                record.interval.high,
+                record.interval.method,
+                record.interval.level * 100.0,
+                out.display()
             );
             Ok(())
         }
