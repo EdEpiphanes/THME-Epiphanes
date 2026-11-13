@@ -223,3 +223,155 @@ fn quantized_pack_runs_like_the_candidate() {
     };
     assert_eq!(export(&packed, "a.gguf"), export(&candidate, "b.gguf"));
 }
+
+fn gguf_with_tokenizer(dir: &Path, template: &str) -> std::path::PathBuf {
+    use crate::parser::gguf::{GgmlType, GgufValue as V};
+    let mut w = crate::exporter::GgufWriter::new();
+    w.add_metadata("general.architecture", V::String("llama".into()));
+    w.add_metadata("general.name", V::String("tiny".into()));
+    w.add_metadata("llama.block_count", V::Uint32(1));
+    w.add_metadata("llama.rope.freq_base", V::Float32(10_000.0));
+    w.add_metadata("test.u8", V::Uint8(7));
+    w.add_metadata("test.i64", V::Int64(-5));
+    w.add_metadata("test.f64", V::Float64(0.1));
+    w.add_metadata("test.bool", V::Bool(true));
+    w.add_metadata(
+        "tokenizer.ggml.tokens",
+        V::Array(vec![
+            V::String("<s>".into()),
+            V::String("hello".into()),
+            V::String("exec(".into()),
+        ]),
+    );
+    w.add_metadata(
+        "tokenizer.ggml.scores",
+        V::Array(vec![V::Float32(0.0), V::Float32(-1.5), V::Float32(-2.25)]),
+    );
+    w.add_metadata(
+        "tokenizer.ggml.token_type",
+        V::Array(vec![V::Int32(3), V::Int32(1), V::Int32(1)]),
+    );
+    w.add_metadata("tokenizer.chat_template", V::String(template.into()));
+    let data: Vec<u8> = (0..64u32)
+        .flat_map(|i| (i as f32 * 0.01).to_le_bytes())
+        .collect();
+    w.add_tensor("blk.0.attn_q.weight", vec![8, 8], GgmlType::F32, data);
+    let path = dir.join("tiny.gguf");
+    std::fs::write(&path, w.write_to_bytes().unwrap()).unwrap();
+    path
+}
+
+/// THME-3014 done-means: GGUF -> .epiph -> GGUF keeps every metadata key with its exact type,
+/// including the tokenizer; the GGUF written from the .epiph equals the one written from the
+/// source.
+#[test]
+fn gguf_metadata_survives_the_round_trip() {
+    let dir = tempfile::tempdir().unwrap();
+    let gguf = gguf_with_tokenizer(dir.path(), "{{ messages }}");
+    let source = ModelImporter::import(&gguf).unwrap();
+    assert!(source
+        .source_gguf_metadata
+        .contains_key("tokenizer.ggml.tokens"));
+    let packed = dir.path().join("tiny.epiph");
+    write(&source, &PackOptions::default(), &packed).unwrap();
+    let (back, manifest) = read(&packed).unwrap();
+    assert!(manifest
+        .attachments
+        .iter()
+        .any(|a| a.kind == "gguf-metadata"));
+    assert_eq!(
+        back.source_gguf_metadata, source.source_gguf_metadata,
+        "every key and type"
+    );
+
+    let export = |m: &ModelIR, name: &str| {
+        let path = dir.path().join(name);
+        let config = crate::exporter::ExportConfig {
+            format: crate::exporter::ExportFormat::GGUFv3,
+            quant_type: crate::exporter::ExportQuantType::PerTensor,
+            output_path: path.clone(),
+            compute_checksum: false,
+        };
+        crate::exporter::ModelExporter::export(m, &config).unwrap();
+        path
+    };
+    let a = export(&source, "a.gguf");
+    let b = export(&back, "b.gguf");
+    assert_eq!(std::fs::read(&a).unwrap(), std::fs::read(&b).unwrap());
+    let again = ModelImporter::import(&b).unwrap();
+    assert_eq!(
+        again.source_gguf_metadata["tokenizer.ggml.tokens"],
+        source.source_gguf_metadata["tokenizer.ggml.tokens"]
+    );
+}
+
+#[test]
+fn hf_files_attach_extract_and_names_are_safe() {
+    let dir = tempfile::tempdir().unwrap();
+    let (model_dir, _) = synthetic_checkpoint(dir.path());
+    std::fs::write(
+        model_dir.join("tokenizer.json"),
+        r#"{"model": {"type": "BPE"}}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        model_dir.join("tokenizer_config.json"),
+        r#"{"chat_template": "{{ x }}"}"#,
+    )
+    .unwrap();
+    let ir = ModelImporter::import(&model_dir).unwrap();
+    let names = ["config.json", "tokenizer.json", "tokenizer_config.json"];
+    let options = PackOptions {
+        hf_files: names.iter().map(|n| model_dir.join(n)).collect(),
+        calibration: None,
+        ..PackOptions::default()
+    };
+    let packed = dir.path().join("hf.epiph");
+    assert_eq!(write(&ir, &options, &packed).unwrap().attachments, 3);
+    assert!(
+        verify(&packed).is_ok(),
+        "several attachments do not overlap"
+    );
+    let out = dir.path().join("extracted");
+    let written = extract_hf_files(&packed, &out).unwrap();
+    assert_eq!(written.len(), 3);
+    for n in names {
+        assert_eq!(
+            std::fs::read(out.join(n)).unwrap(),
+            std::fs::read(model_dir.join(n)).unwrap(),
+            "{n}"
+        );
+    }
+    for bad in ["", ".", "..", "../x", "a/b", r"a\b", "C:x", "x\0y"] {
+        assert!(!is_plain_file_name(bad), "{bad:?}");
+    }
+    assert!(is_plain_file_name("tokenizer.json"));
+}
+
+#[test]
+fn scan_checks_templates_carried_inside_epiph_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let evil = "{{ cycler.__init__.__globals__.os.popen('id').read() }}";
+    let gguf = gguf_with_tokenizer(dir.path(), evil);
+    let packed = dir.path().join("evil.epiph");
+    write(
+        &ModelImporter::import(&gguf).unwrap(),
+        &PackOptions::default(),
+        &packed,
+    )
+    .unwrap();
+    let report = crate::scan::scan(&packed).unwrap();
+    assert!(
+        report
+            .findings
+            .iter()
+            .any(|f| f.rule == "template-injection"),
+        "{:?}",
+        report.findings
+    );
+    // The vocabulary token "exec(" is data, not a finding.
+    assert!(!report
+        .findings
+        .iter()
+        .any(|f| f.detail.contains("tokenizer.ggml.tokens")));
+}

@@ -35,6 +35,14 @@ pub enum EpiphCommand {
         #[arg(long)]
         require_signature: bool,
     },
+    /// Write the Hugging Face files attached to an .epiph file (tokenizer, config) into a folder
+    Extract {
+        #[arg(value_name = "FILE")]
+        file: PathBuf,
+        /// Folder to write the files into
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Sign an .epiph file in place with a Minisign secret key (replaces an earlier signature)
     Sign {
         #[arg(value_name = "FILE")]
@@ -143,6 +151,15 @@ pub fn pack(args: &PackArgs) -> Result<epiph::PackSummary> {
         annotations,
         created_unix: None,
         store_selected: args.quantize,
+        hf_files: if args.model.is_dir() {
+            epiph::HF_FILES
+                .iter()
+                .map(|name| args.model.join(name))
+                .filter(|p| p.is_file())
+                .collect()
+        } else {
+            Vec::new()
+        },
     };
     epiph::write(&model, &options, &args.out)
 }
@@ -191,6 +208,14 @@ pub fn execute(args: EpiphArgs) -> Result<()> {
                     }
                 }
             }
+        }
+        EpiphCommand::Extract { file, out } => {
+            let names = epiph::extract_hf_files(&file, &out)?;
+            println!(
+                "Wrote {} files to {out:?}: {}",
+                names.len(),
+                names.join(", ")
+            );
         }
         EpiphCommand::Sign {
             file,

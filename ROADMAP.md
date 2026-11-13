@@ -32,7 +32,6 @@ flowchart LR
     classDef later fill:#ffffff,stroke:#0b0b0b,stroke-width:1.5px,stroke-dasharray:4 3,color:#52514e;
 
     subgraph NOW["Now"]
-        N2["Tokenizer round trip"]:::now
         N3["Developer sandbox design"]:::now
         N4["Benchmark registry"]:::now
     end
@@ -63,6 +62,7 @@ flowchart LR
 | `.epiph` v1.0 (THME-3012) | Open Epiphanes model format with full metadata; `thme epiph pack/verify` | Tested: round trip, corruption, GGUF conversion |
 | `thme scan` (THME-3018) | Static model security scanner | Tested on built fixtures |
 | Versioned quality gate (THME-3003) | `GateSpec`: custom criteria, absolute and relative margins, hash in every report; `--gate FILE`; validate re-judges; five inline copies removed; validate default now 0.45, like every other command | Tested, including every committed report |
+| Tokenizer round trip (THME-3014) | GGUF metadata as a typed attachment; HF files attached, `thme epiph extract`; scan checks carried templates | Tested: GGUF to `.epiph` to GGUF byte-identical |
 | Quantized `.epiph` (THME-3013) | `thme epiph pack --recipe R --quantize` stores each tensor in its selected format through the exporter's plan | Tested: forward pass and GGUF bytes identical to the candidate |
 | Number formats (THME-3006) | `engine::minifloat` (FP16, BF16, FP8 E4M3/E5M2, nearest-even) and integer, sign, codebook, phase quantizers; fixed an FP16 rounding bug in every block encoder (THME-3023) | Tested: every FP16 code, every tie in four formats |
 | SPDX headers (THME-3005) | `AGPL-3.0-only` header on all 168 source files; `scripts/spdx.py --check` in CI | Tested in CI |
@@ -73,7 +73,6 @@ flowchart LR
 
 | Track | Item | Status | Depends on |
 | :--- | :--- | :--- | :--- |
-| Epiphanes model format | **Tokenizer and GGUF metadata** (THME-3014, v0.2.6.4): lossless GGUF round trip | Not started | `.epiph` v1.0 |
 | Security | **Developer sandbox design** (THME-3020, v0.2.7.5): isolation per OS, written before code | Not started | None |
 | Quality and evidence | **Benchmark registry** (v0.2.8.2): declarative task files and result records | Not started | Versioned gate |
 
@@ -321,7 +320,7 @@ file, and converts to GGUF and back without losing its tokenizer.
 | v0.2.6.1 | Open container v1.0: manifest, aligned payloads, digests, `thme epiph pack/verify` (THME-3012) | **Done**: round trip, corruption, truncation and GGUF conversion tested |
 | v0.2.6.2 | Minisign signatures over the manifest; Epiphanes key by default (THME-3019) | **Done**: tamper, wrong key and broken trailer tested |
 | v0.2.6.3 | Quantized payloads: each tensor in its selected format, including K-quants, ternary and BYOA (THME-3013) | **Done**: `thme epiph pack --recipe R --quantize`; packed file runs bit-identically to the candidate; BYOA formats have no stored encoding yet |
-| v0.2.6.4 | Tokenizer and GGUF metadata attachments, lossless GGUF round trip (THME-3014) | |
+| v0.2.6.4 | Tokenizer and GGUF metadata attachments, lossless GGUF round trip (THME-3014) | **Done**: every GGUF key and type survives; HF files attached and extracted; format v1.1 |
 | v0.2.6.5 | Streaming writer and memory-mapped reader for models larger than memory | |
 | v0.2.6.6 | Lossless payload compression behind a per-payload encoding field (THME-3015) | |
 | v0.2.6.7 | GPU/CPU/disk placement plan from the exact allocator for a stated memory budget (THME-3016) | |

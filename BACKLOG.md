@@ -222,7 +222,7 @@ closes it.
 
 ### [THME-3014] `.epiph`: tokenizer and GGUF metadata attachments
 
-- **Milestone**: v0.2.6 · **Roadmap**: v0.2.6.4 · **Priority**: p2 · **Area**: exporter · **Type**: feature · **Status**: triage
+- **Milestone**: v0.2.6 · **Roadmap**: v0.2.6.4 · **Priority**: p2 · **Area**: exporter · **Type**: feature · **Status**: done
 - **Problem**: GGUF metadata (including the tokenizer) is not serializable yet, so GGUF to .epiph to GGUF loses it.
 - **Done means**: GGUF -> .epiph -> GGUF keeps every metadata key; SafeTensors tokenizer files are attached.
 
