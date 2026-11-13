@@ -25,7 +25,7 @@ pub const EXTENSION: &str = "epiph";
 pub const MAGIC: [u8; 8] = [0x89, b'E', b'P', b'I', b'P', b'H', 0x0D, 0x0A];
 /// Format version this module reads and writes.
 pub const MAJOR: u16 = 1;
-pub const MINOR: u16 = 0;
+pub const MINOR: u16 = 1;
 /// Every payload starts on a multiple of this many bytes.
 pub const ALIGN: u64 = 64;
 const HEADER_LEN: u64 = 32;
@@ -45,6 +45,9 @@ pub struct TensorEntry {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Attachment {
     pub kind: String,
+    /// File name for `hf-file` attachments; a plain name, never a path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     pub encoding: String,
     pub offset: u64,
     pub length: u64,
@@ -107,6 +110,30 @@ pub struct PackOptions {
     pub created_unix: Option<u64>,
     /// Store every tensor in its selected format (as `thme export` would), not as stored.
     pub store_selected: bool,
+    /// Files to attach as `hf-file` (tokenizer, config); each stored under its file name.
+    pub hf_files: Vec<std::path::PathBuf>,
+}
+
+/// Hugging Face files `thme epiph pack` attaches when packing a model folder.
+pub const HF_FILES: [&str; 9] = [
+    "config.json",
+    "generation_config.json",
+    "tokenizer.json",
+    "tokenizer_config.json",
+    "special_tokens_map.json",
+    "added_tokens.json",
+    "vocab.json",
+    "merges.txt",
+    "tokenizer.model",
+];
+
+/// A plain file name: no directory parts, no `..`, nothing that could escape a folder.
+pub fn is_plain_file_name(name: &str) -> bool {
+    !name.is_empty()
+        && name != "."
+        && name != ".."
+        && !name.contains(['/', '\\', ':', '\0'])
+        && Path::new(name).file_name().is_some_and(|f| f == name)
 }
 
 /// What a write produced.
@@ -170,16 +197,51 @@ pub fn write(model: &ModelIR, options: &PackOptions, out: &Path) -> Result<PackS
         payloads.push(bytes);
     }
     let mut attachments = Vec::new();
-    if let Some(calibration) = &options.calibration {
-        let bytes = serde_json::to_vec(calibration)?;
+    let mut attach = |kind: &str, name: Option<String>, encoding: &str, bytes: Vec<u8>| {
         attachments.push(Attachment {
-            kind: "calibration".into(),
-            encoding: "json".into(),
+            kind: kind.into(),
+            name,
+            encoding: encoding.into(),
             offset,
             length: bytes.len() as u64,
             sha256: compute_sha256(&bytes),
         });
+        offset = align(offset + bytes.len() as u64);
         payloads.push(bytes);
+    };
+    if let Some(calibration) = &options.calibration {
+        attach(
+            "calibration",
+            None,
+            "json",
+            serde_json::to_vec(calibration)?,
+        );
+    }
+    if !model.source_gguf_metadata.is_empty() {
+        let mut floats = Vec::new();
+        for value in model.source_gguf_metadata.values() {
+            collect_floats(value, &mut floats);
+        }
+        if floats.iter().any(|f| !f.is_finite()) {
+            bail!("GGUF metadata holds a non-finite number, which JSON cannot carry");
+        }
+        attach(
+            "gguf-metadata",
+            None,
+            "json",
+            serde_json::to_vec(&model.source_gguf_metadata)?,
+        );
+    }
+    for file in &options.hf_files {
+        let name = file
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if !is_plain_file_name(&name) {
+            bail!("Cannot attach {file:?}: not a plain file name");
+        }
+        let bytes = std::fs::read(file).with_context(|| format!("Failed to read {file:?}"))?;
+        attach("hf-file", Some(name), "raw", bytes);
     }
 
     let mut sources = BTreeMap::new();
@@ -374,6 +436,10 @@ pub fn read(path: &Path) -> Result<(ModelIR, Manifest)> {
             byte_len: entry.length,
         });
     }
+    if let Some((_, bytes)) = read_attachments(path, "gguf-metadata")?.into_iter().next() {
+        model.source_gguf_metadata = serde_json::from_slice(&bytes)
+            .with_context(|| format!("{path:?} has unreadable GGUF metadata"))?;
+    }
     Ok((model, manifest))
 }
 
@@ -386,24 +452,58 @@ fn read_range(file: &mut File, at: u64, length: u64) -> Result<Vec<u8>> {
 
 /// The calibration statistics attached to a file, if any (digest checked).
 pub fn read_calibration(path: &Path) -> Result<Option<CalibrationFile>> {
+    read_attachments(path, "calibration")?
+        .into_iter()
+        .next()
+        .map(|(_, bytes)| {
+            serde_json::from_slice(&bytes).context("unreadable calibration attachment")
+        })
+        .transpose()
+}
+
+/// Every attachment of `kind` as `(name, bytes)`, each checked against its digest.
+pub fn read_attachments(path: &Path, kind: &str) -> Result<Vec<(Option<String>, Vec<u8>)>> {
     let Opened {
         manifest,
         data_offset,
         ..
     } = open(path)?;
-    let Some(entry) = manifest
-        .attachments
-        .iter()
-        .find(|a| a.kind == "calibration")
-    else {
-        return Ok(None);
-    };
     let mut file = File::open(path)?;
-    let bytes = read_range(&mut file, data_offset + entry.offset, entry.length)?;
-    if compute_sha256(&bytes) != entry.sha256 {
-        bail!("{path:?}: calibration attachment fails its SHA-256 check");
+    let mut out = Vec::new();
+    for entry in manifest.attachments.iter().filter(|a| a.kind == kind) {
+        let bytes = read_range(&mut file, data_offset + entry.offset, entry.length)?;
+        if compute_sha256(&bytes) != entry.sha256 {
+            bail!("{path:?}: attachment '{kind}' fails its SHA-256 check");
+        }
+        out.push((entry.name.clone(), bytes));
     }
-    Ok(Some(serde_json::from_slice(&bytes)?))
+    Ok(out)
+}
+
+/// Writes every `hf-file` attachment into `dir` under its file name; returns the names.
+/// Names are checked again here, so a crafted file cannot write outside `dir`.
+pub fn extract_hf_files(path: &Path, dir: &Path) -> Result<Vec<String>> {
+    std::fs::create_dir_all(dir).with_context(|| format!("Failed to create {dir:?}"))?;
+    let mut written = Vec::new();
+    for (name, bytes) in read_attachments(path, "hf-file")? {
+        let name = name.unwrap_or_default();
+        if !is_plain_file_name(&name) {
+            bail!("{path:?} holds an attachment with an unsafe name '{name}'; refusing to extract");
+        }
+        std::fs::write(dir.join(&name), bytes)?;
+        written.push(name);
+    }
+    Ok(written)
+}
+
+fn collect_floats(value: &crate::ir::model::ModelMetadataValue, out: &mut Vec<f64>) {
+    use crate::ir::model::ModelMetadataValue as V;
+    match value {
+        V::Float32(f) => out.push(f64::from(*f)),
+        V::Float64(f) => out.push(*f),
+        V::Array(items) => items.iter().for_each(|i| collect_floats(i, out)),
+        _ => {}
+    }
 }
 
 /// Result of a full verification.

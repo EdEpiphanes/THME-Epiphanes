@@ -180,8 +180,9 @@ fn scan_file(path: &Path, rel: &str, remote_code: bool, report: &mut ScanReport)
         .unwrap_or_default();
 
     if magic.starts_with(&crate::epiph::MAGIC) {
-        if let Err(e) = crate::epiph::verify(path) {
-            report.add(Severity::High, "epiph-integrity", rel, format!("{e:#}"));
+        match crate::epiph::verify(path) {
+            Err(e) => report.add(Severity::High, "epiph-integrity", rel, format!("{e:#}")),
+            Ok(_) => scan_epiph_contents(path, rel, report),
         }
     } else if magic.starts_with(b"GGUF") {
         scan_gguf(path, rel, report);
@@ -214,8 +215,17 @@ fn scan_file(path: &Path, rel: &str, remote_code: bool, report: &mut ScanReport)
             (Severity::Medium, "code file shipped with the model")
         };
         report.add(severity, "code-file", rel, detail.to_string());
-    } else if name == "config.json" {
-        if let Some(map) = read_json(path).and_then(|v| v.get("auto_map").cloned()) {
+    } else if name == "config.json" || name == "tokenizer_config.json" {
+        if let Some(json) = read_json(path) {
+            check_hf_json(&name, &json, rel, report);
+        }
+    }
+}
+
+/// Rules for Hugging Face JSON files, loose or attached to an `.epiph` file.
+fn check_hf_json(name: &str, json: &serde_json::Value, rel: &str, report: &mut ScanReport) {
+    if name == "config.json" {
+        if let Some(map) = json.get("auto_map") {
             report.add(
                 Severity::High,
                 "remote-code",
@@ -224,9 +234,55 @@ fn scan_file(path: &Path, rel: &str, remote_code: bool, report: &mut ScanReport)
             );
         }
     } else if name == "tokenizer_config.json" {
-        if let Some(template) = read_json(path).and_then(|v| v.get("chat_template").cloned()) {
-            let text = template.to_string();
-            check_text(&text, rel, "chat_template", true, report);
+        if let Some(template) = json.get("chat_template") {
+            check_text(&template.to_string(), rel, "chat_template", true, report);
+        }
+    }
+}
+
+/// An `.epiph` file's GGUF metadata and attached Hugging Face files get the same rules as
+/// loose files.
+fn scan_epiph_contents(path: &Path, rel: &str, report: &mut ScanReport) {
+    match crate::epiph::read(path) {
+        Ok((model, _)) => check_gguf_metadata(&model.source_gguf_metadata, rel, report),
+        Err(e) => report.add(Severity::High, "epiph-integrity", rel, format!("{e:#}")),
+    }
+    match crate::epiph::read_attachments(path, "hf-file") {
+        Ok(files) => {
+            for (name, bytes) in files {
+                let name = name.unwrap_or_default();
+                let at = format!("{rel}!{name}");
+                if !crate::epiph::is_plain_file_name(&name) {
+                    report.add(
+                        Severity::High,
+                        "unsafe-attachment-name",
+                        rel,
+                        format!("attachment name '{name}' is not a plain file name"),
+                    );
+                } else if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes) {
+                    check_hf_json(&name, &json, &at, report);
+                }
+            }
+        }
+        Err(e) => report.add(Severity::High, "epiph-integrity", rel, format!("{e:#}")),
+    }
+}
+
+/// Text rules over GGUF metadata strings; vocabulary arrays are data and are skipped.
+fn check_gguf_metadata(
+    metadata: &std::collections::BTreeMap<String, ModelMetadataValue>,
+    rel: &str,
+    report: &mut ScanReport,
+) {
+    for (key, value) in metadata {
+        if key.starts_with("tokenizer.ggml.") {
+            continue; // vocabulary, merges and token types are data, not instructions
+        }
+        let mut strings = Vec::new();
+        collect_strings(value, &mut strings);
+        let is_template = key.contains("chat_template");
+        for s in strings {
+            check_text(&s, rel, key, is_template, report);
         }
     }
 }
@@ -457,17 +513,7 @@ fn scan_gguf(path: &Path, rel: &str, report: &mut ScanReport) {
             return;
         }
     };
-    for (key, value) in &model.source_gguf_metadata {
-        if key.starts_with("tokenizer.ggml.") {
-            continue; // vocabulary, merges and token types are data, not instructions
-        }
-        let mut strings = Vec::new();
-        collect_strings(value, &mut strings);
-        let is_template = key.contains("chat_template");
-        for s in strings {
-            check_text(&s, rel, key, is_template, report);
-        }
-    }
+    check_gguf_metadata(&model.source_gguf_metadata, rel, report);
     let alignment = match model.source_gguf_metadata.get("general.alignment") {
         Some(ModelMetadataValue::Uint32(a)) => u64::from(*a).max(1),
         _ => 32,

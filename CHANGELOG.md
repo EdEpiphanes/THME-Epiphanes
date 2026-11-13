@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **`.epiph` 1.1: tokenizer round trip** (THME-3014, v0.2.6.4): GGUF metadata, tokenizer included,
+  is stored as a typed attachment and restored on read, so GGUF to `.epiph` to GGUF is
+  byte-identical; packing a Hugging Face folder attaches `config.json` and tokenizer files, and
+  `thme epiph extract FILE --out DIR` writes them back (names must be plain file names).
+  `thme scan` checks chat templates and `auto_map` carried inside `.epiph` files.
 - **Quantized `.epiph` files** (THME-3013, v0.2.6.3): `thme epiph pack MODEL --recipe R --quantize`
   applies the recipe and stores each tensor in its selected format (Q8_0, Q4_0, K-quants, ternary,
   FP16) through the same plan and encoders as the per-tensor GGUF export
@@ -188,6 +193,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   depict the application.
 
 ### Fixed
+- `.epiph` writer placed every attachment at the same offset; harmless with one attachment, it
+  would have overlapped a second. Attachments now advance and align like tensors.
 - **FP16 rounding** (THME-3023): float32-to-float16 conversion joined exponent and mantissa with
   a bitwise OR, so a rounding carry was lost and values just below a power of two (about 1 in
   2,000) became half their size (1.9999 became 1.0); it also rounded ties up instead of to even and

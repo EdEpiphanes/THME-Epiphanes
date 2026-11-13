@@ -1,4 +1,4 @@
-# The Epiphanes model format (`.epiph`), version 1.0
+# The Epiphanes model format (`.epiph`), version 1.1
 
 **Status:** draft, open specification. The reference reader and writer are `src/epiph/` in this
 repository (AGPL-3.0-only). Anyone may implement this specification.
@@ -29,7 +29,7 @@ All integers are little-endian.
 | ---: | ---: | :--- | :--- |
 | 0 | 8 | magic | `89 45 50 49 50 48 0D 0A` (`\x89EPIPH\r\n`) |
 | 8 | 2 | major version | `1` |
-| 10 | 2 | minor version | `0` |
+| 10 | 2 | minor version | `1` |
 | 12 | 4 | flags | `0` (all bits reserved; a reader refuses a file with any bit set) |
 | 16 | 8 | manifest length `M` | bytes of UTF-8 JSON |
 | 24 | 8 | data offset `D` | multiple of 64, at least `32 + M` |
@@ -49,7 +49,7 @@ the file; a data offset that is not a multiple of 64.
 ```json
 {
   "format": "epiph",
-  "version": "1.0",
+  "version": "1.1",
   "model": { "...": "the model description (section 3.1)" },
   "tensors": [ { "name": "...", "offset": 0, "length": 4096, "sha256": "..." } ],
   "attachments": [ { "kind": "calibration", "encoding": "json", "offset": 4096, "length": 900, "sha256": "..." } ],
@@ -85,8 +85,10 @@ Additional payloads with a `kind` and an `encoding`. Version 1.0 defines:
 | kind | encoding | contents |
 | :--- | :--- | :--- |
 | `calibration` | `json` | per-input-channel calibration statistics, as written by `thme calibrate` |
+| `gguf-metadata` | `json` | every GGUF metadata key of the source, each value tagged with its exact type (`{"Uint32": 7}`), including the tokenizer; restored on read, so GGUF to `.epiph` to GGUF is lossless (1.1) |
+| `hf-file` | `raw` | a Hugging Face file (`config.json`, `tokenizer.json`, ...) stored under `name`, which must be a plain file name; `thme epiph extract` writes these back (1.1) |
 
-Reserved for later minor versions: `tokenizer`, `gguf-metadata`, `report`. A reader skips kinds
+Attachments may carry a `name` (1.1). Reserved for later minor versions: `report`. A reader skips kinds
 it does not know.
 
 ### 3.4 `recipe`, `quality`, `provenance`, `lineage`, `annotations`
@@ -143,8 +145,6 @@ Each lands as a minor version with tests before it is used:
   disk) for a stated memory budget, chosen by THME's exact allocator, so a runtime can load the
   model across GPU and CPU without planning at load time. Optional larger payload alignment
   (4096 bytes) for page-aligned transfers.
-- **Tokenizer and GGUF metadata** attachments, so a GGUF to `.epiph` to GGUF round trip keeps
-  the tokenizer.
 
 ## 8. Versioning
 

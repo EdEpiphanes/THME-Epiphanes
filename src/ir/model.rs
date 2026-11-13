@@ -3,7 +3,7 @@ use super::tensor::{TensorIR, TensorRole};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ModelMetadataValue {
     Uint8(u8),
     Int8(i8),
