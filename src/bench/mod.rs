@@ -8,7 +8,7 @@
 //! fields and inconsistent values are refused, never guessed.
 //!
 //! The registry only describes and checks. Running tasks is the benchmark runner (v0.2.8.3);
-//! `code` tasks will run only inside the sandbox (docs/sandbox.md).
+//! `code` tasks need the sandbox (docs/sandbox.md), which is reserved for the commercial version.
 
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
@@ -16,6 +16,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Component, Path, PathBuf};
 
 use crate::exporter::compute_sha256;
+
+pub mod metrics;
 
 /// `schema` value of a task file.
 pub const TASK_SCHEMA: &str = "thme-bench-task/v1";
@@ -30,7 +32,7 @@ pub enum Family {
     MultipleChoice,
     /// A generated answer that can be checked (GSM8K style).
     CheckableAnswer,
-    /// Generated code scored by unit tests; runs only in the sandbox.
+    /// Generated code scored by unit tests; needs the sandbox (commercial version).
     Code,
 }
 

@@ -1,7 +1,8 @@
 # Developer sandbox: design
 
-Status: **design** (v0.2.7.5, THME-3020). Nothing here is built yet; the implementation and its
-escape tests are v0.2.7.6. This document is the contract the implementation must meet.
+Status: **design** (v0.2.7.5, THME-3020). The implementation is reserved for the commercial
+version of THME; the open-source version does not run untrusted code. This document is the
+contract that implementation must meet.
 
 ## Why
 
