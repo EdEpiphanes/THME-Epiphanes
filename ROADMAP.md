@@ -32,13 +32,16 @@ flowchart LR
     classDef later fill:#ffffff,stroke:#0b0b0b,stroke-width:1.5px,stroke-dasharray:4 3,color:#52514e;
 
     subgraph NOW["Now"]
-        N3["Number formats with error bounds"]:::now
+        N1["Quantized .epiph payloads"]:::now
+        N2["Tokenizer round trip"]:::now
+        N3["Developer sandbox design"]:::now
+        N4["Benchmark registry"]:::now
     end
     subgraph NEXT["Next"]
-        X1["Quantized .epiph payloads"]:::later
-        X2["Developer sandbox"]:::later
-        X3["Benchmark harness and statistics"]:::later
-        X4["Transport, ODE, SVG visual engine"]:::later
+        X1["Benchmark runner and statistics"]:::later
+        X2["Scanner coverage"]:::later
+        X3["Transport, ODE, SVG visual engine"]:::later
+        X4["GPTQ-style rounding"]:::later
     end
     subgraph LATER["Later"]
         L1["Translation layer"]:::later
@@ -47,7 +50,7 @@ flowchart LR
         L4["GPU runtime and placement"]:::later
         L5["Commercial release"]:::later
     end
-    D["Done this week:<br/>engine core, exact allocator,<br/>.epiph and signing, thme scan,<br/>versioned quality gate"]:::done --> NOW --> NEXT --> LATER
+    D["Done this week:<br/>engine core, exact allocator,<br/>.epiph and signing, thme scan,<br/>quality gate, number formats"]:::done --> NOW --> NEXT --> LATER
 ```
 
 ### Done this week
@@ -61,6 +64,7 @@ flowchart LR
 | `.epiph` v1.0 (THME-3012) | Open Epiphanes model format with full metadata; `thme epiph pack/verify` | Tested: round trip, corruption, GGUF conversion |
 | `thme scan` (THME-3018) | Static model security scanner | Tested on built fixtures |
 | Versioned quality gate (THME-3003) | `GateSpec`: custom criteria, absolute and relative margins, hash in every report; `--gate FILE`; validate re-judges; five inline copies removed; validate default now 0.45, like every other command | Tested, including every committed report |
+| Number formats (THME-3006) | `engine::minifloat` (FP16, BF16, FP8 E4M3/E5M2, nearest-even) and integer, sign, codebook, phase quantizers; fixed an FP16 rounding bug in every block encoder (THME-3023) | Tested: every FP16 code, every tie in four formats |
 | SPDX headers (THME-3005) | `AGPL-3.0-only` header on all 168 source files; `scripts/spdx.py --check` in CI | Tested in CI |
 | Signed `.epiph` (THME-3019) | Minisign signature over the manifest; `thme epiph sign`, `verify --require-signature`; Epiphanes key by default | Tested: tamper, wrong key, broken trailer |
 | No-panic rule, GUI split, glossary | Compiler-enforced; Studio tabs as modules; `CONTEXT.md` | Tested |
@@ -69,15 +73,17 @@ flowchart LR
 
 | Track | Item | Status | Depends on |
 | :--- | :--- | :--- | :--- |
-| Engine | **Number formats with stated error bounds** (THME-3006): FP16, BF16, FP8, integer, codebook, phase | On track | None |
+| Epiphanes model format | **Quantized payloads** (THME-3013, v0.2.6.3): each tensor stored in its selected format | Not started | `.epiph` v1.0 |
+| Epiphanes model format | **Tokenizer and GGUF metadata** (THME-3014, v0.2.6.4): lossless GGUF round trip | Not started | `.epiph` v1.0 |
+| Security | **Developer sandbox design** (THME-3020, v0.2.7.5): isolation per OS, written before code | Not started | None |
+| Quality and evidence | **Benchmark registry** (v0.2.8.2): declarative task files and result records | Not started | Versioned gate |
 
 ### Next: planned
 
 | Track | Item | Depends on |
 | :--- | :--- | :--- |
-| Epiphanes model format | Quantized payloads (THME-3013); tokenizer and GGUF metadata (THME-3014) | `.epiph` v1.0 |
-| Security | Developer sandbox, design first (THME-3020); scanner for compressed pickles, ONNX, Keras, NumPy (THME-3022) | None |
-| Quality and evidence | Benchmark registry, runner, statistics and three-state gate (dossier WP31-35); claim register (THME-3000); versioned schemas (THME-3009) | Versioned gate |
+| Security | Sandbox implementation (v0.2.7.6); scanner for compressed pickles, ONNX, Keras, NumPy (THME-3022); scan on import (v0.2.7.3) | Sandbox design |
+| Quality and evidence | Benchmark runner, metrics, statistics and three-state gate (dossier WP32-35); claim register (THME-3000); versioned schemas (THME-3009) | Benchmark registry |
 | Engine | Transport and Sinkhorn (WP4), ODE steppers (WP6), dependency-free SVG visual engine (WP9) | Engine core |
 | Formats and calibration | GPTQ-style rounding (THME-2205); llama.cpp compatibility check on synthetic files (THME-2208) | Calibration |
 
@@ -296,7 +302,7 @@ its oracle tests; no method is implemented twice in the crate.
 | :--- | :--- | :--- |
 | v0.2.5.1 | Engine error type and finite-value guard (WP1, THME-3001) | **Done**: every variant reached by a test |
 | v0.2.5.2 | Exact dynamic-programming allocator beside greedy and thresholds (WP2, THME-3002) | Implemented: matches exhaustive search; comparison on real cost tables pending |
-| v0.2.5.3 | Number formats with stated error bounds: integer, ternary, binary, codebook, FP16, BF16, FP8, phase (WP3, THME-3006) | Implemented in part: one shared absmean-ternary quantizer; other formats open |
+| v0.2.5.3 | Number formats with stated error bounds: integer, ternary, binary, codebook, FP16, BF16, FP8, phase (WP3, THME-3006) | **Done**: one rounding routine for FP16, BF16 and FP8, exhaustively tested; integer, sign, codebook and phase quantizers with checked bounds |
 | v0.2.5.4 | Optimal transport: northwest-corner start, Sinkhorn with a log-domain variant (WP4) | |
 | v0.2.5.5 | Bases and rotations: one Walsh-Hadamard transform, FFT against a naive DFT, Givens and Householder (WP5, THME-3004) | Implemented in part: one shared Walsh-Hadamard transform, three copies removed |
 | v0.2.5.6 | ODE steppers: Dormand-Prince 5(4) with step control and fixed-step RK4, no default tolerances (WP6) | |

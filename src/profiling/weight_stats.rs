@@ -1,41 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 use crate::ir::WeightProfile;
 
-/// Fast IEEE 754 half-precision float (f16) to single-precision (f32) converter
+/// IEEE half precision to f32 (shared implementation in `engine::minifloat`).
 pub fn f16_to_f32(h: u16) -> f32 {
-    let sign = ((h >> 15) & 1) as u32;
-    let exp = ((h >> 10) & 0x1F) as u32;
-    let mant = (h & 0x3FF) as u32;
-
-    if exp == 0 {
-        if mant == 0 {
-            f32::from_bits(sign << 31)
-        } else {
-            let mut m = mant;
-            let mut e = 0;
-            while (m & 0x400) == 0 {
-                m <<= 1;
-                e += 1;
-            }
-            m &= 0x3FF;
-            let exp_f32 = (127 - 15 + 1 - e) as u32;
-            let mant_f32 = m << 13;
-            f32::from_bits((sign << 31) | (exp_f32 << 23) | mant_f32)
-        }
-    } else if exp == 31 {
-        let exp_f32 = 0xFF;
-        let mant_f32 = mant << 13;
-        f32::from_bits((sign << 31) | (exp_f32 << 23) | mant_f32)
-    } else {
-        let exp_f32 = exp + 127 - 15;
-        let mant_f32 = mant << 13;
-        f32::from_bits((sign << 31) | (exp_f32 << 23) | mant_f32)
-    }
+    crate::engine::minifloat::f16_to_f32(h)
 }
 
-/// Bfloat16 to single-precision (f32) converter
+/// Bfloat16 to f32 (shared implementation in `engine::minifloat`).
 pub fn bf16_to_f32(b: u16) -> f32 {
-    f32::from_bits((b as u32) << 16)
+    crate::engine::minifloat::bf16_to_f32(b)
 }
 
 pub struct WeightAnalyzer;

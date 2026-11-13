@@ -13,6 +13,7 @@
 pub mod alloc;
 pub mod basis;
 pub mod error;
+pub mod minifloat;
 pub mod numfmt;
 
 pub use error::{ensure_finite, EngineError, EngineResult};
