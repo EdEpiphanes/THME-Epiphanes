@@ -98,6 +98,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/research/THME_measured_findings_2026-11.md` and `docs/subsystems.md`.
 
 ### Changed
+- One absmean-ternary quantizer, `engine::numfmt` (THME-3006): `MatrixMath`, the BitNet packer and
+  the BYOA `AbsmeanTernary` rule call it. The GGML `TQ1_0` encoder keeps its own MSE-optimal path.
 - One Walsh-Hadamard transform, `engine::basis` (THME-3004): the three copies in
   `MatrixMath`, `byoa::wht_blocks` and the `OrthogonalRotation` rule now call it. Outputs are
   bit-identical to before (hash-pinned test) and checked against the explicit Hadamard matrix.
@@ -129,6 +131,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   depict the application.
 
 ### Fixed
+- BYOA `AbsmeanTernary` compared the scaled weight `w / gamma` with `gamma * zero_band`, so almost
+  nothing rounded to zero. The band is now in scaled units, as in BitNet b1.58; with band 0.5 the
+  rule matches `MatrixMath::discretize_bitnet_ternary` exactly. No committed report used the rule.
 - Documentation no longer claims a dynamic-programming knapsack allocator; the allocator uses
   sensitivity thresholds. `configs/quality_gates.yaml` is marked unread (the gate in force is
   `--max-ppl-delta 0.45`); the dossier defines its nominal-bits column; the README states the

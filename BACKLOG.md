@@ -148,6 +148,7 @@ closes it.
 - **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: engine · **Type**: feature · **Status**: triage
 - **Problem**: Codecs live in the exporter without declared error bounds.
 - **Also**: absmean ternary is written three times (`MatrixMath::discretize_bitnet_ternary`, `BitNetPacker::pack_matrix`, the BYOA `AbsmeanTernary` rule) with different all-zero handling; one shared quantizer.
+- **Progress**: `engine::numfmt` started with the shared absmean-ternary quantizer; the three copies call it. Other formats and error bounds open.
 - **Done means**: `engine::numfmt` covers integer, ternary, binary, codebook, FP16/BF16/FP8 and phase, each with a bound its tests confirm.
 
 ### [THME-3007] Dependency-free SVG visual engine (dossier WP9)

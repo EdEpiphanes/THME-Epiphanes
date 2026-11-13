@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use crate::engine::basis::{walsh_hadamard, walsh_hadamard_blocks};
+use crate::engine::numfmt;
 use crate::ir::TensorRole;
 
 /// Category of the custom algorithm
@@ -262,23 +263,15 @@ fn apply_rule(rule: &TransformationRule, weights: &mut [f32]) -> Result<(), Stri
             scale_gamma,
             zero_band,
         } => {
-            let mean_abs: f32 = weights.iter().map(|&x| x.abs()).sum::<f32>() / n as f32;
             let gamma = if *scale_gamma > 0.0 {
                 *scale_gamma
             } else {
-                mean_abs.max(1e-8)
+                numfmt::absmean(weights).max(1e-6)
             };
-            let threshold = gamma * zero_band.max(0.1);
-
+            // The zero band is in scaled units (|w / gamma|), as in BitNet b1.58.
+            let band = zero_band.max(0.1);
             for w in weights.iter_mut() {
-                let scaled = *w / gamma;
-                if scaled.abs() < threshold {
-                    *w = 0.0;
-                } else if scaled > 0.0 {
-                    *w = gamma;
-                } else {
-                    *w = -gamma;
-                }
+                *w = f32::from(numfmt::ternary_code(*w / gamma, band)) * gamma;
             }
         }
         TransformationRule::QuantizeCodebook { levels, scale_mode } => {
@@ -704,6 +697,28 @@ mod tests {
                 alg.verify_contract(&sample).unwrap();
             }
         }
+    }
+
+    /// The zero band is in scaled units (w / gamma), like BitNet b1.58 round-and-clamp:
+    /// with band 0.5 the rule must agree with `MatrixMath::discretize_bitnet_ternary`.
+    #[test]
+    fn absmean_ternary_zero_band_is_in_scaled_units() {
+        let rule = TransformationRule::AbsmeanTernary {
+            scale_gamma: 0.0,
+            zero_band: 0.5,
+        };
+        let mut w = vec![1.0f32, -1.0, 0.2, -0.2]; // mean |w| = 0.6; scaled +-1.67, +-0.33
+        apply_rule(&rule, &mut w).unwrap();
+        assert_eq!(w, vec![0.6, -0.6, 0.0, 0.0]);
+
+        let weights: Vec<f32> = (0..64)
+            .map(|i| ((i * 37 % 64) as f32 - 31.5) / 40.0)
+            .collect();
+        let (codes, gamma, _) = crate::transform::MatrixMath::discretize_bitnet_ternary(&weights);
+        let mut via_rule = weights.clone();
+        apply_rule(&rule, &mut via_rule).unwrap();
+        let expected: Vec<f32> = codes.iter().map(|&c| f32::from(c) * gamma).collect();
+        assert_eq!(via_rule, expected);
     }
 
     #[test]
