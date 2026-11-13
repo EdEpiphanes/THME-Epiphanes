@@ -11,5 +11,6 @@
 
 pub mod basis;
 pub mod error;
+pub mod numfmt;
 
 pub use error::{ensure_finite, EngineError, EngineResult};

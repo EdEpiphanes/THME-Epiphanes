@@ -219,21 +219,13 @@ impl MatrixMath {
             return (Vec::new(), 0.0, 0.0);
         }
 
-        let sum_abs: f32 = weights.iter().map(|w| w.abs()).sum();
-        let gamma = (sum_abs / weights.len() as f32).max(1e-6);
-
-        let mut quantized = Vec::with_capacity(weights.len());
-        let mut squared_error = 0.0f32;
-
-        for &w in weights {
-            let scaled = w / gamma;
-            let val = scaled.round().clamp(-1.0, 1.0) as i8;
-            quantized.push(val);
-
-            let reconstructed = val as f32 * gamma;
-            let diff = w - reconstructed;
-            squared_error += diff * diff;
-        }
+        let gamma = crate::engine::numfmt::absmean(weights).max(1e-6);
+        let quantized = crate::engine::numfmt::ternary_codes(weights, gamma, 0.5);
+        let squared_error: f32 = weights
+            .iter()
+            .zip(&quantized)
+            .map(|(&w, &q)| (w - f32::from(q) * gamma).powi(2))
+            .sum();
 
         let mse = squared_error / weights.len() as f32;
         (quantized, gamma, mse)

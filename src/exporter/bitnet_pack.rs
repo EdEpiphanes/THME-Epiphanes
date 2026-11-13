@@ -92,27 +92,17 @@ impl BitNetPacker {
             };
 
             // 1. Calculate per-channel absolute mean scale: alpha = mean(|W_ij|)
-            let abs_sum: f32 = row_slice.iter().map(|w| w.abs()).sum();
-            let scale = if !row_slice.is_empty() && abs_sum > 0.0 {
-                abs_sum / (row_slice.len() as f32)
-            } else {
-                1.0
-            };
+            let mean_abs = crate::engine::numfmt::absmean(row_slice);
+            // An all-zero row stores scale 1.0; its codes are all zero either way.
+            let scale = if mean_abs > 0.0 { mean_abs } else { 1.0 };
             row_scales.push(scale);
 
             // 2. Discretize weights to ternary {-1, 0, +1} and pack 4 per byte
-            let inv_scale = if scale.abs() > 1e-12 {
-                1.0 / scale
-            } else {
-                1.0
-            };
-
             let mut byte_val: u8 = 0;
             let mut shift: u8 = 0;
 
             for &w in row_slice {
-                let scaled = w * inv_scale;
-                let ternary = scaled.round().clamp(-1.0, 1.0) as i8;
+                let ternary = crate::engine::numfmt::ternary_code(w / scale, 0.5);
 
                 let code = match ternary {
                     -1 => CODE_NEG_ONE,
