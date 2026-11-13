@@ -144,33 +144,23 @@ pub fn apply_selected_format(tensor: &TensorIR, values: &mut [f32]) -> Result<()
             let algorithm = AlgorithmDefinition::from_json(json)
                 .with_context(|| format!("Invalid definition for algorithm '{id}'"))?;
             algorithm.measurable().map_err(|e| anyhow::anyhow!(e))?;
-            if let crate::transform::byoa::TransformationRule::ActivationAware {
-                format,
-                alpha_grid,
-            } = &algorithm.rule
-            {
-                use super::awq::{self, ChannelStats, CALIBRATION_METADATA_KEY};
-                let json = tensor.metadata.get(CALIBRATION_METADATA_KEY).with_context(|| {
-                    format!(
-                        "Algorithm '{id}' on '{}' needs calibration statistics: run `thme calibrate` and pass `--calibration` to `thme evaluate`",
-                        tensor.name
-                    )
-                })?;
-                let stats: ChannelStats = serde_json::from_str(json).with_context(|| {
-                    format!("Invalid calibration statistics on '{}'", tensor.name)
-                })?;
-                let in_dim = tensor.shape.last().copied().unwrap_or(values.len());
-                awq::activation_aware_quantize(
-                    values,
-                    in_dim,
-                    &stats,
-                    &awq::parse_format(format)?,
-                    alpha_grid,
-                )
-                .with_context(|| format!("Algorithm '{id}' failed on '{}'", tensor.name))?;
-                return Ok(());
-            }
-            algorithm.apply_to_weights(values).map_err(|e| {
+            use crate::transform::awq::{parse_format, ChannelStats, CALIBRATION_METADATA_KEY};
+            let calibration: Option<ChannelStats> = tensor
+                .metadata
+                .get(CALIBRATION_METADATA_KEY)
+                .map(|json| serde_json::from_str(json))
+                .transpose()
+                .with_context(|| format!("Invalid calibration statistics on '{}'", tensor.name))?;
+            let round = |v: &mut [f32], name: &str| -> Result<(), String> {
+                let format = parse_format(name).map_err(|e| format!("{e:#}"))?;
+                fake_quantize(v, &format).map_err(|e| format!("{e:#}"))
+            };
+            let ctx = crate::transform::byoa::ApplyContext {
+                row_width: tensor.shape.last().copied(),
+                calibration: calibration.as_ref(),
+                round: Some(&round),
+            };
+            algorithm.apply_with(values, &ctx).map_err(|e| {
                 anyhow::anyhow!("Algorithm '{id}' failed on '{}': {e}", tensor.name)
             })?;
             Ok(())

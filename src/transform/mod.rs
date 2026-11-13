@@ -12,6 +12,7 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod awq;
 pub mod byoa;
 pub mod rea;
 
