@@ -117,8 +117,13 @@ pub fn parse_formats(list: &str) -> Result<Vec<TensorFormat>> {
             "fp16" | "f16" => TensorFormat::FP16,
             "q8_0" | "q8" => TensorFormat::Q8_0,
             "q4_0" | "q4" => TensorFormat::Q4_0,
+            "q4_k" => TensorFormat::Q4_K,
+            "q5_k" => TensorFormat::Q5_K,
+            "q6_k" => TensorFormat::Q6_K,
             "ternary" | "tq1_0" => TensorFormat::Ternary,
-            other => bail!("Unknown format '{other}'; supported: fp16, q8_0, q4_0, ternary"),
+            other => bail!(
+                "Unknown format '{other}'; supported: fp16, q8_0, q6_k, q5_k, q4_k, q4_0, ternary"
+            ),
         });
     }
     if formats.is_empty() {
@@ -390,7 +395,10 @@ pub fn search(args: &SearchArgs) -> Result<Value> {
     for group in &groups {
         for f in &formats {
             let block = match f {
-                TensorFormat::Ternary => 256,
+                TensorFormat::Ternary
+                | TensorFormat::Q4_K
+                | TensorFormat::Q5_K
+                | TensorFormat::Q6_K => 256,
                 TensorFormat::Q8_0 | TensorFormat::Q4_0 => 32,
                 _ => 1,
             };
@@ -744,6 +752,11 @@ mod tests {
     #[test]
     fn greedy_lowers_the_cheapest_groups_first_and_meets_budget() {
         let groups = vec![group("a", 100), group("b", 100), group("c", 100)];
+        let k = parse_formats("q4_k,q6_k,q5_k").unwrap();
+        assert_eq!(
+            k,
+            vec![TensorFormat::Q6_K, TensorFormat::Q5_K, TensorFormat::Q4_K]
+        );
         let formats = parse_formats("q4_0,q8_0").unwrap();
         assert_eq!(formats[0], TensorFormat::Q8_0);
         // b is cheap at both formats, a is expensive, c in between.

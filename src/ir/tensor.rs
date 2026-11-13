@@ -13,6 +13,8 @@ pub enum TensorFormat {
     Q8_0,
     Q4_0,
     Q4_K,
+    Q5_K,
+    Q6_K,
     Q2_K,
     Ternary, // ~1.58 bits (log2(3))
     Bit1_5,  // 1.5-bit experimental
@@ -26,6 +28,8 @@ impl TensorFormat {
             Self::FP16 | Self::BF16 => 16.0,
             Self::INT8 | Self::Q8_0 | Self::Custom(_) => 8.0,
             Self::Q4_0 | Self::Q4_K => 4.5, // 4-bit plus scale overhead
+            Self::Q5_K => 5.5,              // 176 bytes per 256 values
+            Self::Q6_K => 6.5625,           // 210 bytes per 256 values
             Self::Q2_K => 2.56,
             Self::Ternary => 1.585, // log2(3)
             Self::Bit1_5 => 1.5,
@@ -41,6 +45,8 @@ impl TensorFormat {
             Self::Q8_0 => "Q8_0",
             Self::Q4_0 => "Q4_0",
             Self::Q4_K => "Q4_K",
+            Self::Q5_K => "Q5_K",
+            Self::Q6_K => "Q6_K",
             Self::Q2_K => "Q2_K",
             Self::Ternary => "Ternary (1.58b)",
             Self::Bit1_5 => "1.5-bit",

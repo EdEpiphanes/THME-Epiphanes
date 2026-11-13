@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **K-quant codecs** (`src/exporter/kquant.rs`): Q4_K, Q5_K and Q6_K encoders and decoders in
+  GGML block layout (144, 176, 210 bytes per 256 values), tested against hand-built blocks.
+  The reference forward pass reads K-quant tensors, and `q4_k`, `q5_k`, `q6_k` work in recipes,
+  `thme evaluate` and `thme search --formats` (v0.2.2.2). Encoders use a direct scale rule, not
+  llama.cpp's iterative search, so their error can be slightly higher than llama.cpp's.
 - **Manga panel identity.** Studio themes: **Manga Panel** (new default, black and white),
   with Manga Night and Manga Ink keeping the red. Liquid-glass panels, ink edges, print shadows,
   screentone and speed-line backdrop (`src/gui/manga.rs`); Chakra Petch UI and display type

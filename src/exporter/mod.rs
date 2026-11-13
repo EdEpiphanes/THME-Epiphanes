@@ -7,6 +7,7 @@ pub mod bitnet_pack;
 pub mod calibration;
 pub mod conversion;
 pub mod gguf_writer;
+pub mod kquant;
 pub mod metadata;
 pub mod safetensors_writer;
 pub mod streaming_writer;

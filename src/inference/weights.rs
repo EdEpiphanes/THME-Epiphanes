@@ -7,6 +7,7 @@ use std::io::{Read, Seek, SeekFrom};
 use crate::exporter::conversion::{
     encode_q4_0_block, encode_q8_block, encode_tq1_block, f32_to_f16,
 };
+use crate::exporter::kquant::{self, QK_K};
 use crate::ir::{TensorFormat, TensorIR};
 use crate::parser::gguf::GgufBlockDecoder;
 use crate::profiling::{bf16_to_f32, f16_to_f32};
@@ -96,6 +97,24 @@ pub fn decode_payload(bytes: &[u8], dtype: &str, numel: usize) -> Result<Vec<f32
                 out.extend_from_slice(&GgufBlockDecoder::unpack_tq1_0(block)?);
             }
         }
+        "Q4_K" => {
+            expect_len(blocks(QK_K, kquant::Q4_K_BYTES)?)?;
+            for block in bytes.chunks_exact(kquant::Q4_K_BYTES) {
+                out.extend_from_slice(&kquant::decode_q4_k(block)?);
+            }
+        }
+        "Q5_K" => {
+            expect_len(blocks(QK_K, kquant::Q5_K_BYTES)?)?;
+            for block in bytes.chunks_exact(kquant::Q5_K_BYTES) {
+                out.extend_from_slice(&kquant::decode_q5_k(block)?);
+            }
+        }
+        "Q6_K" => {
+            expect_len(blocks(QK_K, kquant::Q6_K_BYTES)?)?;
+            for block in bytes.chunks_exact(kquant::Q6_K_BYTES) {
+                out.extend_from_slice(&kquant::decode_q6_k(block)?);
+            }
+        }
         other => bail!("Unsupported tensor dtype '{other}' for the reference forward pass"),
     }
     Ok(out)
@@ -173,6 +192,28 @@ pub fn fake_quantize(values: &mut [f32], format: &TensorFormat) -> Result<()> {
                 encoded.clear();
                 encode_q4_0_block(chunk, &mut encoded)?;
                 chunk.copy_from_slice(&GgufBlockDecoder::unpack_q4_0(&encoded)?);
+            }
+        }
+        TensorFormat::Q4_K | TensorFormat::Q5_K | TensorFormat::Q6_K => {
+            type Encode = fn(&[f32], &mut Vec<u8>) -> Result<()>;
+            type Decode = fn(&[u8]) -> Result<[f32; QK_K]>;
+            let (encode, decode): (Encode, Decode) = match format {
+                TensorFormat::Q4_K => (kquant::encode_q4_k_block, kquant::decode_q4_k),
+                TensorFormat::Q5_K => (kquant::encode_q5_k_block, kquant::decode_q5_k),
+                _ => (kquant::encode_q6_k_block, kquant::decode_q6_k),
+            };
+            if !values.len().is_multiple_of(QK_K) {
+                bail!(
+                    "{} requires an element count divisible by {QK_K}, found {}",
+                    format.display_name(),
+                    values.len()
+                );
+            }
+            let mut encoded = Vec::with_capacity(kquant::Q6_K_BYTES);
+            for chunk in values.chunks_exact_mut(QK_K) {
+                encoded.clear();
+                encode(chunk, &mut encoded)?;
+                chunk.copy_from_slice(&decode(&encoded)?);
             }
         }
         TensorFormat::Ternary => {
@@ -273,11 +314,48 @@ mod tests {
     }
 
     #[test]
+    fn k_quant_payloads_decode_and_fake_quantize_matches_the_codec() {
+        let values: Vec<f32> = (0..512)
+            .map(|i| ((i * 37 % 101) as f32 - 50.0) / 400.0)
+            .collect();
+        let mut q4 = Vec::new();
+        let mut q5 = Vec::new();
+        let mut q6 = Vec::new();
+        for chunk in values.chunks_exact(QK_K) {
+            kquant::encode_q4_k_block(chunk, &mut q4).unwrap();
+            kquant::encode_q5_k_block(chunk, &mut q5).unwrap();
+            kquant::encode_q6_k_block(chunk, &mut q6).unwrap();
+        }
+        for (bytes, dtype) in [(&q4, "Q4_K"), (&q5, "Q5_K"), (&q6, "Q6_K")] {
+            let decoded = decode_payload(bytes, dtype, 512).unwrap();
+            assert_eq!(decoded.len(), 512);
+            let worst = values
+                .iter()
+                .zip(&decoded)
+                .map(|(a, b)| (a - b).abs())
+                .fold(0.0f32, f32::max);
+            assert!(worst < 0.02, "{dtype} worst error {worst}");
+        }
+        assert!(decode_payload(&q4[..100], "Q4_K", 512).is_err());
+
+        for (bytes, format, dtype) in [
+            (&q4, TensorFormat::Q4_K, "Q4_K"),
+            (&q5, TensorFormat::Q5_K, "Q5_K"),
+            (&q6, TensorFormat::Q6_K, "Q6_K"),
+        ] {
+            let mut fake = values.clone();
+            fake_quantize(&mut fake, &format).unwrap();
+            assert_eq!(fake, decode_payload(bytes, dtype, 512).unwrap(), "{dtype}");
+        }
+    }
+
+    #[test]
     fn unsupported_formats_and_partial_blocks_are_errors() {
         let mut values = ramp(33);
         assert!(fake_quantize(&mut values, &TensorFormat::Q8_0).is_err());
         assert!(fake_quantize(&mut values, &TensorFormat::Ternary).is_err());
         assert!(fake_quantize(&mut values, &TensorFormat::Q4_K).is_err());
+        assert!(fake_quantize(&mut values, &TensorFormat::Q2_K).is_err());
         assert!(fake_quantize(&mut values, &TensorFormat::Q4_0).is_err());
         fake_quantize(&mut values, &TensorFormat::FP16).unwrap();
     }

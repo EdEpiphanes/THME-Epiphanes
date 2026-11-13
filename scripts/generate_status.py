@@ -76,6 +76,8 @@ def backlog_by_area():
         fields = {k.strip().lower(): v.strip() for k, v in re.findall(r"\*\*(\w[\w ]*)\*\*:\s*([^·]+)", line)}
         area = fields.get("area", "other")
         status = fields.get("status", "triage")
+        if status == "done":
+            continue  # finished tickets leave the active board
         areas.setdefault(area, {"ready": 0, "blocked": 0, "triage": 0})
         areas[area][status if status in ("ready", "blocked") else "triage"] += 1
     return sorted(areas.items(), key=lambda item: (-sum(item[1].values()), item[0]))
