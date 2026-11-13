@@ -306,6 +306,12 @@ closes it.
 - **Problem**: Dossier WP36 and Q.6: a score on items that appear in training or teacher-written data is not clean, and the overlap must be listed before a score is shown.
 - **Done means**: Normalized n-gram overlap between a task's items and any corpus, streamed; a report of overlapping items with fraction and source; planted overlaps found in tests; `thme bench contamination` fails when any item overlaps.
 
+### [THME-3031] Benchmark runner: imported mode
+
+- **Milestone**: v0.2.8 · **Roadmap**: v0.2.8.3 · **Priority**: p1 · **Area**: quality · **Type**: feature · **Status**: done
+- **Problem**: Dossier R.4: numbers produced by other tools must enter THME through the same record format, labelled as supplied and never as measured.
+- **Done means**: Outputs (answers, log-likelihoods, pass counts) scored with the metric library into a validated result record with run mode and evidence `imported`; every dataset item scored exactly once; one dataset reader shared with the contamination check.
+
 ### [THME-3023] Re-measure reports affected by the FP16 rounding fix
 
 - **Milestone**: v0.2.2 · **Roadmap**: none · **Priority**: p1 · **Area**: research · **Type**: chore · **Status**: blocked

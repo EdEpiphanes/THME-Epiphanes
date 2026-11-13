@@ -38,8 +38,9 @@ thme bench validate run.json --task benchmarks/tasks/gsm8k.json
 - **The licence is required.** It is copied into every result record.
 - **Strict.** Unknown or missing fields are refused, never guessed.
 
-The dataset is JSONL, one item per line: a string `id` (unique), a string `input`, and an
-optional string `target`.
+The dataset is JSONL, one item per line: a string `id` (unique), a string `input`, an
+optional string `target`, and optional `choices` (a list of strings). For likelihood tasks the
+target is the index of the correct choice.
 
 | Family | Extract | Metric |
 | :--- | :--- | :--- |
@@ -74,6 +75,28 @@ Checks on every record:
   `imported`, never `measured`; only an imported run can be labelled imported.
 - With `--task`, the record's task hash, dataset hash, split, licence and prompt-template hash
   must equal the task's, so a record cannot be filed under a task it did not run.
+
+## Scoring outputs from any tool (imported mode)
+
+```bash
+thme bench score --task T.json --outputs outputs.jsonl --model-sha256 HASH --out record.json
+```
+
+The outputs file has one JSONL line per dataset item:
+
+| Task metric | Line |
+| :--- | :--- |
+| Generated answer (match, numeric tolerance) | `{"id": "q1", "output": "... #### 72"}` |
+| Likelihood choice | `{"id": "q1", "log_likelihoods": [-3.1, -0.4, -2.2]}` |
+| pass@k | `{"id": "p1", "samples": 6, "passed": 2}` (tests run elsewhere; THME runs no code) |
+
+THME extracts and scores each output with the task's own rules, computes the interval (Wilson
+for 0/1 scores, bootstrap otherwise) and writes a complete result record. Its run mode and
+evidence are `imported`: THME scored the outputs, it did not produce them. Every dataset item
+needs exactly one output; a partial, duplicated or mismatched file is refused rather than scored
+on a subset. Decoding settings and hardware are recorded as you state them (`--temperature`,
+`--seed`, `--max-new-tokens`, `--hardware`). Native and bridged modes, which produce the
+outputs, wait until model runs resume.
 
 ## Contamination check
 

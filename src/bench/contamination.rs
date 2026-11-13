@@ -174,39 +174,19 @@ impl ContaminationCheck {
     }
 }
 
-/// Reads benchmark items from a JSONL dataset: one object per line with a string `id`, a string
-/// `input` and an optional string `target`. The checked text is the input and the target.
+/// Benchmark items of a JSONL dataset as `(id, text)`, the text being the input and the target
+/// (see [`super::score::read_dataset`] for the format).
 pub fn read_items(path: &Path) -> Result<Vec<(String, String)>> {
-    let text =
-        std::fs::read_to_string(path).with_context(|| format!("reading dataset {path:?}"))?;
-    let mut items = Vec::new();
-    let mut seen = BTreeSet::new();
-    for (n, line) in text.lines().enumerate() {
-        if line.trim().is_empty() {
-            continue;
-        }
-        let v: serde_json::Value = serde_json::from_str(line)
-            .with_context(|| format!("{path:?} line {}: not JSON", n + 1))?;
-        let field = |k: &str| v.get(k).and_then(|x| x.as_str());
-        let (Some(id), Some(input)) = (field("id"), field("input")) else {
-            bail!(
-                "{path:?} line {}: needs string fields \"id\" and \"input\"",
-                n + 1
-            );
-        };
-        if !seen.insert(id.to_string()) {
-            bail!("{path:?} line {}: item id '{id}' appears twice", n + 1);
-        }
-        let text = match field("target") {
-            Some(t) => format!("{input} {t}"),
-            None => input.to_string(),
-        };
-        items.push((id.to_string(), text));
-    }
-    if items.is_empty() {
-        bail!("{path:?} holds no items");
-    }
-    Ok(items)
+    Ok(super::score::read_dataset(path)?
+        .into_iter()
+        .map(|i| {
+            let text = match i.target {
+                Some(t) => format!("{} {t}", i.input),
+                None => i.input,
+            };
+            (i.id, text)
+        })
+        .collect())
 }
 
 #[cfg(test)]

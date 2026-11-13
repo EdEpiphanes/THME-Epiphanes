@@ -68,6 +68,7 @@ flowchart LR
 | SPDX headers (THME-3005) | `AGPL-3.0-only` header on all 168 source files; `scripts/spdx.py --check` in CI | Tested in CI |
 | Signed `.epiph` (THME-3019) | Minisign signature over the manifest; `thme epiph sign`, `verify --require-signature`; Epiphanes key by default | Tested: tamper, wrong key, broken trailer |
 | Benchmark registry (THME-3024) | `src/bench`: strict task files and result records with every Table R2 field; `thme bench list/validate/verify-dataset` | Tested: malformed files refused, records round-trip, record-task mismatch caught |
+| Benchmark runner, imported mode (THME-3031) | `thme bench score`: outputs from any tool (answers, log-likelihoods or pass counts) scored with the metric library into a complete result record, labelled imported | Tested: generation, likelihood and pass@k outputs; partial, duplicate and unknown outputs refused; Table R3 interval reproduced |
 | SVG visual engine (THME-3007) | `engine::viz`: deterministic SVG line plots (log axis), heatmaps, scatter with a required caption, layered dataflow graphs, Pareto fronts; evidence label on every chart; palette in `assets/chart-themes.json`, shared with the chart script | Tested: element counts match data, byte-identical output, log-axis and cycle errors; rendered and checked in light and dark |
 | Contamination check (THME-3030) | `bench::contamination`: normalized n-gram overlap between benchmark items and corpora, streamed; `thme bench contamination` lists overlaps and fails | Tested: planted copies found through case, punctuation and line breaks; partial copies give their fraction; clean corpora find nothing |
 | Claim register (THME-3000) | [docs/research/claim-register.md](docs/research/claim-register.md): all 135 dossier claims with ID, status, section, page and note, generated from one JSON file; checked in CI | Statuses copied from the dossier; citations marked unverified |
@@ -83,7 +84,7 @@ flowchart LR
 | Track | Item | Status | Depends on |
 | :--- | :--- | :--- | :--- |
 | Quality and evidence | **Benchmark charts** (v0.2.8.8, WP37): dot plots with intervals, paired deltas, heatmaps and quality against cost from result records | Not started | SVG visual engine |
-| Quality and evidence | **Benchmark runner** (v0.2.8.3): imported mode, resume and cache; native mode on synthetic models; `code` tasks refused | Not started | Metrics library |
+| Quality and evidence | **Benchmark runner, native and bridged modes** (v0.2.8.3): produce outputs with THME's forward pass or an external tool; resume and cache | Blocked | Model runs paused |
 
 ### Next: planned
 
@@ -365,7 +366,7 @@ interval, a three-state verdict and a chart; harness self-tests pass.
 | :--- | :--- | :--- |
 | v0.2.8.1 | One versioned quality gate: custom criteria, one or many, absolute and relative margins (WP20, THME-3003) | **Done**: every gate decision goes through `GateSpec`; reports record the gate hash; `thme validate` re-judges |
 | v0.2.8.2 | Benchmark registry: declarative task files and result records (WP31) | **Done**: [formats](docs/benchmark-registry.md), strict checks, `thme bench` (THME-3024) |
-| v0.2.8.3 | Benchmark runner: native, bridged and imported modes; resume and cache (WP32) | |
+| v0.2.8.3 | Benchmark runner: native, bridged and imported modes; resume and cache (WP32) | **Imported mode done** (`thme bench score`, THME-3031); native and bridged wait for model runs |
 | v0.2.8.4 | Metrics library: exact and normalized match, numeric tolerance, likelihood choice, pass@k (WP33) | **Done**: `bench::metrics`, Table R3 reproduced (THME-3027) |
 | v0.2.8.5 | Statistics: Wilson and bootstrap intervals, paired tests, required-items calculator (WP34) | **Done**: `bench::stats`, Table R3 reproduced (THME-3028) |
 | v0.2.8.6 | Three-state gate: pass, fail or inconclusive from the interval (WP35) | **Done**: one decision path; `thme bench gate` (THME-3029) |
