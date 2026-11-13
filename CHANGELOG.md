@@ -113,6 +113,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/research/THME_measured_findings_2026-11.md` and `docs/subsystems.md`.
 
 ### Changed
+- ROADMAP.md opens with a now / next / later view by track (math engine, Epiphanes model format,
+  security, quality and evidence), with blocked items, out-of-scope items, risks and changes; the
+  numbered milestones are unchanged. README gains a "Now building" section, Quickstart commands
+  for `thme scan` and `thme epiph`, and corrected capability rows.
 - BYOA rules receive calibration statistics, row width and the format codec through one
   `ApplyContext` (THME-3010); the AWQ special case in `apply_selected_format` is gone and AWQ takes
   its rounding as a parameter (`transform::awq`). Behaviour and AWQ tests unchanged.

@@ -1,11 +1,126 @@
 # THME Roadmap
 
 > **Topological Heterogeneous Manifold Engine (THME)** by **Epiphanes**
-> Updated 12 November 2026. v0.2 is redefined around one rule: **every claim is measured, or
-> labelled as not measured.** Recipes and BYOA algorithms are the unit of experimentation; the
-> measured quality gate decides what ships.
+> Updated 13 November 2026. **Direction: finish the open-source engine and tools first.** THME
+> is AGPL-3.0-only now; a commercial release follows once the foundations are complete (version
+> and timing to be decided). Model runs are paused, so work that needs a measurement on a real
+> model is built and tested but marked *measurement pending*. Every claim stays measured, or
+> labelled as not measured.
 
 ---
+
+## Now, next, later
+
+Grouped by track. Status labels: **Done**, **On track**, **Blocked**, **Not started**. Ticket
+numbers link the plan to [BACKLOG.md](BACKLOG.md); the numbered milestones further down keep
+their own sub-milestone tables.
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'fontFamily': 'Chakra Petch, Bahnschrift, Arial Narrow, sans-serif', 'primaryColor': '#ffffff', 'primaryTextColor': '#0b0b0b', 'primaryBorderColor': '#0b0b0b', 'lineColor': '#0b0b0b', 'secondaryColor': '#f6f6f4', 'tertiaryColor': '#ffffff', 'clusterBkg': '#f6f6f4', 'clusterBorder': '#0b0b0b', 'edgeLabelBackground': '#ffffff'}}}%%
+flowchart LR
+    classDef done fill:#0b0b0b,stroke:#0b0b0b,stroke-width:2px,color:#ffffff;
+    classDef now fill:#ffffff,stroke:#0b0b0b,stroke-width:4px,color:#0b0b0b;
+    classDef later fill:#ffffff,stroke:#0b0b0b,stroke-width:1.5px,stroke-dasharray:4 3,color:#52514e;
+
+    subgraph NOW["Now"]
+        N1["Signed .epiph"]:::now
+        N2["One versioned quality gate"]:::now
+        N3["Number formats with error bounds"]:::now
+        N4["SPDX headers"]:::now
+    end
+    subgraph NEXT["Next"]
+        X1["Quantized .epiph payloads"]:::later
+        X2["Developer sandbox"]:::later
+        X3["Benchmark harness and statistics"]:::later
+        X4["Transport, ODE, SVG visual engine"]:::later
+    end
+    subgraph LATER["Later"]
+        L1["Translation layer"]:::later
+        L2["Routing and needles"]:::later
+        L3["Distillation and autonomy"]:::later
+        L4["GPU runtime and placement"]:::later
+        L5["Commercial release"]:::later
+    end
+    D["Done this week:<br/>engine core, exact allocator,<br/>.epiph v1.0, thme scan"]:::done --> NOW --> NEXT --> LATER
+```
+
+### Done this week
+
+| Item | What shipped | Evidence |
+| :--- | :--- | :--- |
+| Engine core (THME-3001, 3004) | `src/engine`: error type, one shared Walsh-Hadamard transform (three copies removed) | Tested against the explicit Hadamard matrix; bit-identical to the old copies |
+| Exact allocator (THME-3002) | `thme search --solver dp` beside greedy and the threshold allocator | Tested against exhaustive search; real-model comparison pending |
+| Shared ternary quantizer (THME-3006, part) | One absmean-ternary implementation; BYOA zero-band bug fixed | Tested against round-and-clamp |
+| BYOA apply context (THME-3010) | Rules receive calibration, row width and codec through one interface | Tested; AWQ unchanged |
+| `.epiph` v1.0 (THME-3012) | Open Epiphanes model format with full metadata; `thme epiph pack/verify` | Tested: round trip, corruption, GGUF conversion |
+| `thme scan` (THME-3018) | Static model security scanner | Tested on built fixtures |
+| No-panic rule, GUI split, glossary | Compiler-enforced; Studio tabs as modules; `CONTEXT.md` | Tested |
+
+### Now: committed, in progress
+
+| Track | Item | Status | Depends on |
+| :--- | :--- | :--- | :--- |
+| Epiphanes model format | **Signed `.epiph` files** (THME-3019): signature over the manifest and payload digests; third-party converters get plain weights only | On track | Pure-Rust signature dependency, to be approved |
+| Quality and evidence | **One versioned quality gate** (THME-3003): custom criteria, one or many, absolute and relative margins, gate version in every report | Not started | None |
+| Engine | **Number formats with stated error bounds** (THME-3006): FP16, BF16, FP8, integer, codebook, phase | On track | None |
+| Hygiene | **SPDX licence headers** on every file, enforced in CI (THME-3005) | Not started | None |
+
+### Next: planned
+
+| Track | Item | Depends on |
+| :--- | :--- | :--- |
+| Epiphanes model format | Quantized payloads (THME-3013); tokenizer and GGUF metadata (THME-3014) | `.epiph` v1.0 |
+| Security | Developer sandbox, design first (THME-3020); scanner for compressed pickles, ONNX, Keras, NumPy (THME-3022) | None |
+| Quality and evidence | Benchmark registry, runner, statistics and three-state gate (dossier WP31-35); claim register (THME-3000); versioned schemas (THME-3009) | Versioned gate |
+| Engine | Transport and Sinkhorn (WP4), ODE steppers (WP6), dependency-free SVG visual engine (WP9) | Engine core |
+| Formats and calibration | GPTQ-style rounding (THME-2205); llama.cpp compatibility check on synthetic files (THME-2208) | Calibration |
+
+### Later: direction
+
+| Track | Item |
+| :--- | :--- |
+| Epiphanes model format | Lossless compression (THME-3015); GPU/CPU placement plan from the exact allocator (THME-3016) |
+| Translation layer | Architecture-neutral graph, exact symmetries, weight layout, architecture inference, compatibility reports (dossier WP14-18), behind a permission record (WP19) |
+| Routing and needles | Calibration metrics, routers, hierarchical scoring, needle training (WP21-25) |
+| Distillation and autonomy | Teacher cache, losses, fidelity report, student planner, autonomy controller with budget caps (WP26-30) |
+| Security | Guardrail detection and refusal evaluation, read-only; optional safety layers THME adds (THME-3021) |
+| Runtime | GPU backends, measured speed, memory and KV cache (v0.2.4, v0.3) |
+| Release | Commercial release after the open-source foundations are complete; version to be decided |
+
+### Blocked: needs real-model runs (paused)
+
+| Item | What is ready | What is pending |
+| :--- | :--- | :--- |
+| AWQ-style scaling (v0.2.2.4) | Implemented and tested | Measurement against plain Q4_0 |
+| Exact versus greedy allocation (THME-3002) | Implemented and tested | Comparison on real cost tables |
+| Hadamard rotation (v0.2.2.6) | Rule implemented | Measurement with and without rotation |
+| Searched recipe report (THME-2004), HF cross-check (THME-2001) | Tools ready | Runs |
+
+### Out of scope
+
+- Any feature that removes or disables a model's safety behaviour.
+- Extracting a model through a provider's interface.
+- Reverse-engineering a model without the owner's permission record.
+
+### Risks
+
+- **Measurement backlog.** Several items wait on paused model runs; the tools stay testable
+  without them, but no new quality figure can be published until runs resume.
+- **Dependencies to approve.** Signing, compression and compressed-pickle scanning each need a
+  pure-Rust crate; each is proposed with its licence and binary-size cost before it is added.
+- **Legal review.** Format-name trademark (THME-3017) and the commercial licence wording need a
+  lawyer before any announcement.
+
+### Changes this update (13 November 2026)
+
+- Added the engine, `.epiph` and security tracks from the research dossier v3.1 and the owner's
+  direction; existing milestones keep their numbers.
+- Commercial licensing moved from "available" to "planned for a later release".
+- Measurement-dependent items moved to *Blocked* while model runs are paused.
+
+---
+
+## Milestones in detail
 
 ## Where things stand
 
