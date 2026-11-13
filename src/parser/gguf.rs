@@ -378,6 +378,14 @@ impl From<ModelMetadataValue> for GgufValue {
 }
 
 impl GgufValue {
+    pub fn as_f32(&self) -> Option<f32> {
+        match self {
+            Self::Float32(v) => Some(*v),
+            Self::Float64(v) => Some(*v as f32),
+            _ => None,
+        }
+    }
+
     pub fn as_u64(&self) -> Option<u64> {
         match self {
             Self::Uint8(v) => Some(*v as u64),
@@ -824,6 +832,10 @@ impl GgufParser {
             tensors,
         );
         model_ir.source_gguf_metadata = source_gguf_metadata;
+        let float = |key: String| metadata.get(&key).and_then(GgufValue::as_f32);
+        model_ir.norm_eps = float(format!("{arch_str}.attention.layer_norm_rms_epsilon"))
+            .or_else(|| float(format!("{arch_str}.attention.layer_norm_epsilon")));
+        model_ir.rope_theta = float(format!("{arch_str}.rope.freq_base"));
 
         Ok(model_ir)
     }

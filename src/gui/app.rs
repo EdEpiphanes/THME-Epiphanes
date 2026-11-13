@@ -4542,6 +4542,7 @@ impl THMEApp {
                                 crate::exporter::ExportQuantType::Q8_0 => "Q8_0",
                                 crate::exporter::ExportQuantType::TQ1_0 => "TQ1_0 (ternary)",
                                 crate::exporter::ExportQuantType::BitNetB158 => "Unsupported BitNet legacy",
+                                crate::exporter::ExportQuantType::PerTensor => "Per tensor (selected formats)",
                             })
                             .show_ui(ui, |ui| {
                                 ui.selectable_value(&mut self.export_quant, crate::exporter::ExportQuantType::FP16, "FP16 (same-dtype)");

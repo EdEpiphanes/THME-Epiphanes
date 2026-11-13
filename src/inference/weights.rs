@@ -91,6 +91,12 @@ pub fn decode_payload(bytes: &[u8], dtype: &str, numel: usize) -> Result<Vec<f32
                 out.extend_from_slice(&GgufBlockDecoder::unpack_q8_0(block)?);
             }
         }
+        "Q4_0" => {
+            expect_len(blocks(Q8_BLOCK_VALUES, Q4_BLOCK_BYTES)?)?;
+            for block in bytes.chunks_exact(Q4_BLOCK_BYTES) {
+                out.extend_from_slice(&GgufBlockDecoder::unpack_q4_0(block)?);
+            }
+        }
         "TQ1_0" => {
             expect_len(blocks(TQ1_BLOCK_VALUES, TQ1_BLOCK_BYTES)?)?;
             for block in bytes.chunks_exact(TQ1_BLOCK_BYTES) {

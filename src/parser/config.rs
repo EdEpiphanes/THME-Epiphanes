@@ -24,6 +24,11 @@ pub struct HfConfig {
     pub max_position_embeddings: Option<usize>,
     #[serde(default)]
     pub torch_dtype: Option<String>,
+    /// RMSNorm epsilon (LLaMA family) or LayerNorm epsilon (GPT-NeoX).
+    #[serde(alias = "layer_norm_eps", alias = "layer_norm_epsilon", default)]
+    pub rms_norm_eps: Option<f64>,
+    #[serde(alias = "rotary_emb_base", default)]
+    pub rope_theta: Option<f64>,
 }
 
 impl HfConfig {

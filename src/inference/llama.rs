@@ -28,15 +28,16 @@ pub struct LlamaConfig {
 }
 
 impl LlamaConfig {
-    /// Builds a config from the IR, using the `LlamaConfig` defaults for epsilon and RoPE base.
+    /// Builds a config from the IR. Epsilon and RoPE base come from the model's recorded
+    /// values (`config.json` or GGUF metadata), falling back to LLaMA defaults.
     pub fn from_model_ir(model: &ModelIR) -> Self {
         Self {
             num_layers: model.num_layers,
             hidden_size: model.hidden_size,
             num_heads: model.num_attention_heads,
             num_kv_heads: model.num_key_value_heads,
-            rms_norm_eps: 1e-6,
-            rope_theta: 10_000.0,
+            rms_norm_eps: model.norm_eps.unwrap_or(1e-6),
+            rope_theta: model.rope_theta.unwrap_or(10_000.0),
         }
     }
 
