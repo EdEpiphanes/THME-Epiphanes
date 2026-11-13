@@ -66,6 +66,31 @@ pub struct EvaluateArgs {
     /// file, measured and deleted; either way the report records its real size.
     #[arg(long, value_name = "GGUF")]
     pub artifact: Option<PathBuf>,
+
+    /// Calibration statistics from `thme calibrate`, required by activation-aware algorithms
+    /// such as `thme.awq_q4_0`. Collect them on tokens outside the evaluation split.
+    #[arg(long, value_name = "CALIBRATION_JSON")]
+    pub calibration: Option<PathBuf>,
+}
+
+/// Attaches each tensor's calibration statistics as metadata; returns how many were attached.
+pub fn attach_calibration(model: &mut ModelIR, path: &Path) -> Result<usize> {
+    use crate::inference::awq::{ChannelStats, CALIBRATION_METADATA_KEY};
+    let file = crate::inference::CalibrationFile::load(path)?;
+    let mut attached = 0;
+    for tensor in &mut model.tensors {
+        if let Some(stats) = file.get(&tensor.name) {
+            let json = serde_json::to_string(&ChannelStats {
+                mean_abs: stats.mean_abs.clone(),
+                rms: stats.rms.clone(),
+            })?;
+            tensor
+                .metadata
+                .insert(CALIBRATION_METADATA_KEY.to_string(), json);
+            attached += 1;
+        }
+    }
+    Ok(attached)
 }
 
 /// Writes the candidate as a per-tensor GGUF and reports the file's real size (block scales,
@@ -301,7 +326,7 @@ pub fn evaluate(args: &EvaluateArgs) -> Result<Value> {
         bail!("Model has tensors without on-disk payloads; evaluation needs real weights");
     }
     let PreparedCandidate {
-        model: candidate,
+        model: mut candidate,
         skipped,
         counts,
         nominal_bits,
@@ -309,6 +334,17 @@ pub fn evaluate(args: &EvaluateArgs) -> Result<Value> {
         relabelled,
         operations_evaluated,
     } = prepare_candidate(&source, &recipe, &registry, args.allow_partial)?;
+    let calibration = match &args.calibration {
+        Some(path) => {
+            let attached = attach_calibration(&mut candidate, path)?;
+            println!("  calibration statistics attached to {attached} tensors");
+            json!({
+                "file": path.file_name().map(|n| n.to_string_lossy().into_owned()),
+                "tensors_attached": attached,
+            })
+        }
+        None => Value::Null,
+    };
     let arch = ArchConfig::detect(&source, &args.model)?;
     let tokens = read_token_file(&args.tokens)?;
     let eval = PerplexityConfig {
@@ -371,6 +407,7 @@ pub fn evaluate(args: &EvaluateArgs) -> Result<Value> {
             "operations_not_evaluated": skipped,
         },
         "export": artifact,
+        "calibration": calibration,
         "evaluation": {
             "measured": true,
             "corpus": corpus,
@@ -564,6 +601,7 @@ pub(crate) mod tests {
             allow_partial,
             algorithms: Vec::new(),
             artifact: None,
+            calibration: None,
         }
     }
 
@@ -618,6 +656,45 @@ pub(crate) mod tests {
             report["recipe"]["operations_not_evaluated"],
             json!(["ReplaceMixer"])
         );
+    }
+
+    /// THME-2204: an AWQ recipe runs through the measured path with calibration attached,
+    /// and refuses to run without it.
+    #[test]
+    fn activation_aware_recipe_needs_and_uses_calibration() {
+        let dir = tempfile::tempdir().unwrap();
+        let (model, tokens) = synthetic_checkpoint(dir.path());
+        let ir = ModelImporter::import(&model).unwrap();
+        let lm = ArchConfig::detect(&ir, &model)
+            .unwrap()
+            .load(&ir, WeightPrecision::AsStored)
+            .unwrap();
+        let token_ids = read_token_file(&tokens).unwrap();
+        let calib =
+            crate::inference::collect_calibration(&*lm, &ir, &token_ids, 32, Some(96)).unwrap();
+        let calib_path = dir.path().join("calibration.json");
+        calib.save(&calib_path).unwrap();
+
+        let recipe = write_custom_recipe(dir.path(), "thme.awq_q4_0");
+        let out = dir.path().join("report.json");
+        let refused = evaluate(&args(
+            model.clone(),
+            recipe.clone(),
+            tokens.clone(),
+            out.clone(),
+            false,
+        ));
+        assert!(format!("{:#}", refused.unwrap_err()).contains("--calibration"));
+
+        let mut with_calibration = args(model, recipe, tokens, out, false);
+        with_calibration.calibration = Some(calib_path);
+        let report = evaluate(&with_calibration).unwrap();
+        assert_eq!(report["calibration"]["tensors_attached"], json!(14));
+        let recipe_ppl = report["evaluation"]["variants"][1]["perplexity"]
+            .as_f64()
+            .unwrap();
+        assert!(recipe_ppl.is_finite() && recipe_ppl > 1.0);
+        assert_eq!(report["export"]["measured"], json!(false));
     }
 
     fn write_custom_recipe(dir: &Path, algorithm: &str) -> PathBuf {

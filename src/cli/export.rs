@@ -146,6 +146,7 @@ mod tests {
             allow_partial: false,
             algorithms: Vec::new(),
             artifact: None,
+            calibration: None,
         })
         .unwrap();
         let measured = report["evaluation"]["variants"][1]["perplexity"]

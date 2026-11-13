@@ -60,8 +60,9 @@ closes it.
 - **Done means**: A probe records per-linear-tensor input channel statistics on calibration tokens and saves them; unit-tested on the synthetic model.
 
 ### [THME-2204] Activation-aware scaling (AWQ-style)
-- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.4 · **Priority**: p1 · **Area**: byoa · **Type**: feature · **Status**: ready
+- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.4 · **Priority**: p1 · **Area**: byoa · **Type**: feature · **Status**: blocked
 - **Problem**: Round-to-nearest 4-bit fails the gate on Pythia-14M (Δ +31 to +74).
+- **Progress**: Implemented and tested (`thme.awq_q4_0`, `thme.awq_q4_k`, `--calibration`). Blocked on the real-model measurement: the owner has paused model runs.
 - **Done means**: A BYOA rule using captured activations; measured against plain Q4_0 on the same split with random controls.
 
 ### [THME-2205] Second-order rounding (GPTQ-style)

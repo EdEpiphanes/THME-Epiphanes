@@ -582,6 +582,7 @@ impl LiveView {
             allow_partial: true,
             algorithms: optional_path(&self.algorithms_path).into_iter().collect(),
             artifact: None,
+            calibration: None,
         };
         let (tx, rx) = mpsc::channel();
         let ctx = ctx.clone();
