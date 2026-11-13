@@ -102,7 +102,8 @@ A release train is cut when a milestone's exit criteria are met.
 3. Tag the merge commit `vX.Y.Z` and push the tag.
 4. [release.yml](../.github/workflows/release.yml) checks that the tag matches Cargo.toml and that
    the changelog has the section, re-runs the gates, builds four targets (Linux x64, Windows x64,
-   macOS arm64 and x64) within the binary size limits, signs them when the Minisign key is
+   macOS arm64 and x64) within the binary size limits, bundles `THIRD_PARTY_LICENSES.html`
+   (dependency and font licence notices from `cargo about`), signs them when the Minisign key is
    configured, and publishes the archives with per-file and combined SHA-256 checksums.
 5. Recapture Studio screenshots if the GUI changed, and confirm the README badges are green.
 

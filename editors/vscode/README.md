@@ -41,10 +41,11 @@ When installed, GitHub Copilot Chat has access to the following live tools:
 ## Packaging & Installation
 
 ### Option A: Install via VSIX Package
-To package the extension into an installable `.vsix` file:
+To package the extension into an installable `.vsix` file (needs Node.js 22 or newer):
 ```bash
 cd editors/vscode
-npx @vscode/vsce package --no-dependencies
+npm ci
+npm run package
 ```
 Then in VS Code:
 1. Open the Extensions view (`Ctrl+Shift+X` / `Cmd+Shift+X`).
