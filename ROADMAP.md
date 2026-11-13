@@ -119,7 +119,7 @@ SmolLM-135M, measured from the written file.
 | v0.2.2.4 | Activation-aware scaling (AWQ-style) |
 | v0.2.2.5 | Second-order rounding (GPTQ-style) |
 | v0.2.2.6 | Randomized Hadamard rotation of weight inputs (QuaRot-style), measured with and without |
-| v0.2.2.7 | SmoothQuant-style scale migration for activation outliers |
+| v0.2.2.7 | SmoothQuant-style scale migration for activation outliers. **Done**: `inference::smoothing` folds per-channel scales (from calibration max \|x\|) into the preceding RMSNorm or LayerNorm and the linears that read it, for LLaMA and GPT-NeoX; tests confirm unchanged outputs before quantization. Its effect after quantization is not measured |
 | v0.2.2.8 | Format compatibility checks against llama.cpp on exported files |
 | v0.2.2.9 | Measured artifact size, including scales and metadata, in every report. **Done**: `thme evaluate` and `thme search` write the candidate as a per-tensor GGUF and report `export.artifact_bytes` beside the nominal estimate (`--artifact` keeps the file); candidates the exporter cannot write are reported as not measured, with the reason |
 
