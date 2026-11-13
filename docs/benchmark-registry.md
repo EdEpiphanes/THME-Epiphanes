@@ -38,6 +38,9 @@ thme bench validate run.json --task benchmarks/tasks/gsm8k.json
 - **The licence is required.** It is copied into every result record.
 - **Strict.** Unknown or missing fields are refused, never guessed.
 
+The dataset is JSONL, one item per line: a string `id` (unique), a string `input`, and an
+optional string `target`.
+
 | Family | Extract | Metric |
 | :--- | :--- | :--- |
 | `multiple-choice` | `none` | `choice-by-likelihood` |
@@ -71,6 +74,22 @@ Checks on every record:
   `imported`, never `measured`; only an imported run can be labelled imported.
 - With `--task`, the record's task hash, dataset hash, split, licence and prompt-template hash
   must equal the task's, so a record cannot be filed under a task it did not run.
+
+## Contamination check
+
+A score is only clean if its items were not in the model's training or teacher-written data
+(dossier WP36, Q.6). Check before scoring:
+
+```bash
+thme bench contamination --task benchmarks/tasks/gsm8k.json --corpus train-part-1.txt --corpus teacher.jsonl
+```
+
+Items and corpora are compared as 13-word n-grams after lower-casing and dropping punctuation
+(`--n` changes the length; an item shorter than that is matched whole). Corpora are streamed, so
+they can be larger than memory. The command lists every item with an overlap, the share of its
+n-grams found and the files they were found in, writes the list with `--report`, and exits with
+an error when any item overlaps. It finds verbatim and lightly reformatted copies, not
+paraphrases.
 
 ## Not yet
 
