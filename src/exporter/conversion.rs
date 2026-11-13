@@ -7,7 +7,41 @@ use crate::exporter::calibration::optimal_ternary_scale;
 use crate::exporter::streaming_writer::STREAM_CHUNK_SIZE;
 use crate::parser::gguf::GgmlType;
 
-/// Encode an exact-length F16/F32 source into a GGML Q8_0 or TQ1_0 stream.
+type BlockEncoder = fn(&[f32], &mut Vec<u8>) -> Result<()>;
+
+fn encode_f16_value(values: &[f32], out: &mut Vec<u8>) -> Result<()> {
+    for &value in values {
+        let half = f32_to_f16(value);
+        if !crate::profiling::f16_to_f32(half).is_finite() {
+            bail!("Value {value} exceeds the finite FP16 range");
+        }
+        out.extend_from_slice(&half.to_le_bytes());
+    }
+    Ok(())
+}
+
+/// Values per block, bytes per block and encoder for each supported conversion target.
+fn conversion_target(target: GgmlType) -> Result<(usize, usize, BlockEncoder)> {
+    use crate::exporter::kquant;
+    Ok(match target {
+        GgmlType::F16 => (1, 2, encode_f16_value),
+        GgmlType::Q8_0 => (32, 34, encode_q8_block),
+        GgmlType::Q4_0 => (32, 18, encode_q4_0_block),
+        GgmlType::TQ1_0 => (256, 54, encode_tq1_block),
+        GgmlType::Q4_K => (kquant::QK_K, kquant::Q4_K_BYTES, kquant::encode_q4_k_block),
+        GgmlType::Q5_K => (kquant::QK_K, kquant::Q5_K_BYTES, kquant::encode_q5_k_block),
+        GgmlType::Q6_K => (kquant::QK_K, kquant::Q6_K_BYTES, kquant::encode_q6_k_block),
+        _ => bail!("Unsupported float conversion target {}", target.type_name()),
+    })
+}
+
+/// True when `encode_float_source` can write `target`.
+pub fn is_conversion_target(target: GgmlType) -> bool {
+    conversion_target(target).is_ok()
+}
+
+/// Encode an exact-length F32/F16/BF16 source into a GGML stream of `target`
+/// (F16, Q8_0, Q4_0, TQ1_0, Q4_K, Q5_K or Q6_K).
 pub fn encode_float_source<R: Read, W: Write>(
     reader: &mut R,
     writer: &mut W,
@@ -15,13 +49,9 @@ pub fn encode_float_source<R: Read, W: Write>(
     target: GgmlType,
     element_count: usize,
 ) -> Result<u64> {
-    let (block, byte_size) = match target {
-        GgmlType::Q8_0 => (32, 34),
-        GgmlType::TQ1_0 => (256, 54),
-        _ => bail!("Unsupported float conversion target {}", target.type_name()),
-    };
-    if !matches!(source_dtype, "F16" | "F32") {
-        bail!("Conversion source dtype must be F16 or F32, got {source_dtype}");
+    let (block, byte_size, encode) = conversion_target(target)?;
+    if !matches!(source_dtype, "F16" | "F32" | "BF16") {
+        bail!("Conversion source dtype must be F32, F16 or BF16, got {source_dtype}");
     }
     if !element_count.is_multiple_of(block) {
         bail!(
@@ -43,12 +73,14 @@ pub fn encode_float_source<R: Read, W: Write>(
             .context("Float tensor source ended before expected element count")?;
         let mut values = Vec::with_capacity(count);
         for bytes in input[..input_len].chunks_exact(source_width) {
-            let value = if source_dtype == "F32" {
-                f32::from_le_bytes(bytes.try_into().context("Invalid F32 source chunk")?)
-            } else {
-                crate::profiling::f16_to_f32(u16::from_le_bytes(
+            let value = match source_dtype {
+                "F32" => f32::from_le_bytes(bytes.try_into().context("Invalid F32 source chunk")?),
+                "BF16" => crate::profiling::bf16_to_f32(u16::from_le_bytes(
+                    bytes.try_into().context("Invalid BF16 source chunk")?,
+                )),
+                _ => crate::profiling::f16_to_f32(u16::from_le_bytes(
                     bytes.try_into().context("Invalid F16 source chunk")?,
-                ))
+                )),
             };
             if !value.is_finite() {
                 bail!("Float source contains NaN or infinity");
@@ -57,11 +89,7 @@ pub fn encode_float_source<R: Read, W: Write>(
         }
         for chunk in values.chunks_exact(block) {
             let mut encoded = Vec::with_capacity(byte_size);
-            match target {
-                GgmlType::Q8_0 => encode_q8_block(chunk, &mut encoded)?,
-                GgmlType::TQ1_0 => encode_tq1_block(chunk, &mut encoded)?,
-                _ => unreachable!(),
-            }
+            encode(chunk, &mut encoded)?;
             writer
                 .write_all(&encoded)
                 .context("Failed writing converted tensor block")?;

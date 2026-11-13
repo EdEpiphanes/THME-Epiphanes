@@ -74,6 +74,12 @@ pub struct ModelIR {
     pub vocab_size: usize,
     pub max_position_embeddings: usize,
     pub tensors: Vec<TensorIR>,
+    /// Normalization epsilon (RMSNorm or LayerNorm) from `config.json` or GGUF metadata.
+    #[serde(default)]
+    pub norm_eps: Option<f32>,
+    /// RoPE base frequency from `config.json` or GGUF metadata.
+    #[serde(default)]
+    pub rope_theta: Option<f32>,
     #[serde(skip)]
     pub source_gguf_metadata: BTreeMap<String, ModelMetadataValue>,
 }
@@ -108,6 +114,8 @@ impl ModelIR {
             vocab_size,
             max_position_embeddings,
             tensors,
+            norm_eps: None,
+            rope_theta: None,
             source_gguf_metadata: BTreeMap::new(),
         }
     }

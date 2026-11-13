@@ -45,7 +45,7 @@ closes it.
 ## Next: v0.2.2 Formats and calibration
 
 ### [THME-2201] Per-tensor formats in the GGUF writer
-- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.1 · **Priority**: p1 · **Area**: exporter · **Type**: feature · **Status**: ready
+- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.1 · **Priority**: p1 · **Area**: exporter · **Type**: feature · **Status**: done
 - **Problem**: The exporter writes every tensor as one format, so a recipe and its artifact differ.
 - **Done means**: Exporting a recipe writes each tensor in its assigned format; re-importing and evaluating the file reproduces `thme evaluate`'s perplexity for the same recipe.
 

@@ -248,6 +248,9 @@ cargo run --release --example precision_sweep -- \
 cargo run --release --example depth_probe -- \
     --model-path models/Pythia-14M --tokens target/eval/wikitext2_test.pythia-14m.u32
 
+# Write the recipe as a GGUF file, each tensor in its own format
+./target/release/thme export models/SmolLM-135M -o smollm-mixed.gguf --recipe recipe.json
+
 # Search a mixed-precision recipe under a size budget, then re-check it
 ./target/release/thme search models/Pythia-14M --tokens target/eval/wikitext2_test.pythia-14m.u32 \
     --budget 0.5 --formats q8_0,q4_0 --emit-recipe target/searched.json

@@ -121,7 +121,7 @@ impl ModelImporter {
             .and_then(|c| c.max_position_embeddings)
             .unwrap_or(4096);
 
-        let model_ir = ModelIR::new(
+        let mut model_ir = ModelIR::new(
             model_name,
             architecture,
             num_layers,
@@ -132,6 +132,14 @@ impl ModelImporter {
             max_position_embeddings,
             tensors,
         );
+        model_ir.norm_eps = hf_config
+            .as_ref()
+            .and_then(|c| c.rms_norm_eps)
+            .map(|v| v as f32);
+        model_ir.rope_theta = hf_config
+            .as_ref()
+            .and_then(|c| c.rope_theta)
+            .map(|v| v as f32);
 
         Ok(model_ir)
     }

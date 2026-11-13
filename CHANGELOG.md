@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **Per-tensor GGUF export** (v0.2.2.1): `thme export MODEL -o out.gguf --recipe R` applies the
+  recipe as `thme evaluate` does and writes each tensor in its assigned format (FP16, Q8_0, Q4_0,
+  Q4_K, Q5_K, Q6_K, TQ1_0); FP32 and 1-D tensors keep their stored dtype. Re-importing the file
+  reproduces the measured perplexity (tested, with bit-identical weights). The converter also
+  accepts BF16 sources, and the forward pass reads Q4_0 tensors.
 - **K-quant codecs** (`src/exporter/kquant.rs`): Q4_K, Q5_K and Q6_K encoders and decoders in
   GGML block layout (144, 176, 210 bytes per 256 values), tested against hand-built blocks.
   The reference forward pass reads K-quant tensors, and `q4_k`, `q5_k`, `q6_k` work in recipes,
@@ -97,6 +102,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   depict the application.
 
 ### Fixed
+- GGUF export wrote a fixed RoPE base (10000) and RMSNorm epsilon (1e-5), and the forward pass
+  ignored those keys on import (falling back to 1e-6). Both now come from the model's
+  `config.json` or GGUF metadata (`ModelIR::norm_eps`, `ModelIR::rope_theta`).
 - SafeTensors tensors are ordered by file offset; the safetensors crate returns hash order, which
   made random-control placements and cached search plans irreproducible across runs.
 - MSRV corrected to 1.89, the highest `rust-version` in the locked dependency tree (the code itself

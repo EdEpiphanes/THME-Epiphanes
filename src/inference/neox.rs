@@ -37,8 +37,8 @@ impl NeoxConfig {
             hidden_size: model.hidden_size,
             num_heads: model.num_attention_heads,
             rotary_pct: 0.25,
-            rope_theta: 10_000.0,
-            layer_norm_eps: 1e-5,
+            rope_theta: model.rope_theta.unwrap_or(10_000.0),
+            layer_norm_eps: model.norm_eps.unwrap_or(1e-5),
             parallel_residual: true,
         }
     }

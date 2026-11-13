@@ -37,7 +37,38 @@ impl GgufMetadataSynchronizer {
             ExportQuantType::Q8_0 => 7,       // MOSTLY_Q8_0
             ExportQuantType::TQ1_0 => 36,     // MOSTLY_TQ1_0
             ExportQuantType::BitNetB158 => 0, // ALL_F32 / Custom experimental
+            ExportQuantType::PerTensor => 0,  // resolved per model by `file_type_for_model`
         }
+    }
+
+    /// GGUF `general.file_type` for a per-tensor export: the llama.cpp file type of the format
+    /// that holds the most weight-matrix parameters.
+    pub fn file_type_for_model(model: &ModelIR) -> u32 {
+        use crate::ir::TensorFormat;
+        let mut totals: Vec<(u32, usize)> = Vec::new();
+        for tensor in model.tensors.iter().filter(|t| t.shape.len() >= 2) {
+            let code = match tensor.selected_format {
+                TensorFormat::FP16 => 1,
+                TensorFormat::Q4_0 => 2,
+                TensorFormat::Q8_0 => 7,
+                TensorFormat::Q4_K => 15,
+                TensorFormat::Q5_K => 17,
+                TensorFormat::Q6_K => 18,
+                TensorFormat::Ternary => 36,
+                _ => match tensor.original_dtype.as_str() {
+                    "F16" => 1,
+                    _ => 0,
+                },
+            };
+            match totals.iter_mut().find(|(c, _)| *c == code) {
+                Some(entry) => entry.1 += tensor.numel,
+                None => totals.push((code, tensor.numel)),
+            }
+        }
+        totals
+            .into_iter()
+            .max_by_key(|&(code, n)| (n, std::cmp::Reverse(code)))
+            .map_or(0, |(code, _)| code)
     }
 
     /// Reconstitutes standard GGUF metadata key-value pairs from `ModelIR`
@@ -63,7 +94,11 @@ impl GgufMetadataSynchronizer {
         ));
         meta.push((
             "general.file_type".to_string(),
-            GgufValue::Uint32(Self::file_type_code(quant_type)),
+            GgufValue::Uint32(if quant_type == ExportQuantType::PerTensor {
+                Self::file_type_for_model(model)
+            } else {
+                Self::file_type_code(quant_type)
+            }),
         ));
 
         // 2. Core architectural dimensions
@@ -108,13 +143,14 @@ impl GgufMetadataSynchronizer {
         ));
 
         // 4. RoPE & Normalization constants
+        // The model's own values; the defaults apply only when the source recorded none.
         meta.push((
             format!("{arch}.rope.freq_base"),
-            GgufValue::Float32(10000.0),
+            GgufValue::Float32(model.rope_theta.unwrap_or(10_000.0)),
         ));
         meta.push((
             format!("{arch}.attention.layer_norm_rms_epsilon"),
-            GgufValue::Float32(1e-5),
+            GgufValue::Float32(model.norm_eps.unwrap_or(1e-5)),
         ));
 
         // 5. Vocabulary metadata

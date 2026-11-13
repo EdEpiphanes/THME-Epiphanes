@@ -61,6 +61,10 @@ pub enum ExportQuantType {
     TQ1_0,
     /// Full 16-bit floating point weights
     FP16,
+    /// Each tensor in its own selected format (`TensorIR::selected_format`, set by a recipe):
+    /// FP16, Q8_0, Q4_0, Q4_K, Q5_K, Q6_K or ternary (TQ1_0); FP32 and 1-D tensors keep their
+    /// stored dtype, as the measured path does.
+    PerTensor,
 }
 
 impl std::str::FromStr for ExportQuantType {
@@ -74,8 +78,9 @@ impl std::str::FromStr for ExportQuantType {
             "q8" | "q8_0" | "int8" => Ok(ExportQuantType::Q8_0),
             "tq1" | "tq1_0" => Ok(ExportQuantType::TQ1_0),
             "fp16" | "f16" => Ok(ExportQuantType::FP16),
+            "per-tensor" | "per_tensor" | "recipe" | "selected" => Ok(ExportQuantType::PerTensor),
             other => Err(format!(
-                "Unknown export quant type '{}'. Supported: bitnet-b1.58, q8_0, fp16",
+                "Unknown export quant type '{}'. Supported: bitnet-b1.58, q8_0, fp16, per-tensor",
                 other
             )),
         }
@@ -116,6 +121,45 @@ impl ModelExporter {
         }
 
         match config.format {
+            ExportFormat::GGUFv3 if config.quant_type == ExportQuantType::PerTensor => {
+                let mut writer = GgufWriter::new();
+                GgufMetadataSynchronizer::synchronize_into_writer(
+                    &mut writer,
+                    model,
+                    config.quant_type,
+                );
+                for tensor in &model.tensors {
+                    let source = tensor.source.clone().with_context(|| format!(
+                        "Tensor '{}' has no file-backed payload; parse a model from disk before exporting", tensor.name
+                    ))?;
+                    match per_tensor_plan(tensor)? {
+                        TensorPlan::Copy(ggml_type) => {
+                            ensure_source_dtype(tensor, &tensor.original_dtype)?;
+                            writer.add_tensor_source(
+                                &tensor.name,
+                                tensor.shape.clone(),
+                                ggml_type,
+                                source,
+                            );
+                        }
+                        TensorPlan::Convert(ggml_type) => {
+                            if source.byte_len != u64::try_from(tensor.byte_size)? {
+                                anyhow::bail!("Tensor '{}' source payload length does not match recorded byte size", tensor.name);
+                            }
+                            writer.add_converted_tensor_source(
+                                &tensor.name,
+                                tensor.shape.clone(),
+                                ggml_type,
+                                source,
+                                tensor.original_dtype.clone(),
+                            );
+                        }
+                    }
+                }
+                writer
+                    .write_to_file(&config.output_path)
+                    .with_context(|| format!("Failed writing GGUF to {:?}", config.output_path))?;
+            }
             ExportFormat::GGUFv3 => {
                 let target_type = match config.quant_type {
                     ExportQuantType::FP16 => ("F16", GgmlType::F16),
@@ -124,6 +168,7 @@ impl ModelExporter {
                     ExportQuantType::BitNetB158 => anyhow::bail!(
                         "BitNet conversion is not available for source-backed export; choose a matching FP16 or Q8_0 source"
                     ),
+                    ExportQuantType::PerTensor => unreachable!("handled by the per-tensor branch"),
                 };
                 let mut writer = GgufWriter::new();
                 GgufMetadataSynchronizer::synchronize_into_writer(
@@ -239,6 +284,90 @@ impl ModelExporter {
             sha256_checksum,
         })
     }
+}
+
+/// How one tensor is written in a per-tensor export.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TensorPlan {
+    /// Copy the stored payload unchanged.
+    Copy(GgmlType),
+    /// Encode the float source into this block format.
+    Convert(GgmlType),
+}
+
+/// GGML type of a stored dtype that can be copied into GGUF unchanged.
+fn stored_ggml_type(dtype: &str) -> Option<GgmlType> {
+    Some(match dtype {
+        "F32" => GgmlType::F32,
+        "F16" => GgmlType::F16,
+        "BF16" => GgmlType::BF16,
+        "Q8_0" => GgmlType::Q8_0,
+        "Q4_0" => GgmlType::Q4_0,
+        "TQ1_0" => GgmlType::TQ1_0,
+        "Q4_K" => GgmlType::Q4_K,
+        "Q5_K" => GgmlType::Q5_K,
+        "Q6_K" => GgmlType::Q6_K,
+        _ => return None,
+    })
+}
+
+/// Decides how a tensor is written from its selected format. Mirrors the measured path
+/// (`inference::load_tensor`): FP32 means "keep as stored", and 1-D tensors (norms, biases)
+/// always keep their stored dtype, so an exported recipe matches what `thme evaluate` measured.
+fn per_tensor_plan(tensor: &crate::ir::TensorIR) -> Result<TensorPlan> {
+    use crate::ir::TensorFormat;
+    let stored = || {
+        stored_ggml_type(&tensor.original_dtype).with_context(|| {
+            format!(
+                "Tensor '{}' has stored dtype {}, which cannot be copied into GGUF",
+                tensor.name, tensor.original_dtype
+            )
+        })
+    };
+    if tensor.shape.len() < 2 {
+        return Ok(TensorPlan::Copy(stored()?));
+    }
+    let target = match &tensor.selected_format {
+        TensorFormat::FP32 => return Ok(TensorPlan::Copy(stored()?)),
+        TensorFormat::FP16 => GgmlType::F16,
+        TensorFormat::BF16 if tensor.original_dtype == "BF16" => GgmlType::BF16,
+        TensorFormat::Q8_0 => GgmlType::Q8_0,
+        TensorFormat::Q4_0 => GgmlType::Q4_0,
+        TensorFormat::Q4_K => GgmlType::Q4_K,
+        TensorFormat::Q5_K => GgmlType::Q5_K,
+        TensorFormat::Q6_K => GgmlType::Q6_K,
+        TensorFormat::Ternary => GgmlType::TQ1_0,
+        TensorFormat::Custom(id) => anyhow::bail!(
+            "Tensor '{}' uses BYOA algorithm '{id}', which has no GGUF encoding; evaluate it with `thme evaluate`, or choose a built-in format for export",
+            tensor.name
+        ),
+        other => anyhow::bail!(
+            "Tensor '{}' is assigned {}, which the GGUF exporter cannot write (supported: FP16, Q8_0, Q4_0, Q4_K, Q5_K, Q6_K, Ternary, or FP32 to keep as stored)",
+            tensor.name,
+            other.display_name()
+        ),
+    };
+    if tensor.original_dtype == target.type_name() {
+        return Ok(TensorPlan::Copy(target));
+    }
+    if !matches!(tensor.original_dtype.as_str(), "F32" | "F16" | "BF16") {
+        anyhow::bail!(
+            "Tensor '{}' is stored as {}; converting to {} needs an F32, F16 or BF16 source",
+            tensor.name,
+            tensor.original_dtype,
+            target.type_name()
+        );
+    }
+    let row_width = tensor.shape.last().copied().unwrap_or(1);
+    if !row_width.is_multiple_of(target.block_size()) {
+        anyhow::bail!(
+            "Tensor '{}' rows are {row_width} wide; {} needs rows divisible by {} (choose a 32-value format such as Q8_0 or Q4_0 for this tensor)",
+            tensor.name,
+            target.type_name(),
+            target.block_size()
+        );
+    }
+    Ok(TensorPlan::Convert(target))
 }
 
 fn ensure_source_dtype(tensor: &crate::ir::TensorIR, expected_dtype: &str) -> Result<()> {
