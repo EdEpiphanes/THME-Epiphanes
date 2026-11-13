@@ -11,6 +11,7 @@ pub mod plan;
 pub mod profile;
 pub mod report;
 pub mod roofline;
+pub mod scan;
 pub mod search;
 pub mod speculate;
 pub mod tweak;
@@ -82,6 +83,9 @@ pub enum Commands {
     /// Pack or verify Epiphanes model files (.epiph): weights plus all their metadata
     Epiph(epiph::EpiphArgs),
 
+    /// Security scan of a model file or folder for code execution, hidden payloads and malformed headers
+    Scan(scan::ScanArgs),
+
     /// Generate PyTorch / CUDA fine-tuning scripts or Hugging Face configurations
     Interop(interop::InteropArgs),
 
@@ -112,6 +116,7 @@ pub fn run() -> Result<()> {
         Commands::Roofline(args) => roofline::execute(args),
         Commands::Export(args) => export::execute(args),
         Commands::Epiph(args) => epiph::execute(args),
+        Commands::Scan(args) => scan::execute(args),
         Commands::Interop(args) => interop::execute(args),
         Commands::Mcp(args) => mcp::execute(args),
         Commands::CoSurgery(args) => co_surgery::execute(args),

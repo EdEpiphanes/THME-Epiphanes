@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **`thme scan`** (THME-3018): static security scan of model files and folders. Walks pickle
+  opcodes without loading them (plain and PyTorch zip) and flags code-executing imports; checks
+  GGUF and SafeTensors headers, unused bytes and hidden executables; flags template injection in
+  chat templates, code in metadata, `auto_map` remote code, scripts and executables; verifies
+  `.epiph` files. `--fail-on` sets the exit-code threshold. No findings is not proof of safety.
 - **The `.epiph` format** (THME-3012): an open, verifiable single-file container for a model and
   everything known about it (description, recipe, provenance, quality results with evidence
   labels, calibration statistics, lineage, annotations). `thme epiph pack` / `thme epiph verify`;

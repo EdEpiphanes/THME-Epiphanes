@@ -207,6 +207,31 @@ closes it.
 - **Problem**: The owner wants the format name protected under Epiphanes. Extensions are not usually registrable; the name is.
 - **Done means**: A lawyer has searched and advised on the name; filing decided by the owner.
 
+### [THME-3018] Static model security scanner (`thme scan`)
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: security · **Type**: feature · **Status**: done
+- **Problem**: Model files can execute code on load (pickle imports, template injection, trust_remote_code) or hide payloads in unused bytes.
+- **Done means**: `src/scan`: pickle opcode walker (plain and PyTorch zip), GGUF/SafeTensors header and coverage checks, metadata and chat-template rules, code and executable files, `.epiph` verification; `--fail-on` exit code; tests on built fixtures, no file loaded or run.
+
+### [THME-3019] Signed `.epiph` files
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: security · **Type**: feature · **Status**: triage
+- **Problem**: Owner wants files signed by Epiphanes. Third-party converters can read the open format but get plain weights only; signature, provenance, quality evidence and placement are THME features.
+- **Done means**: Optional signature section over the manifest and payload digests; `thme epiph sign` / `verify` check it; key handling documented; a pure-Rust signature dependency proposed and approved first.
+
+### [THME-3020] Developer sandbox for untrusted code
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: security · **Type**: feature · **Status**: triage
+- **Problem**: Remote-code models, plugins (dossier L.4) and benchmark code (R.4) need to run isolated.
+- **Done means**: Design doc first: separate process, no network, file access limited to a work folder, time and memory caps, per-OS mechanism; then an implementation with escape tests.
+
+### [THME-3021] Guardrail detection and evaluation (read-only)
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: security · **Type**: feature · **Status**: triage
+- **Problem**: Owner asks to find guardrails. Scope: detect safety components (safety classifiers, refusal instructions in chat templates and system prompts) and measure refusal behaviour on a fixed prompt set. Out of scope: any feature that removes or disables a model's safety behaviour.
+- **Done means**: Scan reports safety-related components it finds; an evaluation reports refusal rates with intervals; optional safety layers that THME adds on top of a model can be switched on or off.
+
+### [THME-3022] Scanner: more formats and compressed pickles
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: security · **Type**: feature · **Status**: triage
+- **Problem**: v1 does not inspect deflate-compressed pickles, ONNX, Keras Lambda layers or NumPy object arrays.
+- **Done means**: Each format added with fixtures; compressed pickles inspected with a pure-Rust inflate dependency proposed first.
+
 <!-- backlog:end -->
 
 ---
