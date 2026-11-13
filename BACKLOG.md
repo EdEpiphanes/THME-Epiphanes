@@ -23,7 +23,7 @@ closes it.
 - **Done means**: eframe upgraded; the two `ignore` entries removed from deny.toml; `cargo deny check` passes; all Studio tabs recaptured and visually checked.
 
 ### [THME-2003] Split src/gui/app.rs into tab modules
-- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p2 · **Area**: gui · **Type**: chore · **Status**: ready
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p2 · **Area**: gui · **Type**: chore · **Status**: done
 - **Problem**: app.rs is about 6,000 lines with ten tab renderers sharing mutable state (supersedes THME-910).
 - **Done means**: Each `render_tab_*` lives in `src/gui/tabs/<name>.rs`; no behaviour change; screenshots identical apart from timestamps.
 
