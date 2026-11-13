@@ -56,9 +56,9 @@ All contributors and maintainers are expected to follow our [Code of Conduct](CO
 
 ## Licensing of Contributions
 
-THME is dual-licensed: AGPL-3.0-only for everyone, and a commercial license sold by Epiphanes
-(see [LICENSING.md](LICENSING.md)). For that to keep working, every contribution has to be
-usable under both.
+THME is AGPL-3.0-only for everyone. Epiphanes plans a commercial license in a later release
+(not offered yet; see [LICENSING.md](LICENSING.md)). For that to stay possible, every
+contribution has to be usable under both.
 
 By opening a pull request you confirm that:
 

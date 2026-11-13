@@ -133,6 +133,7 @@ closes it.
 ### [THME-3003] One versioned quality gate; retire the stale 0.25 tolerance (dossier WP20)
 - **Milestone**: unplaced · **Roadmap**: none · **Priority**: p1 · **Area**: quality · **Type**: fix · **Status**: triage
 - **Problem**: The threshold lives in three places: CLI defaults (0.45), `configs/quality_gates.yaml` (0.25, unread) and evaluator tests (0.25).
+- **Owner decision (2026-11-13)**: thresholds are customizable; a quality gate may hold one criterion or many.
 - **Done means**: A gate is versioned data with a content hash, absolute and relative margins; every report records its gate version; MMLU/GSM8K marked not measured.
 
 ### [THME-3004] Shared basis module: one Walsh-Hadamard transform (dossier WP5)
@@ -168,7 +169,7 @@ closes it.
 - **Done means**: Each schema carries a version field and validates a fixture in CI.
 
 ### [THME-3010] BYOA rules get calibration through their interface, not tensor metadata
-- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: byoa · **Type**: refactor · **Status**: triage
+- **Milestone**: unplaced · **Roadmap**: none · **Priority**: p2 · **Area**: byoa · **Type**: refactor · **Status**: done
 - **Problem**: `ActivationAware` reads statistics from a JSON string in tensor metadata and needs a special case in `apply_selected_format`; each new data-needing rule would add another.
 - **Done means**: A rule receives an apply context (calibration statistics, row width) at one seam; the metadata side channel and special case are gone; AWQ tests unchanged.
 ### [THME-3011] Measured bits per weight from the written artifact (placeholder)

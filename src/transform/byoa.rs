@@ -79,6 +79,22 @@ pub enum TransformationRule {
     },
 }
 
+/// Rounds a slice in place to the named block format (e.g. `Q4_0`).
+pub type FormatRounder<'a> = dyn Fn(&mut [f32], &str) -> Result<(), String> + 'a;
+
+/// What a rule may use besides the weights. Built once per tensor by the caller; each rule
+/// takes what it needs and reports what is missing.
+#[derive(Clone, Copy, Default)]
+pub struct ApplyContext<'a> {
+    /// Width of one weight row (the input dimension of a `[out][in]` linear tensor).
+    pub row_width: Option<usize>,
+    /// Per-input-channel activation statistics from `thme calibrate`.
+    pub calibration: Option<&'a crate::transform::awq::ChannelStats>,
+    /// Replaces a slice by what it becomes after storage in the named block format
+    /// (e.g. `Q4_0`); supplied by the inference path, which owns the codecs.
+    pub round: Option<&'a FormatRounder<'a>>,
+}
+
 /// What a rule means for a running model.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum WeightContract {
@@ -204,8 +220,18 @@ impl AlgorithmDefinition {
         serde_json::to_string_pretty(self)
     }
 
-    /// Applies this algorithm's transformation rule to a float weight slice in-place
+    /// Applies this algorithm's transformation rule to a float weight slice in-place, with
+    /// no context (rules that need calibration or a codec report it as an error).
     pub fn apply_to_weights(&self, weights: &mut [f32]) -> Result<TransformResult, String> {
+        self.apply_with(weights, &ApplyContext::default())
+    }
+
+    /// Applies this algorithm's rule in place with whatever context the caller has.
+    pub fn apply_with(
+        &self,
+        weights: &mut [f32],
+        ctx: &ApplyContext<'_>,
+    ) -> Result<TransformResult, String> {
         let n = weights.len();
         if n == 0 {
             return Err("Cannot apply algorithm to empty weight slice".to_string());
@@ -215,7 +241,7 @@ impl AlgorithmDefinition {
         let orig_l2 = orig_norm_sq.sqrt();
         let original_copy = weights.to_vec();
 
-        apply_rule(&self.rule, weights)?;
+        apply_rule(&self.rule, weights, ctx)?;
 
         // Compute metrics
         let trans_norm_sq: f32 = weights.iter().map(|&x| x * x).sum();
@@ -249,15 +275,31 @@ impl AlgorithmDefinition {
 }
 
 /// Applies one transformation rule in place (shared by plain and composed rules).
-fn apply_rule(rule: &TransformationRule, weights: &mut [f32]) -> Result<(), String> {
+fn apply_rule(
+    rule: &TransformationRule,
+    weights: &mut [f32],
+    ctx: &ApplyContext<'_>,
+) -> Result<(), String> {
     let n = weights.len();
     let orig_norm_sq: f32 = weights.iter().map(|&x| x * x).sum();
     match rule {
-        TransformationRule::ActivationAware { .. } => {
-            return Err(
-                "activation-aware rules need calibration statistics; run `thme calibrate` and pass `--calibration` to `thme evaluate`"
-                    .to_string(),
-            );
+        TransformationRule::ActivationAware { format, alpha_grid } => {
+            let stats = ctx.calibration.ok_or(
+                "activation-aware rules need calibration statistics; run `thme calibrate` and pass `--calibration` to `thme evaluate`",
+            )?;
+            let round = ctx.round.ok_or(
+                "activation-aware rules need the block-format codec of the inference path",
+            )?;
+            let in_dim = ctx.row_width.unwrap_or(n);
+            let round_in_format = |v: &mut [f32]| round(v, format).map_err(|e| anyhow::anyhow!(e));
+            crate::transform::awq::activation_aware_quantize(
+                weights,
+                in_dim,
+                stats,
+                &round_in_format,
+                alpha_grid,
+            )
+            .map_err(|e| format!("{e:#}"))?;
         }
         TransformationRule::AbsmeanTernary {
             scale_gamma,
@@ -357,7 +399,12 @@ fn apply_rule(rule: &TransformationRule, weights: &mut [f32]) -> Result<(), Stri
                 ));
             }
             walsh_hadamard_blocks(weights, b).map_err(|e| e.to_string())?;
-            apply_rule(inner, weights)?;
+            // Rotation mixes input channels, so per-channel calibration no longer applies.
+            let rotated = ApplyContext {
+                calibration: None,
+                ..*ctx
+            };
+            apply_rule(inner, weights, &rotated)?;
             // The normalized Hadamard matrix is its own inverse.
             walsh_hadamard_blocks(weights, b).map_err(|e| e.to_string())?;
         }
@@ -699,6 +746,63 @@ mod tests {
         }
     }
 
+    /// THME-3010: a data-needing rule gets everything through `ApplyContext`, testable with a
+    /// toy codec and no inference code; missing pieces are reported, not defaulted.
+    #[test]
+    fn activation_aware_rule_runs_through_the_apply_context() {
+        use crate::transform::awq::ChannelStats;
+        let rule = AlgorithmDefinition {
+            rule: TransformationRule::ActivationAware {
+                format: "grid".into(),
+                alpha_grid: vec![0.0, 0.5, 1.0],
+            },
+            ..AlgorithmRegistry::new()
+                .get("thme.awq_q4_0")
+                .unwrap()
+                .clone()
+        };
+        // Toy codec: round to a 0.25 grid; it records the format name it was asked for.
+        let asked = std::cell::RefCell::new(String::new());
+        let round = |v: &mut [f32], name: &str| -> Result<(), String> {
+            *asked.borrow_mut() = name.to_string();
+            v.iter_mut().for_each(|x| *x = (*x * 4.0).round() / 4.0);
+            Ok(())
+        };
+        let mut mean_abs = vec![0.05f32; 8];
+        mean_abs[2] = 2.0;
+        let stats = ChannelStats {
+            rms: mean_abs.clone(),
+            mean_abs,
+        };
+        let w: Vec<f32> = (0..32)
+            .map(|i| ((i * 7 % 32) as f32 - 15.5) / 20.0)
+            .collect();
+        let ctx = ApplyContext {
+            row_width: Some(8),
+            calibration: Some(&stats),
+            round: Some(&round),
+        };
+        let mut out = w.clone();
+        rule.apply_with(&mut out, &ctx).unwrap();
+        assert_eq!(*asked.borrow(), "grid");
+        assert_ne!(out, w);
+
+        let no_stats = ApplyContext {
+            calibration: None,
+            ..ctx
+        };
+        assert!(rule
+            .apply_with(&mut w.clone(), &no_stats)
+            .unwrap_err()
+            .contains("--calibration"));
+        let no_codec = ApplyContext { round: None, ..ctx };
+        assert!(rule
+            .apply_with(&mut w.clone(), &no_codec)
+            .unwrap_err()
+            .contains("codec"));
+        assert!(rule.apply_to_weights(&mut w.clone()).is_err());
+    }
+
     /// The zero band is in scaled units (w / gamma), like BitNet b1.58 round-and-clamp:
     /// with band 0.5 the rule must agree with `MatrixMath::discretize_bitnet_ternary`.
     #[test]
@@ -708,7 +812,7 @@ mod tests {
             zero_band: 0.5,
         };
         let mut w = vec![1.0f32, -1.0, 0.2, -0.2]; // mean |w| = 0.6; scaled +-1.67, +-0.33
-        apply_rule(&rule, &mut w).unwrap();
+        apply_rule(&rule, &mut w, &ApplyContext::default()).unwrap();
         assert_eq!(w, vec![0.6, -0.6, 0.0, 0.0]);
 
         let weights: Vec<f32> = (0..64)
@@ -716,7 +820,7 @@ mod tests {
             .collect();
         let (codes, gamma, _) = crate::transform::MatrixMath::discretize_bitnet_ternary(&weights);
         let mut via_rule = weights.clone();
-        apply_rule(&rule, &mut via_rule).unwrap();
+        apply_rule(&rule, &mut via_rule, &ApplyContext::default()).unwrap();
         let expected: Vec<f32> = codes.iter().map(|&c| f32::from(c) * gamma).collect();
         assert_eq!(via_rule, expected);
     }
@@ -749,6 +853,6 @@ mod tests {
             }),
         };
         let mut w = vec![0.1; 96];
-        assert!(apply_rule(&rule, &mut w).is_err());
+        assert!(apply_rule(&rule, &mut w, &ApplyContext::default()).is_err());
     }
 }

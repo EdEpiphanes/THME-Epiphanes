@@ -59,6 +59,7 @@ cargo test
   - Release GUI binary (`thme-gui`): <= 15 MB.
   - Release CLI binary (`thme` / `llm-tweaker`): <= 10 MB.
 - **Dependencies**: Pure Rust wherever feasible; avoid heavy C/C++ runtimes or external dynamic linking requirements.
+- **Vocabulary**: Use the terms defined in [CONTEXT.md](CONTEXT.md) in code, docs and reports (for example *quality gate* and *criterion*, never a bare "gate"; *nominal* vs *measured* bits per weight).
 - **Process**: Follow [docs/WORKFLOW.md](docs/WORKFLOW.md). Work starts from a ticket in BACKLOG.md, lands through a pull request using the template, and merges only when every blocking CI gate passes (hygiene, fmt/clippy on the pinned toolchain, tests on three OSes, MSRV, measured-claims regeneration, cargo-deny).
 
 ---

@@ -8,11 +8,13 @@
 //! `sum_o sum_j rms_j^2 (W_oj - W'_oj)^2` (the expected output error for inputs with
 //! per-channel rms `rms_j`), and the best alpha is kept. alpha = 0 is plain rounding, so the
 //! result is never worse than plain rounding under that error.
+//!
+//! The block format's rounding is passed in by the caller, so this module does not depend
+//! on any codec; the inference path supplies THME's own encoders and decoders.
 
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 
-use super::weights::fake_quantize;
 use crate::ir::TensorFormat;
 
 /// Tensor metadata key holding a tensor's calibration statistics (JSON `ChannelStats`),
@@ -55,13 +57,14 @@ pub fn weighted_error(original: &[f32], rounded: &[f32], rms: &[f32]) -> f64 {
         .sum()
 }
 
-/// Replaces `values` (row-major `[out][in_dim]`) by their activation-aware rounding in
-/// `format`; returns the chosen alpha.
+/// Replaces `values` (row-major `[out][in_dim]`) by their activation-aware rounding, where
+/// `round` replaces a slice by what it becomes after storage in the target format; returns
+/// the chosen alpha.
 pub fn activation_aware_quantize(
     values: &mut [f32],
     in_dim: usize,
     stats: &ChannelStats,
-    format: &TensorFormat,
+    round: &dyn Fn(&mut [f32]) -> Result<()>,
     alpha_grid: &[f32],
 ) -> Result<f32> {
     if in_dim == 0 || !values.len().is_multiple_of(in_dim) {
@@ -99,8 +102,7 @@ pub fn activation_aware_quantize(
             .chunks_exact(in_dim)
             .flat_map(|row| row.iter().zip(&scales).map(|(w, s)| w * s))
             .collect();
-        fake_quantize(&mut scaled, format)
-            .with_context(|| format!("{} rounding failed", format.display_name()))?;
+        round(&mut scaled).context("rounding in the target format failed")?;
         for row in scaled.chunks_exact_mut(in_dim) {
             for (w, s) in row.iter_mut().zip(&scales) {
                 *w /= s;
@@ -119,6 +121,11 @@ pub fn activation_aware_quantize(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::inference::fake_quantize;
+
+    fn rounder(format: TensorFormat) -> impl Fn(&mut [f32]) -> Result<()> {
+        move |v: &mut [f32]| fake_quantize(v, &format)
+    }
 
     /// 4 rows x 64 inputs; channel 3 carries activations 50x larger than the rest.
     fn salient() -> (Vec<f32>, ChannelStats) {
@@ -146,7 +153,9 @@ mod tests {
             let mut plain = weights.clone();
             fake_quantize(&mut plain, &format).unwrap();
             let mut aware = weights.clone();
-            let alpha = activation_aware_quantize(&mut aware, 64, &stats, &format, &grid).unwrap();
+            let alpha =
+                activation_aware_quantize(&mut aware, 64, &stats, &rounder(format.clone()), &grid)
+                    .unwrap();
             let e_plain = weighted_error(&weights, &plain, &stats.rms);
             let e_aware = weighted_error(&weights, &aware, &stats.rms);
             assert!(e_aware <= e_plain, "{format:?}: {e_aware} > {e_plain}");
@@ -157,7 +166,14 @@ mod tests {
         }
         // alpha = 0 alone is exactly plain rounding.
         let mut only_zero = weights.clone();
-        activation_aware_quantize(&mut only_zero, 64, &stats, &TensorFormat::Q4_0, &[0.0]).unwrap();
+        activation_aware_quantize(
+            &mut only_zero,
+            64,
+            &stats,
+            &rounder(TensorFormat::Q4_0),
+            &[0.0],
+        )
+        .unwrap();
         let mut plain = weights.clone();
         fake_quantize(&mut plain, &TensorFormat::Q4_0).unwrap();
         let close = only_zero
@@ -170,13 +186,22 @@ mod tests {
     #[test]
     fn bad_shapes_and_formats_are_errors() {
         let (mut weights, stats) = salient();
-        assert!(
-            activation_aware_quantize(&mut weights, 60, &stats, &TensorFormat::Q4_0, &[0.5])
-                .is_err()
-        );
-        assert!(
-            activation_aware_quantize(&mut weights, 64, &stats, &TensorFormat::Q4_0, &[]).is_err()
-        );
+        assert!(activation_aware_quantize(
+            &mut weights,
+            60,
+            &stats,
+            &rounder(TensorFormat::Q4_0),
+            &[0.5]
+        )
+        .is_err());
+        assert!(activation_aware_quantize(
+            &mut weights,
+            64,
+            &stats,
+            &rounder(TensorFormat::Q4_0),
+            &[]
+        )
+        .is_err());
         assert!(parse_format("q4_k").is_ok());
         assert!(parse_format("Q3_K").is_err());
     }

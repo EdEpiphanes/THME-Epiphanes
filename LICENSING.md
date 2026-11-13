@@ -1,8 +1,8 @@
 # Licensing
 
-THME is dual-licensed by Epiphanes. You can use it under the open-source **GNU Affero General
-Public License v3.0** (AGPL-3.0-only), or buy a **commercial license** that removes the AGPL's
-obligations.
+THME is open source under the **GNU Affero General Public License v3.0** (AGPL-3.0-only).
+Epiphanes plans to offer a **commercial license** that removes the AGPL's obligations in a later
+release; it is **not available yet** (see [Commercial license](#commercial-license)).
 
 ## Which license do I need?
 
@@ -11,21 +11,27 @@ obligations.
 | Use THME for research, study, personal projects or internal work | AGPL-3.0, free |
 | Modify THME and share the modified source under the AGPL | AGPL-3.0, free |
 | Run a modified THME as a network service **and publish your changes** under the AGPL | AGPL-3.0, free |
-| Ship THME, or a product built on it, **without releasing your source code** | Commercial |
-| Offer a hosted or managed THME service **without publishing your modifications** | Commercial |
-| Embed THME in proprietary software or hardware | Commercial |
+| Ship THME, or a product built on it, **without releasing your source code** | Commercial (planned) |
+| Offer a hosted or managed THME service **without publishing your modifications** | Commercial (planned) |
+| Embed THME in proprietary software or hardware | Commercial (planned) |
 
 The AGPL's key condition (section 13) is that anyone who lets users interact with a modified
 version over a network must offer those users the complete corresponding source code. If that
-does not work for your business, the commercial license is for you.
+does not work for your business, the planned commercial license is meant for you.
 
 ## Commercial license
+
+**Status: not yet offered.** THME is being built as open-source software and tools first. A
+commercial release is planned once that work is complete; its version and timing are still to
+be decided. Until then no commercial right, warranty or support is offered beyond the
+AGPL-3.0, and the terms below describe the intended license, which will be reviewed by a lawyer
+before it is offered.
 
 A commercial license grants the right to use, modify, embed and distribute THME, and to offer
 it as a service, without the AGPL's source-disclosure and copyleft obligations. Terms (seats,
 deployment scope, support and updates) are agreed per customer.
 
-To ask about a commercial license, hosted service or trial, contact Epiphanes through
+To register interest in a future commercial license, hosted service or trial, contact Epiphanes through
 [github.com/EdEpiphanes](https://github.com/EdEpiphanes).
 
 ## Earlier versions

@@ -103,6 +103,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `docs/research/THME_measured_findings_2026-11.md` and `docs/subsystems.md`.
 
 ### Changed
+- BYOA rules receive calibration statistics, row width and the format codec through one
+  `ApplyContext` (THME-3010); the AWQ special case in `apply_selected_format` is gone and AWQ takes
+  its rounding as a parameter (`transform::awq`). Behaviour and AWQ tests unchanged.
+- `CONTEXT.md` glossary of project terms (evidence levels, quality gate and criterion, nominal vs
+  measured bits per weight, solvers); AGENTS.md points to it.
+- Licensing: THME is AGPL-3.0-only now; a commercial license is planned for a later release and
+  is not offered yet (LICENSING.md, CONTRIBUTING.md, README).
 - One absmean-ternary quantizer, `engine::numfmt` (THME-3006): `MatrixMath`, the BitNet packer and
   the BYOA `AbsmeanTernary` rule call it. The GGML `TQ1_0` encoder keeps its own MSE-optimal path.
 - One Walsh-Hadamard transform, `engine::basis` (THME-3004): the three copies in

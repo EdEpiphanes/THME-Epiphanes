@@ -75,7 +75,7 @@ pub struct EvaluateArgs {
 
 /// Attaches each tensor's calibration statistics as metadata; returns how many were attached.
 pub fn attach_calibration(model: &mut ModelIR, path: &Path) -> Result<usize> {
-    use crate::inference::awq::{ChannelStats, CALIBRATION_METADATA_KEY};
+    use crate::transform::awq::{ChannelStats, CALIBRATION_METADATA_KEY};
     let file = crate::inference::CalibrationFile::load(path)?;
     let mut attached = 0;
     for tensor in &mut model.tensors {
