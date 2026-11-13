@@ -145,6 +145,7 @@ mod tests {
             report: dir.path().join("report.json"),
             allow_partial: false,
             algorithms: Vec::new(),
+            artifact: None,
         })
         .unwrap();
         let measured = report["evaluation"]["variants"][1]["perplexity"]

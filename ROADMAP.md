@@ -120,7 +120,7 @@ SmolLM-135M, measured from the written file.
 | v0.2.2.6 | Randomized Hadamard rotation of weight inputs (QuaRot-style), measured with and without |
 | v0.2.2.7 | SmoothQuant-style scale migration for activation outliers |
 | v0.2.2.8 | Format compatibility checks against llama.cpp on exported files |
-| v0.2.2.9 | Measured artifact size, including scales and metadata, in every report |
+| v0.2.2.9 | Measured artifact size, including scales and metadata, in every report. **Done**: `thme evaluate` and `thme search` write the candidate as a per-tensor GGUF and report `export.artifact_bytes` beside the nominal estimate (`--artifact` keeps the file); candidates the exporter cannot write are reported as not measured, with the reason |
 
 ## v0.2.3 — Recovery and distillation
 
