@@ -261,7 +261,7 @@ closes it.
 - **Milestone**: v0.2.7 · **Roadmap**: v0.2.7.5, v0.2.7.6 · **Priority**: p1 · **Area**: security · **Type**: feature · **Status**: in progress
 - **Problem**: Remote-code models, plugins (dossier L.4) and benchmark code (R.4) need to run isolated.
 - **Done means**: Design doc first: separate process, no network, file access limited to a work folder, time and memory caps, per-OS mechanism; then an implementation with escape tests.
-- **Progress**: design done ([docs/sandbox.md](docs/sandbox.md)). Implementation waits for owner approval of the proposed dependencies (`landlock`, `seccompiler`, `windows-sys`).
+- **Progress**: design done ([docs/sandbox.md](docs/sandbox.md)); dependencies approved by the owner. Windows backend done with 15 escape tests; Linux and macOS backends next.
 
 ### [THME-3021] Guardrail detection and evaluation (read-only)
 
@@ -280,6 +280,18 @@ closes it.
 - **Milestone**: v0.2.8 · **Roadmap**: v0.2.8.2 · **Priority**: p1 · **Area**: quality · **Type**: feature · **Status**: done
 - **Problem**: Dossier R.4 and WP31: benchmarks must be declarative data with one result format, so runs are reproducible and intervals and paired tests can be computed without re-running.
 - **Done means**: Task file (dataset path and hash, split, licence, prompt template, extraction, metric) and result record (every Table R2 field, per-item results) with strict validation; a folder registry; `thme bench list/validate/verify-dataset`; tests show malformed files are refused and a record round-trips.
+
+### [THME-3025] Official THME container image
+
+- **Milestone**: v0.2.7 · **Roadmap**: v0.2.7.9 · **Priority**: p2 · **Area**: release · **Type**: feature · **Status**: triage
+- **Problem**: Servers, CI and reproducible runs want THME without a local Rust toolchain. Containerising THME is not a sandbox: untrusted code run by THME would share its container.
+- **Done means**: A minimal image with the CLI only, built in the release workflow, pinned by digest, signed like the release archives, with a smoke test; docs say it does not replace `thme sandbox`.
+
+### [THME-3026] Docker as an optional sandbox backend
+
+- **Milestone**: v0.2.7 · **Roadmap**: v0.2.7.6 · **Priority**: p2 · **Area**: security · **Type**: feature · **Status**: triage
+- **Problem**: Some hosts lack the native layers (old Linux kernels), and some users want a VM boundary through Docker Desktop. Docker must stay optional.
+- **Done means**: `sandbox::run` can use Docker when asked and present: `--network none`, read-only root, `--cap-drop ALL`, `no-new-privileges`, memory, CPU and process limits, only the work folder mounted; it passes the same escape tests; the native backend stays the default.
 
 ### [THME-3023] Re-measure reports affected by the FP16 rounding fix
 

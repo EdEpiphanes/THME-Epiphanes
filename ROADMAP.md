@@ -67,6 +67,7 @@ flowchart LR
 | Number formats (THME-3006) | `engine::minifloat` (FP16, BF16, FP8 E4M3/E5M2, nearest-even) and integer, sign, codebook, phase quantizers; fixed an FP16 rounding bug in every block encoder (THME-3023) | Tested: every FP16 code, every tie in four formats |
 | SPDX headers (THME-3005) | `AGPL-3.0-only` header on all 168 source files; `scripts/spdx.py --check` in CI | Tested in CI |
 | Signed `.epiph` (THME-3019) | Minisign signature over the manifest; `thme epiph sign`, `verify --require-signature`; Epiphanes key by default | Tested: tamper, wrong key, broken trailer |
+| Sandbox on Windows (THME-3020, part) | `thme sandbox check/run`: AppContainer and job object, fail closed; Linux and macOS refuse until their backends land | Tested: 15 escape tests (files, links, network and loopback, memory, CPU, wall, processes, output, leftovers, environment, other processes, allowed actions, parallel runs) |
 | Benchmark registry (THME-3024) | `src/bench`: strict task files and result records with every Table R2 field; `thme bench list/validate/verify-dataset` | Tested: malformed files refused, records round-trip, record-task mismatch caught |
 | Sandbox design (THME-3020, design part) | [docs/sandbox.md](docs/sandbox.md): threat model, one fail-closed interface, layers per OS, 13 escape tests, dependency proposal | Design only; nothing built |
 | No-panic rule, GUI split, glossary | Compiler-enforced; Studio tabs as modules; `CONTEXT.md` | Tested |
@@ -75,7 +76,7 @@ flowchart LR
 
 | Track | Item | Status | Depends on |
 | :--- | :--- | :--- | :--- |
-| Security | **Sandbox implementation** (THME-3020, v0.2.7.6): escape tests on three OSes | Blocked | Owner approval of `landlock`, `seccompiler`, `windows-sys` |
+| Security | **Sandbox implementation** (THME-3020, v0.2.7.6): Windows done; Linux (Landlock, seccomp) and macOS (Seatbelt) next | On track | Dependencies approved |
 | Quality and evidence | **Benchmark runner and metrics** (v0.2.8.3-4): imported mode, resume, metric library; native mode on synthetic models | Not started | Benchmark registry |
 
 ### Next: planned
@@ -83,6 +84,7 @@ flowchart LR
 | Track | Item | Depends on |
 | :--- | :--- | :--- |
 | Security | Scanner for compressed pickles, ONNX, Keras, NumPy (THME-3022); scan on import (v0.2.7.3) | Scanner v1 |
+| Security | Docker as an optional sandbox backend (THME-3026); signed THME container image (THME-3025) | Sandbox on Linux |
 | Quality and evidence | Statistics and three-state gate (dossier WP34-35); claim register (THME-3000); versioned schemas (THME-3009) | Benchmark runner |
 | Engine | Transport and Sinkhorn (WP4), ODE steppers (WP6), dependency-free SVG visual engine (WP9) | Engine core |
 | Formats and calibration | GPTQ-style rounding (THME-2205); llama.cpp compatibility check on synthetic files (THME-2208) | Calibration |

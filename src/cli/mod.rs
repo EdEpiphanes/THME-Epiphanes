@@ -13,6 +13,7 @@ pub mod plan;
 pub mod profile;
 pub mod report;
 pub mod roofline;
+pub mod sandbox;
 pub mod scan;
 pub mod search;
 pub mod speculate;
@@ -91,6 +92,9 @@ pub enum Commands {
     /// Benchmark registry: list and check task files and result records
     Bench(bench::BenchArgs),
 
+    /// Developer sandbox: run untrusted code with no network and only a work folder
+    Sandbox(sandbox::SandboxArgs),
+
     /// Generate PyTorch / CUDA fine-tuning scripts or Hugging Face configurations
     Interop(interop::InteropArgs),
 
@@ -123,6 +127,7 @@ pub fn run() -> Result<()> {
         Commands::Epiph(args) => epiph::execute(args),
         Commands::Scan(args) => scan::execute(args),
         Commands::Bench(args) => bench::execute(args),
+        Commands::Sandbox(args) => sandbox::execute(args),
         Commands::Interop(args) => interop::execute(args),
         Commands::Mcp(args) => mcp::execute(args),
         Commands::CoSurgery(args) => co_surgery::execute(args),

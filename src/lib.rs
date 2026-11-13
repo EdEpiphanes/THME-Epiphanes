@@ -28,6 +28,7 @@ pub mod parser;
 pub mod profiling;
 pub mod quality;
 pub mod report;
+pub mod sandbox;
 pub mod scan;
 pub mod speculative;
 pub mod surgery;

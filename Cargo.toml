@@ -55,6 +55,21 @@ eframe = { version = "0.31", default-features = true }
 rfd = "0.15"
 minisign = "0.10.0"
 
+# Developer sandbox (docs/sandbox.md): OS isolation layers, approved by the owner.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Security_Isolation",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_JobObjects",
+    "Win32_System_Pipes",
+    "Win32_System_SystemServices",
+    "Win32_System_Threading",
+] }
+
 [dev-dependencies]
 tempfile = "3.17"
 # Host description in examples/production_verification.rs only.

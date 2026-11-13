@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **Developer sandbox on Windows** (THME-3020, v0.2.7.6): `thme sandbox check` and `thme sandbox run`
+  start a program in a per-run AppContainer with no capabilities inside a job object: no
+  network (loopback included), writes only in the work folder, caps on memory, CPU time,
+  processes, file size and output, nothing inherited, nothing left running. It fails closed:
+  Linux and macOS refuse to run anything until their backends land. 15 escape tests.
+  Adds `windows-sys` (already in the dependency tree) as a direct Windows-only dependency.
 - **Benchmark registry** (THME-3024, v0.2.8.2): `src/bench` defines task files (dataset hash,
   split, licence, prompt template, extraction, metric) and result records with every field of
   dossier Table R2, refuses malformed or inconsistent files, and loads a folder of tasks.

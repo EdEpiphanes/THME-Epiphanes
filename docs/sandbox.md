@@ -1,7 +1,8 @@
 # Developer sandbox: design
 
-Status: **design** (v0.2.7.5, THME-3020). Nothing here is built yet; the implementation and its
-escape tests are v0.2.7.6. This document is the contract the implementation must meet.
+Status: design done (v0.2.7.5). Implementation (v0.2.7.6, THME-3020): **Windows built**, with
+every escape test passing (`tests/sandbox_escape.rs`); Linux and macOS refuse to run anything
+until their backends land. This document is the contract each backend must meet.
 
 ## Why
 
@@ -55,7 +56,7 @@ pub struct Policy {
     pub max_output_bytes: u64,      // stdout and stderr, each
 }
 
-pub enum Ended { Exited(i32), Signalled(i32), TimeLimit, CpuLimit, MemoryLimit, OutputLimit }
+pub enum Ended { Exited(i32), Signalled(i32), TimeLimit, CpuLimit, MemoryLimit, OutputLimit, ProcessLimit }
 
 pub struct Outcome { pub ended: Ended, pub stdout: Vec<u8>, pub stderr: Vec<u8>, pub wall: Duration }
 
@@ -92,7 +93,7 @@ fails, the layer counts as unsupported and `run` refuses.
 | Threat | Layer |
 | :--- | :--- |
 | Files (1, 2) | Landlock ruleset: read-only paths, read-write `work_dir`, nothing else. ABI 1 (Linux 5.13) minimum; link and rename rules need ABI 2 (5.19); refused below that |
-| Network (3) | seccomp filter: `socket()` refused for every family except `AF_UNIX`. Landlock ABI 4 (6.7) TCP rules added on top where available. Abstract Unix sockets scoped with Landlock ABI 6 (6.12); below 6.12 `connect()` to abstract addresses is refused by seccomp |
+| Network (3) | seccomp filter: `socket()` refused for every family, Unix sockets included (`socketpair()` still works for pipes between the program's own processes); `io_uring` refused, since its socket operations would bypass the filter. Landlock ABI 4 (6.7) TCP rules added on top where available. seccomp cannot read a socket address, so blocking `socket()` itself is what closes Unix and abstract sockets |
 | Exhaustion (4) | `setrlimit`: `RLIMIT_AS`, `RLIMIT_CPU`, `RLIMIT_NPROC`, `RLIMIT_FSIZE`, `RLIMIT_CORE = 0`; parent caps pipe reads |
 | Outliving (5) | New process group and session; `PR_SET_PDEATHSIG`; parent kills the group on return. A cgroup is used when one is delegated to the user, otherwise the process group |
 | Environment (6) | Empty environment plus `Policy::env` |
@@ -106,9 +107,9 @@ are never the only one.
 
 | Threat | Layer |
 | :--- | :--- |
-| Files (1, 2) | AppContainer: a per-run container profile with no capabilities. Access is granted by ACL to `work_dir` (read-write) and each read-only path, and removed afterwards |
-| Network (3) | AppContainer without network capabilities. Loopback behaviour to be confirmed by the escape test; loopback exemptions are never added |
-| Exhaustion (4) | Job object: process memory limit, job CPU time limit, active process limit; parent caps pipe reads. File size: no per-file cap in the OS, so `max_file_bytes` is enforced as a quota by the parent polling `work_dir` (escape test decides whether that is good enough) |
+| Files (1, 2) | AppContainer: a per-run container profile with no capabilities. Access is granted by ACL to `work_dir` (read-write), the program and each read-only path; only the run's own entries are added and revoked, so parallel runs do not disturb each other. Windows also gives the container a private folder (`LOCALAPPDATA`, `TEMP` and `TMP` point there), deleted with the profile |
+| Network (3) | AppContainer without network capabilities; loopback exemptions are never added. Escape test E4: TCP, UDP and DNS are blocked, outward and to loopback listeners |
+| Exhaustion (4) | Job object: memory limit for the whole job, CPU time limit (user-mode time, so a run can use somewhat more wall time than `cpu_time` before it is stopped), active process limit; parent caps pipe reads. File size: no per-file cap in the OS, so the parent checks `work_dir` every 50 ms and stops the run when a file it wrote passes `max_file_bytes` |
 | Outliving (5) | Job object with kill-on-job-close; the child is created suspended, assigned to the job, then resumed, so no process escapes the job |
 | Environment (6) | Explicit environment block |
 | Other processes (7) | AppContainer token (low integrity, no access to other processes' objects) |
@@ -141,10 +142,10 @@ run on a host fails, it is not skipped.
 | E2 | Write outside `work_dir`; create a symbolic link and a hard link in `work_dir` pointing out, then write through each | Denied, target unchanged |
 | E3 | Rename a file out of `work_dir`; `..` in paths | Denied |
 | E4 | TCP and UDP to `127.0.0.1` (a listener started by the test) and to a routable address; DNS lookup | Each fails; the listener sees no connection |
-| E5 | Connect to a Unix socket and an abstract socket the test opened outside | Denied |
+| E5 | Connect to a Unix socket and an abstract socket the test opened outside (Linux, macOS) | Denied |
 | E6 | Allocate past `memory_bytes` | `MemoryLimit` |
 | E7 | Spin past `cpu_time`; sleep past `wall_time` | `CpuLimit`, `TimeLimit` |
-| E8 | Fork until refused | Process limit hit, run ends, no process left |
+| E8 | Fork until refused | `ProcessLimit`, no process left |
 | E9 | Write a file past `max_file_bytes`; print past `max_output_bytes` | Write fails or `OutputLimit` |
 | E10 | Start a detached grandchild that outlives the probe | Gone when `run` returns |
 | E11 | Read an environment variable set in the parent | Not present |
