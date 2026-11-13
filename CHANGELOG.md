@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **The `.epiph` format** (THME-3012): an open, verifiable single-file container for a model and
+  everything known about it (description, recipe, provenance, quality results with evidence
+  labels, calibration statistics, lineage, annotations). `thme epiph pack` / `thme epiph verify`;
+  every command reads `.epiph` through the importer, and `thme export` converts it to GGUF or
+  SafeTensors. Spec: `docs/formats/epiph-v1.md`.
 - **Exact allocator** (THME-3002, dossier WP2): `engine::alloc::min_cost_choice` solves the
   multiple-choice knapsack by dynamic programming and matches exhaustive search;
   `thme search --solver dp [--dp-grid N]` uses it on the measured cost table. Greedy stays the

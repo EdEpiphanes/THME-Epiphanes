@@ -25,6 +25,9 @@ impl ModelImporter {
             if ext == "gguf" {
                 return GgufParser::parse_from_file(p);
             }
+            if ext == crate::epiph::EXTENSION {
+                return crate::epiph::read(p).map(|(model, _)| model);
+            }
         }
         Self::import_from_dir(p)
     }

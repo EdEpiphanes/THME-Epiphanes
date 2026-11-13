@@ -21,6 +21,13 @@ const TQ1_BLOCK_BYTES: usize = 54;
 
 /// Reads a file-backed tensor payload and decodes it to `f32` values.
 pub fn read_tensor_f32(tensor: &TensorIR) -> Result<Vec<f32>> {
+    let bytes = read_tensor_bytes(tensor)?;
+    decode_payload(&bytes, &tensor.original_dtype, tensor.numel)
+        .with_context(|| format!("Failed to decode tensor '{}'", tensor.name))
+}
+
+/// Reads a tensor's raw payload bytes exactly as stored in its source file.
+pub fn read_tensor_bytes(tensor: &TensorIR) -> Result<Vec<u8>> {
     let source = tensor.source.as_ref().with_context(|| {
         format!(
             "Tensor '{}' has no file-backed payload; import the model from disk first",
@@ -36,8 +43,7 @@ pub fn read_tensor_f32(tensor: &TensorIR) -> Result<Vec<f32>> {
     let mut bytes = vec![0u8; len];
     file.read_exact(&mut bytes)
         .with_context(|| format!("Payload of tensor '{}' is truncated", tensor.name))?;
-    decode_payload(&bytes, &tensor.original_dtype, tensor.numel)
-        .with_context(|| format!("Failed to decode tensor '{}'", tensor.name))
+    Ok(bytes)
 }
 
 /// Decodes a raw payload of `numel` elements stored as `dtype` into `f32` values.

@@ -18,6 +18,7 @@ models/*/
 *.pt
 *.onnx
 *.thme
+*.epiph
 
 # Transient outputs and generated reports
 optimization_plan.json
