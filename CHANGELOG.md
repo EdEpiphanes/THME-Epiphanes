@@ -220,6 +220,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   screenshots of every Studio tab under `assets/screenshots/`.
 - Measured reports for SmolLM-135M and Pythia-14M under `docs/benchmarks/`.
 - `docs/research/THME_measured_findings_2026-11.md` and `docs/subsystems.md`.
+- **ODE steppers** (dossier WP6, ROADMAP v0.2.5.6): `src/engine/ode.rs` adds `FixedMethod::Rk4`, the embedded Dormand-Prince 5(4) pair `dopri5_step` with step control, and the adaptive `integrate_adaptive` driver; Euler, RK4 and Dormand-Prince steppers are error-order tested on the decay and oscillator equations. No measured figure.
+- **Optimal transport** (dossier WP4, ROADMAP v0.2.5.4): `src/engine/transport.rs` adds the northwest-corner start, plain-domain and log-domain Sinkhorn, and oracle tests (brute-force OT over the permutation polytope, sorted 1-D cost); Sinkhorn gaps are bounded by epsilon·ln(n²), mass is conserved, and the log-domain plan agrees with the plain domain. No measured figure.
 
 ### Changed
 - **Developer sandbox implementation reserved for the commercial version** (THME-3020). The design

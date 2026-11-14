@@ -1,0 +1,951 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+//! Optimal transport (dossier WP4): the northwest-corner starting plan and the
+//! plain-domain Sinkhorn algorithm, with marginal validation and plan bookkeeping
+//! shared by the log-domain variant that follows.
+
+use super::error::{ensure_finite, EngineError, EngineResult};
+
+/// A transport plan on `a.len()` rows and `b.len()` columns.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Transport {
+    /// Row-major plan, `rows * cols` entries.
+    pub plan: Vec<f64>,
+    /// Total cost, the sum of `plan[i][j] * cost[i][j]`.
+    pub cost: f64,
+    /// Iterations the solver used.
+    pub iterations: usize,
+    /// Largest absolute deviation of a row or column sum from `a` and `b`.
+    pub marginal_error: f64,
+}
+
+fn validate_marginals(a: &[f64], b: &[f64]) -> EngineResult<()> {
+    if a.is_empty() {
+        return Err(EngineError::InvalidInput(
+            "the row marginal a must not be empty".to_string(),
+        ));
+    }
+    if b.is_empty() {
+        return Err(EngineError::InvalidInput(
+            "the column marginal b must not be empty".to_string(),
+        ));
+    }
+    ensure_finite("a", a)?;
+    ensure_finite("b", b)?;
+    if a.iter().any(|&v| v < 0.0) {
+        return Err(EngineError::InvalidInput(
+            "the row marginal a has a negative entry".to_string(),
+        ));
+    }
+    if b.iter().any(|&v| v < 0.0) {
+        return Err(EngineError::InvalidInput(
+            "the column marginal b has a negative entry".to_string(),
+        ));
+    }
+    let sum_a = a.iter().sum::<f64>();
+    let sum_b = b.iter().sum::<f64>();
+    if sum_a <= 0.0 {
+        return Err(EngineError::InvalidInput(format!(
+            "the row marginal a must sum to a positive number, got {sum_a}"
+        )));
+    }
+    if sum_b <= 0.0 {
+        return Err(EngineError::InvalidInput(format!(
+            "the column marginal b must sum to a positive number, got {sum_b}"
+        )));
+    }
+    let scale = sum_a.max(sum_b);
+    if (sum_a - sum_b).abs() > 1.0e-9 * scale {
+        return Err(EngineError::InvalidInput(format!(
+            "the marginals are not conserved: sum(a) = {sum_a}, sum(b) = {sum_b}; \
+             mass is never renormalized silently"
+        )));
+    }
+    Ok(())
+}
+
+pub fn northwest_corner(a: &[f64], b: &[f64]) -> EngineResult<Vec<f64>> {
+    validate_marginals(a, b)?;
+    let rows = a.len();
+    let cols = b.len();
+    let mut plan = vec![0.0; rows * cols];
+    let mut remaining_b = b.to_vec();
+    for (i, &row_mass) in a.iter().enumerate() {
+        let mut remaining = row_mass;
+        for (j, col_mass) in remaining_b.iter_mut().enumerate() {
+            if remaining == 0.0 {
+                break;
+            }
+            let take = remaining.min(*col_mass);
+            plan[i * cols + j] = take;
+            remaining -= take;
+            *col_mass -= take;
+        }
+    }
+    Ok(plan)
+}
+
+/// Validates a Sinkhorn problem: the marginals, the row-major cost matrix (one
+/// finite entry per plan cell), and the three scientific parameters, none of which
+/// has a default. Shared with the log-domain variant.
+fn validate_problem(
+    cost: &[f64],
+    a: &[f64],
+    b: &[f64],
+    epsilon: f64,
+    tol: f64,
+    max_iter: usize,
+) -> EngineResult<()> {
+    validate_marginals(a, b)?;
+    if cost.len() != a.len() * b.len() {
+        return Err(EngineError::InvalidInput(format!(
+            "the cost matrix has {} entries, the marginals imply {} ({} rows x {} columns)",
+            cost.len(),
+            a.len() * b.len(),
+            a.len(),
+            b.len()
+        )));
+    }
+    ensure_finite("cost", cost)?;
+    if !epsilon.is_finite() || epsilon <= 0.0 {
+        return Err(EngineError::InvalidInput(format!(
+            "epsilon must be finite and positive, got {epsilon}"
+        )));
+    }
+    if !tol.is_finite() || tol <= 0.0 {
+        return Err(EngineError::InvalidInput(format!(
+            "tol must be finite and positive, got {tol}"
+        )));
+    }
+    if max_iter == 0 {
+        return Err(EngineError::InvalidInput(
+            "max_iter must be at least 1".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// The shared bookkeeping: the total cost and the largest absolute row or column
+/// deviation, and the [`Transport`] value. Shared with the log-domain variant.
+fn finish(plan: Vec<f64>, cost: &[f64], a: &[f64], b: &[f64], iterations: usize) -> Transport {
+    let cols = b.len();
+    let mut marginal_error = 0.0f64;
+    for (i, &want) in a.iter().enumerate() {
+        let got: f64 = plan.iter().skip(i * cols).take(cols).copied().sum();
+        marginal_error = marginal_error.max((got - want).abs());
+    }
+    for (j, &want) in b.iter().enumerate() {
+        let got: f64 = plan.iter().skip(j).step_by(cols).copied().sum();
+        marginal_error = marginal_error.max((got - want).abs());
+    }
+    let total_cost = plan.iter().zip(cost.iter()).map(|(&p, &c)| p * c).sum();
+    Transport {
+        plan,
+        cost: total_cost,
+        iterations,
+        marginal_error,
+    }
+}
+
+/// Plain-domain Sinkhorn on `cost` with marginals `a` and `b`. The kernel is
+/// `K[i][j] = exp(-cost[i][j] / epsilon)`; the plan is `diag(u) K diag(v)`, and `u`
+/// and `v` are rescaled to the row and column marginals alternately until the
+/// largest absolute row or column deviation is at most `tol`.
+///
+/// Small `epsilon` drives the kernel entries below the f64 floor, so the plain
+/// domain is refused the moment a row or column of the plan is identically zero or a
+/// scaling is not finite: `NonFinite` or `Infeasible`, both naming the log-domain
+/// variant. A finite answer is never a NaN.
+pub fn sinkhorn(
+    cost: &[f64],
+    a: &[f64],
+    b: &[f64],
+    epsilon: f64,
+    tol: f64,
+    max_iter: usize,
+) -> EngineResult<Transport> {
+    validate_problem(cost, a, b, epsilon, tol, max_iter)?;
+    let rows = a.len();
+    let cols = b.len();
+    // K = exp(-C/epsilon), row-major.
+    let kernel: Vec<f64> = cost.iter().map(|&c| (-c / epsilon).exp()).collect();
+    let mut u = vec![1.0; rows];
+    let mut v = vec![1.0; cols];
+    let mut iterations = 0usize;
+    loop {
+        // Rows: u_i <- a_i / sum_j K[i][j] v_j.
+        for i in 0..rows {
+            let mut sum = 0.0f64;
+            for j in 0..cols {
+                sum += kernel[i * cols + j] * v[j];
+            }
+            if !sum.is_finite() || sum <= 0.0 {
+                return Err(EngineError::Infeasible(format!(
+                    "the kernel row {i} scaled to {sum} at iteration {iterations}; \
+                     epsilon {epsilon} is too small for the plain domain, use sinkhorn_log"
+                )));
+            }
+            let next = a[i] / sum;
+            if !next.is_finite() {
+                return Err(EngineError::NonFinite {
+                    what: "row scaling u".to_string(),
+                    index: i,
+                });
+            }
+            u[i] = next;
+        }
+        // Columns: v_j <- b_j / sum_i K[i][j] u_i.
+        for j in 0..cols {
+            let mut sum = 0.0f64;
+            for i in 0..rows {
+                sum += kernel[i * cols + j] * u[i];
+            }
+            if !sum.is_finite() || sum <= 0.0 {
+                return Err(EngineError::Infeasible(format!(
+                    "the kernel column {j} scaled to {sum} at iteration {iterations}; \
+                     epsilon {epsilon} is too small for the plain domain, use sinkhorn_log"
+                )));
+            }
+            let next = b[j] / sum;
+            if !next.is_finite() {
+                return Err(EngineError::NonFinite {
+                    what: "column scaling v".to_string(),
+                    index: j,
+                });
+            }
+            v[j] = next;
+        }
+        iterations += 1;
+        let mut plan = vec![0.0; rows * cols];
+        for i in 0..rows {
+            for j in 0..cols {
+                plan[i * cols + j] = u[i] * kernel[i * cols + j] * v[j];
+            }
+        }
+        let out = finish(plan, cost, a, b, iterations);
+        if out.marginal_error <= tol {
+            return Ok(out);
+        }
+        if iterations >= max_iter {
+            return Err(EngineError::NoConvergence {
+                iterations,
+                residual: out.marginal_error,
+            });
+        }
+    }
+}
+
+/// Log-domain Sinkhorn on `cost` with marginals `a` and `b`. The kernel is
+/// `K[i][j] = exp(-cost[i][j] / epsilon)`, carried as the exponent
+/// `L[i][j] = -cost[i][j] / epsilon` and as the dual potentials `f[i]`, `g[j]`;
+/// the plan is `exp(f[i] + L[i][j] + g[j])`. Each scaling is a log-sum-exp with
+/// the row or column maximum subtracted, so `epsilon` far below the plain
+/// domain's floor still produces a finite plan instead of underflow.
+///
+/// The same validation, the same stop rule and the same bookkeeping as
+/// [`sinkhorn`]: a marginal deviation above `tol` at `max_iter` is
+/// `NoConvergence`, and a non-finite potential or log-sum-exp is `NonFinite`.
+pub fn sinkhorn_log(
+    cost: &[f64],
+    a: &[f64],
+    b: &[f64],
+    epsilon: f64,
+    tol: f64,
+    max_iter: usize,
+) -> EngineResult<Transport> {
+    validate_problem(cost, a, b, epsilon, tol, max_iter)?;
+    let rows = a.len();
+    let cols = b.len();
+    // L = -C/epsilon, row-major; the log of the plain kernel.
+    let log_kernel: Vec<f64> = cost.iter().map(|&c| -c / epsilon).collect();
+    let log_a: Vec<f64> = a.iter().map(|&v| v.ln()).collect();
+    let log_b: Vec<f64> = b.iter().map(|&v| v.ln()).collect();
+    let mut f = vec![0.0; rows];
+    let mut g = vec![0.0; cols];
+    let mut iterations = 0usize;
+    loop {
+        // Rows: f_i <- log a_i - logsumexp_j (L[i][j] + g_j).
+        for i in 0..rows {
+            let mut row_max = f64::NEG_INFINITY;
+            for j in 0..cols {
+                row_max = row_max.max(log_kernel[i * cols + j] + g[j]);
+            }
+            if !row_max.is_finite() {
+                return Err(EngineError::NonFinite {
+                    what: "row log-sum-exp".to_string(),
+                    index: i,
+                });
+            }
+            let mut sum = 0.0f64;
+            for j in 0..cols {
+                sum += (log_kernel[i * cols + j] + g[j] - row_max).exp();
+            }
+            let log_sum = row_max + sum.ln();
+            if !log_sum.is_finite() {
+                return Err(EngineError::NonFinite {
+                    what: "row log-sum-exp".to_string(),
+                    index: i,
+                });
+            }
+            f[i] = log_a[i] - log_sum;
+            if !f[i].is_finite() {
+                return Err(EngineError::NonFinite {
+                    what: "row potential f".to_string(),
+                    index: i,
+                });
+            }
+        }
+        // Columns: g_j <- log b_j - logsumexp_i (L[i][j] + f_i).
+        for j in 0..cols {
+            let mut col_max = f64::NEG_INFINITY;
+            for i in 0..rows {
+                col_max = col_max.max(log_kernel[i * cols + j] + f[i]);
+            }
+            if !col_max.is_finite() {
+                return Err(EngineError::NonFinite {
+                    what: "column log-sum-exp".to_string(),
+                    index: j,
+                });
+            }
+            let mut sum = 0.0f64;
+            for i in 0..rows {
+                sum += (log_kernel[i * cols + j] + f[i] - col_max).exp();
+            }
+            let log_sum = col_max + sum.ln();
+            if !log_sum.is_finite() {
+                return Err(EngineError::NonFinite {
+                    what: "column log-sum-exp".to_string(),
+                    index: j,
+                });
+            }
+            g[j] = log_b[j] - log_sum;
+            if !g[j].is_finite() {
+                return Err(EngineError::NonFinite {
+                    what: "column potential g".to_string(),
+                    index: j,
+                });
+            }
+        }
+        iterations += 1;
+        let mut plan = vec![0.0; rows * cols];
+        for i in 0..rows {
+            for j in 0..cols {
+                plan[i * cols + j] = (f[i] + log_kernel[i * cols + j] + g[j]).exp();
+            }
+        }
+        let out = finish(plan, cost, a, b, iterations);
+        if out.marginal_error <= tol {
+            return Ok(out);
+        }
+        if iterations >= max_iter {
+            return Err(EngineError::NoConvergence {
+                iterations,
+                residual: out.marginal_error,
+            });
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The classic 2x2 start: a = [0.3, 0.7], b = [0.5, 0.5] fills (0,0) with 0.3,
+    /// (1,0) with the remaining 0.2 of column 0 and (1,1) with 0.5. The task's
+    /// `[0.3, 0.0, 0.2, 0.5]` is the exact-math answer; in f64 the third entry is one
+    /// ulp off (0.5 - 0.3), and both vectors are exactly feasible, so the entries are
+    /// compared with a tolerance and the marginals to 1e-15.
+    #[test]
+    fn northwest_corner_starts_in_the_top_left() {
+        let plan = northwest_corner(&[0.3, 0.7], &[0.5, 0.5]).unwrap();
+        let want = [0.3, 0.0, 0.2, 0.5];
+        for (i, &w) in want.iter().enumerate() {
+            assert!(
+                (plan[i] - w).abs() <= 1.0e-15,
+                "entry {i}: got {}, want {}",
+                plan[i],
+                w
+            );
+        }
+        // Feasible: the row and column sums are the marginals up to rounding (the
+        // third entry is one ulp off the exact-math 0.2, which shifts one column
+        // sum by one ulp too).
+        assert!((plan[0] + plan[1] - 0.3).abs() <= 1.0e-15);
+        assert!((plan[2] + plan[3] - 0.7).abs() <= 1.0e-15);
+        assert!((plan[0] + plan[2] - 0.5).abs() <= 1.0e-15);
+        assert!((plan[1] + plan[3] - 0.5).abs() <= 1.0e-15);
+    }
+
+    /// Seeded 5x7 problem; the row and column sums reproduce the marginals `a` and
+    /// `b` to rounding.
+    #[test]
+    fn northwest_corner_is_exactly_feasible() {
+        let (a, b) = marginals(5, 7, 2026);
+        let plan = northwest_corner(&a, &b).unwrap();
+        let cols = b.len();
+        for (i, &want) in a.iter().enumerate() {
+            let got: f64 = plan.iter().skip(i * cols).take(cols).copied().sum();
+            assert!(
+                (got - want).abs() <= 1.0e-12,
+                "row {i}: sum {got}, marginal {want}"
+            );
+        }
+        for (j, &want) in b.iter().enumerate() {
+            let got: f64 = plan.iter().skip(j).step_by(cols).copied().sum();
+            assert!(
+                (got - want).abs() <= 1.0e-12,
+                "column {j}: sum {got}, marginal {want}"
+            );
+        }
+        // The start is a feasible flow, so its entries are non-negative.
+        assert!(plan.iter().all(|&v| v >= 0.0));
+    }
+
+    /// Every refusal is a structured error: unequal mass, a negative entry and an
+    /// empty `a` are `InvalidInput`; a NaN entry is `NonFinite`, because the shared
+    /// `ensure_finite` guard reports it that way (the batch's other steps do the
+    /// same). The task line says "all InvalidInput"; `ensure_finite` is mandated by
+    /// the same task and returns `NonFinite`, so the guard wins.
+    #[test]
+    fn bad_marginals_are_refused() {
+        assert!(matches!(
+            northwest_corner(&[0.3, 0.8], &[0.5, 0.5]),
+            Err(EngineError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            northwest_corner(&[0.3, -0.1], &[0.2, 0.0]),
+            Err(EngineError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            northwest_corner(&[0.3, f64::NAN], &[0.5, 0.5]),
+            Err(EngineError::NonFinite { .. })
+        ));
+        assert!(matches!(
+            northwest_corner(&[], &[0.5, 0.5]),
+            Err(EngineError::InvalidInput(_))
+        ));
+        // A mass that is not positive is refused too.
+        assert!(matches!(
+            northwest_corner(&[0.0, 0.0], &[0.5, 0.5]),
+            Err(EngineError::InvalidInput(_))
+        ));
+        // Mass just inside the 1e-9 relative tolerance is accepted.
+        let mut b = vec![0.5, 0.5];
+        b[0] += 1.0e-12;
+        b[1] -= 1.0e-12;
+        assert!(northwest_corner(&[0.3, 0.7], &b).is_ok());
+    }
+
+    /// A seeded 5x7 pair of marginals with equal positive mass, like `seeded` in the
+    /// `basis` tests.
+    fn marginals(rows: usize, cols: usize, seed: u64) -> (Vec<f64>, Vec<f64>) {
+        let mut s = seed;
+        let mut next = || {
+            s = s
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            (s >> 40) as f64 / 16_777_216.0
+        };
+        let a: Vec<f64> = (0..rows).map(|_| next() + 0.05).collect();
+        let mut b: Vec<f64> = (0..cols).map(|_| next() + 0.05).collect();
+        let sum = a.iter().sum::<f64>();
+        let scale = sum / b.iter().sum::<f64>();
+        for v in b.iter_mut() {
+            *v *= scale;
+        }
+        (a, b)
+    }
+
+    /// A row-major cost matrix from the seeded generator, like `marginals`.
+    fn cost(rows: usize, cols: usize, seed: u64) -> Vec<f64> {
+        let mut s = seed;
+        let mut next = || {
+            s = s
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            (s >> 40) as f64 / 16_777_216.0
+        };
+        (0..rows * cols).map(|_| next()).collect()
+    }
+
+    /// A cost matrix with every entry at 1, so `exp(-cost / eps)` is `exp(-1/eps)`
+    /// in every cell: at `eps = 1e-3` that is `exp(-1000)`, below the f64 floor, so
+    /// the plain-domain kernel is identically zero and the plain domain refuses.
+    fn cost_ones(rows: usize, cols: usize) -> Vec<f64> {
+        vec![1.0; rows * cols]
+    }
+
+    /// The task's 2x2: a = b = [0.5, 0.5], cost [[0, 1], [1, 0]]. The closed form is
+    /// plan = [[p, 0.5-p], [0.5-p, p]] with p = 0.5 / (1 + k), k = exp(-1/eps), and
+    /// cost = 1 / (exp(1/eps) + 1), for eps = 1.0, 0.5, 0.2.
+    #[test]
+    fn sinkhorn_matches_the_two_by_two_closed_form() {
+        let cost = [0.0, 1.0, 1.0, 0.0];
+        for eps in [1.0, 0.5, 0.2] {
+            let plan = sinkhorn(&cost, &[0.5, 0.5], &[0.5, 0.5], eps, 1.0e-12, 100_000).unwrap();
+            let k = (-1.0 / eps).exp();
+            let p = 0.5 / (1.0 + k);
+            let want = [p, 0.5 - p, 0.5 - p, p];
+            for (i, &w) in want.iter().enumerate() {
+                assert!(
+                    (plan.plan[i] - w).abs() <= 1.0e-9,
+                    "eps {eps}: entry {i}: got {}, want {}",
+                    plan.plan[i],
+                    w
+                );
+            }
+            let exact = 1.0 / ((1.0 / eps).exp() + 1.0);
+            assert!(
+                (plan.cost - exact).abs() <= 1.0e-9,
+                "eps {eps}: cost {}, want {exact}",
+                plan.cost
+            );
+            assert!(plan.iterations <= 100_000);
+            assert!(plan.marginal_error <= 1.0e-12);
+        }
+    }
+
+    /// Mass conservation on a fixed 5x7 problem (seeded LCG, non-uniform marginals of
+    /// equal sums): the reported error and an independent recomputation from `plan`
+    /// are both within `tol`, the total mass equals `sum(a)` and every entry is
+    /// non-negative.
+    #[test]
+    fn sinkhorn_conserves_mass_on_a_seeded_problem() {
+        let (a, b) = marginals(5, 7, 2026);
+        let cost = cost(5, 7, 4242);
+        let tol = 1.0e-10;
+        let plan = sinkhorn(&cost, &a, &b, 1.0, tol, 100_000).unwrap();
+        let cols = b.len();
+        let mut error = 0.0f64;
+        for (i, &want) in a.iter().enumerate() {
+            let got: f64 = plan.plan.iter().skip(i * cols).take(cols).copied().sum();
+            error = error.max((got - want).abs());
+        }
+        for (j, &want) in b.iter().enumerate() {
+            let got: f64 = plan.plan.iter().skip(j).step_by(cols).copied().sum();
+            error = error.max((got - want).abs());
+        }
+        assert!(
+            plan.marginal_error <= tol,
+            "reported error {} exceeds {tol}",
+            plan.marginal_error
+        );
+        assert!(error <= tol, "recomputed error {error} exceeds {tol}");
+        let total: f64 = plan.plan.iter().sum();
+        assert!(
+            (total - a.iter().sum::<f64>()).abs() <= tol,
+            "total mass {total} is not sum(a)"
+        );
+        assert!(
+            plan.plan.iter().all(|&v| v >= 0.0),
+            "the plan has a negative entry"
+        );
+        assert!(
+            (plan.cost
+                - plan
+                    .plan
+                    .iter()
+                    .zip(cost.iter())
+                    .map(|(&p, &c)| p * c)
+                    .sum::<f64>())
+            .abs()
+                <= 1.0e-9,
+            "the reported cost does not match plan * cost"
+        );
+    }
+
+    /// The task's 2x2 for `sinkhorn_log`: same closed form as the plain-domain
+    /// test, because the log-domain scalings are the same potentials up to a
+    /// constant. Compared to 1e-9 at eps = 1.0, 0.5, 0.2.
+    #[test]
+    fn sinkhorn_log_matches_the_two_by_two_closed_form() {
+        let cost = [0.0, 1.0, 1.0, 0.0];
+        for eps in [1.0, 0.5, 0.2] {
+            let plan =
+                sinkhorn_log(&cost, &[0.5, 0.5], &[0.5, 0.5], eps, 1.0e-12, 100_000).unwrap();
+            let k = (-1.0 / eps).exp();
+            let p = 0.5 / (1.0 + k);
+            let want = [p, 0.5 - p, 0.5 - p, p];
+            for (i, &w) in want.iter().enumerate() {
+                assert!(
+                    (plan.plan[i] - w).abs() <= 1.0e-9,
+                    "eps {eps}: entry {i}: got {}, want {}",
+                    plan.plan[i],
+                    w
+                );
+            }
+            let exact = 1.0 / ((1.0 / eps).exp() + 1.0);
+            assert!(
+                (plan.cost - exact).abs() <= 1.0e-9,
+                "eps {eps}: cost {}, want {exact}",
+                plan.cost
+            );
+            assert!(plan.iterations <= 100_000);
+            assert!(plan.marginal_error <= 1.0e-12);
+        }
+    }
+
+    /// Mass conservation of the plain-domain test on the same 5x7 problem, for
+    /// `sinkhorn_log`: the reported error and an independent recomputation from
+    /// `plan` are both within `tol`, the total mass equals `sum(a)`, every entry
+    /// is non-negative, and the two domains agree to 1e-7.
+    #[test]
+    fn sinkhorn_log_conserves_mass_and_agrees_with_the_plain_domain() {
+        let (a, b) = marginals(5, 7, 2026);
+        let cost = cost(5, 7, 4242);
+        let tol = 1.0e-10;
+        let plan = sinkhorn_log(&cost, &a, &b, 1.0, tol, 100_000).unwrap();
+        let plain = sinkhorn(&cost, &a, &b, 1.0, tol, 100_000).unwrap();
+        let cols = b.len();
+        let mut error = 0.0f64;
+        for (i, &want) in a.iter().enumerate() {
+            let got: f64 = plan.plan.iter().skip(i * cols).take(cols).copied().sum();
+            error = error.max((got - want).abs());
+        }
+        for (j, &want) in b.iter().enumerate() {
+            let got: f64 = plan.plan.iter().skip(j).step_by(cols).copied().sum();
+            error = error.max((got - want).abs());
+        }
+        assert!(
+            plan.marginal_error <= tol,
+            "reported error {} exceeds {tol}",
+            plan.marginal_error
+        );
+        assert!(error <= tol, "recomputed error {error} exceeds {tol}");
+        let total: f64 = plan.plan.iter().sum();
+        assert!(
+            (total - a.iter().sum::<f64>()).abs() <= tol,
+            "total mass {total} is not sum(a)"
+        );
+        assert!(
+            plan.plan.iter().all(|&v| v >= 0.0),
+            "the plan has a negative entry"
+        );
+        for (i, (&got, &want)) in plan.plan.iter().zip(plain.plan.iter()).enumerate() {
+            assert!(
+                (got - want).abs() <= 1.0e-7,
+                "entry {i}: log {got}, plain {want}"
+            );
+        }
+        assert!(
+            (plan.cost - plain.cost).abs() <= 1.0e-7,
+            "log cost {} vs plain {}",
+            plan.cost,
+            plain.cost
+        );
+    }
+
+    /// The underflow case: every cost entry is 1 and `eps = 1e-3`, so the kernel
+    /// exponent is `-1000` and the plain kernel is identically zero (0.0) while the
+    /// largest exponent in the seeded 5x7 cost is only `-899`, which survives as a
+    /// subnormal. The plain domain refuses the all-ones problem; the log domain
+    /// converges, its output is finite and its marginals are within `tol`.
+    #[test]
+    fn sinkhorn_log_survives_underflow_that_refuses_the_plain_domain() {
+        let (a, b) = marginals(5, 7, 2026);
+        let cost = cost_ones(5, 7);
+        let tol = 1.0e-9;
+        let err = sinkhorn(&cost, &a, &b, 1.0e-3, tol, 100_000).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                EngineError::Infeasible(_) | EngineError::NonFinite { .. }
+            ),
+            "expected the plain domain to refuse, got {err}"
+        );
+        let plan = sinkhorn_log(&cost, &a, &b, 1.0e-3, tol, 100_000).unwrap();
+        assert!(
+            plan.plan.iter().all(|&v| v.is_finite()),
+            "the log-domain plan has a non-finite entry"
+        );
+        assert!(
+            plan.plan.iter().all(|&v| v >= 0.0),
+            "the log-domain plan has a negative entry"
+        );
+        let cols = b.len();
+        let mut error = 0.0f64;
+        for (i, &want) in a.iter().enumerate() {
+            let got: f64 = plan.plan.iter().skip(i * cols).take(cols).copied().sum();
+            error = error.max((got - want).abs());
+        }
+        for (j, &want) in b.iter().enumerate() {
+            let got: f64 = plan.plan.iter().skip(j).step_by(cols).copied().sum();
+            error = error.max((got - want).abs());
+        }
+        assert!(plan.marginal_error <= tol);
+        assert!(error <= tol, "recomputed error {error} exceeds {tol}");
+        assert!(plan.cost.is_finite());
+    }
+
+    /// `max_iter = 1` gives `NoConvergence` on the seeded 5x7 problem, whose one
+    /// pass leaves a deviation above `tol`, and `epsilon = 0` gives `InvalidInput`.
+    #[test]
+    fn sinkhorn_log_reports_non_convergence_and_refuses_bad_parameters() {
+        assert!(matches!(
+            sinkhorn_log(
+                &[0.0, 1.0, 1.0, 0.0],
+                &[0.5, 0.5],
+                &[0.5, 0.5],
+                0.0,
+                1.0e-9,
+                100
+            ),
+            Err(EngineError::InvalidInput(_))
+        ));
+        let (a, b) = marginals(5, 7, 2026);
+        let cost = cost(5, 7, 4242);
+        let err = sinkhorn_log(&cost, &a, &b, 1.0, 1.0e-12, 1).unwrap_err();
+        match err {
+            EngineError::NoConvergence {
+                iterations,
+                residual,
+            } => {
+                assert_eq!(iterations, 1);
+                assert!(residual > 1.0e-12);
+            }
+            other => panic!("expected NoConvergence, got {other}"),
+        }
+    }
+
+    /// Errors: `epsilon = 0` and a cost matrix of the wrong length give
+    /// `InvalidInput`; a NaN cost gives the variant `ensure_finite` returns
+    /// (`NonFinite`); `max_iter = 1` on the 5x7 problem, whose one pass leaves a
+    /// deviation above `tol`, gives `NoConvergence`.
+    #[test]
+    fn sinkhorn_refuses_bad_input_and_reports_non_convergence() {
+        assert!(matches!(
+            sinkhorn(
+                &[0.0, 1.0, 1.0, 0.0],
+                &[0.5, 0.5],
+                &[0.5, 0.5],
+                0.0,
+                1.0e-9,
+                100
+            ),
+            Err(EngineError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            sinkhorn(&[0.0, 1.0, 1.0], &[0.5, 0.5], &[0.5, 0.5], 1.0, 1.0e-9, 100),
+            Err(EngineError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            sinkhorn(
+                &[0.0, 1.0, 1.0, f64::NAN],
+                &[0.5, 0.5],
+                &[0.5, 0.5],
+                1.0,
+                1.0e-9,
+                100
+            ),
+            Err(EngineError::NonFinite { .. })
+        ));
+        let (a, b) = marginals(5, 7, 2026);
+        let cost = cost(5, 7, 4242);
+        let err = sinkhorn(&cost, &a, &b, 1.0, 1.0e-12, 1).unwrap_err();
+        match err {
+            EngineError::NoConvergence {
+                iterations,
+                residual,
+            } => {
+                assert_eq!(iterations, 1);
+                assert!(residual > 1.0e-12);
+            }
+            other => panic!("expected NoConvergence, got {other}"),
+        }
+    }
+
+    // ---- Oracle tests: closed forms and brute force, never the code under test ----
+
+    /// The exact OT cost of a plan (`perm[i]` entries at column i) under uniform
+    /// marginals 1/n, as a plain loop: an oracle, independent of both Sinkhorn
+    /// variants and of the plan they return.
+    fn permutation_cost(cost: &[f64], n: usize, perm: &[usize]) -> f64 {
+        let mut total = 0.0f64;
+        for (i, &j) in perm.iter().enumerate() {
+            total += cost[i * n + j];
+        }
+        total / n as f64
+    }
+
+    /// Heap's algorithm: every permutation of `0..n`, test-only. `n` is small (6
+    /// gives 720 permutations), so no dependency is warranted.
+    fn for_each_permutation(n: usize, visit: &mut dyn FnMut(&[usize])) {
+        let mut perm: Vec<usize> = (0..n).collect();
+        let mut counts = vec![0usize; n];
+        visit(&perm);
+        let mut i = 0usize;
+        while i < n {
+            if counts[i] < i {
+                if i.is_multiple_of(2) {
+                    perm.swap(0, i);
+                } else {
+                    perm.swap(counts[i], i);
+                }
+                visit(&perm);
+                counts[i] += 1;
+                i = 0;
+            } else {
+                counts[i] = 0;
+                i += 1;
+            }
+        }
+    }
+
+    /// The optimal transport cost of a 6x6 problem by brute force over all 720
+    /// permutations, each weighted 1/6. Oracle for the square uniform case: the
+    /// polytope's vertices are the permutation matrices (Birkhoff-von Neumann), so
+    /// a linear program attains its minimum at one of them.
+    fn brute_force_ot(cost: &[f64], n: usize) -> f64 {
+        let mut best = f64::INFINITY;
+        for_each_permutation(n, &mut |perm| {
+            best = best.min(permutation_cost(cost, n, perm));
+        });
+        best
+    }
+
+    /// A fixed 6x6 cost matrix with entries in [0,1], hand-written so the brute
+    /// force oracle is reproducible. Uniform marginals 1/6.
+    fn square_cost_six() -> Vec<f64> {
+        vec![
+            0.10, 0.55, 0.90, 0.35, 0.70, 0.20, //
+            0.80, 0.15, 0.45, 0.95, 0.25, 0.60, //
+            0.30, 0.65, 0.05, 0.85, 0.40, 0.75, //
+            0.50, 0.95, 0.20, 0.10, 0.60, 0.35, //
+            0.75, 0.30, 0.80, 0.45, 0.05, 0.90, //
+            0.40, 0.70, 0.55, 0.65, 0.85, 0.15,
+        ]
+    }
+
+    /// Oracle 1: the exact OT cost as epsilon shrinks. The Sinkhorn plan is
+    /// feasible, so its cost cannot beat OT, and the entropic term bounds the gap
+    /// by epsilon * ln(n*n); the gap must not grow as epsilon shrinks. The plain
+    /// domain is compared at every epsilon where it converges in the same budget
+    /// (it does at all five here; at a tolerance the plain kernel cannot reach, it
+    /// reports `NoConvergence` and the comparison is skipped, which is the
+    /// underflow regime the log domain exists for).
+    #[test]
+    fn sinkhorn_log_cost_brackets_the_brute_force_ot_cost() {
+        let n = 6usize;
+        let cost = square_cost_six();
+        let mass = 1.0 / n as f64;
+        let a = vec![mass; n];
+        let b = vec![mass; n];
+        let ot = brute_force_ot(&cost, n);
+        assert!(
+            ot.is_finite() && ot > 0.0,
+            "oracle OT cost {ot} is unusable"
+        );
+        let bound = (n * n) as f64;
+        // The stop tolerance is stated per epsilon: a tighter one needs more
+        // iterations, because Sinkhorn contracts geometrically with a ratio set by
+        // the cost gaps over epsilon.
+        let cases = [
+            (1.0, 1.0e-9),
+            (0.3, 1.0e-9),
+            (0.1, 1.0e-9),
+            (0.03, 1.0e-6),
+            (0.01, 1.0e-6),
+        ];
+        let max_iter = 10_000_000;
+        let mut previous_gap = f64::INFINITY;
+        for (eps, tol) in cases {
+            let plan = sinkhorn_log(&cost, &a, &b, eps, tol, max_iter).unwrap();
+            let gap = plan.cost - ot;
+            assert!(
+                gap >= -1.0e-9,
+                "eps {eps}: the plan cost {} beats the oracle {ot}, so it is infeasible",
+                plan.cost
+            );
+            assert!(
+                gap <= eps * bound.ln() + 1.0e-9,
+                "eps {eps}: the gap {gap} exceeds epsilon * ln(n*n) = {}",
+                eps * bound.ln()
+            );
+            assert!(
+                gap <= previous_gap + 1.0e-9,
+                "eps {eps}: the gap {gap} grew past the previous {previous_gap}"
+            );
+            previous_gap = gap;
+            // The plain domain agrees where it converges in the same budget.
+            if let Ok(plain) = sinkhorn(&cost, &a, &b, eps, tol, max_iter) {
+                assert!(
+                    (plain.cost - plan.cost).abs() <= 1.0e-7,
+                    "eps {eps}: plain {} vs log {}",
+                    plain.cost,
+                    plan.cost
+                );
+            }
+        }
+    }
+
+    /// The 1-D points for oracle 2, scaled so every cost lies in [0,1]: the two
+    /// point sets are interleaved around the unit interval, as a hand-written
+    /// sorted list.
+    fn line_points() -> (Vec<f64>, Vec<f64>) {
+        let x = [0.02, 0.18, 0.34, 0.50, 0.66, 0.82, 0.91, 0.98];
+        let y = [0.05, 0.22, 0.39, 0.55, 0.70, 0.78, 0.88, 0.95];
+        (x.to_vec(), y.to_vec())
+    }
+
+    /// The exact 1-D OT cost for a convex cost: sort both point sets and average
+    /// |x_(i) - y_(i)|. Oracle, independent of the Sinkhorn code.
+    fn sorted_ot_cost(xs: &[f64], ys: &[f64]) -> f64 {
+        let mut x = xs.to_vec();
+        let mut y = ys.to_vec();
+        x.sort_by(|p, q| p.partial_cmp(q).unwrap_or(std::cmp::Ordering::Equal));
+        y.sort_by(|p, q| p.partial_cmp(q).unwrap_or(std::cmp::Ordering::Equal));
+        x.iter()
+            .zip(y.iter())
+            .map(|(&p, &q)| (p - q).abs())
+            .sum::<f64>()
+            / x.len() as f64
+    }
+
+    /// Oracle 2: on a line with cost |x - y| the OT cost is the sorted average
+    /// pairing. The same feasibility-plus-entropy bound holds at eps = 0.01.
+    #[test]
+    fn sinkhorn_log_matches_the_sorted_one_dimensional_oracle() {
+        let (xs, ys) = line_points();
+        let n = xs.len();
+        let mass = 1.0 / n as f64;
+        let a = vec![mass; n];
+        let b = vec![mass; n];
+        let cost: Vec<f64> = xs
+            .iter()
+            .flat_map(|&x| ys.iter().map(move |&y| (x - y).abs()))
+            .collect();
+        assert!(
+            cost.iter().all(|&c| (0.0..=1.0).contains(&c)),
+            "the 1-D costs must lie in [0,1]"
+        );
+        let ot = sorted_ot_cost(&xs, &ys);
+        assert!(
+            ot.is_finite() && ot > 0.0,
+            "oracle 1-D OT cost {ot} is unusable"
+        );
+        let eps = 0.01;
+        let bound = (n * n) as f64;
+        // 1e-6 is the tolerance this epsilon reaches in a sane budget; see the
+        // square-case test for why it is stated per epsilon.
+        let tol = 1.0e-6;
+        let plan = sinkhorn_log(&cost, &a, &b, eps, tol, 10_000_000).unwrap();
+        let gap = plan.cost - ot;
+        assert!(
+            gap >= -1.0e-9,
+            "the plan cost {} beats the oracle {ot}, so it is infeasible",
+            plan.cost
+        );
+        assert!(
+            gap <= eps * bound.ln() + 1.0e-9,
+            "the gap {gap} exceeds epsilon * ln(n*n) = {}",
+            eps * bound.ln()
+        );
+        // The plain domain is not refused at this epsilon, so it must agree.
+        let plain = sinkhorn(&cost, &a, &b, eps, tol, 10_000_000).unwrap();
+        assert!(
+            (plain.cost - plan.cost).abs() <= 1.0e-7,
+            "plain {} vs log {}",
+            plain.cost,
+            plan.cost
+        );
+    }
+}
