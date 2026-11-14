@@ -18,6 +18,7 @@ pub mod iso;
 pub mod minifloat;
 pub mod numfmt;
 pub mod ode;
+pub mod transport;
 pub mod viz;
 
 pub use error::{ensure_finite, EngineError, EngineResult};
