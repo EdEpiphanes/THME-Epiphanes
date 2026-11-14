@@ -5,7 +5,8 @@
 //! for the ways a model file can carry code or hide data:
 //!
 //! - **Pickle imports** in `.bin`/`.pt`/`.pth`/`.ckpt`/`.pkl` files (plain or inside the
-//!   PyTorch zip), since loading a pickle can call any importable function.
+//!   PyTorch zip), and in NumPy `.npy`/`.npz` object arrays, whose payload is a pickle.
+//!   Loading such a file needs `allow_pickle=True` and can run code.
 //! - **Malformed headers** in GGUF and SafeTensors files, which target parser bugs.
 //! - **Unaccounted bytes** between or after tensor payloads, and executables hidden there.
 //! - **Code in text**: template-injection patterns in chat templates, shell or Python in
@@ -186,6 +187,8 @@ fn scan_file(path: &Path, rel: &str, remote_code: bool, report: &mut ScanReport)
         }
     } else if magic.starts_with(b"GGUF") {
         scan_gguf(path, rel, report);
+    } else if magic.starts_with(b"\x93NUMPY") {
+        scan_npy(path, rel, report);
     } else if magic.starts_with(b"PK\x03\x04") {
         scan_zip(path, rel, report);
     } else if ext == "safetensors" {
@@ -368,13 +371,18 @@ fn judge_pickle(bytes: &[u8], rel: &str, inner: &str, report: &mut ScanReport) {
     } else {
         format!("{rel}!{inner}")
     };
+    judge_pickle_at(bytes, &at, report);
+}
+
+/// Pickle rules with the finding path already resolved.
+fn judge_pickle_at(bytes: &[u8], at: &str, report: &mut ScanReport) {
     let scan = scan_pickle(bytes);
     for import in &scan.imports {
         if let Some((severity, rule)) = classify(import) {
             report.add(
                 severity,
                 rule,
-                &at,
+                at,
                 format!(
                     "loading this pickle imports {}.{}",
                     import.module, import.name
@@ -386,7 +394,7 @@ fn judge_pickle(bytes: &[u8], rel: &str, inner: &str, report: &mut ScanReport) {
         report.add(
             Severity::Medium,
             "pickle-unresolved-import",
-            &at,
+            at,
             format!(
                 "{} imports whose names are computed at load time",
                 scan.unresolved_globals
@@ -397,7 +405,7 @@ fn judge_pickle(bytes: &[u8], rel: &str, inner: &str, report: &mut ScanReport) {
         report.add(
             Severity::Medium,
             "pickle-malformed",
-            &at,
+            at,
             format!("pickle stream ends or breaks at byte {offset}"),
         );
     }
@@ -423,30 +431,94 @@ fn inflate_limited(bytes: &[u8], limit: u64) -> std::result::Result<Vec<u8>, Inf
     }
 }
 
+/// An archive entry's uncompressed bytes: stored entries as-is, deflate inflated within
+/// the size limit. Reports why an entry cannot be inspected instead of failing.
+fn zip_entry_body(
+    bytes: &[u8],
+    method: usize,
+    kind: &str,
+    name: &str,
+    rule: &'static str,
+    rel: &str,
+    report: &mut ScanReport,
+) -> Option<Vec<u8>> {
+    match method {
+        0 => Some(bytes.to_vec()),
+        8 => match inflate_limited(bytes, PICKLE_LIMIT) {
+            Ok(inflated) => Some(inflated),
+            Err(InflateFailure::TooLarge) => {
+                report.add(
+                    Severity::Medium,
+                    rule,
+                    rel,
+                    format!(
+                        "{kind} '{name}' inflates past the {PICKLE_LIMIT}-byte limit; too large to inspect"
+                    ),
+                );
+                None
+            }
+            Err(InflateFailure::Corrupt(e)) => {
+                report.add(
+                    Severity::Medium,
+                    rule,
+                    rel,
+                    format!("{kind} '{name}' has a corrupt deflate stream ({e}); not inspected"),
+                );
+                None
+            }
+        },
+        _ => {
+            report.add(
+                Severity::Medium,
+                rule,
+                rel,
+                format!("{kind} '{name}' is compressed (method {method}); not inspected"),
+            );
+            None
+        }
+    }
+}
+
 /// Inspects one `.pkl` entry: stored bytes as they are, deflate (method 8) inflated first.
 fn inspect_zip_pickle(bytes: &[u8], method: usize, rel: &str, name: &str, report: &mut ScanReport) {
-    match method {
-        0 => judge_pickle(bytes, rel, name, report),
-        8 => match inflate_limited(bytes, PICKLE_LIMIT) {
-            Ok(inflated) => judge_pickle(&inflated, rel, name, report),
-            Err(InflateFailure::TooLarge) => report.add(
-                Severity::Medium,
-                "pickle-not-inspected",
-                rel,
-                format!("pickle '{name}' inflates past the {PICKLE_LIMIT}-byte limit; too large to inspect"),
-            ),
-            Err(InflateFailure::Corrupt(e)) => report.add(
-                Severity::Medium,
-                "pickle-not-inspected",
-                rel,
-                format!("pickle '{name}' has a corrupt deflate stream ({e}); not inspected"),
-            ),
-        },
-        _ => report.add(
-            Severity::Medium,
-            "pickle-not-inspected",
-            rel,
-            format!("pickle '{name}' is compressed (method {method}); not inspected"),
+    if let Some(body) = zip_entry_body(
+        bytes,
+        method,
+        "pickle",
+        name,
+        "pickle-not-inspected",
+        rel,
+        report,
+    ) {
+        judge_pickle(&body, rel, name, report);
+    }
+}
+
+/// Inspects one `.npy` entry inside a `.npz`: the same header rules as a loose file.
+fn inspect_zip_npy(bytes: &[u8], method: usize, rel: &str, name: &str, report: &mut ScanReport) {
+    let Some(body) = zip_entry_body(
+        bytes,
+        method,
+        "NumPy array",
+        name,
+        "numpy-not-inspected",
+        rel,
+        report,
+    ) else {
+        return;
+    };
+    let at = format!("{rel}!{name}");
+    match parse_npy(&body) {
+        Ok(info) => {
+            if let Some(payload) = body.get(info.data_at..) {
+                judge_npy(&info, payload, &at, report);
+            }
+        }
+        Err(e) => report.add(
+            Severity::High,
+            "malformed-header",
+            &at,
+            format!(".npy header does not parse ({e})"),
         ),
     }
 }
@@ -514,6 +586,8 @@ fn scan_zip(path: &Path, rel: &str, report: &mut ScanReport) {
         let lower = name.to_ascii_lowercase();
         if lower.ends_with(".pkl") {
             inspect_zip_pickle(bytes, method, rel, &name, report);
+        } else if lower.ends_with(".npy") {
+            inspect_zip_npy(bytes, method, rel, &name, report);
         } else if let Some(kind) = executable_kind(bytes, 0) {
             report.add(
                 Severity::High,
@@ -536,6 +610,182 @@ fn scan_zip(path: &Path, rel: &str, report: &mut ScanReport) {
     }
 }
 
+// ---------------------------------------------------------------------------------------------
+// NumPy `.npy` / `.npz`
+
+/// Magic at the start of every `.npy` file.
+const NPY_MAGIC: &[u8] = b"\x93NUMPY";
+/// Largest header held in memory; a corrupt length field must not drive a huge allocation.
+const MAX_NPY_HEADER: usize = 64 << 20;
+
+/// A parsed `.npy` header: the dtype description and where the payload starts.
+struct NpyInfo {
+    descr: String,
+    data_at: usize,
+}
+
+/// Parses a `.npy` blob, magic included. Versions 1.0, 2.0 and 3.0 differ only in the
+/// width of the little-endian header-length field: 2 bytes for 1.0, 4 for 2.0 and 3.0.
+fn parse_npy(data: &[u8]) -> std::result::Result<NpyInfo, String> {
+    if !data.starts_with(NPY_MAGIC) {
+        return Err("missing \\x93NUMPY magic".into());
+    }
+    let major = *data.get(6).ok_or("truncated header")?;
+    let (len_size, len) = match major {
+        1 => {
+            let b = data.get(8..10).ok_or("truncated header")?;
+            (2, usize::from(u16::from_le_bytes([b[0], b[1]])))
+        }
+        2 | 3 => {
+            let b = data.get(8..12).ok_or("truncated header")?;
+            (4, u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as usize)
+        }
+        other => return Err(format!("unsupported version {other}.0")),
+    };
+    if len > MAX_NPY_HEADER {
+        return Err(format!("header length {len} is implausible"));
+    }
+    let start: usize = 8 + len_size;
+    let end = start.checked_add(len).ok_or("header length overflows")?;
+    let header = data
+        .get(start..end)
+        .ok_or("header runs past the end of the file")?;
+    let text = std::str::from_utf8(header).map_err(|_| "header is not UTF-8")?;
+    if !text.trim_start().starts_with('{') {
+        return Err("header is not a Python dict".into());
+    }
+    let descr = header_descr(text).ok_or("no 'descr' field in the header")?;
+    Ok(NpyInfo {
+        descr: descr.to_string(),
+        data_at: end,
+    })
+}
+
+/// The value of `descr` in a NumPy header dict literal: a quoted string, a bracketed list
+/// of `(name, dtype)` tuples, or a bare token.
+fn header_descr(header: &str) -> Option<&str> {
+    let after_key = &header[header.find("descr")?..];
+    let rest = &after_key[after_key.find(':')? + 1..];
+    let start = rest.find(|c: char| !c.is_whitespace())?;
+    let tail = &rest[start..];
+    let bytes = tail.as_bytes();
+    let end = match *bytes.first()? {
+        q @ (b'\'' | b'"') => tail[1..].find(q as char)? + 2,
+        b'[' => {
+            // Matching bracket, skipping the quotes around field names and type codes.
+            let mut depth = 0usize;
+            let mut quote = None;
+            let mut at = 0usize;
+            loop {
+                let b = *bytes.get(at)?;
+                match quote {
+                    Some(q) if b == q => quote = None,
+                    Some(_) => {}
+                    None if b == b'\'' || b == b'"' => quote = Some(b),
+                    None if b == b'[' => depth += 1,
+                    None if b == b']' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            break at + 1;
+                        }
+                    }
+                    None => {}
+                }
+                at += 1;
+            }
+        }
+        _ => tail.find([',', '}']).unwrap_or(tail.len()),
+    };
+    Some(&tail[..end])
+}
+
+/// True for the object dtype: `O` with any byte-order marker, a quoted `O` field type in a
+/// structured dtype, or a bare `O`. Field names are quoted too, so this matches the dtype
+/// code rather than any capital O.
+fn is_object_descr(descr: &str) -> bool {
+    const OBJECT_CODES: [&str; 5] = ["|O", "<O", ">O", "'O'", "\"O\""];
+    let descr = descr.trim();
+    descr == "O" || OBJECT_CODES.iter().any(|code| descr.contains(code))
+}
+
+/// Reads just the header of a `.npy` file, so a large numeric array is never loaded whole.
+fn read_npy_head(path: &Path) -> std::result::Result<Vec<u8>, String> {
+    use std::io::{Seek, SeekFrom};
+    let mut file = File::open(path).map_err(|e| e.to_string())?;
+    let mut prefix = [0u8; 12];
+    file.read_exact(&mut prefix).map_err(|e| e.to_string())?;
+    let major = prefix[6];
+    let (len_size, len) = match major {
+        1 => (2, usize::from(u16::from_le_bytes([prefix[8], prefix[9]]))),
+        2 | 3 => (
+            4,
+            u32::from_le_bytes([prefix[8], prefix[9], prefix[10], prefix[11]]) as usize,
+        ),
+        other => return Err(format!("unsupported version {other}.0")),
+    };
+    if len > MAX_NPY_HEADER {
+        return Err(format!("header length {len} is implausible"));
+    }
+    let total = 8 + len_size + len;
+    let file_len = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+    if total as u64 > file_len {
+        return Err(format!(
+            "header claims {total} bytes but the file holds {file_len}"
+        ));
+    }
+    file.seek(SeekFrom::Start(0)).map_err(|e| e.to_string())?;
+    let mut buf = vec![0u8; total];
+    file.read_exact(&mut buf).map_err(|e| e.to_string())?;
+    Ok(buf)
+}
+
+/// Scans a `.npy` file: only an object dtype stores its payload as a pickle.
+fn scan_npy(path: &Path, rel: &str, report: &mut ScanReport) {
+    let info = match read_npy_head(path).and_then(|head| parse_npy(&head)) {
+        Ok(info) => info,
+        Err(e) => {
+            report.add(
+                Severity::High,
+                "malformed-header",
+                rel,
+                format!(".npy header does not parse ({e})"),
+            );
+            return;
+        }
+    };
+    if !is_object_descr(&info.descr) {
+        return; // numeric payload: nothing to inspect
+    }
+    match read_range(path, info.data_at as u64, PICKLE_LIMIT) {
+        Ok(payload) => judge_npy(&info, &payload, rel, report),
+        Err(e) => {
+            // The object dtype is already known, so the allow_pickle medium stands
+            // even when the payload cannot be read.
+            add_numpy_allow_pickle(rel, report);
+            report.add(Severity::Medium, "unreadable", rel, format!("{e:#}"));
+        }
+    }
+}
+
+/// The medium finding every object `.npy` carries: loading it needs `allow_pickle=True`.
+fn add_numpy_allow_pickle(at: &str, report: &mut ScanReport) {
+    report.add(
+        Severity::Medium,
+        "numpy-allow-pickle",
+        at,
+        "loading this .npy needs allow_pickle=True, which runs its embedded pickle".to_string(),
+    );
+}
+
+/// An object dtype's payload is a pickle, so it goes through the pickle rules; loading
+/// such a file needs `allow_pickle=True` either way.
+fn judge_npy(info: &NpyInfo, payload: &[u8], at: &str, report: &mut ScanReport) {
+    if !is_object_descr(&info.descr) {
+        return;
+    }
+    add_numpy_allow_pickle(at, report);
+    judge_pickle_at(payload, at, report);
+}
 // ---------------------------------------------------------------------------------------------
 // Tensor containers
 
