@@ -7,6 +7,10 @@
 //! - **Pickle imports** in `.bin`/`.pt`/`.pth`/`.ckpt`/`.pkl` files (plain or inside the
 //!   PyTorch zip), and in NumPy `.npy`/`.npz` object arrays, whose payload is a pickle.
 //!   Loading such a file needs `allow_pickle=True` and can run code.
+//! - **Keras Lambda layers** in `.keras` files: a layer whose `class_name` is `Lambda`,
+//!   `TFOpLambda` or a `__lambda__` function carries Python code that runs when the model is
+//!   loaded with `safe_mode` disabled. Custom layer classes must be imported from user code;
+//!   legacy HDF5 `.h5` files are reported as not inspected.
 //! - **Malformed headers** in GGUF and SafeTensors files, which target parser bugs.
 //! - **Unaccounted bytes** between or after tensor payloads, and executables hidden there.
 //! - **Code in text**: template-injection patterns in chat templates, shell or Python in
@@ -191,6 +195,13 @@ fn scan_file(path: &Path, rel: &str, remote_code: bool, report: &mut ScanReport)
         scan_npy(path, rel, report);
     } else if magic.starts_with(b"PK\x03\x04") {
         scan_zip(path, rel, report);
+    } else if magic.starts_with(b"\x89HDF\r\n\x1a\n") {
+        report.add(
+            Severity::Info,
+            "hdf5-not-inspected",
+            rel,
+            "HDF5 or legacy Keras file; layers (including Lambda) are not inspected".to_string(),
+        );
     } else if ext == "safetensors" {
         scan_safetensors(path, rel, report);
     } else if let Some(kind) = executable_kind(&magic, 0) {
@@ -494,6 +505,118 @@ fn inspect_zip_pickle(bytes: &[u8], method: usize, rel: &str, name: &str, report
     }
 }
 
+/// Deepest JSON nesting walked in a Keras config; deeper configs are reported, not searched.
+const KERAS_JSON_DEPTH: usize = 64;
+
+/// Inspects a Keras 3 `config.json` entry: Lambda layers carry serialized Python code.
+fn inspect_zip_keras(bytes: &[u8], method: usize, rel: &str, name: &str, report: &mut ScanReport) {
+    let Some(body) = zip_entry_body(
+        bytes,
+        method,
+        "Keras config",
+        name,
+        "keras-not-inspected",
+        rel,
+        report,
+    ) else {
+        return;
+    };
+    let at = format!("{rel}!{name}");
+    let json = match serde_json::from_slice::<serde_json::Value>(&body) {
+        Ok(json) => json,
+        Err(e) => {
+            report.add(
+                Severity::Medium,
+                "keras-not-inspected",
+                &at,
+                format!("Keras config '{name}' is not valid JSON ({e}); not inspected"),
+            );
+            return;
+        }
+    };
+    walk_keras_config(&json, 0, &at, name, report);
+}
+
+/// Walks a Keras config, reporting Lambda layers and custom classes, and stops at the depth cap.
+fn walk_keras_config(
+    value: &serde_json::Value,
+    depth: usize,
+    at: &str,
+    name: &str,
+    report: &mut ScanReport,
+) {
+    if depth > KERAS_JSON_DEPTH {
+        report.add(
+            Severity::Medium,
+            "keras-not-inspected",
+            at,
+            format!(
+                "Keras config '{name}' nests deeper than {KERAS_JSON_DEPTH} levels; not inspected past there"
+            ),
+        );
+        return;
+    }
+    match value {
+        serde_json::Value::Object(map) => {
+            check_keras_object(map, at, report);
+            for child in map.values() {
+                walk_keras_config(child, depth + 1, at, name, report);
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for child in items {
+                walk_keras_config(child, depth + 1, at, name, report);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Rules for one object with a `class_name`: Lambda layers carry code; custom classes must be
+/// imported from user code.
+fn check_keras_object(
+    map: &serde_json::Map<String, serde_json::Value>,
+    at: &str,
+    report: &mut ScanReport,
+) {
+    let Some(class) = map.get("class_name").and_then(|v| v.as_str()) else {
+        return;
+    };
+    if matches!(class, "Lambda" | "TFOpLambda" | "__lambda__") {
+        let name = map
+            .get("config")
+            .and_then(|config| config.get("name"))
+            .and_then(|n| n.as_str())
+            .unwrap_or("unnamed");
+        report.add(
+            Severity::High,
+            "keras-lambda-layer",
+            at,
+            format!(
+                "layer '{name}' ({class}) carries Python code that runs when the model is loaded with safe_mode disabled"
+            ),
+        );
+        return;
+    }
+    let module = map.get("module").and_then(|v| v.as_str());
+    let registered = map.get("registered_name").and_then(|v| v.as_str());
+    let custom = module.is_some_and(|m| !m.starts_with("keras") && !m.starts_with("tensorflow"))
+        || registered.is_some_and(|r| r.starts_with("Custom>"));
+    if custom {
+        let origin = module
+            .map(|m| format!("module '{m}'"))
+            .unwrap_or_else(|| "no module".to_string());
+        report.add(
+            Severity::Medium,
+            "keras-custom-object",
+            at,
+            format!(
+                "custom class '{class}' ({origin}) must be imported from user code when the model is loaded"
+            ),
+        );
+    }
+}
+
 /// Inspects one `.npy` entry inside a `.npz`: the same header rules as a loose file.
 fn inspect_zip_npy(bytes: &[u8], method: usize, rel: &str, name: &str, report: &mut ScanReport) {
     let Some(body) = zip_entry_body(
@@ -588,6 +711,8 @@ fn scan_zip(path: &Path, rel: &str, report: &mut ScanReport) {
             inspect_zip_pickle(bytes, method, rel, &name, report);
         } else if lower.ends_with(".npy") {
             inspect_zip_npy(bytes, method, rel, &name, report);
+        } else if lower == "config.json" {
+            inspect_zip_keras(bytes, method, rel, &name, report);
         } else if let Some(kind) = executable_kind(bytes, 0) {
             report.add(
                 Severity::High,

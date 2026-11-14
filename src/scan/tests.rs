@@ -515,3 +515,180 @@ fn npz_entry_with_object_array_is_flagged() {
         report.findings
     );
 }
+
+// -------------------------------------------------------------------------------------------
+// Keras `.keras` / legacy `.h5`
+
+fn write_keras(dir: &Path, name: &str, config: &[u8], deflated: bool) -> PathBuf {
+    let bytes = if deflated {
+        zip_deflated(&[("config.json", config)])
+    } else {
+        zip_stored(&[("config.json", config)])
+    };
+    let path = dir.join(name);
+    std::fs::write(&path, bytes).unwrap();
+    path
+}
+
+#[test]
+fn keras_lambda_layer_is_high_and_deflated_matches() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = br#"{
+        "config": {"layers": [
+            {"class_name": "Lambda", "config": {"name": "scale", "function": {
+                "class_name": "__lambda__", "config": {"code": "AAAA"}}}}
+        ]}
+    }"#;
+    write_keras(dir.path(), "stored.keras", config, false);
+    write_keras(dir.path(), "deflated.keras", config, true);
+
+    let report = scan(dir.path()).unwrap();
+    for name in ["stored.keras", "deflated.keras"] {
+        let at = format!("{name}!config.json");
+        let named: Vec<&Finding> = report
+            .findings
+            .iter()
+            .filter(|f| f.file == at && f.rule == "keras-lambda-layer")
+            .collect();
+        assert!(
+            named.iter().any(|f| {
+                f.severity == Severity::High
+                    && f.detail.contains("scale")
+                    && f.detail.contains("Lambda")
+            }),
+            "{at}: {:?}",
+            report.findings
+        );
+    }
+}
+
+#[test]
+fn keras_tf_op_lambda_layer_is_high() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = br#"{"config": {"layers": [
+        {"class_name": "TFOpLambda", "config": {"name": "cast", "function": "math.multiply"}}
+    ]}}"#;
+    write_keras(dir.path(), "tf.keras", config, false);
+    let report = scan(&dir.path().join("tf.keras")).unwrap();
+    let finding = report
+        .findings
+        .iter()
+        .find(|f| f.rule == "keras-lambda-layer")
+        .unwrap_or_else(|| panic!("{:?}", report.findings));
+    assert_eq!(finding.severity, Severity::High);
+    assert_eq!(finding.file, "tf.keras!config.json");
+    assert!(finding.detail.contains("cast"), "{}", finding.detail);
+    assert!(finding.detail.contains("TFOpLambda"), "{}", finding.detail);
+}
+
+#[test]
+fn plain_keras_model_has_no_findings() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = br#"{
+        "module": "keras", "class_name": "Functional", "registered_name": "Functional",
+        "config": {"name": "model", "layers": [
+            {"class_name": "InputLayer", "module": "keras.layers", "registered_name": null,
+             "config": {"name": "input"}},
+            {"class_name": "Dense", "module": "keras.layers", "registered_name": "Dense",
+             "config": {"name": "dense"}}
+        ]}
+    }"#;
+    write_keras(dir.path(), "plain.keras", config, false);
+    let report = scan(&dir.path().join("plain.keras")).unwrap();
+    assert_eq!(report.verdict(), "no findings", "{:?}", report.findings);
+    assert!(report.findings.is_empty(), "{:?}", report.findings);
+}
+
+#[test]
+fn keras_custom_object_is_medium() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = br#"{"config": {"layers": [
+        {"class_name": "MyLayer", "module": "my_pkg.layers", "registered_name": "Custom>MyLayer",
+         "config": {"name": "custom"}},
+        {"class_name": "Other", "registered_name": "Custom>Other", "config": {"name": "other"}}
+    ]}}"#;
+    write_keras(dir.path(), "custom.keras", config, false);
+    let report = scan(&dir.path().join("custom.keras")).unwrap();
+    let custom: Vec<&Finding> = report
+        .findings
+        .iter()
+        .filter(|f| f.rule == "keras-custom-object")
+        .collect();
+    assert_eq!(custom.len(), 2, "{:?}", report.findings);
+    assert!(custom.iter().all(|f| f.severity == Severity::Medium));
+    assert!(
+        custom
+            .iter()
+            .any(|f| f.detail.contains("my_pkg.layers") && f.detail.contains("MyLayer")),
+        "{:?}",
+        custom
+    );
+    assert!(
+        custom.iter().any(|f| f.detail.contains("Other")),
+        "{:?}",
+        custom
+    );
+}
+
+#[test]
+fn invalid_keras_config_json_is_a_medium_finding_not_a_panic() {
+    let dir = tempfile::tempdir().unwrap();
+    write_keras(dir.path(), "broken.keras", b"{not json", false);
+    let report = scan(&dir.path().join("broken.keras")).unwrap();
+    let finding = report
+        .findings
+        .iter()
+        .find(|f| f.rule == "keras-not-inspected")
+        .unwrap_or_else(|| panic!("{:?}", report.findings));
+    assert_eq!(finding.severity, Severity::Medium);
+    assert_eq!(finding.file, "broken.keras!config.json");
+}
+
+#[test]
+fn legacy_hdf5_file_is_one_info_finding() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut bytes = b"\x89HDF\r\n\x1a\n".to_vec();
+    bytes.extend_from_slice(&[0u8; 64]);
+    let path = dir.path().join("legacy.h5");
+    std::fs::write(&path, bytes).unwrap();
+    let report = scan(&path).unwrap();
+    assert_eq!(report.findings.len(), 1, "{:?}", report.findings);
+    assert_eq!(report.findings[0].severity, Severity::Info);
+    assert_eq!(report.findings[0].rule, "hdf5-not-inspected");
+    assert_eq!(report.findings[0].file, "legacy.h5");
+    assert!(
+        report.findings[0].detail.contains("not inspected"),
+        "{}",
+        report.findings[0].detail
+    );
+    assert_eq!(report.verdict(), "no findings");
+}
+
+#[test]
+fn deeply_nested_keras_config_is_reported_without_overflowing_the_stack() {
+    let dir = tempfile::tempdir().unwrap();
+    // serde_json's own 128-level parser limit turns this into the same medium finding;
+    // 100 levels is past the scanner's 64-level cap but still parses.
+    let deep = format!("{}1{}", "{\"a\":".repeat(200), "}".repeat(200));
+    write_keras(dir.path(), "deep.keras", deep.as_bytes(), false);
+    let report = scan(&dir.path().join("deep.keras")).unwrap();
+    assert!(
+        report
+            .findings
+            .iter()
+            .any(|f| f.rule == "keras-not-inspected" && f.severity == Severity::Medium),
+        "{:?}",
+        report.findings
+    );
+
+    let capped = format!("{}1{}", "{\"a\":".repeat(100), "}".repeat(100));
+    write_keras(dir.path(), "capped.keras", capped.as_bytes(), false);
+    let report = scan(&dir.path().join("capped.keras")).unwrap();
+    let finding = report
+        .findings
+        .iter()
+        .find(|f| f.rule == "keras-not-inspected")
+        .unwrap_or_else(|| panic!("{:?}", report.findings));
+    assert_eq!(finding.severity, Severity::Medium);
+    assert!(finding.detail.contains("64"), "{}", finding.detail);
+}
