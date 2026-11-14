@@ -82,6 +82,108 @@ fn add_scaled(y: &[f64], d: &[f64], c: f64) -> Vec<f64> {
         .collect()
 }
 
+// Dormand-Prince 5(4) tableau: nodes `c`, the strict lower-triangular `a` rows and the
+// two weight rows, `b5` for the fifth-order solution and `b4` for the embedded
+// fourth-order one. The coefficients are exact rationals written as divisions, so
+// nothing depends on a decimal literal.
+const DP_C: [f64; 7] = [0.0, 1.0 / 5.0, 3.0 / 10.0, 4.0 / 5.0, 8.0 / 9.0, 1.0, 1.0];
+const DP_A2: [f64; 1] = [1.0 / 5.0];
+const DP_A3: [f64; 2] = [3.0 / 40.0, 9.0 / 40.0];
+const DP_A4: [f64; 3] = [44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0];
+const DP_A5: [f64; 4] = [
+    19372.0 / 6561.0,
+    -25360.0 / 2187.0,
+    64448.0 / 6561.0,
+    -212.0 / 729.0,
+];
+const DP_A6: [f64; 5] = [
+    9017.0 / 3168.0,
+    -355.0 / 33.0,
+    46732.0 / 5247.0,
+    49.0 / 176.0,
+    -5103.0 / 18656.0,
+];
+const DP_A7: [f64; 6] = [
+    35.0 / 384.0,
+    0.0,
+    500.0 / 1113.0,
+    125.0 / 192.0,
+    -2187.0 / 6784.0,
+    11.0 / 84.0,
+];
+const DP_B5: [f64; 7] = [
+    35.0 / 384.0,
+    0.0,
+    500.0 / 1113.0,
+    125.0 / 192.0,
+    -2187.0 / 6784.0,
+    11.0 / 84.0,
+    0.0,
+];
+const DP_B4: [f64; 7] = [
+    5179.0 / 57600.0,
+    0.0,
+    7571.0 / 16695.0,
+    393.0 / 640.0,
+    -92097.0 / 339200.0,
+    187.0 / 2100.0,
+    1.0 / 40.0,
+];
+
+/// One step of the embedded Dormand-Prince 5(4) pair from `(t, y)` with step size
+/// `h`, returning `(y5, error)`: the fifth-order solution and the error estimate
+/// `y5 - y4` (the fifth-order minus the embedded fourth-order solution), one entry
+/// per state component. The step size, the state and every stage are validated
+/// through [`eval`]; nothing defaults. The FSAL property of the tableau is not
+/// exploited: the last stage is recomputed like any other.
+pub fn dopri5_step(f: &Rhs, t: f64, y: &[f64], h: f64) -> EngineResult<(Vec<f64>, Vec<f64>)> {
+    if !h.is_finite() || h == 0.0 {
+        return Err(EngineError::InvalidInput(format!(
+            "step size must be finite and non-zero, got {h}"
+        )));
+    }
+    if y.is_empty() {
+        return Err(EngineError::InvalidInput(
+            "the state y must not be empty".to_string(),
+        ));
+    }
+    ensure_finite("y", y)?;
+    // Stage states: `y + h * sum_j a[i][j] * k[j]`. `stages` holds k1..k7; the last
+    // row is the FSAL stage, recomputed here like any other.
+    let mut stages: Vec<Vec<f64>> = Vec::with_capacity(7);
+    stages.push(eval(f, t, y)?);
+    let a_rows: [&[f64]; 6] = [&DP_A2, &DP_A3, &DP_A4, &DP_A5, &DP_A6, &DP_A7];
+    for (i, a) in a_rows.iter().enumerate() {
+        let mut state = y.to_vec();
+        for (j, &aij) in a.iter().enumerate() {
+            for (yi, ki) in state.iter_mut().zip(stages[j].iter()) {
+                *yi += h * aij * ki;
+            }
+        }
+        stages.push(eval(f, t + DP_C[i + 1] * h, &state)?);
+    }
+    let mut y5 = vec![0.0; y.len()];
+    let mut y4 = vec![0.0; y.len()];
+    for (i, &yi) in y.iter().enumerate() {
+        let mut s5 = 0.0;
+        let mut s4 = 0.0;
+        for (s, k) in stages.iter().enumerate() {
+            s5 += DP_B5[s] * k[i];
+            s4 += DP_B4[s] * k[i];
+        }
+        y5[i] = yi + h * s5;
+        y4[i] = yi + h * s4;
+    }
+    let error: Vec<f64> = y5
+        .iter()
+        .zip(y4.iter())
+        .map(|(&high, &low)| high - low)
+        .collect();
+    ensure_finite("y_next", &y5)?;
+    ensure_finite("error", &error)?;
+    Ok((y5, error))
+}
+
 /// Integrates `y' = f(t, y)` from `(t0, y0)` to `t1` in `steps` equal steps of
 /// `h = (t1 - t0) / steps`. The time is `t0 + i * h`, never accumulated, so the
 /// last step starts exactly on `t1 - h` and lands on `t1`.
@@ -364,5 +466,121 @@ mod tests {
                 previous = Some(error);
             }
         }
+    }
+
+    /// Fixed-step Dormand-Prince 5(4) on y' = -y, y(0) = 1, [0, 1], exact exp(-1):
+    /// n = 4, 8, 16, 32.
+    ///
+    /// The pair's global error falls by about 32 per halving: the measured ratios
+    /// are 39.1, 35.5 and 33.7, approaching 32 from above as the error series
+    /// converges on its leading `h^5` term, so each halving carries its own band.
+    /// The scan stops at n = 32 (error 3.2e-12); at n = 64 the ~1e-13
+    /// floating-point floor takes over and the ratios stop being a clean order
+    /// measurement.
+    #[test]
+    fn dopri5_order_is_five_on_the_decay_equation() {
+        let exact = (-1.0f64).exp();
+        let error_at = |n: usize| {
+            let h = 1.0 / n as f64;
+            let mut t = 0.0;
+            let mut y = vec![1.0];
+            for _ in 0..n {
+                let (next, _) = dopri5_step(&decay, t, &y, h).unwrap();
+                y = next;
+                t += h;
+            }
+            (y[0] - exact).abs()
+        };
+        let ratios = [
+            (4usize, 8usize, 40.0, 0.3),
+            (8, 16, 36.0, 0.2),
+            (16, 32, 33.0, 0.1),
+        ];
+        let mut errors: Vec<f64> = Vec::new();
+        for (coarse, fine, expected, order_tolerance) in ratios {
+            errors.push(error_at(coarse));
+            errors.push(error_at(fine));
+            let ratio = errors[errors.len() - 2] / errors[errors.len() - 1];
+            assert!(
+                (ratio - expected).abs() <= 0.05 * expected,
+                "error ratio {ratio} at n = {fine} is not within 5% of {expected}"
+            );
+            let order = ratio.log2();
+            assert!(
+                (order - 5.0).abs() <= order_tolerance,
+                "observed order {order} at n = {fine} is not within {order_tolerance} of 5"
+            );
+        }
+    }
+
+    /// One Dormand-Prince step with h = 0.1 on y' = -y from y = 1: the returned
+    /// error estimate is within a factor 10 of the true local error of the embedded
+    /// fourth-order solution, `|(y5 - error) - exp(-h)|` (observed ratio 1.04).
+    ///
+    /// The estimate is an `h^5` quantity dominated by the embedded solution's
+    /// error, so it is compared with that; the fifth-order solution's own local
+    /// error is 28x smaller at this step size (it is `O(h^6)`), which is why a
+    /// factor-10 check against `|y5 - exp(-h)|` would need `h >= 0.5`.
+    #[test]
+    fn dopri5_error_estimate_tracks_the_local_error() {
+        let h = 0.1;
+        let (y5, error) = dopri5_step(&decay, 0.0, &[1.0], h).unwrap();
+        let embedded = y5[0] - error[0];
+        let true_local = (embedded - (-h).exp()).abs();
+        let estimated = error[0].abs();
+        assert!(
+            estimated <= 10.0 * true_local,
+            "estimate {estimated} exceeds 10x the local error {true_local}"
+        );
+        assert!(
+            true_local <= 10.0 * estimated,
+            "local error {true_local} exceeds 10x the estimate {estimated}"
+        );
+    }
+
+    /// One Dormand-Prince step with h = 0.1 on the oscillator from (1, 0) is
+    /// within 1e-8 of the closed form (cos h, -sin h).
+    #[test]
+    fn dopri5_matches_the_oscillator_closed_form() {
+        let h = 0.1;
+        let (y5, _) = dopri5_step(&oscillator, 0.0, &[1.0, 0.0], h).unwrap();
+        let error = ((y5[0] - h.cos()).powi(2) + (y5[1] + h.sin()).powi(2)).sqrt();
+        assert!(
+            error < 1.0e-8,
+            "Dormand-Prince oscillator error {error} is not below 1e-8"
+        );
+    }
+
+    /// `dopri5_step` refuses the same bad input as `step`: a non-finite step size,
+    /// an empty state, a state that is not finite, a wrong-length `f` and an
+    /// infinite-valued `f` (as `NonFinite`, never as a NaN state).
+    #[test]
+    fn dopri5_refuses_bad_input() {
+        let wrong_length = |_t: f64, _y: &[f64]| vec![1.0, 2.0];
+        let infinite = |_t: f64, y: &[f64]| vec![f64::INFINITY * y[0]];
+        assert!(matches!(
+            dopri5_step(&decay, 0.0, &[1.0], f64::NAN),
+            Err(EngineError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            dopri5_step(&decay, 0.0, &[1.0], 0.0),
+            Err(EngineError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            dopri5_step(&decay, 0.0, &[], 1.0),
+            Err(EngineError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            dopri5_step(&decay, 0.0, &[f64::NAN], 1.0),
+            Err(EngineError::NonFinite { .. })
+        ));
+        assert!(matches!(
+            dopri5_step(&wrong_length, 0.0, &[1.0], 1.0),
+            Err(EngineError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            dopri5_step(&infinite, 0.0, &[1.0], 1.0),
+            Err(EngineError::NonFinite { .. })
+        ));
     }
 }
