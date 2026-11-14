@@ -54,6 +54,9 @@ anyhow = "1.0"
 eframe = { version = "0.31", default-features = true }
 rfd = "0.15"
 minisign = "0.10.0"
+# Animated figures (report::animate): rasterize SVG and encode GIF in Rust.
+resvg = { version = "0.50", default-features = false, features = ["text", "system-fonts", "memmap-fonts"] }
+gif = "0.14"
 
 [dev-dependencies]
 tempfile = "3.17"
@@ -66,3 +69,20 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = "symbols"
+
+# The SVG rasterizer and GIF encoder (report::animate) are built for size, not speed, so the CLI
+# stays under its 10 MiB limit; THME's own engine code keeps opt-level 3.
+[profile.release.package.resvg]
+opt-level = "s"
+[profile.release.package.usvg]
+opt-level = "s"
+[profile.release.package.tiny-skia]
+opt-level = "s"
+[profile.release.package.rustybuzz]
+opt-level = "s"
+[profile.release.package.ttf-parser]
+opt-level = "s"
+[profile.release.package.fontdb]
+opt-level = "s"
+[profile.release.package.gif]
+opt-level = "s"

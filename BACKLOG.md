@@ -318,6 +318,12 @@ closes it.
 - **Problem**: Dossier WP37 and R.7: benchmark results need charts drawn from stored records, with intervals and evidence status.
 - **Done means**: Scores with intervals, paired changes against a baseline, a model-by-benchmark heatmap, from result records through the visual engine; light and dark; evidence label on each.
 
+### [THME-3033] Isometric figure kit in Rust (anatomy port)
+
+- **Milestone**: v0.2.5 · **Roadmap**: v0.2.5.8 · **Priority**: p2 · **Area**: core · **Type**: feature · **Status**: done
+- **Problem**: Owner wants engine, 3D visuals and speed in Rust; the isometric figure kit existed only in TypeScript.
+- **Done means**: Camera, extruded solids with facing-based shading, painter's order, lines, dots, wires and the card in `engine::iso`, byte-identical to the kit on a committed set of cases (`scripts/iso_golden.mjs` regenerates them from the kit), and timed against it (`examples/iso_bench.rs`).
+
 ### [THME-3023] Re-measure reports affected by the FP16 rounding fix
 
 - **Milestone**: v0.2.2 · **Roadmap**: none · **Priority**: p1 · **Area**: research · **Type**: chore · **Status**: blocked

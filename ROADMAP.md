@@ -68,6 +68,7 @@ flowchart LR
 | SPDX headers (THME-3005) | `AGPL-3.0-only` header on all 168 source files; `scripts/spdx.py --check` in CI | Tested in CI |
 | Signed `.epiph` (THME-3019) | Minisign signature over the manifest; `thme epiph sign`, `verify --require-signature`; Epiphanes key by default | Tested: tamper, wrong key, broken trailer |
 | Benchmark registry (THME-3024) | `src/bench`: strict task files and result records with every Table R2 field; `thme bench list/validate/verify-dataset` | Tested: malformed files refused, records round-trip, record-task mismatch caught |
+| Isometric figures in Rust (THME-3033) | `engine::iso`: the anatomy kit's core ported to Rust (camera, extruded solids with four-tone shading, painter's order, lines, dots, wires, card), with CSS-free SVG output; `thme figure MODEL` draws a model's anatomy ([showcase](docs/figures.md)) | Tested: 48 cases byte-identical to the kit's own output; figure geometry follows bytes and bits; rendered and checked in both themes |
 | Scan on import (v0.2.7.3) | Every model load (CLI, MCP server, Studio) runs the scanner first and refuses on a high or critical finding; `--allow-unsafe-model` turns that into a warning | Tested: clean model loads; planted pickle refused, allowed with the override; injected template refused |
 | Benchmark charts (THME-3032) | `thme bench chart`: scores with intervals, paired changes against a baseline, a model-by-benchmark heatmap; `engine::viz` interval plot | Tested: row and cell counts, signs of paired changes, evidence labels; rendered and checked |
 | Benchmark runner, imported mode (THME-3031) | `thme bench score`: outputs from any tool (answers, log-likelihoods or pass counts) scored with the metric library into a complete result record, labelled imported | Tested: generation, likelihood and pass@k outputs; partial, duplicate and unknown outputs refused; Table R3 interval reproduced |
@@ -100,7 +101,7 @@ flowchart LR
 
 | Track | Item |
 | :--- | :--- |
-| Rust everywhere | Owner direction: engine, 3D visuals and speed in Rust. Port `scripts/*.py` to Rust commands (charts already in `engine::viz`), parallel CPU paths with a pure-Rust thread pool, 3D model and manifold views in the Studio on its existing GPU stack |
+| Rust everywhere | Owner direction: engine, 3D visuals and speed in Rust. Done: charts (`engine::viz`) and the isometric kit core (`engine::iso`). Next: the kit's round parts, tubes and depth audit; `scripts/*.py` as Rust commands; parallel CPU paths with a pure-Rust thread pool; 3D model and manifold views in the Studio on its existing GPU stack. Every port is checked against the original's output and timed against it |
 | Epiphanes model format | Lossless compression (THME-3015); GPU/CPU placement plan from the exact allocator (THME-3016) |
 | Translation layer | Architecture-neutral graph, exact symmetries, weight layout, architecture inference, compatibility reports (dossier WP14-18), behind a permission record (WP19) |
 | Routing and needles | Calibration metrics, routers, hierarchical scoring, needle training (WP21-25) |

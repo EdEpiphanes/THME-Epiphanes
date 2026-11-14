@@ -6,6 +6,7 @@ pub mod convert;
 pub mod epiph;
 pub mod evaluate;
 pub mod export;
+pub mod figure;
 pub mod inspect;
 pub mod interop;
 pub mod mcp;
@@ -41,7 +42,7 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Launch the interactive THME Native Desktop Studio GUI
+    /// Launch the THME Studio (the separate `thme-gui` program next to this one)
     #[command(alias = "ui")]
     Gui,
 
@@ -95,6 +96,9 @@ pub enum Commands {
     /// Benchmark registry: list and check task files and result records
     Bench(bench::BenchArgs),
 
+    /// Draw a model as an isometric figure: one tray per layer, one block per tensor
+    Figure(figure::FigureArgs),
+
     /// Generate PyTorch / CUDA fine-tuning scripts or Hugging Face configurations
     Interop(interop::InteropArgs),
 
@@ -111,7 +115,7 @@ pub fn run() -> Result<()> {
     let cli = Cli::parse();
     crate::parser::allow_unsafe_models(cli.allow_unsafe_model);
     match cli.command {
-        Commands::Gui => crate::gui::launch_gui(),
+        Commands::Gui => launch_studio(),
         Commands::Inspect(args) => inspect::execute(args),
         Commands::Profile(args) => profile::execute(args),
         Commands::Plan(args) => plan::execute(args),
@@ -128,8 +132,28 @@ pub fn run() -> Result<()> {
         Commands::Epiph(args) => epiph::execute(args),
         Commands::Scan(args) => scan::execute(args),
         Commands::Bench(args) => bench::execute(args),
+        Commands::Figure(args) => figure::execute(args),
         Commands::Interop(args) => interop::execute(args),
         Commands::Mcp(args) => mcp::execute(args),
         Commands::CoSurgery(args) => co_surgery::execute(args),
     }
+}
+
+/// Starts the Studio, which is its own program (`thme-gui`), so this headless CLI carries none of
+/// the GUI stack.
+fn launch_studio() -> Result<()> {
+    let exe = std::env::current_exe()?;
+    let studio = exe.with_file_name(format!("thme-gui{}", std::env::consts::EXE_SUFFIX));
+    if !studio.is_file() {
+        anyhow::bail!(
+            "the Studio is a separate program and {} was not found next to {}; install the full build or run thme-gui directly",
+            studio.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+            exe.display()
+        );
+    }
+    let status = std::process::Command::new(&studio).status()?;
+    if !status.success() {
+        anyhow::bail!("thme-gui exited with {status}");
+    }
+    Ok(())
 }

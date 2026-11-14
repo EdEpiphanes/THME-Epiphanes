@@ -13,6 +13,7 @@
 pub mod alloc;
 pub mod basis;
 pub mod error;
+pub mod iso;
 pub mod minifloat;
 pub mod numfmt;
 pub mod viz;
