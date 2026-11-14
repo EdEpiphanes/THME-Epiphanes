@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **Keras Lambda scan** (THME-3022, v0.2.7.2): `thme scan` reads `config.json` in `.keras` zips
+  (JSON only, nothing loaded). A `Lambda`, `TFOpLambda` or `__lambda__` object is a high
+  `keras-lambda-layer` finding; a custom class outside keras/tensorflow is a medium
+  `keras-custom-object`. Legacy HDF5 files get an info `hdf5-not-inspected` note.
 - **ONNX external-data scan** (THME-3022, v0.2.7.2): `thme scan` walks `.onnx` protobufs with a
   small hand-written reader (no new dependency). A tensor `location` that is absolute or has `..`
   is a high `onnx-external-data-path` finding (CVE-2022-25882); custom operator domains are info.

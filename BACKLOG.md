@@ -272,8 +272,8 @@ closes it.
 
 ### [THME-3022] Scanner: more formats and compressed pickles
 
-- **Milestone**: v0.2.7 · **Roadmap**: v0.2.7.2 · **Priority**: p2 · **Area**: security · **Type**: feature · **Status**: triage
-- **Problem**: Only ONNX and Keras Lambda layers are still not inspected.
+- **Milestone**: v0.2.7 · **Roadmap**: v0.2.7.2 · **Priority**: p2 · **Area**: security · **Type**: feature · **Status**: ready
+- **Problem**: Legacy HDF5 `.h5` Keras files are still not inspected.
 - **Done means**: Each format added with fixtures; compressed pickles inspected with a pure-Rust inflate dependency proposed first.
 
 ### [THME-3024] Benchmark registry: task files and result records
