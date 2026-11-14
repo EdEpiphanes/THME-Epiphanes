@@ -403,6 +403,54 @@ fn judge_pickle(bytes: &[u8], rel: &str, inner: &str, report: &mut ScanReport) {
     }
 }
 
+/// Why a deflate stream could not be inflated.
+enum InflateFailure {
+    /// It produces more bytes than the pickle size limit.
+    TooLarge,
+    /// It is not a valid deflate stream.
+    Corrupt(String),
+}
+
+/// Inflates a raw deflate stream (zip method 8), stopping at `limit` bytes.
+fn inflate_limited(bytes: &[u8], limit: u64) -> std::result::Result<Vec<u8>, InflateFailure> {
+    let decoder = flate2::read::DeflateDecoder::new(bytes);
+    let mut out = Vec::new();
+    // Read one byte past the limit so an oversized stream is caught instead of truncated.
+    match decoder.take(limit.saturating_add(1)).read_to_end(&mut out) {
+        Ok(_) if out.len() as u64 > limit => Err(InflateFailure::TooLarge),
+        Ok(_) => Ok(out),
+        Err(e) => Err(InflateFailure::Corrupt(e.to_string())),
+    }
+}
+
+/// Inspects one `.pkl` entry: stored bytes as they are, deflate (method 8) inflated first.
+fn inspect_zip_pickle(bytes: &[u8], method: usize, rel: &str, name: &str, report: &mut ScanReport) {
+    match method {
+        0 => judge_pickle(bytes, rel, name, report),
+        8 => match inflate_limited(bytes, PICKLE_LIMIT) {
+            Ok(inflated) => judge_pickle(&inflated, rel, name, report),
+            Err(InflateFailure::TooLarge) => report.add(
+                Severity::Medium,
+                "pickle-not-inspected",
+                rel,
+                format!("pickle '{name}' inflates past the {PICKLE_LIMIT}-byte limit; too large to inspect"),
+            ),
+            Err(InflateFailure::Corrupt(e)) => report.add(
+                Severity::Medium,
+                "pickle-not-inspected",
+                rel,
+                format!("pickle '{name}' has a corrupt deflate stream ({e}); not inspected"),
+            ),
+        },
+        _ => report.add(
+            Severity::Medium,
+            "pickle-not-inspected",
+            rel,
+            format!("pickle '{name}' is compressed (method {method}); not inspected"),
+        ),
+    }
+}
+
 /// Walks the local headers of a zip (the PyTorch checkpoint container) and scans its pickles.
 fn scan_zip(path: &Path, rel: &str, report: &mut ScanReport) {
     let data = match read_limited(path, 4 << 30) {
@@ -465,16 +513,7 @@ fn scan_zip(path: &Path, rel: &str, report: &mut ScanReport) {
         };
         let lower = name.to_ascii_lowercase();
         if lower.ends_with(".pkl") {
-            if method == 0 {
-                judge_pickle(bytes, rel, &name, report);
-            } else {
-                report.add(
-                    Severity::Medium,
-                    "pickle-not-inspected",
-                    rel,
-                    format!("pickle '{name}' is compressed (method {method}); not inspected"),
-                );
-            }
+            inspect_zip_pickle(bytes, method, rel, &name, report);
         } else if let Some(kind) = executable_kind(bytes, 0) {
             report.add(
                 Severity::High,

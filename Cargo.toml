@@ -51,6 +51,8 @@ safetensors = "0.5"
 memmap2 = "0.9"
 comfy-table = "7.1"
 anyhow = "1.0"
+# Pure-Rust deflate backend (default features): inflating zip pickle entries during a scan.
+flate2 = "1.1"
 eframe = { version = "0.31", default-features = true }
 rfd = "0.15"
 minisign = "0.10.0"
