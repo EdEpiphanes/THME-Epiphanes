@@ -325,6 +325,134 @@ fn deflated_pickle_past_the_size_limit_is_reported_too_large() {
     );
 }
 
+const TEST_LIMIT: u64 = 64;
+
+/// `body` followed by zero padding so the whole thing is well past `TEST_LIMIT`.
+fn padded(body: &[u8]) -> Vec<u8> {
+    let mut v = body.to_vec();
+    v.extend_from_slice(&[0u8; 200]);
+    v
+}
+
+fn assert_evil_and_note(report: &ScanReport) {
+    assert!(
+        report
+            .findings
+            .iter()
+            .any(|f| f.rule == "pickle-code-execution" && f.severity == Severity::Critical),
+        "{:?}",
+        report.findings
+    );
+    assert!(
+        rules(report).contains(&"pickle-not-inspected"),
+        "{:?}",
+        report.findings
+    );
+}
+
+#[test]
+fn oversize_stored_pickle_is_still_judged_on_its_prefix() {
+    let mut report = ScanReport::default();
+    inspect_zip_pickle(
+        &padded(EVIL_PICKLE),
+        0,
+        "a.pt",
+        "d.pkl",
+        TEST_LIMIT,
+        &mut report,
+    );
+    assert_evil_and_note(&report);
+}
+
+#[test]
+fn oversize_deflated_pickle_is_still_judged_on_its_prefix() {
+    let mut report = ScanReport::default();
+    let body = deflate(&padded(EVIL_PICKLE));
+    inspect_zip_pickle(&body, 8, "a.pt", "d.pkl", TEST_LIMIT, &mut report);
+    assert_evil_and_note(&report);
+}
+
+#[test]
+fn oversize_loose_pickle_is_still_judged_on_its_prefix() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("evil.pkl");
+    std::fs::write(&path, padded(EVIL_PICKLE)).unwrap();
+    let mut report = ScanReport::default();
+    scan_loose_pickle(&path, "evil.pkl", TEST_LIMIT, &mut report);
+    assert_evil_and_note(&report);
+}
+
+#[test]
+fn oversize_clean_pickle_gets_only_the_size_note() {
+    let mut report = ScanReport::default();
+    inspect_zip_pickle(
+        &padded(CLEAN_PICKLE),
+        0,
+        "a.pt",
+        "d.pkl",
+        TEST_LIMIT,
+        &mut report,
+    );
+    assert!(
+        rules(&report).contains(&"pickle-not-inspected"),
+        "{:?}",
+        report.findings
+    );
+    assert!(
+        report
+            .findings
+            .iter()
+            .all(|f| f.severity <= Severity::Medium),
+        "{:?}",
+        report.findings
+    );
+}
+
+#[test]
+fn pickle_of_exactly_the_limit_gets_no_size_note() {
+    let limit = CLEAN_PICKLE.len() as u64;
+    let mut report = ScanReport::default();
+    inspect_zip_pickle(CLEAN_PICKLE, 0, "a.pt", "d.pkl", limit, &mut report);
+    assert!(
+        !rules(&report).contains(&"pickle-not-inspected"),
+        "{:?}",
+        report.findings
+    );
+}
+
+#[test]
+fn stored_keras_config_past_the_limit_is_noted_and_skipped_on_purpose() {
+    // A cut JSON prefix cannot be parsed, so inspect_zip_keras skips it (`Some((_, false))` gate).
+    let mut report = ScanReport::default();
+    let body = zip_entry_body(
+        &padded(b"{}"),
+        0,
+        "Keras config",
+        "config.json",
+        "keras-not-inspected",
+        "m.keras",
+        TEST_LIMIT,
+        &mut report,
+    );
+    assert!(matches!(body, Some((_, true))));
+    assert_eq!(rules(&report), ["keras-not-inspected"]);
+}
+
+#[test]
+fn object_npy_past_the_limit_gets_the_size_note() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("big.npy");
+    std::fs::write(&path, npy_bytes((1, 0), "|O", &padded(EVIL_PICKLE))).unwrap();
+    let mut report = ScanReport::default();
+    scan_npy(&path, "big.npy", TEST_LIMIT, &mut report);
+    assert_eq!(
+        rules(&report),
+        ["numpy-not-inspected"],
+        "{:?}",
+        report.findings
+    );
+}
+
 #[test]
 fn corrupt_deflate_stream_is_a_finding_not_a_crash() {
     let dir = tempfile::tempdir().unwrap();

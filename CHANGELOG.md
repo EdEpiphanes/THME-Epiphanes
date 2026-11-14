@@ -43,7 +43,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deflate-compressed pickles in zip containers (flate2, pure-Rust backend, capped at the
   256 MiB pickle limit; corrupt or oversize streams are findings) and checks `.npy`/`.npz`
   object arrays (the payload is a pickle; always a medium `numpy-allow-pickle` finding,
-  malformed headers a high `malformed-header`).
+  malformed headers a high `malformed-header`). Oversize pickles (loose, stored or deflated)
+  get a medium `pickle-not-inspected` note and their first 256 MiB are still judged, so padding
+  cannot hide a payload. An oversize `.npy` (loose, stored or deflated) is note-only (stored
+  ones used to be judged in full), as is an oversize Keras `config.json` (a cut JSON cannot be
+  parsed).
 - **Benchmark charts** (THME-3032, v0.2.8.8): `thme bench chart` draws scores with intervals,
   paired changes against a baseline and a model-by-benchmark heatmap from result records, in
   light and dark, each with its evidence label. `engine::viz` gains an interval plot.
