@@ -18,6 +18,14 @@ pub struct FigureArgs {
     /// Output folder; writes <name>-dark.svg and <name>-light.svg
     #[arg(long)]
     pub out: PathBuf,
+
+    /// Also write <name>-forward.gif: tensors light up in forward-pass order
+    #[arg(long)]
+    pub gif: bool,
+
+    /// With --gif, also write every frame as a PNG into this folder
+    #[arg(long, requires = "gif")]
+    pub frames: Option<PathBuf>,
 }
 
 pub fn execute(args: FigureArgs) -> Result<()> {
@@ -38,6 +46,12 @@ pub fn execute(args: FigureArgs) -> Result<()> {
         let path = args.out.join(format!("{stem}-{name}.svg"));
         std::fs::write(&path, model_figure_svg(&model, theme))?;
         println!("wrote {}", path.display());
+    }
+    if args.gif {
+        let path = args.out.join(format!("{stem}-forward.gif"));
+        let frames =
+            crate::report::animate::model_forward_gif(&model, &path, args.frames.as_deref())?;
+        println!("wrote {} ({frames} frames)", path.display());
     }
     Ok(())
 }

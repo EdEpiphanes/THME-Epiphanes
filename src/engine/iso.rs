@@ -1135,9 +1135,12 @@ pub fn card_svg(
     paper
         .vars
         .insert("paper".into(), pal.get("card").to_string());
+    // The drawing stays inside the card: anything reaching past its border is clipped.
     let _ = write!(
         s,
-        "<g transform=\"translate({pad} {top})\">{}</g>",
+        "<clipPath id=\"iso-card\"><rect x=\"1\" y=\"1\" width=\"{}\" height=\"{}\"/></clipPath><g clip-path=\"url(#iso-card)\"><g transform=\"translate({pad} {top})\">{}</g></g>",
+        tw - 2.0,
+        card_h - 2.0,
         inline_styles(body, &paper)
     );
     for (i, line) in card.caption.iter().enumerate() {

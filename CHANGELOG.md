@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   byte-identical to the kit's on 48 committed cases; `examples/iso_bench.rs` times it against
   `scripts/iso_golden.mjs --bench`. CSS-free output: Rust resolves every colour from the kit
   palette and draws the card in SVG, so a figure is one self-contained file.
+- **`thme figure --gif`**: animates the forward pass (each tensor lights up as ink glass with a
+  manga ink splash), rasterized with resvg and encoded as GIF in Rust; `--frames` dumps PNGs.
+- **Headless CLI without the GUI stack**: `thme gui` now launches the separate `thme-gui`
+  program, so the CLI no longer links the GUI (release CLI about 5.4 MB on Windows, from 9.6).
 - **`thme figure MODEL --out DIR`**: draws a model as an isometric parts tray (one tray per
   layer, one block per tensor; footprint follows stored bytes, height follows measured bits per
   weight). Showcase from the synthetic mock model in [docs/figures.md](docs/figures.md).

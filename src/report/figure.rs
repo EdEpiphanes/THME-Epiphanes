@@ -179,6 +179,10 @@ pub fn model_figure_svg(model: &ModelIR, theme: Theme) -> String {
 }
 
 fn scene(model: &ModelIR) -> String {
+    scene_with(model, None)
+}
+
+fn scene_with(model: &ModelIR, highlight: Option<&Highlight>) -> String {
     let (blocks, trays, base, _) = layout(model);
     let p = fit(&blocks, &base);
     let mut s = Scene::new();
@@ -282,8 +286,10 @@ fn scene(model: &ModelIR) -> String {
         );
     }
 
-    // Blocks, painted by the depth of their nearest bottom corner.
+    // Blocks, painted by the depth of their nearest bottom corner. Without a highlight the
+    // largest tensor is the lit accent; with one, the active tensor is.
     let largest = blocks.iter().map(|b| b.tensor.byte_size).max().unwrap_or(0);
+    let active = highlight.and_then(|h| model.tensors.get(h.active));
     let mut lit_done = false;
     for b in &blocks {
         let z = base_h
@@ -292,7 +298,10 @@ fn scene(model: &ModelIR) -> String {
             } else {
                 0.0
             };
-        let lit = !lit_done && b.tensor.byte_size == largest;
+        let lit = match active {
+            Some(a) => std::ptr::eq(a, b.tensor),
+            None => !lit_done && b.tensor.byte_size == largest,
+        };
         lit_done |= lit;
         let solid = slab_of(&b.plan, z, b.height, &p, 4, (b.plan.w * 0.04).min(0.6));
         let style = SolidStyle {
@@ -301,9 +310,211 @@ fn scene(model: &ModelIR) -> String {
             ..Default::default()
         };
         let near = (b.plan.x + b.plan.w, b.plan.y + b.plan.d, z);
-        s.add_at(near, &p, solid_svg(&solid, &style));
+        let depth = crate::engine::iso::depth_of(near, &p);
+        match highlight {
+            Some(h) if lit => {
+                s.add(depth - 1e-6, ink_splash(b, z, &p, h));
+                let mut svg = solid_svg(&solid, &style);
+                svg.push_str(&glass(b, z, &p, &solid.fill, h));
+                s.add(depth, svg);
+            }
+            _ => s.add(depth, solid_svg(&solid, &style)),
+        }
     }
     s.render()
+}
+
+/// What to light in one animation frame.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Highlight {
+    /// Index into the model's tensors.
+    pub active: usize,
+    /// 0 at the start of this tensor's turn, 1 at the end.
+    pub phase: f64,
+    /// Ink colour (manga ink) and the sheen colour of the glass.
+    pub ink: String,
+    pub sheen: String,
+}
+
+/// Tensor indices in forward-pass order: tensors outside the layers that come first (the
+/// embedding), then each layer's tensors in role order, then the rest (final norm, head).
+pub fn forward_order(model: &ModelIR) -> Vec<usize> {
+    let mut idx: Vec<usize> = (0..model.tensors.len()).collect();
+    let key = |i: &usize| {
+        let t = &model.tensors[*i];
+        let stage = match (t.layer_index, &t.role) {
+            (None, TensorRole::Embedding) => 0,
+            (Some(_), _) => 1,
+            _ => 2,
+        };
+        (
+            stage,
+            t.layer_index.unwrap_or(0),
+            role_rank(&t.role),
+            t.name.clone(),
+        )
+    };
+    idx.sort_by_key(key);
+    idx
+}
+
+fn screen_box(b: &Block, z: f64, p: &Projection) -> (f64, f64, f64, f64) {
+    let (x0, y0, x1, y1) = (b.plan.x, b.plan.y, b.plan.x + b.plan.w, b.plan.y + b.plan.d);
+    let mut bx = (
+        f64::INFINITY,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        f64::NEG_INFINITY,
+    );
+    for (x, y) in [(x0, y0), (x1, y0), (x0, y1), (x1, y1)] {
+        for zz in [z, z + b.height] {
+            let (sx, sy) = iso((x, y, zz), p);
+            bx = (bx.0.min(sx), bx.1.min(sy), bx.2.max(sx), bx.3.max(sy));
+        }
+    }
+    bx
+}
+
+/// The active block as glossy ink glass: ink over its silhouette, then a bright band sweeping
+/// diagonally across it with the phase.
+fn glass(b: &Block, z: f64, p: &Projection, fill: &str, h: &Highlight) -> String {
+    let (x0, y0, x1, y1) = screen_box(b, z, p);
+    let (w, hh) = (x1 - x0, y1 - y0);
+    let c = -0.4 + h.phase * 1.8;
+    let (gx, gy) = (x0 + c * w, y0 + c * hh);
+    let half = 0.22 * w.max(hh);
+    format!(
+        "<defs><linearGradient id=\"glass\" gradientUnits=\"userSpaceOnUse\" x1=\"{:.1}\" y1=\"{:.1}\" x2=\"{:.1}\" y2=\"{:.1}\"><stop offset=\"0\" stop-color=\"{s}\" stop-opacity=\"0\"/><stop offset=\"0.5\" stop-color=\"{s}\" stop-opacity=\"0.7\"/><stop offset=\"1\" stop-color=\"{s}\" stop-opacity=\"0\"/></linearGradient></defs><path d=\"{fill}\" fill=\"{ink}\" fill-opacity=\"0.9\"/><path d=\"{fill}\" fill=\"url(#glass)\"/><path d=\"{fill}\" fill=\"none\" stroke=\"{s}\" stroke-opacity=\"0.5\" stroke-width=\"0.6\"/>",
+        gx - half,
+        gy - half,
+        gx + half,
+        gy + half,
+        s = h.sheen,
+        ink = h.ink,
+    )
+}
+
+/// A manga ink splash on the paper under the active block: an organic blot with tendrils, flung
+/// droplets (some stretched along their flight) and tapered speed lines, growing with the phase
+/// and fading at the end. Seeded by the tensor, so every frame is reproducible.
+fn ink_splash(b: &Block, z: f64, p: &Projection, h: &Highlight) -> String {
+    use crate::bench::stats::SplitMix64;
+    use std::f64::consts::TAU;
+    let (x0, y0, x1, y1) = screen_box(b, z, p);
+    let (cx, cy) = iso((b.plan.x + b.plan.w / 2.0, b.plan.y + b.plan.d / 2.0, z), p);
+    let r = ((x1 - x0).max(y1 - y0) * 1.3).clamp(42.0, 120.0);
+    let t = h.phase.clamp(0.0, 1.0);
+    let grow = 1.0 - (1.0 - t).powi(3);
+    let fade = if t < 0.7 {
+        1.0
+    } else {
+        (1.0 - (t - 0.7) / 0.3).max(0.0)
+    };
+    let squash = 0.55; // the floor is foreshortened
+    let at = |a: f64, k: f64| (cx + k * a.cos(), cy + k * squash * a.sin());
+    let mut rng = SplitMix64::new(0x9e37_79b9 ^ (h.active as u64).wrapping_mul(0x2545_f491));
+    let mut out = format!(
+        "<g fill=\"{ink}\" stroke=\"none\" opacity=\"{fade:.3}\">",
+        ink = h.ink
+    );
+
+    // Blot: a closed curve through jittered points, a few pushed out into tendrils.
+    let n = 26;
+    let pts: Vec<(f64, f64)> = (0..n)
+        .map(|i| {
+            let a = i as f64 / n as f64 * TAU + rng.unit() * 0.12;
+            let tendril = if rng.unit() < 0.22 {
+                1.0 + 0.9 * rng.unit()
+            } else {
+                0.0
+            };
+            let k = r * grow * (0.42 + 0.22 * rng.unit() + 0.38 * tendril);
+            at(a, k)
+        })
+        .collect();
+    let mid = |a: (f64, f64), b: (f64, f64)| ((a.0 + b.0) / 2.0, (a.1 + b.1) / 2.0);
+    let start = mid(pts[n - 1], pts[0]);
+    let mut d = format!("M{:.1} {:.1}", start.0, start.1);
+    for i in 0..n {
+        let m = mid(pts[i], pts[(i + 1) % n]);
+        d += &format!("Q{:.1} {:.1} {:.1} {:.1}", pts[i].0, pts[i].1, m.0, m.1);
+    }
+    out += &format!("<path d=\"{d}Z\"/>");
+
+    // Droplets flung outward; the farther ones are smaller and stretched along their flight.
+    for _ in 0..22 {
+        let a = rng.unit() * TAU;
+        let reach = 0.7 + 1.1 * rng.unit();
+        let (x, y) = at(a, r * reach * grow);
+        let size = (1.4 + 4.2 * rng.unit()) * (1.25 - 0.45 * reach / 1.8);
+        let stretch = 1.0 + 1.6 * (reach - 0.7) * grow;
+        let deg = (a.sin() * squash).atan2(a.cos()).to_degrees();
+        out += &format!(
+            "<ellipse cx=\"{x:.1}\" cy=\"{y:.1}\" rx=\"{:.2}\" ry=\"{:.2}\" transform=\"rotate({deg:.1} {x:.1} {y:.1})\"/>",
+            size * stretch,
+            size
+        );
+    }
+
+    // Speed lines: tapered wedges radiating from the blot, thick at the base, sharp at the tip.
+    for _ in 0..16 {
+        let a = rng.unit() * TAU;
+        let (r0, r1) = (
+            r * (0.55 + 0.15 * rng.unit()),
+            r * (1.05 + 0.75 * rng.unit()) * (0.5 + 0.5 * grow),
+        );
+        let half = (0.8 + 1.8 * rng.unit()) * (0.6 + 0.4 * grow);
+        let (bx, by) = at(a, r0);
+        let (tx, ty) = at(a, r1);
+        let (nx, ny) = (-(a.sin() * squash), a.cos());
+        let len = (nx * nx + ny * ny).sqrt().max(1e-9);
+        let (nx, ny) = (nx / len * half, ny / len * half);
+        out += &format!(
+            "<path d=\"M{:.1} {:.1}L{:.1} {:.1}L{tx:.1} {ty:.1}Z\"/>",
+            bx + nx,
+            by + ny,
+            bx - nx,
+            by - ny
+        );
+    }
+    out.push_str("</g>");
+    out
+}
+
+/// Bytes as KiB, MiB or GiB with one decimal.
+fn human_bytes(n: usize) -> String {
+    let n = n as f64;
+    if n >= (1u64 << 30) as f64 {
+        format!("{:.1} GiB", n / (1u64 << 30) as f64)
+    } else if n >= (1u64 << 20) as f64 {
+        format!("{:.1} MiB", n / (1u64 << 20) as f64)
+    } else {
+        format!("{:.1} KiB", n / 1024.0)
+    }
+}
+
+/// One animation frame on its card: the active tensor glows as ink glass with an ink splash,
+/// and the readout names it.
+pub fn model_figure_frame(model: &ModelIR, theme: Theme, highlight: &Highlight) -> String {
+    let t = &model.tensors[highlight.active.min(model.tensors.len().saturating_sub(1))];
+    let card = Card {
+        fig: "Fig 2".into(),
+        title: model.name.clone(),
+        hint: "Forward pass".into(),
+        readout: format!("{} \u{b7} {}", t.name, human_bytes(t.byte_size)),
+        caption: vec![
+            "Each tensor lights up in forward-pass order: the embedding, each layer's projections, then".into(),
+            "the output. Block sizes follow stored bytes and measured bits per weight, as in Fig 1.".into(),
+        ],
+    };
+    card_svg(
+        W,
+        H,
+        &format!("{} forward pass", model.name),
+        &scene_with(model, Some(highlight)),
+        &card,
+        theme,
+    )
 }
 
 /// The camera that fits the base and every block, top and bottom, into the frame.
@@ -326,11 +537,12 @@ mod tests {
     use super::*;
     use crate::parser::ModelImporter;
 
+    /// A small synthetic checkpoint written for the test (the mock under examples/ is generated
+    /// locally and never committed, so tests cannot rely on it).
     fn mock() -> ModelIR {
-        ModelImporter::import(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/mock_llama"),
-        )
-        .unwrap()
+        let dir = tempfile::tempdir().unwrap();
+        let (model_dir, _) = crate::cli::evaluate::tests::synthetic_checkpoint(dir.path());
+        ModelImporter::import(&model_dir).unwrap()
     }
 
     #[test]
@@ -367,7 +579,7 @@ mod tests {
             blocks
                 .iter()
                 .find(|x| {
-                    x.tensor.byte_size > 4096 && x.tensor.byte_size != blocks[0].tensor.byte_size
+                    x.tensor.byte_size > 0 && x.tensor.byte_size != blocks[0].tensor.byte_size
                 })
                 .unwrap(),
         );
@@ -382,6 +594,41 @@ mod tests {
             .find(|x| x.tensor.layer_index.is_none())
             .unwrap();
         assert!((loose.height - (measured_bits(loose.tensor) * scale).max(1.0)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn frames_light_tensors_in_forward_order() {
+        let m = mock();
+        let order = forward_order(&m);
+        assert_eq!(order.len(), m.tensors.len());
+        assert_eq!(m.tensors[order[0]].role, TensorRole::Embedding);
+        let layers: Vec<usize> = order
+            .iter()
+            .filter_map(|&i| m.tensors[i].layer_index)
+            .collect();
+        assert!(
+            layers.windows(2).all(|w| w[0] <= w[1]),
+            "layers in order: {layers:?}"
+        );
+        let h = |phase| Highlight {
+            active: order[3],
+            phase,
+            ink: "#0b0b0b".into(),
+            sheen: "#ffffff".into(),
+        };
+        let a = model_figure_frame(&m, Theme::Light, &h(0.3));
+        assert_eq!(
+            a,
+            model_figure_frame(&m, Theme::Light, &h(0.3)),
+            "deterministic"
+        );
+        assert_ne!(
+            a,
+            model_figure_frame(&m, Theme::Light, &h(0.8)),
+            "the phase moves the effect"
+        );
+        assert!(a.contains(&m.tensors[order[3]].name) && a.contains("url(#glass)"));
+        assert!(!a.contains("class="), "frames need no stylesheet either");
     }
 
     #[test]
