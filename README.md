@@ -186,12 +186,12 @@ orbit, scroll to zoom, hover for statistics. Point it at any local LLaMA-family 
 folder, or run the built-in synthetic demo shown here.
 
 <p align="center">
-  <img src="assets/gifs/live-3d-manifold.gif" alt="Recording of the Live 3D manifold view: a black-and-white manga-shaded Calabi-Yau surface turning and morphing through its fourth dimension, patches toned by format family and lit by measured layer activity, token particles flowing" width="760" />
+  <img src="assets/gifs/live-3d-manifold.gif" alt="Recording of the Live 3D manifold view: a black-and-white manga-shaded Calabi-Yau surface turning and morphing through its fourth dimension, patches toned by format family and lit by measured layer activity, token particles flowing, and the patches of one layer at a time turning to ink glass as the forward pass walks through the layers" width="760" />
 </p>
 
 <table>
   <tr>
-    <td width="50%"><img src="assets/gifs/live-3d-slabs.gif" alt="Recording of the Live 3D layer-slab view with measured per-channel activity and token-flow particles" /><br><sub><b>Layer slabs</b>: tensors, channel groups, residual flow</sub></td>
+    <td width="50%"><img src="assets/gifs/live-3d-slabs.gif" alt="Recording of the Live 3D layer-slab view with measured per-channel activity and token-flow particles; the layer the forward pass is on turns to ink glass with a manga ink splash" /><br><sub><b>Layer slabs</b>: tensors, channel groups, residual flow; ink glass marks the layer in turn</sub></td>
     <td width="50%"><img src="assets/gifs/dashboard.gif" alt="Recording of the Studio dashboard in the Manga Panel theme" /><br><sub><b>Manga Panel</b> theme (default); <b>Manga Night</b> and <b>Manga Ink</b> keep the red</sub></td>
   </tr>
 </table>

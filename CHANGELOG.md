@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **Ink glass in the Studio Live 3D view**: the figure GIF's treatment now marks the layer the
+  forward pass is on. In the slab view that layer turns to ink glass with a sweeping sheen and a
+  manga ink splash on its plane; in the manifold view its patches darken under the sheen. The
+  pacing is illustrative; tiles and colours stay measured, and an anomaly mark is never covered.
+  The splash geometry is one shared function (`ink_splash_geometry`) for the SVG figure and the
+  Studio; figure frames stay byte-identical (pinned by hash). README GIFs re-recorded; recording
+  mode ignores the pointer, so no tooltip lands in the frames.
 - **Isometric figures in Rust** (THME-3033): `engine::iso` ports the core of the anatomy
   figure kit (camera and fit, extruded solids with four side tones by facing and a lighter top,
   painter's order, lines, dots, wires, figure and card markup, the kit stylesheet). Its output is
