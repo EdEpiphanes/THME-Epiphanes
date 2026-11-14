@@ -247,4 +247,122 @@ mod tests {
         let direct = step(FixedMethod::Euler, &decay, 0.0, &[1.0], 0.5).unwrap();
         assert_eq!(one, direct);
     }
+
+    /// x' = v, v' = -x: the harmonic oscillator with the closed form
+    /// (cos t, -sin t). Energy x^2 + v^2 is conserved by the exact flow.
+    fn oscillator(_t: f64, y: &[f64]) -> Vec<f64> {
+        vec![y[1], -y[0]]
+    }
+
+    /// RK4 on the oscillator over one period t = 2*pi, n = 20, 40, 80.
+    ///
+    /// The error ratio is asserted only for the 40 and 80 halvings, where the
+    /// asymptotic regime holds; at n = 20 the leading neglected term still adds a
+    /// few percent. Every check compares against the exact solution.
+    #[test]
+    fn rk4_order_is_four_on_the_harmonic_oscillator() {
+        let period = 2.0 * std::f64::consts::PI;
+        let error_at = |n: usize| {
+            let got = integrate_fixed(FixedMethod::Rk4, &oscillator, 0.0, &[1.0, 0.0], period, n)
+                .unwrap();
+            ((got[0] - period.cos()).powi(2) + (got[1] + period.sin()).powi(2)).sqrt()
+        };
+        let mut previous: Option<f64> = None;
+        for n in [20usize, 40, 80] {
+            let error = error_at(n);
+            if let Some(prev) = previous {
+                let ratio = prev / error;
+                assert!(
+                    (ratio - 16.0).abs() <= 0.1 * 16.0,
+                    "error ratio {ratio} at n = {n} is not within 10% of 16"
+                );
+                let order = ratio.log2();
+                assert!(
+                    (order - 4.0).abs() <= 0.1,
+                    "observed order {order} at n = {n} is not within 0.1 of 4"
+                );
+            }
+            previous = Some(error);
+        }
+    }
+
+    /// Euler gains energy on the oscillator: the discrete flow multiplies
+    /// x^2 + v^2 by (1 + h^2) every step, so after 1000 steps it exceeds 1.
+    /// The exact energy is 1.
+    #[test]
+    fn euler_gains_energy_on_the_harmonic_oscillator() {
+        let period = 2.0 * std::f64::consts::PI;
+        let got = integrate_fixed(
+            FixedMethod::Euler,
+            &oscillator,
+            0.0,
+            &[1.0, 0.0],
+            period,
+            1000,
+        )
+        .unwrap();
+        let energy = got[0].powi(2) + got[1].powi(2);
+        assert!(
+            energy > 1.0,
+            "Euler energy {energy} at n = 1000 is not greater than 1"
+        );
+    }
+
+    /// RK4 keeps the oscillator's energy within 1e-8 of 1 at n = 200; the exact
+    /// energy is 1.
+    #[test]
+    fn rk4_conserves_energy_on_the_harmonic_oscillator() {
+        let period = 2.0 * std::f64::consts::PI;
+        let got =
+            integrate_fixed(FixedMethod::Rk4, &oscillator, 0.0, &[1.0, 0.0], period, 200).unwrap();
+        let energy = got[0].powi(2) + got[1].powi(2);
+        assert!(
+            (energy - 1.0).abs() <= 1.0e-8,
+            "RK4 energy {energy} at n = 200 is not within 1e-8 of 1"
+        );
+    }
+
+    /// Backward integration (t1 < t0) on y' = -y: y(0) = 1 from t0 = 0 to
+    /// t1 = -1 returns exp(+1), the exact backward solution. A negative step size
+    /// must reach the same closed form as forward integration does.
+    #[test]
+    fn backward_integration_follows_the_closed_form() {
+        let exact = 1.0f64.exp();
+        let got = integrate_fixed(FixedMethod::Euler, &decay, 0.0, &[1.0], -1.0, 1000).unwrap()[0];
+        assert!(
+            (got - exact).abs() < 1.0e-2,
+            "Euler backward value {got} is not within 1e-2 of exp(1) = {exact}"
+        );
+        let got = integrate_fixed(FixedMethod::Rk4, &decay, 0.0, &[1.0], -1.0, 100).unwrap()[0];
+        assert!(
+            (got - exact).abs() < 1.0e-9,
+            "RK4 backward value {got} is not within 1e-9 of exp(1) = {exact}"
+        );
+    }
+
+    /// Observed orders on the backward decay, with the same tolerances as the
+    /// forward tests: Euler about 1 (ratio 2), RK4 about 4 (ratio 16).
+    #[test]
+    fn backward_integration_keeps_the_forward_orders() {
+        let exact = 1.0f64.exp();
+        for (method, expected_ratio, tolerance) in [
+            (FixedMethod::Euler, 2.0, 0.05),
+            (FixedMethod::Rk4, 16.0, 0.1),
+        ] {
+            let mut previous: Option<f64> = None;
+            for n in [100usize, 200, 400] {
+                let got = integrate_fixed(method, &decay, 0.0, &[1.0], -1.0, n).unwrap()[0];
+                let error = (got - exact).abs();
+                if let Some(prev) = previous {
+                    let ratio = prev / error;
+                    assert!(
+                        (ratio - expected_ratio).abs() <= tolerance * expected_ratio,
+                        "backward error ratio {ratio} at n = {n} is not within {}% of {expected_ratio}",
+                        tolerance * 100.0
+                    );
+                }
+                previous = Some(error);
+            }
+        }
+    }
 }
