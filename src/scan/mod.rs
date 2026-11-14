@@ -11,6 +11,9 @@
 //!   `TFOpLambda` or a `__lambda__` function carries Python code that runs when the model is
 //!   loaded with `safe_mode` disabled. Custom layer classes must be imported from user code;
 //!   legacy HDF5 `.h5` files are reported as not inspected.
+//! - **ONNX external data** in `.onnx` files: a tensor whose `location` is an absolute path or
+//!   contains `..` makes a loader read a file outside the model folder; custom operator domains
+//!   are noted.
 //! - **Malformed headers** in GGUF and SafeTensors files, which target parser bugs.
 //! - **Unaccounted bytes** between or after tensor payloads, and executables hidden there.
 //! - **Code in text**: template-injection patterns in chat templates, shell or Python in
@@ -21,6 +24,7 @@
 //!
 //! A clean result means no rule fired. It is not proof that a file is safe.
 
+pub mod onnx;
 pub mod pickle;
 
 use anyhow::{bail, Context, Result};
@@ -211,6 +215,8 @@ fn scan_file(path: &Path, rel: &str, remote_code: bool, report: &mut ScanReport)
             rel,
             format!("{kind} executable shipped with the model"),
         );
+    } else if ext == "onnx" {
+        scan_onnx_file(path, rel, report);
     } else if is_pickle_candidate(&magic, &ext) {
         scan_loose_pickle(path, rel, PICKLE_LIMIT, report);
     } else if matches!(
@@ -230,6 +236,58 @@ fn scan_file(path: &Path, rel: &str, remote_code: bool, report: &mut ScanReport)
         if let Some(json) = read_json(path) {
             check_hf_json(&name, &json, rel, report);
         }
+    }
+}
+
+/// Rules for an ONNX file: tensor data locations that leave the model folder, a broken protobuf,
+/// and operator domains that need a custom-op library.
+fn scan_onnx_file(path: &Path, rel: &str, report: &mut ScanReport) {
+    const STANDARD_DOMAINS: [&str; 5] = [
+        "",
+        "ai.onnx",
+        "ai.onnx.ml",
+        "ai.onnx.training",
+        "ai.onnx.preview.training",
+    ];
+    let data = match read_limited(path, 2 << 30) {
+        Ok(d) => d,
+        Err(e) => {
+            report.add(Severity::Medium, "unreadable", rel, format!("{e:#}"));
+            return;
+        }
+    };
+    let scan = onnx::scan_onnx(&data);
+    for location in scan
+        .external_locations
+        .iter()
+        .filter(|l| onnx::is_unsafe_location(l))
+    {
+        report.add(
+            Severity::High,
+            "onnx-external-data-path",
+            rel,
+            format!("tensor data location '{location}' points outside the model folder"),
+        );
+    }
+    if let Some(at) = scan.malformed_at {
+        report.add(
+            Severity::Medium,
+            "onnx-malformed",
+            rel,
+            format!("protobuf ends or breaks at byte {at}"),
+        );
+    }
+    for domain in scan
+        .domains
+        .iter()
+        .filter(|d| !STANDARD_DOMAINS.contains(&d.as_str()))
+    {
+        report.add(
+            Severity::Info,
+            "onnx-custom-domain",
+            rel,
+            format!("operator domain '{domain}' needs a custom-op library; the scan loads none"),
+        );
     }
 }
 

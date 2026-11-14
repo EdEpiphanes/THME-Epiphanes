@@ -820,3 +820,88 @@ fn deeply_nested_keras_config_is_reported_without_overflowing_the_stack() {
     assert_eq!(finding.severity, Severity::Medium);
     assert!(finding.detail.contains("64"), "{}", finding.detail);
 }
+
+// ---------------------------------------------------------------------------------------------
+// ONNX
+
+mod onnx_files {
+    use super::*;
+    use crate::scan::onnx::tests::{model, pb_field, tensor};
+
+    fn scan_bytes(bytes: &[u8]) -> ScanReport {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("m.onnx");
+        std::fs::write(&p, bytes).unwrap();
+        scan(&p).unwrap()
+    }
+
+    fn initializer(location: &str) -> Vec<u8> {
+        model(&pb_field(5, 2, &tensor(location)))
+    }
+
+    #[test]
+    fn local_external_data_has_no_finding() {
+        assert!(scan_bytes(&initializer("weights.bin")).findings.is_empty());
+    }
+
+    #[test]
+    fn traversal_in_initializer_constant_and_subgraph_is_high() {
+        let attr_t = pb_field(5, 2, &tensor("../../etc/passwd"));
+        let node = |attr: &[u8]| pb_field(1, 2, &pb_field(5, 2, attr));
+        let subgraph = pb_field(6, 2, &pb_field(5, 2, &tensor("/etc/passwd")));
+        for bytes in [
+            initializer("../../etc/passwd"),
+            model(&node(&attr_t)),
+            model(&node(&subgraph)),
+        ] {
+            let report = scan_bytes(&bytes);
+            assert_eq!(rules(&report), ["onnx-external-data-path"], "{report:?}");
+            assert_eq!(report.verdict(), "dangerous");
+        }
+    }
+
+    #[test]
+    fn custom_domain_is_info_and_standard_domains_are_silent() {
+        let node = |d: &str| model(&pb_field(1, 2, &pb_field(7, 2, d.as_bytes())));
+        let report = scan_bytes(&node("com.example.custom"));
+        assert_eq!(rules(&report), ["onnx-custom-domain"]);
+        assert_eq!(report.findings[0].severity, Severity::Info);
+        for d in ["", "ai.onnx", "ai.onnx.ml"] {
+            assert!(scan_bytes(&node(d)).findings.is_empty(), "{d}");
+        }
+    }
+
+    #[test]
+    fn attribute_tensor_and_graph_lists_are_flagged() {
+        let node = |attr: &[u8]| model(&pb_field(1, 2, &pb_field(5, 2, attr)));
+        let graph = pb_field(5, 2, &tensor("/etc/passwd"));
+        for attr in [pb_field(10, 2, &tensor("../x")), pb_field(11, 2, &graph)] {
+            assert_eq!(
+                rules(&scan_bytes(&node(&attr))),
+                ["onnx-external-data-path"]
+            );
+        }
+    }
+
+    #[test]
+    fn executable_renamed_onnx_is_high() {
+        let report = scan_bytes(b"\x7fELF renamed program");
+        assert_eq!(rules(&report), ["executable-file"]);
+    }
+
+    #[test]
+    fn deep_nesting_is_malformed_not_a_stack_overflow() {
+        let mut graph = pb_field(5, 2, &tensor("../x"));
+        for _ in 0..100 {
+            graph = pb_field(1, 2, &pb_field(5, 2, &pb_field(6, 2, &graph)));
+        }
+        assert!(rules(&scan_bytes(&model(&graph))).contains(&"onnx-malformed"));
+    }
+
+    #[test]
+    fn cut_file_is_malformed_not_a_panic() {
+        let bytes = initializer("weights.bin");
+        let report = scan_bytes(&bytes[..bytes.len() - 1]);
+        assert_eq!(rules(&report), ["onnx-malformed"]);
+    }
+}

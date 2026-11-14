@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+- **ONNX external-data scan** (THME-3022, v0.2.7.2): `thme scan` walks `.onnx` protobufs with a
+  small hand-written reader (no new dependency). A tensor `location` that is absolute or has `..`
+  is a high `onnx-external-data-path` finding (CVE-2022-25882); custom operator domains are info.
 - **Ink glass in the Studio Live 3D view**: the figure GIF's treatment now marks the layer the
   forward pass is on. In the slab view that layer turns to ink glass with a sweeping sheen and a
   manga ink splash on its plane; in the manifold view its patches darken under the sheen. The
