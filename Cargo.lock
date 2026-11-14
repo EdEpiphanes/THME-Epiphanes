@@ -3614,6 +3614,7 @@ dependencies = [
  "clap",
  "comfy-table",
  "eframe",
+ "flate2",
  "gif",
  "memmap2",
  "minisign",

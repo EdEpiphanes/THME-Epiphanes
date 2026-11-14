@@ -39,6 +39,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Scan on import** (v0.2.7.3): every model load (CLI, MCP server, Studio) runs the scanner
   first and refuses on a high or critical finding. The global `--allow-unsafe-model` flag turns
   the refusal into a printed warning; nothing in the files is executed either way.
+- **Deflate pickles and NumPy object arrays** (THME-3022): `thme scan` now inflates
+  deflate-compressed pickles in zip containers (flate2, pure-Rust backend, capped at the
+  256 MiB pickle limit; corrupt or oversize streams are findings) and checks `.npy`/`.npz`
+  object arrays (the payload is a pickle; always a medium `numpy-allow-pickle` finding,
+  malformed headers a high `malformed-header`).
 - **Benchmark charts** (THME-3032, v0.2.8.8): `thme bench chart` draws scores with intervals,
   paired changes against a baseline and a model-by-benchmark heatmap from result records, in
   light and dark, each with its evidence label. `engine::viz` gains an interval plot.
@@ -241,6 +246,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hardened release pipeline (tag/version and changelog checks, gates before build, four targets,
   per-file and combined checksums); Dependabot; PR and issue templates (bug, feature, experiment);
   CODEOWNERS; `docs/WORKFLOW.md`; active backlog in BACKLOG.md with `scripts/sync_github_backlog.py`.
+- Pinned toolchain is 1.100.0 (`rust-toolchain.toml`); MSRV stays 1.89.
 - `examples/production_verification.rs` runs a real perplexity gate on the source weights, the
   re-imported GGUF export and the surgery recipe. Without weights and tokens it reports
   NOT EVALUATED instead of a number, and it exits non-zero when a candidate fails.

@@ -18,13 +18,13 @@ fn fake_elf() -> Vec<u8> {
     b
 }
 
-fn zip_stored(entries: &[(&str, &[u8])]) -> Vec<u8> {
+fn zip_entries(entries: &[(&str, u16, &[u8])]) -> Vec<u8> {
     let mut out = Vec::new();
-    for (name, data) in entries {
+    for (name, method, data) in entries {
         out.extend_from_slice(b"PK\x03\x04");
         out.extend_from_slice(&20u16.to_le_bytes()); // version
         out.extend_from_slice(&0u16.to_le_bytes()); // flags
-        out.extend_from_slice(&0u16.to_le_bytes()); // method: stored
+        out.extend_from_slice(&method.to_le_bytes());
         out.extend_from_slice(&[0u8; 8]); // time, date, crc
         out.extend_from_slice(&(data.len() as u32).to_le_bytes());
         out.extend_from_slice(&(data.len() as u32).to_le_bytes());
@@ -34,6 +34,43 @@ fn zip_stored(entries: &[(&str, &[u8])]) -> Vec<u8> {
         out.extend_from_slice(data);
     }
     out
+}
+
+fn zip_stored(entries: &[(&str, &[u8])]) -> Vec<u8> {
+    let items: Vec<(&str, u16, &[u8])> = entries.iter().map(|(n, d)| (*n, 0, *d)).collect();
+    zip_entries(&items)
+}
+
+/// Deflates each payload, the way the PyTorch container stores pickles.
+fn zip_deflated(entries: &[(&str, &[u8])]) -> Vec<u8> {
+    let items: Vec<(&str, u16, Vec<u8>)> =
+        entries.iter().map(|(n, d)| (*n, 8, deflate(d))).collect();
+    let refs: Vec<(&str, u16, &[u8])> = items
+        .iter()
+        .map(|(n, m, d)| (*n, *m, d.as_slice()))
+        .collect();
+    zip_entries(&refs)
+}
+
+fn deflate(data: &[u8]) -> Vec<u8> {
+    use std::io::Write;
+    let mut enc = flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
+    enc.write_all(data).unwrap();
+    enc.finish().unwrap()
+}
+
+/// Deflates `len` zero bytes without holding them uncompressed; a zip-bomb stand-in.
+fn deflate_zeros(len: u64) -> Vec<u8> {
+    use std::io::Write;
+    let mut enc = flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::fast());
+    let chunk = [0u8; 1 << 16];
+    let mut left = len;
+    while left > 0 {
+        let take = left.min(chunk.len() as u64) as usize;
+        enc.write_all(&chunk[..take]).unwrap();
+        left -= take as u64;
+    }
+    enc.finish().unwrap()
 }
 
 fn gguf_bytes(template: Option<&str>) -> Vec<u8> {
@@ -216,4 +253,265 @@ fn epiph_files_are_verified() {
     bytes[last] ^= 0xFF;
     std::fs::write(&out, bytes).unwrap();
     assert!(rules(&scan(&out).unwrap()).contains(&"epiph-integrity"));
+}
+
+#[test]
+fn deflated_pickle_importing_code_is_critical_like_the_stored_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let evil = b"cos\nsystem\n(S'echo fixture'\ntR.";
+    std::fs::write(
+        dir.path().join("stored.pt"),
+        zip_stored(&[("archive/data.pkl", evil)]),
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("deflated.pt"),
+        zip_deflated(&[("archive/data.pkl", evil)]),
+    )
+    .unwrap();
+
+    let report = scan(dir.path()).unwrap();
+    let finding = |file: &str| {
+        report
+            .findings
+            .iter()
+            .find(|f| f.file == file)
+            .unwrap_or_else(|| panic!("no finding for {file}: {:?}", report.findings))
+    };
+    let stored = finding("stored.pt!archive/data.pkl");
+    assert_eq!(stored.severity, Severity::Critical);
+    let deflated = finding("deflated.pt!archive/data.pkl");
+    assert_eq!(deflated.severity, stored.severity);
+    assert_eq!(deflated.rule, stored.rule);
+    assert_eq!(deflated.detail, stored.detail);
+}
+
+#[test]
+fn deflated_clean_pickle_has_no_finding() {
+    let dir = tempfile::tempdir().unwrap();
+    let benign =
+        b"\x80\x02ccollections\nOrderedDict\nq\x00)Rq\x01ctorch._utils\n_rebuild_tensor_v2\nq\x02.";
+    std::fs::write(
+        dir.path().join("ok.pt"),
+        zip_deflated(&[("archive/data.pkl", benign)]),
+    )
+    .unwrap();
+    let report = scan(dir.path()).unwrap();
+    assert_eq!(report.verdict(), "no findings", "{:?}", report.findings);
+}
+
+#[test]
+fn deflated_pickle_past_the_size_limit_is_reported_too_large() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("bomb.pt"),
+        zip_entries(&[(
+            "archive/data.pkl",
+            8,
+            deflate_zeros(PICKLE_LIMIT + 1).as_slice(),
+        )]),
+    )
+    .unwrap();
+    let report = scan(dir.path()).unwrap();
+    let finding = report
+        .findings
+        .iter()
+        .find(|f| f.rule == "pickle-not-inspected")
+        .unwrap_or_else(|| panic!("expected a not-inspected finding: {:?}", report.findings));
+    assert!(
+        finding.detail.contains("too large"),
+        "detail was {}",
+        finding.detail
+    );
+}
+
+#[test]
+fn corrupt_deflate_stream_is_a_finding_not_a_crash() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut body = deflate(b"cos\nsystem\n(S'echo fixture'\ntR.");
+    body.truncate(body.len() / 2);
+    std::fs::write(
+        dir.path().join("corrupt.pt"),
+        zip_entries(&[("archive/data.pkl", 8, &body)]),
+    )
+    .unwrap();
+    let report = scan(dir.path()).unwrap();
+    let finding = report
+        .findings
+        .iter()
+        .find(|f| f.rule == "pickle-not-inspected")
+        .unwrap_or_else(|| panic!("expected a not-inspected finding: {:?}", report.findings));
+    assert!(
+        finding.detail.contains("corrupt"),
+        "detail was {}",
+        finding.detail
+    );
+}
+
+/// Builds a `.npy` file: magic, version, little-endian header length, dict header, payload.
+/// `descr` is a dtype token in the header's own quoting, so `'O'` and `"'O'"` both reach
+/// `descr` as `'O'`; the fixture covers the quoting a real `.npy` file uses.
+fn npy_bytes_raw(version: (u8, u8), descr: &str, payload: &[u8]) -> Vec<u8> {
+    let len_size = if version.0 == 1 { 2 } else { 4 };
+    let mut header =
+        format!("{{'descr': {descr}, 'fortran_order': False, 'shape': (2,), }}").into_bytes();
+    while (8 + len_size + header.len() + 1) % 64 != 0 {
+        header.push(b' ');
+    }
+    header.push(b'\n');
+    let mut out = b"\x93NUMPY".to_vec();
+    out.push(version.0);
+    out.push(version.1);
+    if len_size == 2 {
+        out.extend_from_slice(&(header.len() as u16).to_le_bytes());
+    } else {
+        out.extend_from_slice(&(header.len() as u32).to_le_bytes());
+    }
+    out.extend_from_slice(&header);
+    out.extend_from_slice(payload);
+    out
+}
+
+/// A dtype code without its quotes, the way `'|O'` appears in a header.
+fn npy_bytes(version: (u8, u8), descr: &str, payload: &[u8]) -> Vec<u8> {
+    npy_bytes_raw(version, &format!("'{descr}'"), payload)
+}
+
+const EVIL_PICKLE: &[u8] = b"cos\nsystem\n(S'echo fixture'\ntR.";
+const CLEAN_PICKLE: &[u8] =
+    b"\x80\x02ccollections\nOrderedDict\nq\x00)Rq\x01ctorch._utils\n_rebuild_tensor_v2\nq\x02.";
+
+#[test]
+fn numeric_npy_has_no_finding() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("weights.npy");
+    std::fs::write(&path, npy_bytes((1, 0), "<f8", &[0u8; 16])).unwrap();
+    let report = scan(&path).unwrap();
+    assert_eq!(report.verdict(), "no findings", "{:?}", report.findings);
+}
+
+#[test]
+fn object_npy_with_code_execution_pickle_is_critical() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("evil.npy");
+    std::fs::write(&path, npy_bytes((1, 0), "|O", EVIL_PICKLE)).unwrap();
+    let report = scan(&path).unwrap();
+    assert!(
+        report
+            .findings
+            .iter()
+            .any(|f| f.rule == "pickle-code-execution" && f.severity == Severity::Critical),
+        "{:?}",
+        report.findings
+    );
+}
+
+#[test]
+fn object_npy_with_clean_pickle_only_needs_allow_pickle() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("data.npy");
+    std::fs::write(&path, npy_bytes((1, 0), "|O", CLEAN_PICKLE)).unwrap();
+    let report = scan(&path).unwrap();
+    assert_eq!(report.findings.len(), 1, "{:?}", report.findings);
+    assert_eq!(report.findings[0].rule, "numpy-allow-pickle");
+    assert_eq!(report.findings[0].severity, Severity::Medium);
+    assert_eq!(report.verdict(), "suspicious");
+}
+
+#[test]
+fn npy_version_2_header_is_parsed() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("v2.npy");
+    std::fs::write(&path, npy_bytes((2, 0), "<f8", &[0u8; 16])).unwrap();
+    let report = scan(&path).unwrap();
+    assert_eq!(report.verdict(), "no findings", "{:?}", report.findings);
+}
+
+#[test]
+fn object_npy_without_byte_order_marker_is_flagged() {
+    // `np.dtype('O')` is the object dtype; a header that writes `descr` as `'O'`
+    // (no byte-order marker) still loads as a pickle.
+    let dir = tempfile::tempdir().unwrap();
+    let mut files = Vec::new();
+    for (i, descr) in ["'O'", "\"O\""].into_iter().enumerate() {
+        let path = dir.path().join(format!("obj-{i}.npy"));
+        std::fs::write(&path, npy_bytes_raw((1, 0), descr, EVIL_PICKLE)).unwrap();
+        files.push(path);
+    }
+    // The same descr inside an `.npz` entry.
+    std::fs::write(
+        dir.path().join("z.npz"),
+        zip_stored(&[(
+            "arr.npy",
+            npy_bytes_raw((1, 0), "'O'", EVIL_PICKLE).as_slice(),
+        )]),
+    )
+    .unwrap();
+
+    let report = scan(dir.path()).unwrap();
+    let flagged: Vec<&str> = report
+        .findings
+        .iter()
+        .filter(|f| f.rule == "pickle-code-execution" && f.severity == Severity::Critical)
+        .map(|f| f.file.as_str())
+        .collect();
+    assert_eq!(flagged.len(), 3, "{:?}", report.findings);
+    assert!(flagged.contains(&"z.npz!arr.npy"), "{:?}", report.findings);
+    // The always-present allow_pickle medium accompanies each object array.
+    let medium: Vec<&str> = report
+        .findings
+        .iter()
+        .filter(|f| f.rule == "numpy-allow-pickle")
+        .map(|f| f.file.as_str())
+        .collect();
+    assert_eq!(medium.len(), 3, "{:?}", report.findings);
+}
+
+#[test]
+fn truncated_npy_header_is_a_finding_not_a_panic() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut bytes = npy_bytes((1, 0), "|O", EVIL_PICKLE);
+    bytes.truncate(12);
+    let path = dir.path().join("cut.npy");
+    std::fs::write(&path, bytes).unwrap();
+    let report = scan(&path).unwrap();
+    assert!(
+        rules(&report).contains(&"malformed-header"),
+        "{:?}",
+        report.findings
+    );
+}
+
+#[test]
+fn npz_entry_with_object_array_is_flagged() {
+    let dir = tempfile::tempdir().unwrap();
+    let evil = npy_bytes((1, 0), "|O", EVIL_PICKLE);
+    std::fs::write(
+        dir.path().join("stored.npz"),
+        zip_stored(&[("arr.npy", evil.as_slice())]),
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("deflated.npz"),
+        zip_deflated(&[("arr.npy", evil.as_slice())]),
+    )
+    .unwrap();
+
+    let report = scan(dir.path()).unwrap();
+    let critical: Vec<&str> = report
+        .findings
+        .iter()
+        .filter(|f| f.severity == Severity::Critical)
+        .map(|f| f.file.as_str())
+        .collect();
+    assert!(
+        critical.contains(&"stored.npz!arr.npy"),
+        "{:?}",
+        report.findings
+    );
+    assert!(
+        critical.contains(&"deflated.npz!arr.npy"),
+        "{:?}",
+        report.findings
+    );
 }
