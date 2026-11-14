@@ -82,13 +82,13 @@ flowchart LR
 | Metrics library (THME-3027) | `bench::metrics`: answer extraction, exact and normalized match, numeric tolerance, likelihood choice with ties scored as misses, unbiased pass@k; `TaskSpec::score_output` | Tested: dossier Table R3 pass@k values, pass@k against enumeration for n <= 10, hand-computed cases |
 | Sandbox design (THME-3020, design part) | [docs/sandbox.md](docs/sandbox.md): threat model, one fail-closed interface, layers per OS, 13 escape tests, dependency proposal | Design only; nothing built |
 | No-panic rule, GUI split, glossary | Compiler-enforced; Studio tabs as modules; `CONTEXT.md` | Tested |
+| Toolchain 1.100.0 | Pinned compiler bumped to 1.100.0 (`rust-toolchain.toml`); MSRV stays 1.89 | fmt, clippy and tests green on 1.100.0 |
 
 ### Now: committed, in progress
 
 | Track | Item | Status | Depends on |
 | :--- | :--- | :--- | :--- |
 | Security | **Scanner coverage** (THME-3022, v0.2.7.2): deflate-compressed pickles and zip entries through `flate2` (approved, already in the tree); ONNX, Keras and NumPy object arrays | Not started | Scanner v1 |
-| Tooling | **Toolchain 1.100.0** (approved): bump the pinned compiler from 1.99.1; MSRV stays 1.89 | Not started | None |
 | Engine | **Transport and ODE steppers** (dossier WP4, WP6): Sinkhorn transport with mass conservation; Euler, RK4 and adaptive RK with error-order tests | Not started | Engine core |
 | Quality and evidence | **Benchmark runner, native and bridged modes** (v0.2.8.3): produce outputs with THME's forward pass or an external tool; resume and cache | Blocked | Model runs paused |
 

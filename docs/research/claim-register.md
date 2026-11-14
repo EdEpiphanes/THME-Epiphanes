@@ -121,7 +121,7 @@
 | V-97 | Absmax integer quantization error is at most scale / 2 | T | Appendix M | 113 | Bit widths 2, 4, 8, 12; 20 seeds each |
 | V-98 | Mean absolute value is the MSE-optimal scale for sign quantization | T | Appendix M | 113 | Compared with 39 alternative scales |
 | V-99 | A Walsh-Hadamard transform already exists in the repository | S | Appendix M | 113 | Observed in the BYOA transform code; must be shared, not copied |
-| V-100 | The prototype is verified for the repository toolchain | U | Appendix M | 113 | Compiled on rustc 1.97 only; pinned 1.99.1, MSRV 1.89, fmt and clippy not run |
+| V-100 | The prototype is verified for the repository toolchain | U | Appendix M | 113 | Compiled on rustc 1.97 only; MSRV 1.89, fmt and clippy not run |
 | V-101 | THME's contribution is an integration layer plus new tools | Design decision | Appendix N | 116 | Stated by the owner; guides claims in all appendices |
 | V-102 | The candidates in Table N3 are new | U | Appendix N | 116 | No prior-art search done |
 | V-103 | A native reimplementation matches its reference | U | Appendix N | 116 | Required differential test per technique |

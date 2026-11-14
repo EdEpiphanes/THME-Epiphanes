@@ -3,6 +3,6 @@
 # PR after the non-blocking "latest stable" CI job is green. The minimum supported version is
 # `rust-version` in Cargo.toml (checked by the `msrv` CI job).
 [toolchain]
-channel = "1.99.1"
+channel = "1.100.0"
 components = ["rustfmt", "clippy"]
 profile = "minimal"

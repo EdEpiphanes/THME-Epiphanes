@@ -910,7 +910,7 @@
    "status_qualified": false,
    "section": "Appendix M",
    "page": 113,
-   "note": "Compiled on rustc 1.97 only; pinned 1.99.1, MSRV 1.89, fmt and clippy not run"
+   "note": "Compiled on rustc 1.97 only; MSRV 1.89, fmt and clippy not run"
   },
   {
    "id": "V-101",
