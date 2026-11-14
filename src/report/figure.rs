@@ -394,33 +394,55 @@ fn glass(b: &Block, z: f64, p: &Projection, fill: &str, h: &Highlight) -> String
     )
 }
 
-/// A manga ink splash on the paper under the active block: an organic blot with tendrils, flung
-/// droplets (some stretched along their flight) and tapered speed lines, growing with the phase
-/// and fading at the end. Seeded by the tensor, so every frame is reproducible.
-fn ink_splash(b: &Block, z: f64, p: &Projection, h: &Highlight) -> String {
+/// One flung droplet of an ink splash: an ellipse stretched along its flight, rotated `deg`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct InkDrop {
+    pub x: f64,
+    pub y: f64,
+    pub rx: f64,
+    pub ry: f64,
+    pub deg: f64,
+}
+
+/// A manga ink splash in the caller's 2D coordinates: an organic blot with tendrils (closed
+/// quadratic curve through `blot`, see [`InkSplash::outline`]), flung droplets and tapered speed
+/// lines (triangles). Shared by the SVG figure and the Studio's live view.
+#[derive(Debug, Clone, PartialEq)]
+pub struct InkSplash {
+    /// Opacity: 1 while the splash grows, fading to 0 over the last 30% of the phase.
+    pub fade: f64,
+    pub blot: Vec<(f64, f64)>,
+    pub drops: Vec<InkDrop>,
+    pub lines: Vec<[(f64, f64); 3]>,
+}
+
+/// Ink splash geometry around (`cx`, `cy`) with radius `r`, growing with `phase` (0..1).
+/// `squash` foreshortens the vertical axis (1 = none), `unit` scales droplet and line sizes
+/// (1 = the figure's pixels). Seeded by `seed`, so every frame is reproducible.
+pub fn ink_splash_geometry(
+    cx: f64,
+    cy: f64,
+    r: f64,
+    squash: f64,
+    unit: f64,
+    seed: usize,
+    phase: f64,
+) -> InkSplash {
     use crate::bench::stats::SplitMix64;
     use std::f64::consts::TAU;
-    let (x0, y0, x1, y1) = screen_box(b, z, p);
-    let (cx, cy) = iso((b.plan.x + b.plan.w / 2.0, b.plan.y + b.plan.d / 2.0, z), p);
-    let r = ((x1 - x0).max(y1 - y0) * 1.3).clamp(42.0, 120.0);
-    let t = h.phase.clamp(0.0, 1.0);
+    let t = phase.clamp(0.0, 1.0);
     let grow = 1.0 - (1.0 - t).powi(3);
     let fade = if t < 0.7 {
         1.0
     } else {
         (1.0 - (t - 0.7) / 0.3).max(0.0)
     };
-    let squash = 0.55; // the floor is foreshortened
     let at = |a: f64, k: f64| (cx + k * a.cos(), cy + k * squash * a.sin());
-    let mut rng = SplitMix64::new(0x9e37_79b9 ^ (h.active as u64).wrapping_mul(0x2545_f491));
-    let mut out = format!(
-        "<g fill=\"{ink}\" stroke=\"none\" opacity=\"{fade:.3}\">",
-        ink = h.ink
-    );
+    let mut rng = SplitMix64::new(0x9e37_79b9 ^ (seed as u64).wrapping_mul(0x2545_f491));
 
-    // Blot: a closed curve through jittered points, a few pushed out into tendrils.
+    // Blot: jittered points around the centre, a few pushed out into tendrils.
     let n = 26;
-    let pts: Vec<(f64, f64)> = (0..n)
+    let blot = (0..n)
         .map(|i| {
             let a = i as f64 / n as f64 * TAU + rng.unit() * 0.12;
             let tendril = if rng.unit() < 0.22 {
@@ -432,6 +454,90 @@ fn ink_splash(b: &Block, z: f64, p: &Projection, h: &Highlight) -> String {
             at(a, k)
         })
         .collect();
+
+    // Droplets flung outward; the farther ones are smaller and stretched along their flight.
+    let drops = (0..22)
+        .map(|_| {
+            let a = rng.unit() * TAU;
+            let reach = 0.7 + 1.1 * rng.unit();
+            let (x, y) = at(a, r * reach * grow);
+            let size = (1.4 + 4.2 * rng.unit()) * (1.25 - 0.45 * reach / 1.8) * unit;
+            let stretch = 1.0 + 1.6 * (reach - 0.7) * grow;
+            let deg = (a.sin() * squash).atan2(a.cos()).to_degrees();
+            InkDrop {
+                x,
+                y,
+                rx: size * stretch,
+                ry: size,
+                deg,
+            }
+        })
+        .collect();
+
+    // Speed lines: tapered wedges radiating from the blot, thick at the base, sharp at the tip.
+    let lines = (0..16)
+        .map(|_| {
+            let a = rng.unit() * TAU;
+            let (r0, r1) = (
+                r * (0.55 + 0.15 * rng.unit()),
+                r * (1.05 + 0.75 * rng.unit()) * (0.5 + 0.5 * grow),
+            );
+            let half = (0.8 + 1.8 * rng.unit()) * (0.6 + 0.4 * grow) * unit;
+            let (bx, by) = at(a, r0);
+            let tip = at(a, r1);
+            let (nx, ny) = (-(a.sin() * squash), a.cos());
+            let len = (nx * nx + ny * ny).sqrt().max(1e-9);
+            let (nx, ny) = (nx / len * half, ny / len * half);
+            [(bx + nx, by + ny), (bx - nx, by - ny), tip]
+        })
+        .collect();
+    InkSplash {
+        fade,
+        blot,
+        drops,
+        lines,
+    }
+}
+
+impl InkSplash {
+    /// The blot as a closed polygon: each quadratic segment (between midpoints of neighbouring
+    /// blot points, controlled by the point itself) sampled `steps` times.
+    pub fn outline(&self, steps: usize) -> Vec<(f64, f64)> {
+        let n = self.blot.len();
+        let mid = |a: (f64, f64), b: (f64, f64)| ((a.0 + b.0) / 2.0, (a.1 + b.1) / 2.0);
+        let mut out = Vec::with_capacity(n * steps.max(1));
+        for i in 0..n {
+            let (p0, c, p1) = (
+                mid(self.blot[(i + n - 1) % n], self.blot[i]),
+                self.blot[i],
+                mid(self.blot[i], self.blot[(i + 1) % n]),
+            );
+            for s in 0..steps.max(1) {
+                let t = s as f64 / steps.max(1) as f64;
+                let u = 1.0 - t;
+                out.push((
+                    u * u * p0.0 + 2.0 * u * t * c.0 + t * t * p1.0,
+                    u * u * p0.1 + 2.0 * u * t * c.1 + t * t * p1.1,
+                ));
+            }
+        }
+        out
+    }
+}
+
+/// The ink splash on the paper under the active block, as SVG.
+fn ink_splash(b: &Block, z: f64, p: &Projection, h: &Highlight) -> String {
+    let (x0, y0, x1, y1) = screen_box(b, z, p);
+    let (cx, cy) = iso((b.plan.x + b.plan.w / 2.0, b.plan.y + b.plan.d / 2.0, z), p);
+    let r = ((x1 - x0).max(y1 - y0) * 1.3).clamp(42.0, 120.0);
+    let g = ink_splash_geometry(cx, cy, r, 0.55, 1.0, h.active, h.phase);
+    let fade = g.fade;
+    let mut out = format!(
+        "<g fill=\"{ink}\" stroke=\"none\" opacity=\"{fade:.3}\">",
+        ink = h.ink
+    );
+    let pts = &g.blot;
+    let n = pts.len();
     let mid = |a: (f64, f64), b: (f64, f64)| ((a.0 + b.0) / 2.0, (a.1 + b.1) / 2.0);
     let start = mid(pts[n - 1], pts[0]);
     let mut d = format!("M{:.1} {:.1}", start.0, start.1);
@@ -440,42 +546,13 @@ fn ink_splash(b: &Block, z: f64, p: &Projection, h: &Highlight) -> String {
         d += &format!("Q{:.1} {:.1} {:.1} {:.1}", pts[i].0, pts[i].1, m.0, m.1);
     }
     out += &format!("<path d=\"{d}Z\"/>");
-
-    // Droplets flung outward; the farther ones are smaller and stretched along their flight.
-    for _ in 0..22 {
-        let a = rng.unit() * TAU;
-        let reach = 0.7 + 1.1 * rng.unit();
-        let (x, y) = at(a, r * reach * grow);
-        let size = (1.4 + 4.2 * rng.unit()) * (1.25 - 0.45 * reach / 1.8);
-        let stretch = 1.0 + 1.6 * (reach - 0.7) * grow;
-        let deg = (a.sin() * squash).atan2(a.cos()).to_degrees();
+    for InkDrop { x, y, rx, ry, deg } in &g.drops {
         out += &format!(
-            "<ellipse cx=\"{x:.1}\" cy=\"{y:.1}\" rx=\"{:.2}\" ry=\"{:.2}\" transform=\"rotate({deg:.1} {x:.1} {y:.1})\"/>",
-            size * stretch,
-            size
+            "<ellipse cx=\"{x:.1}\" cy=\"{y:.1}\" rx=\"{rx:.2}\" ry=\"{ry:.2}\" transform=\"rotate({deg:.1} {x:.1} {y:.1})\"/>"
         );
     }
-
-    // Speed lines: tapered wedges radiating from the blot, thick at the base, sharp at the tip.
-    for _ in 0..16 {
-        let a = rng.unit() * TAU;
-        let (r0, r1) = (
-            r * (0.55 + 0.15 * rng.unit()),
-            r * (1.05 + 0.75 * rng.unit()) * (0.5 + 0.5 * grow),
-        );
-        let half = (0.8 + 1.8 * rng.unit()) * (0.6 + 0.4 * grow);
-        let (bx, by) = at(a, r0);
-        let (tx, ty) = at(a, r1);
-        let (nx, ny) = (-(a.sin() * squash), a.cos());
-        let len = (nx * nx + ny * ny).sqrt().max(1e-9);
-        let (nx, ny) = (nx / len * half, ny / len * half);
-        out += &format!(
-            "<path d=\"M{:.1} {:.1}L{:.1} {:.1}L{tx:.1} {ty:.1}Z\"/>",
-            bx + nx,
-            by + ny,
-            bx - nx,
-            by - ny
-        );
+    for [(ax, ay), (bx, by), (tx, ty)] in &g.lines {
+        out += &format!("<path d=\"M{ax:.1} {ay:.1}L{bx:.1} {by:.1}L{tx:.1} {ty:.1}Z\"/>");
     }
     out.push_str("</g>");
     out
@@ -629,6 +706,39 @@ mod tests {
         );
         assert!(a.contains(&m.tensors[order[3]].name) && a.contains("url(#glass)"));
         assert!(!a.contains("class="), "frames need no stylesheet either");
+    }
+
+    /// Pins the animation frames byte for byte, so refactors of the glass and splash geometry
+    /// (shared with the Studio) cannot change the committed figure GIF.
+    #[test]
+    fn frames_are_byte_stable() {
+        let m = mock();
+        let order = forward_order(&m);
+        let fnv = |s: &str| {
+            s.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
+                (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+            })
+        };
+        let hashes: Vec<u64> = [(3, 0.1), (3, 0.5), (7, 0.9)]
+            .iter()
+            .map(|&(i, phase)| {
+                let h = Highlight {
+                    active: order[i],
+                    phase,
+                    ink: "#0b0b0b".into(),
+                    sheen: "#ffffff".into(),
+                };
+                fnv(&model_figure_frame(&m, Theme::Dark, &h))
+            })
+            .collect();
+        assert_eq!(
+            hashes,
+            vec![
+                2344707693492852283,
+                8172922762593007790,
+                9484452446407433820
+            ]
+        );
     }
 
     #[test]

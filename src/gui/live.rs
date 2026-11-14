@@ -226,6 +226,8 @@ fn draw_manifold(
         .max(1e-6);
     let light = normalize3([-0.45, 0.75, -0.55]);
     let scale = 1.32f32;
+    // Ink glass on the patches of the layer the forward-pass cursor is on.
+    let (active, phase) = forward_cursor(time, n_layers);
 
     let mut faces: Vec<Face> = Vec::with_capacity(patches.len() * 128);
     for (index, patch) in patches.iter().enumerate() {
@@ -310,6 +312,11 @@ fn draw_manifold(
                     fill = manga::mix(fill, paper, 0.55);
                     dots = 0.0;
                 }
+                // Never on an anomalous patch: solid ink is the anomaly mark in mono themes.
+                if index % n_layers == active && !anomalous {
+                    fill = manga::mix(fill, ink, 0.65);
+                    dots = 0.0;
+                }
                 faces.push(Face {
                     depth: (v[0][2] + v[1][2] + v[2][2] + v[3][2]) / 4.0,
                     pts,
@@ -324,13 +331,30 @@ fn draw_manifold(
     }
     faces.sort_by(|a, b| b.depth.total_cmp(&a.depth));
     let line = Stroke::new(0.8_f32, manga::with_alpha(ink, 190));
+    // Patches share their layer's anomaly state: an anomalous active layer gets no sheen either.
+    let active_layer = &trace.layers[active];
+    let active_ok = !(active_layer.tensors.iter().any(|t| t.nonfinite > 0)
+        || !active_layer.resid_rms_out.is_finite());
+    let lit = |f: &Face| active_ok && f.patch % n_layers == active;
+    let lit_box = faces
+        .iter()
+        .filter(|f| lit(f))
+        .fold(Rect::NOTHING, |r, f| r.union(Rect::from_points(&f.pts)));
     for face in &faces {
+        let fill = if lit(face) && lit_box.is_positive() {
+            let s = ((face.center.x - lit_box.left()) / lit_box.width()
+                + (face.center.y - lit_box.top()) / lit_box.height())
+                / 2.0;
+            manga::mix(face.fill, Color32::WHITE, 0.85 * sheen_at(s, phase))
+        } else {
+            face.fill
+        };
         // Fill without a polygon stroke, then ink the edges as plain segments: segments have
         // no miter joins, so collapsed faces cannot throw spikes across the view.
         if is_convex(&face.pts) {
             painter.add(egui::Shape::convex_polygon(
                 face.pts.to_vec(),
-                face.fill,
+                fill,
                 Stroke::NONE,
             ));
         } else {
@@ -340,7 +364,7 @@ fn draw_manifold(
             ] {
                 painter.add(egui::Shape::convex_polygon(
                     tri.to_vec(),
-                    face.fill,
+                    fill,
                     Stroke::NONE,
                 ));
             }
@@ -506,6 +530,8 @@ pub struct LiveView {
     started_demo: bool,
     epoch: Instant,
     mode: ViewMode,
+    /// Recording README GIFs: ignore the pointer, so no tooltip lands in the frames.
+    capturing: bool,
     manifold: Vec<ManifoldPatch>,
 }
 
@@ -537,6 +563,7 @@ impl Default for LiveView {
                 _ => ViewMode::Manifold,
             },
             manifold: calabi_yau_patches(5, 14, 9, 0.85),
+            capturing: std::env::var_os("THME_GUI_CAPTURE_DIR").is_some(),
         }
     }
 }
@@ -676,8 +703,8 @@ impl LiveView {
             ui.selectable_value(&mut self.mode, ViewMode::Slabs, "LAYER SLABS");
         });
         let caption = match self.mode {
-            ViewMode::Manifold => "A Calabi-Yau quintic cross-section with each of its 25 patches bound to a layer (cyclically). Patch colour is the layer's format family; its light is the measured residual update of the current window; anomalies are marked red (solid ink in black-and-white themes). Token particles flow across the patches. The geometry is illustrative; the colours and light are measured. Drag to orbit, scroll to zoom, hover a patch to inspect its layer.",
-            ViewMode::Slabs => "Each slab is one applied layer; each row is a linear tensor split into output-channel groups, lit by the measured output magnitude of the current window and tinted by format family. Particles carry the residual stream between layers, brighter where a layer rewrites it more. Red marks anomalies. Drag to orbit, scroll to zoom, hover a tile to inspect it.",
+            ViewMode::Manifold => "A Calabi-Yau quintic cross-section with each of its 25 patches bound to a layer (cyclically). Patch colour is the layer's format family; its light is the measured residual update of the current window; anomalies are marked red (solid ink in black-and-white themes). Token particles flow across the patches. A sweeping glass sheen over darkened patches marks the layer the forward pass is on (illustrative pacing); it never covers an anomaly. The geometry is illustrative; the colours and light are measured. Drag to orbit, scroll to zoom, hover a patch to inspect its layer.",
+            ViewMode::Slabs => "Each slab is one applied layer; each row is a linear tensor split into output-channel groups, lit by the measured output magnitude of the current window and tinted by format family. Particles carry the residual stream between layers, brighter where a layer rewrites it more. Red marks anomalies. Ink glass and an ink splash mark the layer the forward pass is on (illustrative pacing); anomalous tiles keep their mark. Drag to orbit, scroll to zoom, hover a tile to inspect it.",
         };
         ui.label(egui::RichText::new(caption).size(10.0).color(p.text_muted));
         ui.add_space(4.0);
@@ -847,6 +874,11 @@ impl LiveView {
             }
         }
 
+        let pointer = if self.capturing {
+            None
+        } else {
+            response.hover_pos()
+        };
         let drag = response.drag_delta();
         self.yaw += drag.x * 0.008;
         self.pitch = (self.pitch + drag.y * 0.008).clamp(-1.2, 1.2);
@@ -884,7 +916,7 @@ impl LiveView {
             };
             draw_manifold(
                 &painter,
-                response.hover_pos(),
+                pointer,
                 &camera,
                 &self.manifold,
                 &frame.trace,
@@ -935,21 +967,48 @@ impl LiveView {
                 .map_or(1.0, |(_, v)| v.max(1e-12))
         };
 
-        let mut quads: Vec<(f32, [Pos2; 4], Color32, Option<Hover>)> = Vec::new();
+        // Ink glass: a forward-pass cursor walks the layers; the active slab gets an ink splash
+        // behind its tiles and a glass sheen sweeping over them (the figure GIF's treatment).
+        let (active, phase) = forward_cursor(self.epoch.elapsed().as_secs_f32(), steps);
+        let splash_ink = if p.is_light() {
+            manga::ink(p)
+        } else {
+            p.text_main
+        };
+        // Slabs are parallel planes: draw each as a unit (plate, splash, tiles, sheen), far
+        // slabs first. The sort below is stable, so that order holds within a slab.
+        let mut drawn: Vec<(f32, egui::Shape)> = Vec::new();
+        let mut quads: Vec<(f32, [Pos2; 4], Hover)> = Vec::new();
         for (step, layer) in trace.layers.iter().enumerate() {
             let z = z_of(step);
+            let slab_depth = camera.view([0.0, 0.0, z])[2];
             let composition = self.composition.get(layer.layer);
             // Slab backplate.
             let pad = 0.12;
             let top = y_of(0) + row_h / 2.0 + pad;
             let bottom = y_of(rows - 1) - row_h / 2.0 - pad;
-            if let Some((depth, pts)) = camera.quad([
+            let lit = step == active;
+            if let Some((_, pts)) = camera.quad([
                 [-half_w - pad, top, z],
                 [half_w + pad, top, z],
                 [half_w + pad, bottom, z],
                 [-half_w - pad, bottom, z],
             ]) {
-                quads.push((depth + 0.01, pts, with_alpha(p.bg_card, 200), None));
+                let plate = if lit {
+                    manga::mix(p.bg_card, splash_ink, 0.18)
+                } else {
+                    p.bg_card
+                };
+                drawn.push((
+                    slab_depth,
+                    egui::Shape::convex_polygon(pts.to_vec(), with_alpha(plate, 200), Stroke::NONE),
+                ));
+            }
+            let plate = [-half_w - pad, half_w + pad, bottom, top];
+            if lit {
+                for shape in ink_splash_shapes(&camera, z, plate, layer.layer, phase, splash_ink) {
+                    drawn.push((slab_depth, shape));
+                }
             }
             for (row, tensor) in layer.tensors.iter().enumerate() {
                 let family = composition
@@ -970,33 +1029,44 @@ impl LiveView {
                         let t = (value / scale).clamp(0.0, 1.0).sqrt();
                         lerp(dim, base, 0.2 + 0.8 * t)
                     };
-                    if let Some((depth, pts)) = camera.quad([
+                    // Ink glass keeps the tiles' relative tones, so the data stays readable.
+                    let color = if lit && tensor.nonfinite == 0 {
+                        manga::mix(color, splash_ink, 0.55)
+                    } else {
+                        color
+                    };
+                    if let Some((_, pts)) = camera.quad([
                         [x0, y + row_h * 0.38, z],
                         [x1, y + row_h * 0.38, z],
                         [x1, y - row_h * 0.38, z],
                         [x0, y - row_h * 0.38, z],
                     ]) {
+                        drawn.push((
+                            slab_depth,
+                            egui::Shape::convex_polygon(pts.to_vec(), color, Stroke::NONE),
+                        ));
                         quads.push((
-                            depth,
+                            slab_depth,
                             pts,
-                            color,
-                            Some(Hover {
+                            Hover {
                                 step,
                                 tensor: row,
                                 bin,
-                            }),
+                            },
                         ));
                     }
                 }
             }
+            if lit {
+                if let Some(sheen) = sheen_mesh(&camera, z, plate, phase) {
+                    drawn.push((slab_depth, sheen));
+                }
+            }
         }
+        drawn.sort_by(|a, b| b.0.total_cmp(&a.0));
         quads.sort_by(|a, b| b.0.total_cmp(&a.0));
-        for (_, pts, color, _) in &quads {
-            painter.add(egui::Shape::convex_polygon(
-                pts.to_vec(),
-                *color,
-                Stroke::NONE,
-            ));
+        for (_, shape) in drawn {
+            painter.add(shape);
         }
 
         // Layer labels and routers between layers.
@@ -1075,12 +1145,12 @@ impl LiveView {
         }
 
         // Hover inspection: the front-most tile under the pointer.
-        if let Some(pointer) = response.hover_pos() {
+        if let Some(pointer) = pointer {
             let hit = quads
                 .iter()
                 .rev()
-                .find(|(_, pts, _, info)| info.is_some() && inside(pointer, pts))
-                .and_then(|(_, _, _, info)| *info);
+                .find(|(_, pts, _)| inside(pointer, pts))
+                .map(|(_, _, info)| *info);
             if let Some(h) = hit {
                 if let Some(layer) = trace.layers.get(h.step) {
                     if let Some(tensor) = layer.tensors.get(h.tensor) {
@@ -1525,9 +1595,167 @@ fn hash01(i: usize) -> f32 {
     (x % 10_000) as f32 / 10_000.0
 }
 
+/// Seconds the ink-glass highlight spends on each layer.
+const LAYER_SECONDS: f32 = 0.9;
+
+/// The forward-pass cursor: which of `steps` layers is lit at `time`, and how far through its
+/// turn (0..1). Illustrative pacing, not a measured timing.
+fn forward_cursor(time: f32, steps: usize) -> (usize, f32) {
+    if steps == 0 {
+        return (0, 0.0);
+    }
+    let pos = time.max(0.0) / LAYER_SECONDS;
+    ((pos as usize) % steps, pos.fract())
+}
+
+/// Glass sheen strength (0..1) at diagonal position `s` (0..1 across a surface): a band that
+/// sweeps from before the surface to past it as `phase` goes 0..1, like the figure's ink glass.
+fn sheen_at(s: f32, phase: f32) -> f32 {
+    let centre = -0.4 + phase * 1.8;
+    (1.0 - (s - centre).abs() / 0.22).max(0.0)
+}
+
+/// The glass sheen over a slab plate `[x0, x1, y0, y1]` on plane `z`, as a projected grid mesh
+/// whose vertex alpha follows [`sheen_at`] along the plate's diagonal.
+fn sheen_mesh(camera: &Camera, z: f32, plate: [f32; 4], phase: f32) -> Option<egui::Shape> {
+    let [x0, x1, y0, y1] = plate;
+    let (nx, ny) = (16u32, 6u32);
+    let mut mesh = egui::Mesh::default();
+    for j in 0..=ny {
+        for i in 0..=nx {
+            let (u, v) = (i as f32 / nx as f32, j as f32 / ny as f32);
+            let (pos, _) = camera.project([x0 + u * (x1 - x0), y1 - v * (y1 - y0), z])?;
+            let a = (0.55 * 255.0 * sheen_at((u + v) / 2.0, phase)) as u8;
+            mesh.colored_vertex(pos, with_alpha(Color32::WHITE, a));
+        }
+    }
+    for j in 0..ny {
+        for i in 0..nx {
+            let k = j * (nx + 1) + i;
+            mesh.add_triangle(k, k + 1, k + nx + 2);
+            mesh.add_triangle(k, k + nx + 2, k + nx + 1);
+        }
+    }
+    Some(egui::Shape::mesh(mesh))
+}
+
+/// The figure's manga ink splash on a slab plate `[x0, x1, y0, y1]` on plane `z`: the shared
+/// geometry in world units, projected through the camera so it lies in the scene's perspective.
+fn ink_splash_shapes(
+    camera: &Camera,
+    z: f32,
+    plate: [f32; 4],
+    seed: usize,
+    phase: f32,
+    ink: Color32,
+) -> Vec<egui::Shape> {
+    let [x0, x1, y0, y1] = plate;
+    let (cx, cy) = (f64::from(x0 + x1) / 2.0, f64::from(y0 + y1) / 2.0);
+    let r = 0.55 * f64::from((x1 - x0).min(y1 - y0));
+    // unit: the figure sizes droplets in pixels for a radius around 80 px.
+    let g = crate::report::figure::ink_splash_geometry(
+        cx,
+        cy,
+        r,
+        1.0,
+        r / 80.0,
+        seed,
+        f64::from(phase),
+    );
+    let color = with_alpha(ink, (235.0 * g.fade) as u8);
+    let to = |(x, y): (f64, f64)| camera.project([x as f32, y as f32, z]).map(|(p, _)| p);
+    let mut out = Vec::new();
+    // The blot is star-shaped around its centre, so a triangle fan from the centre fills it.
+    let ring: Option<Vec<Pos2>> = g.outline(4).into_iter().map(to).collect();
+    if let (Some(ring), Some(centre)) = (ring, to((cx, cy))) {
+        let mut mesh = egui::Mesh::default();
+        mesh.colored_vertex(centre, color);
+        for q in &ring {
+            mesh.colored_vertex(*q, color);
+        }
+        let n = ring.len() as u32;
+        for i in 0..n {
+            mesh.add_triangle(0, 1 + i, 1 + (i + 1) % n);
+        }
+        out.push(egui::Shape::mesh(mesh));
+    }
+    for d in &g.drops {
+        let (s, c) = d.deg.to_radians().sin_cos();
+        let pts: Option<Vec<Pos2>> = (0..10)
+            .map(|k| {
+                let t = f64::from(k) / 10.0 * std::f64::consts::TAU;
+                let (ex, ey) = (d.rx * t.cos(), d.ry * t.sin());
+                to((d.x + ex * c - ey * s, d.y + ex * s + ey * c))
+            })
+            .collect();
+        if let Some(pts) = pts {
+            out.push(egui::Shape::convex_polygon(pts, color, Stroke::NONE));
+        }
+    }
+    for tri in &g.lines {
+        let pts: Option<Vec<Pos2>> = tri.iter().map(|&q| to(q)).collect();
+        if let Some(pts) = pts {
+            out.push(egui::Shape::convex_polygon(pts, color, Stroke::NONE));
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn forward_cursor_walks_every_layer_in_order_and_wraps() {
+        let seen: Vec<usize> = (0..8)
+            .map(|k| forward_cursor((k as f32 + 0.5) * LAYER_SECONDS, 3).0)
+            .collect();
+        assert_eq!(seen, [0, 1, 2, 0, 1, 2, 0, 1]);
+        let (_, phase) = forward_cursor(1.25 * LAYER_SECONDS, 3);
+        assert!((phase - 0.25).abs() < 1e-4);
+        assert_eq!(forward_cursor(5.0, 0), (0, 0.0));
+    }
+
+    #[test]
+    fn sheen_band_sweeps_across_the_surface() {
+        // Off the surface at both ends of the turn, at full strength where the band centre is.
+        assert_eq!(sheen_at(0.0, 0.0), 0.0);
+        assert_eq!(sheen_at(1.0, 1.0), 0.0);
+        assert!((sheen_at(0.5, 0.5) - 1.0).abs() < 1e-6);
+        let peak = |phase: f32| {
+            (0..=100)
+                .max_by(|&a, &b| {
+                    sheen_at(a as f32 / 100.0, phase).total_cmp(&sheen_at(b as f32 / 100.0, phase))
+                })
+                .unwrap_or(0)
+        };
+        assert!(
+            peak(0.3) < peak(0.5) && peak(0.5) < peak(0.7),
+            "the band moves forward"
+        );
+    }
+
+    #[test]
+    fn ink_splash_outline_is_closed_and_shapes_project() {
+        let g = crate::report::figure::ink_splash_geometry(0.0, 0.0, 1.0, 1.0, 1.0 / 80.0, 3, 0.5);
+        let ring = g.outline(4);
+        assert_eq!(ring.len(), g.blot.len() * 4);
+        // Sampling starts each segment at the previous segment's end: the ring closes.
+        let last = ring[ring.len() - 1];
+        let first = ring[0];
+        assert!((last.0 - first.0).hypot(last.1 - first.1) < 0.5);
+        let camera = Camera {
+            yaw: 0.0,
+            pitch: 0.0,
+            dist: 6.0,
+            rect: Rect::from_min_size(Pos2::ZERO, Vec2::new(800.0, 500.0)),
+        };
+        let shapes =
+            ink_splash_shapes(&camera, 0.0, [-2.0, 2.0, -1.0, 1.0], 3, 0.5, Color32::BLACK);
+        // Blot + 22 droplets + 16 speed lines, all in front of the camera.
+        assert_eq!(shapes.len(), 1 + 22 + 16);
+        assert!(sheen_mesh(&camera, 0.0, [-2.0, 2.0, -1.0, 1.0], 0.5).is_some());
+    }
 
     #[test]
     fn families_cover_formats_and_dtypes() {

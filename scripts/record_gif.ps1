@@ -21,7 +21,9 @@ $clips = @(
 )
 
 cargo build --release --bin thme-gui
-$python = if (Get-Command py -ErrorAction SilentlyContinue) { "py" } else { "python" }
+# A real python first; on Windows `python` may be only the Microsoft Store stub, then use `py`.
+$cmd = Get-Command python -ErrorAction SilentlyContinue
+$python = if ($cmd -and $cmd.Source -notlike "*\WindowsApps\*") { "python" } else { "py" }
 New-Item -ItemType Directory -Force $out | Out-Null
 
 foreach ($clip in $clips) {
