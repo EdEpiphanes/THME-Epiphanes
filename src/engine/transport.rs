@@ -752,4 +752,200 @@ mod tests {
             other => panic!("expected NoConvergence, got {other}"),
         }
     }
+
+    // ---- Oracle tests: closed forms and brute force, never the code under test ----
+
+    /// The exact OT cost of a plan (`perm[i]` entries at column i) under uniform
+    /// marginals 1/n, as a plain loop: an oracle, independent of both Sinkhorn
+    /// variants and of the plan they return.
+    fn permutation_cost(cost: &[f64], n: usize, perm: &[usize]) -> f64 {
+        let mut total = 0.0f64;
+        for (i, &j) in perm.iter().enumerate() {
+            total += cost[i * n + j];
+        }
+        total / n as f64
+    }
+
+    /// Heap's algorithm: every permutation of `0..n`, test-only. `n` is small (6
+    /// gives 720 permutations), so no dependency is warranted.
+    fn for_each_permutation(n: usize, visit: &mut dyn FnMut(&[usize])) {
+        let mut perm: Vec<usize> = (0..n).collect();
+        let mut counts = vec![0usize; n];
+        visit(&perm);
+        let mut i = 0usize;
+        while i < n {
+            if counts[i] < i {
+                if i.is_multiple_of(2) {
+                    perm.swap(0, i);
+                } else {
+                    perm.swap(counts[i], i);
+                }
+                visit(&perm);
+                counts[i] += 1;
+                i = 0;
+            } else {
+                counts[i] = 0;
+                i += 1;
+            }
+        }
+    }
+
+    /// The optimal transport cost of a 6x6 problem by brute force over all 720
+    /// permutations, each weighted 1/6. Oracle for the square uniform case: the
+    /// polytope's vertices are the permutation matrices (Birkhoff-von Neumann), so
+    /// a linear program attains its minimum at one of them.
+    fn brute_force_ot(cost: &[f64], n: usize) -> f64 {
+        let mut best = f64::INFINITY;
+        for_each_permutation(n, &mut |perm| {
+            best = best.min(permutation_cost(cost, n, perm));
+        });
+        best
+    }
+
+    /// A fixed 6x6 cost matrix with entries in [0,1], hand-written so the brute
+    /// force oracle is reproducible. Uniform marginals 1/6.
+    fn square_cost_six() -> Vec<f64> {
+        vec![
+            0.10, 0.55, 0.90, 0.35, 0.70, 0.20, //
+            0.80, 0.15, 0.45, 0.95, 0.25, 0.60, //
+            0.30, 0.65, 0.05, 0.85, 0.40, 0.75, //
+            0.50, 0.95, 0.20, 0.10, 0.60, 0.35, //
+            0.75, 0.30, 0.80, 0.45, 0.05, 0.90, //
+            0.40, 0.70, 0.55, 0.65, 0.85, 0.15,
+        ]
+    }
+
+    /// Oracle 1: the exact OT cost as epsilon shrinks. The Sinkhorn plan is
+    /// feasible, so its cost cannot beat OT, and the entropic term bounds the gap
+    /// by epsilon * ln(n*n); the gap must not grow as epsilon shrinks. The plain
+    /// domain is compared at every epsilon where it converges in the same budget
+    /// (it does at all five here; at a tolerance the plain kernel cannot reach, it
+    /// reports `NoConvergence` and the comparison is skipped, which is the
+    /// underflow regime the log domain exists for).
+    #[test]
+    fn sinkhorn_log_cost_brackets_the_brute_force_ot_cost() {
+        let n = 6usize;
+        let cost = square_cost_six();
+        let mass = 1.0 / n as f64;
+        let a = vec![mass; n];
+        let b = vec![mass; n];
+        let ot = brute_force_ot(&cost, n);
+        assert!(
+            ot.is_finite() && ot > 0.0,
+            "oracle OT cost {ot} is unusable"
+        );
+        let bound = (n * n) as f64;
+        // The stop tolerance is stated per epsilon: a tighter one needs more
+        // iterations, because Sinkhorn contracts geometrically with a ratio set by
+        // the cost gaps over epsilon.
+        let cases = [
+            (1.0, 1.0e-9),
+            (0.3, 1.0e-9),
+            (0.1, 1.0e-9),
+            (0.03, 1.0e-6),
+            (0.01, 1.0e-6),
+        ];
+        let max_iter = 10_000_000;
+        let mut previous_gap = f64::INFINITY;
+        for (eps, tol) in cases {
+            let plan = sinkhorn_log(&cost, &a, &b, eps, tol, max_iter).unwrap();
+            let gap = plan.cost - ot;
+            assert!(
+                gap >= -1.0e-9,
+                "eps {eps}: the plan cost {} beats the oracle {ot}, so it is infeasible",
+                plan.cost
+            );
+            assert!(
+                gap <= eps * bound.ln() + 1.0e-9,
+                "eps {eps}: the gap {gap} exceeds epsilon * ln(n*n) = {}",
+                eps * bound.ln()
+            );
+            assert!(
+                gap <= previous_gap + 1.0e-9,
+                "eps {eps}: the gap {gap} grew past the previous {previous_gap}"
+            );
+            previous_gap = gap;
+            // The plain domain agrees where it converges in the same budget.
+            if let Ok(plain) = sinkhorn(&cost, &a, &b, eps, tol, max_iter) {
+                assert!(
+                    (plain.cost - plan.cost).abs() <= 1.0e-7,
+                    "eps {eps}: plain {} vs log {}",
+                    plain.cost,
+                    plan.cost
+                );
+            }
+        }
+    }
+
+    /// The 1-D points for oracle 2, scaled so every cost lies in [0,1]: the two
+    /// point sets are interleaved around the unit interval, as a hand-written
+    /// sorted list.
+    fn line_points() -> (Vec<f64>, Vec<f64>) {
+        let x = [0.02, 0.18, 0.34, 0.50, 0.66, 0.82, 0.91, 0.98];
+        let y = [0.05, 0.22, 0.39, 0.55, 0.70, 0.78, 0.88, 0.95];
+        (x.to_vec(), y.to_vec())
+    }
+
+    /// The exact 1-D OT cost for a convex cost: sort both point sets and average
+    /// |x_(i) - y_(i)|. Oracle, independent of the Sinkhorn code.
+    fn sorted_ot_cost(xs: &[f64], ys: &[f64]) -> f64 {
+        let mut x = xs.to_vec();
+        let mut y = ys.to_vec();
+        x.sort_by(|p, q| p.partial_cmp(q).unwrap_or(std::cmp::Ordering::Equal));
+        y.sort_by(|p, q| p.partial_cmp(q).unwrap_or(std::cmp::Ordering::Equal));
+        x.iter()
+            .zip(y.iter())
+            .map(|(&p, &q)| (p - q).abs())
+            .sum::<f64>()
+            / x.len() as f64
+    }
+
+    /// Oracle 2: on a line with cost |x - y| the OT cost is the sorted average
+    /// pairing. The same feasibility-plus-entropy bound holds at eps = 0.01.
+    #[test]
+    fn sinkhorn_log_matches_the_sorted_one_dimensional_oracle() {
+        let (xs, ys) = line_points();
+        let n = xs.len();
+        let mass = 1.0 / n as f64;
+        let a = vec![mass; n];
+        let b = vec![mass; n];
+        let cost: Vec<f64> = xs
+            .iter()
+            .flat_map(|&x| ys.iter().map(move |&y| (x - y).abs()))
+            .collect();
+        assert!(
+            cost.iter().all(|&c| (0.0..=1.0).contains(&c)),
+            "the 1-D costs must lie in [0,1]"
+        );
+        let ot = sorted_ot_cost(&xs, &ys);
+        assert!(
+            ot.is_finite() && ot > 0.0,
+            "oracle 1-D OT cost {ot} is unusable"
+        );
+        let eps = 0.01;
+        let bound = (n * n) as f64;
+        // 1e-6 is the tolerance this epsilon reaches in a sane budget; see the
+        // square-case test for why it is stated per epsilon.
+        let tol = 1.0e-6;
+        let plan = sinkhorn_log(&cost, &a, &b, eps, tol, 10_000_000).unwrap();
+        let gap = plan.cost - ot;
+        assert!(
+            gap >= -1.0e-9,
+            "the plan cost {} beats the oracle {ot}, so it is infeasible",
+            plan.cost
+        );
+        assert!(
+            gap <= eps * bound.ln() + 1.0e-9,
+            "the gap {gap} exceeds epsilon * ln(n*n) = {}",
+            eps * bound.ln()
+        );
+        // The plain domain is not refused at this epsilon, so it must agree.
+        let plain = sinkhorn(&cost, &a, &b, eps, tol, 10_000_000).unwrap();
+        assert!(
+            (plain.cost - plan.cost).abs() <= 1.0e-7,
+            "plain {} vs log {}",
+            plain.cost,
+            plan.cost
+        );
+    }
 }
