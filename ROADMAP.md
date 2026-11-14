@@ -85,13 +85,14 @@ flowchart LR
 | Toolchain 1.100.0 | Pinned compiler bumped to 1.100.0 (`rust-toolchain.toml`); MSRV stays 1.89 | fmt, clippy and tests green on 1.100.0 |
 | Scanner: deflate pickles and NumPy object arrays (THME-3022, parts 1-2) | `thme scan`: deflate-compressed pickles in zip containers; `.npy`/`.npz` object arrays | Tested: 16 scan tests |
 | Scanner: Keras, ONNX and oversize pickles (THME-3022, parts 3-5) | `thme scan`: Keras Lambda and custom layers in `.keras`; ONNX external-data path traversal and custom domains; the first 256 MiB of an oversize pickle is still judged | Tested: scan fixtures for each rule |
+| ODE steppers (dossier WP6, ROADMAP v0.2.5.6) | `src/engine/ode.rs`: `FixedMethod::Rk4`, the Dormand-Prince 5(4) pair `dopri5_step` with step control and the adaptive `integrate_adaptive` driver; Euler, RK4 and Dormand-Prince steppers are error-order tested on the decay and oscillator equations | Tested: ratios 2 and 16, step control lands on t1; no measured figure |
+| Optimal transport (dossier WP4, ROADMAP v0.2.5.4) | `src/engine/transport.rs`: northwest-corner start, plain-domain and log-domain Sinkhorn, mass conservation and infeasibility errors, oracle tests (brute-force permutation polytope and sorted 1-D cost) | Tested against hand-written oracles; no measured figure |
 
 ### Now: committed, in progress
 
 | Track | Item | Status | Depends on |
 | :--- | :--- | :--- | :--- |
 | Security | **Scanner coverage** (THME-3022, v0.2.7.2): legacy HDF5 `.h5` Keras files | Partly done: `.h5` is flagged, not inspected | Scanner v1 |
-| Engine | **Transport and ODE steppers** (dossier WP4, WP6): Sinkhorn transport with mass conservation; Euler, RK4 and adaptive RK with error-order tests | Not started | Engine core |
 | Quality and evidence | **Benchmark runner, native and bridged modes** (v0.2.8.3): produce outputs with THME's forward pass or an external tool; resume and cache | Blocked | Model runs paused |
 
 ### Next: planned
@@ -317,9 +318,9 @@ its oracle tests; no method is implemented twice in the crate.
 | v0.2.5.1 | Engine error type and finite-value guard (WP1, THME-3001) | **Done**: every variant reached by a test |
 | v0.2.5.2 | Exact dynamic-programming allocator beside greedy and thresholds (WP2, THME-3002) | Implemented: matches exhaustive search; comparison on real cost tables pending |
 | v0.2.5.3 | Number formats with stated error bounds: integer, ternary, binary, codebook, FP16, BF16, FP8, phase (WP3, THME-3006) | **Done**: one rounding routine for FP16, BF16 and FP8, exhaustively tested; integer, sign, codebook and phase quantizers with checked bounds |
-| v0.2.5.4 | Optimal transport: northwest-corner start, Sinkhorn with a log-domain variant (WP4) | |
+| v0.2.5.4 | Optimal transport: northwest-corner start, Sinkhorn with a log-domain variant (WP4) | **Done** |
 | v0.2.5.5 | Bases and rotations: one Walsh-Hadamard transform, FFT against a naive DFT, Givens and Householder (WP5, THME-3004) | Implemented in part: one shared Walsh-Hadamard transform, three copies removed |
-| v0.2.5.6 | ODE steppers: Dormand-Prince 5(4) with step control and fixed-step RK4, no default tolerances (WP6) | |
+| v0.2.5.6 | ODE steppers: Dormand-Prince 5(4) with step control and fixed-step RK4, no default tolerances (WP6) | **Done** |
 | v0.2.5.7 | Projections that always report retained structure: PCA, participation ratio, MDS, stereographic (WP8) | |
 | v0.2.5.8 | Dependency-free SVG visual engine: log-axis traces, heatmaps, scatter, dataflow graphs, Pareto fronts (WP9) | **Done**: `engine::viz` (THME-3007) |
 | v0.2.5.9 | Typed conversion registry with accumulated error bounds, and engine benchmarks run on every release (WP10, WP39) | |
