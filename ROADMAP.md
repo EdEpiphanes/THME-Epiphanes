@@ -84,12 +84,13 @@ flowchart LR
 | No-panic rule, GUI split, glossary | Compiler-enforced; Studio tabs as modules; `CONTEXT.md` | Tested |
 | Toolchain 1.100.0 | Pinned compiler bumped to 1.100.0 (`rust-toolchain.toml`); MSRV stays 1.89 | fmt, clippy and tests green on 1.100.0 |
 | Scanner: deflate pickles and NumPy object arrays (THME-3022, parts 1-2) | `thme scan`: deflate-compressed pickles in zip containers; `.npy`/`.npz` object arrays | Tested: 16 scan tests |
+| Scanner: Keras, ONNX and oversize pickles (THME-3022, parts 3-5) | `thme scan`: Keras Lambda and custom layers in `.keras`; ONNX external-data path traversal and custom domains; the first 256 MiB of an oversize pickle is still judged | Tested: scan fixtures for each rule |
 
 ### Now: committed, in progress
 
 | Track | Item | Status | Depends on |
 | :--- | :--- | :--- | :--- |
-| Security | **Scanner coverage** (THME-3022, v0.2.7.2): ONNX and Keras Lambda layers | Partly done: ONNX and Keras remain | Scanner v1 |
+| Security | **Scanner coverage** (THME-3022, v0.2.7.2): legacy HDF5 `.h5` Keras files | Partly done: `.h5` is flagged, not inspected | Scanner v1 |
 | Engine | **Transport and ODE steppers** (dossier WP4, WP6): Sinkhorn transport with mass conservation; Euler, RK4 and adaptive RK with error-order tests | Not started | Engine core |
 | Quality and evidence | **Benchmark runner, native and bridged modes** (v0.2.8.3): produce outputs with THME's forward pass or an external tool; resume and cache | Blocked | Model runs paused |
 

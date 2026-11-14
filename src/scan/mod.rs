@@ -7,6 +7,13 @@
 //! - **Pickle imports** in `.bin`/`.pt`/`.pth`/`.ckpt`/`.pkl` files (plain or inside the
 //!   PyTorch zip), and in NumPy `.npy`/`.npz` object arrays, whose payload is a pickle.
 //!   Loading such a file needs `allow_pickle=True` and can run code.
+//! - **Keras Lambda layers** in `.keras` files: a layer whose `class_name` is `Lambda`,
+//!   `TFOpLambda` or a `__lambda__` function carries Python code that runs when the model is
+//!   loaded with `safe_mode` disabled. Custom layer classes must be imported from user code;
+//!   legacy HDF5 `.h5` files are reported as not inspected.
+//! - **ONNX external data** in `.onnx` files: a tensor whose `location` is an absolute path or
+//!   contains `..` makes a loader read a file outside the model folder; custom operator domains
+//!   are noted.
 //! - **Malformed headers** in GGUF and SafeTensors files, which target parser bugs.
 //! - **Unaccounted bytes** between or after tensor payloads, and executables hidden there.
 //! - **Code in text**: template-injection patterns in chat templates, shell or Python in
@@ -17,6 +24,7 @@
 //!
 //! A clean result means no rule fired. It is not proof that a file is safe.
 
+pub mod onnx;
 pub mod pickle;
 
 use anyhow::{bail, Context, Result};
@@ -188,9 +196,16 @@ fn scan_file(path: &Path, rel: &str, remote_code: bool, report: &mut ScanReport)
     } else if magic.starts_with(b"GGUF") {
         scan_gguf(path, rel, report);
     } else if magic.starts_with(b"\x93NUMPY") {
-        scan_npy(path, rel, report);
+        scan_npy(path, rel, PICKLE_LIMIT, report);
     } else if magic.starts_with(b"PK\x03\x04") {
         scan_zip(path, rel, report);
+    } else if magic.starts_with(b"\x89HDF\r\n\x1a\n") {
+        report.add(
+            Severity::Info,
+            "hdf5-not-inspected",
+            rel,
+            "HDF5 or legacy Keras file; layers (including Lambda) are not inspected".to_string(),
+        );
     } else if ext == "safetensors" {
         scan_safetensors(path, rel, report);
     } else if let Some(kind) = executable_kind(&magic, 0) {
@@ -200,11 +215,10 @@ fn scan_file(path: &Path, rel: &str, remote_code: bool, report: &mut ScanReport)
             rel,
             format!("{kind} executable shipped with the model"),
         );
+    } else if ext == "onnx" {
+        scan_onnx_file(path, rel, report);
     } else if is_pickle_candidate(&magic, &ext) {
-        match read_limited(path, PICKLE_LIMIT) {
-            Ok(bytes) => judge_pickle(&bytes, rel, "", report),
-            Err(e) => report.add(Severity::Medium, "unreadable", rel, format!("{e:#}")),
-        }
+        scan_loose_pickle(path, rel, PICKLE_LIMIT, report);
     } else if matches!(
         ext.as_str(),
         "py" | "sh" | "bat" | "cmd" | "ps1" | "js" | "vbs" | "pyc"
@@ -222,6 +236,81 @@ fn scan_file(path: &Path, rel: &str, remote_code: bool, report: &mut ScanReport)
         if let Some(json) = read_json(path) {
             check_hf_json(&name, &json, rel, report);
         }
+    }
+}
+
+/// Rules for an ONNX file: tensor data locations that leave the model folder, a broken protobuf,
+/// and operator domains that need a custom-op library.
+fn scan_onnx_file(path: &Path, rel: &str, report: &mut ScanReport) {
+    const STANDARD_DOMAINS: [&str; 5] = [
+        "",
+        "ai.onnx",
+        "ai.onnx.ml",
+        "ai.onnx.training",
+        "ai.onnx.preview.training",
+    ];
+    let data = match read_limited(path, 2 << 30) {
+        Ok(d) => d,
+        Err(e) => {
+            report.add(Severity::Medium, "unreadable", rel, format!("{e:#}"));
+            return;
+        }
+    };
+    let scan = onnx::scan_onnx(&data);
+    for location in scan
+        .external_locations
+        .iter()
+        .filter(|l| onnx::is_unsafe_location(l))
+    {
+        report.add(
+            Severity::High,
+            "onnx-external-data-path",
+            rel,
+            format!("tensor data location '{location}' points outside the model folder"),
+        );
+    }
+    if let Some(at) = scan.malformed_at {
+        report.add(
+            Severity::Medium,
+            "onnx-malformed",
+            rel,
+            format!("protobuf ends or breaks at byte {at}"),
+        );
+    }
+    for domain in scan
+        .domains
+        .iter()
+        .filter(|d| !STANDARD_DOMAINS.contains(&d.as_str()))
+    {
+        report.add(
+            Severity::Info,
+            "onnx-custom-domain",
+            rel,
+            format!("operator domain '{domain}' needs a custom-op library; the scan loads none"),
+        );
+    }
+}
+
+/// Judges a loose pickle. Loaders stop at the first STOP opcode, so padding past `limit` must not
+/// hide a payload: the first `limit` bytes are judged and the cut is reported.
+// The limit is a parameter only so tests can use a small one.
+fn scan_loose_pickle(path: &Path, rel: &str, limit: u64, report: &mut ScanReport) {
+    match read_limited(path, limit.saturating_add(1)) {
+        Ok(mut bytes) => {
+            if bytes.len() as u64 > limit {
+                bytes.truncate(limit as usize);
+                report.add(
+                    Severity::Medium,
+                    "pickle-not-inspected",
+                    rel,
+                    format!(
+                        "larger than the {limit}-byte limit; only the first {limit} bytes were inspected"
+                    ),
+                );
+            }
+            judge_pickle(&bytes, rel, "", report);
+        }
+        Err(e) => report.add(Severity::Medium, "unreadable", rel, format!("{e:#}")),
     }
 }
 
@@ -413,26 +502,33 @@ fn judge_pickle_at(bytes: &[u8], at: &str, report: &mut ScanReport) {
 
 /// Why a deflate stream could not be inflated.
 enum InflateFailure {
-    /// It produces more bytes than the pickle size limit.
-    TooLarge,
     /// It is not a valid deflate stream.
     Corrupt(String),
 }
 
-/// Inflates a raw deflate stream (zip method 8), stopping at `limit` bytes.
-fn inflate_limited(bytes: &[u8], limit: u64) -> std::result::Result<Vec<u8>, InflateFailure> {
+/// Inflates a raw deflate stream (zip method 8), stopping at `limit` bytes. The flag says the
+/// stream held more, so the bytes returned are only its first `limit`.
+fn inflate_limited(
+    bytes: &[u8],
+    limit: u64,
+) -> std::result::Result<(Vec<u8>, bool), InflateFailure> {
     let decoder = flate2::read::DeflateDecoder::new(bytes);
     let mut out = Vec::new();
-    // Read one byte past the limit so an oversized stream is caught instead of truncated.
+    // Read one byte past the limit so an oversized stream is detected.
     match decoder.take(limit.saturating_add(1)).read_to_end(&mut out) {
-        Ok(_) if out.len() as u64 > limit => Err(InflateFailure::TooLarge),
-        Ok(_) => Ok(out),
+        Ok(_) => {
+            let truncated = out.len() as u64 > limit;
+            out.truncate(limit as usize);
+            Ok((out, truncated))
+        }
         Err(e) => Err(InflateFailure::Corrupt(e.to_string())),
     }
 }
 
-/// An archive entry's uncompressed bytes: stored entries as-is, deflate inflated within
-/// the size limit. Reports why an entry cannot be inspected instead of failing.
+/// An archive entry's uncompressed bytes and whether they were cut at `limit`: stored entries
+/// as-is, deflate inflated. Reports why an entry cannot be inspected instead of failing; a cut
+/// entry gets its size note here and the caller decides whether the prefix is worth judging.
+#[allow(clippy::too_many_arguments)]
 fn zip_entry_body(
     bytes: &[u8],
     method: usize,
@@ -440,23 +536,17 @@ fn zip_entry_body(
     name: &str,
     rule: &'static str,
     rel: &str,
+    limit: u64,
     report: &mut ScanReport,
-) -> Option<Vec<u8>> {
-    match method {
-        0 => Some(bytes.to_vec()),
-        8 => match inflate_limited(bytes, PICKLE_LIMIT) {
+) -> Option<(Vec<u8>, bool)> {
+    let body = match method {
+        0 => {
+            let cut = bytes.len() as u64 > limit;
+            let kept = if cut { &bytes[..limit as usize] } else { bytes };
+            Some((kept.to_vec(), cut))
+        }
+        8 => match inflate_limited(bytes, limit) {
             Ok(inflated) => Some(inflated),
-            Err(InflateFailure::TooLarge) => {
-                report.add(
-                    Severity::Medium,
-                    rule,
-                    rel,
-                    format!(
-                        "{kind} '{name}' inflates past the {PICKLE_LIMIT}-byte limit; too large to inspect"
-                    ),
-                );
-                None
-            }
             Err(InflateFailure::Corrupt(e)) => {
                 report.add(
                     Severity::Medium,
@@ -476,33 +566,167 @@ fn zip_entry_body(
             );
             None
         }
+    };
+    if body.as_ref().is_some_and(|(_, cut)| *cut) {
+        report.add(
+            Severity::Medium,
+            rule,
+            rel,
+            format!(
+                "{kind} '{name}' is larger than the {limit}-byte limit; too large to inspect past its first {limit} bytes"
+            ),
+        );
     }
+    body
 }
 
 /// Inspects one `.pkl` entry: stored bytes as they are, deflate (method 8) inflated first.
-fn inspect_zip_pickle(bytes: &[u8], method: usize, rel: &str, name: &str, report: &mut ScanReport) {
-    if let Some(body) = zip_entry_body(
+/// An oversize entry is noted and its first `limit` bytes are still judged.
+fn inspect_zip_pickle(
+    bytes: &[u8],
+    method: usize,
+    rel: &str,
+    name: &str,
+    limit: u64,
+    report: &mut ScanReport,
+) {
+    if let Some((body, _)) = zip_entry_body(
         bytes,
         method,
         "pickle",
         name,
         "pickle-not-inspected",
         rel,
+        limit,
         report,
     ) {
         judge_pickle(&body, rel, name, report);
     }
 }
 
+/// Deepest JSON nesting walked in a Keras config; deeper configs are reported, not searched.
+const KERAS_JSON_DEPTH: usize = 64;
+
+/// Inspects a Keras 3 `config.json` entry: Lambda layers carry serialized Python code.
+fn inspect_zip_keras(bytes: &[u8], method: usize, rel: &str, name: &str, report: &mut ScanReport) {
+    let Some((body, false)) = zip_entry_body(
+        bytes,
+        method,
+        "Keras config",
+        name,
+        "keras-not-inspected",
+        rel,
+        PICKLE_LIMIT,
+        report,
+    ) else {
+        return;
+    };
+    let at = format!("{rel}!{name}");
+    let json = match serde_json::from_slice::<serde_json::Value>(&body) {
+        Ok(json) => json,
+        Err(e) => {
+            report.add(
+                Severity::Medium,
+                "keras-not-inspected",
+                &at,
+                format!("Keras config '{name}' is not valid JSON ({e}); not inspected"),
+            );
+            return;
+        }
+    };
+    walk_keras_config(&json, 0, &at, name, report);
+}
+
+/// Walks a Keras config, reporting Lambda layers and custom classes, and stops at the depth cap.
+fn walk_keras_config(
+    value: &serde_json::Value,
+    depth: usize,
+    at: &str,
+    name: &str,
+    report: &mut ScanReport,
+) {
+    if depth > KERAS_JSON_DEPTH {
+        report.add(
+            Severity::Medium,
+            "keras-not-inspected",
+            at,
+            format!(
+                "Keras config '{name}' nests deeper than {KERAS_JSON_DEPTH} levels; not inspected past there"
+            ),
+        );
+        return;
+    }
+    match value {
+        serde_json::Value::Object(map) => {
+            check_keras_object(map, at, report);
+            for child in map.values() {
+                walk_keras_config(child, depth + 1, at, name, report);
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for child in items {
+                walk_keras_config(child, depth + 1, at, name, report);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Rules for one object with a `class_name`: Lambda layers carry code; custom classes must be
+/// imported from user code.
+fn check_keras_object(
+    map: &serde_json::Map<String, serde_json::Value>,
+    at: &str,
+    report: &mut ScanReport,
+) {
+    let Some(class) = map.get("class_name").and_then(|v| v.as_str()) else {
+        return;
+    };
+    if matches!(class, "Lambda" | "TFOpLambda" | "__lambda__") {
+        let name = map
+            .get("config")
+            .and_then(|config| config.get("name"))
+            .and_then(|n| n.as_str())
+            .unwrap_or("unnamed");
+        report.add(
+            Severity::High,
+            "keras-lambda-layer",
+            at,
+            format!(
+                "layer '{name}' ({class}) carries Python code that runs when the model is loaded with safe_mode disabled"
+            ),
+        );
+        return;
+    }
+    let module = map.get("module").and_then(|v| v.as_str());
+    let registered = map.get("registered_name").and_then(|v| v.as_str());
+    let custom = module.is_some_and(|m| !m.starts_with("keras") && !m.starts_with("tensorflow"))
+        || registered.is_some_and(|r| r.starts_with("Custom>"));
+    if custom {
+        let origin = module
+            .map(|m| format!("module '{m}'"))
+            .unwrap_or_else(|| "no module".to_string());
+        report.add(
+            Severity::Medium,
+            "keras-custom-object",
+            at,
+            format!(
+                "custom class '{class}' ({origin}) must be imported from user code when the model is loaded"
+            ),
+        );
+    }
+}
+
 /// Inspects one `.npy` entry inside a `.npz`: the same header rules as a loose file.
 fn inspect_zip_npy(bytes: &[u8], method: usize, rel: &str, name: &str, report: &mut ScanReport) {
-    let Some(body) = zip_entry_body(
+    let Some((body, false)) = zip_entry_body(
         bytes,
         method,
         "NumPy array",
         name,
         "numpy-not-inspected",
         rel,
+        PICKLE_LIMIT,
         report,
     ) else {
         return;
@@ -585,9 +809,11 @@ fn scan_zip(path: &Path, rel: &str, report: &mut ScanReport) {
         };
         let lower = name.to_ascii_lowercase();
         if lower.ends_with(".pkl") {
-            inspect_zip_pickle(bytes, method, rel, &name, report);
+            inspect_zip_pickle(bytes, method, rel, &name, PICKLE_LIMIT, report);
         } else if lower.ends_with(".npy") {
             inspect_zip_npy(bytes, method, rel, &name, report);
+        } else if lower == "config.json" {
+            inspect_zip_keras(bytes, method, rel, &name, report);
         } else if let Some(kind) = executable_kind(bytes, 0) {
             report.add(
                 Severity::High,
@@ -740,7 +966,8 @@ fn read_npy_head(path: &Path) -> std::result::Result<Vec<u8>, String> {
 }
 
 /// Scans a `.npy` file: only an object dtype stores its payload as a pickle.
-fn scan_npy(path: &Path, rel: &str, report: &mut ScanReport) {
+// The limit is a parameter only so tests can use a small one.
+fn scan_npy(path: &Path, rel: &str, limit: u64, report: &mut ScanReport) {
     let info = match read_npy_head(path).and_then(|head| parse_npy(&head)) {
         Ok(info) => info,
         Err(e) => {
@@ -756,7 +983,15 @@ fn scan_npy(path: &Path, rel: &str, report: &mut ScanReport) {
     if !is_object_descr(&info.descr) {
         return; // numeric payload: nothing to inspect
     }
-    match read_range(path, info.data_at as u64, PICKLE_LIMIT) {
+    match read_range(path, info.data_at as u64, limit.saturating_add(1)) {
+        Ok(payload) if payload.len() as u64 > limit => report.add(
+            Severity::Medium,
+            "numpy-not-inspected",
+            rel,
+            format!(
+                "object array payload is larger than the {limit}-byte limit; too large to inspect"
+            ),
+        ),
         Ok(payload) => judge_npy(&info, &payload, rel, report),
         Err(e) => {
             // The object dtype is already known, so the allow_pickle medium stands
