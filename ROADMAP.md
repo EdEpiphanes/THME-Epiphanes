@@ -1,7 +1,7 @@
 # THME Roadmap
 
 > **Topological Heterogeneous Manifold Engine (THME)** by **Epiphanes**
-> Updated 13 November 2026. **Direction: finish the open-source engine and tools first.** THME
+> Updated 14 November 2026. **Direction: finish the open-source engine and tools first.** THME
 > is AGPL-3.0-only now; a commercial release follows once the foundations are complete (version
 > and timing to be decided). Model runs are paused, so work that needs a measurement on a real
 > model is built and tested but marked *measurement pending*. Every claim stays measured, or
@@ -32,14 +32,14 @@ flowchart LR
     classDef later fill:#ffffff,stroke:#0b0b0b,stroke-width:1.5px,stroke-dasharray:4 3,color:#52514e;
 
     subgraph NOW["Now"]
-        N4["Scanner coverage (flate2)"]:::now
-        N5["Transport and ODE steppers"]:::now
+        N1["GPTQ-style rounding"]:::now
+        N2["llama.cpp check (synthetic)"]:::now
+        N3["Scanner: legacy Keras .h5"]:::now
     end
     subgraph NEXT["Next"]
-        X1["Native benchmark runner"]:::later
-        X2["Scanner coverage"]:::later
-        X3["Scanner coverage"]:::later
-        X4["GPTQ-style rounding"]:::later
+        X1[".epiph placement plan"]:::later
+        X2[".epiph lossless compression"]:::later
+        X3["Native benchmark runner (model runs paused)"]:::later
     end
     subgraph LATER["Later"]
         L1["Translation layer"]:::later
@@ -48,7 +48,7 @@ flowchart LR
         L4["GPU runtime and placement"]:::later
         L5["Commercial release"]:::later
     end
-    D["Done this week:<br/>engine core, exact allocator,<br/>.epiph and signing, thme scan,<br/>quality gate, number formats"]:::done --> NOW --> NEXT --> LATER
+    D["Done this week:<br/>scanner coverage (deflate, NumPy,<br/>Keras, ONNX), toolchain 1.100,<br/>ODE steppers, optimal transport,<br/>ink-glass Studio GIFs"]:::done --> NOW --> NEXT --> LATER
 ```
 
 ### Done this week
@@ -92,6 +92,8 @@ flowchart LR
 
 | Track | Item | Status | Depends on |
 | :--- | :--- | :--- | :--- |
+| Formats and calibration | **GPTQ-style rounding** (THME-2205): second-order rounding with a full-Hessian calibration step (`faer`, approved) | Not started | Calibration |
+| Formats and calibration | **llama.cpp compatibility check** (THME-2208) on synthetic exported files; the runtime check runs only when a tool is configured | Not started | Exporter |
 | Security | **Scanner coverage** (THME-3022, v0.2.7.2): legacy HDF5 `.h5` Keras files | Partly done: `.h5` is flagged, not inspected | Scanner v1 |
 | Quality and evidence | **Benchmark runner, native and bridged modes** (v0.2.8.3): produce outputs with THME's forward pass or an external tool; resume and cache | Blocked | Model runs paused |
 
@@ -99,7 +101,8 @@ flowchart LR
 
 | Track | Item | Depends on |
 | :--- | :--- | :--- |
-| Formats and calibration | GPTQ-style rounding (THME-2205); llama.cpp compatibility check on synthetic files (THME-2208) | Calibration |
+| Epiphanes model format | `.epiph` GPU/CPU placement plan from the exact allocator (THME-3016) | Exact allocator |
+| Epiphanes model format | `.epiph` lossless payload compression with `flate2` (THME-3015) | Signature over compressed payloads |
 
 ### Later: direction
 
@@ -138,7 +141,15 @@ flowchart LR
 - **Legal review.** Format-name trademark (THME-3017) and the commercial licence wording need a
   lawyer before any announcement.
 
-### Changes this update (13 November 2026)
+### Changes this update (14 November 2026)
+
+- Done: scanner coverage parts 1-5 (deflate pickles, NumPy object arrays, oversize pickles,
+  Keras, ONNX), toolchain 1.100.0, ODE steppers (WP6), optimal transport (WP4), ink-glass
+  treatment in the Studio Live 3D view.
+- Now: GPTQ-style rounding and the llama.cpp check move up from Next; legacy Keras `.h5` stays.
+- Next: `.epiph` placement plan (THME-3016) and lossless compression (THME-3015).
+
+### Changes in the previous update (13 November 2026)
 
 - Added the engine, `.epiph` and security tracks from the research dossier v3.1 and the owner's
   direction; existing milestones keep their numbers.
