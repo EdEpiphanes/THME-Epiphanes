@@ -273,7 +273,7 @@ closes it.
 ### [THME-3022] Scanner: more formats and compressed pickles
 
 - **Milestone**: v0.2.7 · **Roadmap**: v0.2.7.2 · **Priority**: p2 · **Area**: security · **Type**: feature · **Status**: triage
-- **Problem**: v1 does not inspect deflate-compressed pickles, ONNX, Keras Lambda layers or NumPy object arrays.
+- **Problem**: Only ONNX and Keras Lambda layers are still not inspected.
 - **Done means**: Each format added with fixtures; compressed pickles inspected with a pure-Rust inflate dependency proposed first.
 
 ### [THME-3024] Benchmark registry: task files and result records

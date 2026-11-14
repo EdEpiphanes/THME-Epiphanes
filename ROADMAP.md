@@ -83,12 +83,13 @@ flowchart LR
 | Sandbox design (THME-3020, design part) | [docs/sandbox.md](docs/sandbox.md): threat model, one fail-closed interface, layers per OS, 13 escape tests, dependency proposal | Design only; nothing built |
 | No-panic rule, GUI split, glossary | Compiler-enforced; Studio tabs as modules; `CONTEXT.md` | Tested |
 | Toolchain 1.100.0 | Pinned compiler bumped to 1.100.0 (`rust-toolchain.toml`); MSRV stays 1.89 | fmt, clippy and tests green on 1.100.0 |
+| Scanner: deflate pickles and NumPy object arrays (THME-3022, parts 1-2) | `thme scan`: deflate-compressed pickles in zip containers; `.npy`/`.npz` object arrays | Tested: 16 scan tests |
 
 ### Now: committed, in progress
 
 | Track | Item | Status | Depends on |
 | :--- | :--- | :--- | :--- |
-| Security | **Scanner coverage** (THME-3022, v0.2.7.2): deflate-compressed pickles and zip entries through `flate2` (approved, already in the tree); ONNX, Keras and NumPy object arrays | Not started | Scanner v1 |
+| Security | **Scanner coverage** (THME-3022, v0.2.7.2): ONNX and Keras Lambda layers | Partly done: ONNX and Keras remain | Scanner v1 |
 | Engine | **Transport and ODE steppers** (dossier WP4, WP6): Sinkhorn transport with mass conservation; Euler, RK4 and adaptive RK with error-order tests | Not started | Engine core |
 | Quality and evidence | **Benchmark runner, native and bridged modes** (v0.2.8.3): produce outputs with THME's forward pass or an external tool; resume and cache | Blocked | Model runs paused |
 
