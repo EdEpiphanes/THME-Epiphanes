@@ -146,7 +146,7 @@ flowchart LR
 - Done: build repaired for eframe and egui 0.37, wgpu 30 and sysinfo 0.40 (fmt, clippy and the test suite green; `cargo deny check` passes without the two advisory ignores); GPTQ rounding rewritten to the reference algorithm and tested on synthetic matrices; wgpu GPU kernels pass their eight tests on one RTX 4060 Ti (no speed figure claimed).
 - Corrected: the scanner ticket (THME-3022) is back to *ready*, because legacy `.h5` files are flagged, not inspected; the Studio no longer loads a model from a developer-machine path at startup.
 - Cleaned: `agent-hub` and 18 unrelated `neutron-*` crates moved out of the repository; only `neutron-gpu` remains as a workspace member.
-- Not done: new README GIFs. The other Studio tabs do not move, so their recordings collapse to one frame, and the Live 3D crop needs adjusting for the new layout. See THME-3039.
+- Not done: new README GIFs. The other Studio tabs do not move, so their recordings collapse to one frame, and the Live 3D crop needs adjusting for the new layout. A forward-pass animation already exists (`thme figure MODEL --gif`); THME-3039 covers a per-layer view.
 - Added to the backlog (triage): third-party code register (3034), mock and simulated data in the Studio (3035), LoRA training (3036), tokenizer and chat templates (3037), Studio chat tab (3038), live-layers figure (3039).
 
 ### Changes in the previous update (14 November 2026)
