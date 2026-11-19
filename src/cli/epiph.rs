@@ -95,6 +95,10 @@ pub struct PackArgs {
     /// With --quantize, skip recipe operations that cannot be applied instead of failing
     #[arg(long, requires = "quantize")]
     pub allow_partial: bool,
+
+    /// Plan GPU/CPU placement for a memory budget, `VRAM_MIB:HOST_MIB`, and store it in the file
+    #[arg(long, value_name = "VRAM_MIB:HOST_MIB")]
+    pub placement: Option<String>,
 }
 
 fn read_json(path: &Path) -> Result<Value> {
@@ -150,6 +154,11 @@ pub fn pack(args: &PackArgs) -> Result<epiph::PackSummary> {
             .collect::<Result<_>>()?,
         annotations,
         created_unix: None,
+        placement: args
+            .placement
+            .as_deref()
+            .map(epiph::placement::Budget::parse_mib)
+            .transpose()?,
         store_selected: args.quantize,
         hf_files: if args.model.is_dir() {
             epiph::HF_FILES
@@ -168,8 +177,13 @@ pub fn execute(args: EpiphArgs) -> Result<()> {
     match args.command {
         EpiphCommand::Pack(pack_args) => {
             let s = pack(&pack_args)?;
+            let planned = if pack_args.placement.is_some() {
+                ", placement planned"
+            } else {
+                ""
+            };
             println!(
-                "Packed {} tensors and {} attachments into {:?} ({} bytes, sha256 {})",
+                "Packed {} tensors and {} attachments into {:?} ({} bytes, sha256 {}{planned})",
                 s.tensors, s.attachments, pack_args.out, s.file_bytes, s.sha256
             );
         }
@@ -183,6 +197,17 @@ pub fn execute(args: EpiphArgs) -> Result<()> {
                 "OK: {} tensors and {} attachments verified ({} payload bytes)",
                 r.tensors, r.attachments, r.payload_bytes
             );
+            if let Some(p) = &r.placement {
+                println!(
+                    "Placement: {} tensors, GPU {} bytes, CPU {} bytes, streamed {} bytes (budget VRAM {} bytes, host {} bytes)",
+                    p.tensors.len(),
+                    p.gpu_bytes,
+                    p.cpu_bytes,
+                    p.stream_bytes,
+                    p.budget.vram_bytes,
+                    p.budget.host_bytes
+                );
+            }
             let key = public_key.as_deref().map(load_public_key).transpose()?;
             match sign::check(&file, key.as_ref())? {
                 SignatureStatus::Valid {
@@ -272,6 +297,7 @@ mod tests {
             annotate: vec![],
             quantize: false,
             allow_partial: false,
+            placement: None,
         })
         .unwrap();
         let pair = minisign::KeyPair::generate_unencrypted_keypair().unwrap();
@@ -321,6 +347,7 @@ mod tests {
             annotate: vec![],
             quantize: true,
             allow_partial: false,
+            placement: None,
         };
         pack(&base).unwrap();
         let (m, manifest) = epiph::read(&base.out).unwrap();
@@ -351,6 +378,7 @@ mod tests {
             annotate: vec!["stage=base".into()],
             quantize: false,
             allow_partial: false,
+            placement: None,
         };
         pack(&args).unwrap();
         // Re-pack from the .epiph itself, recording lineage.
@@ -384,7 +412,70 @@ mod tests {
             annotate: vec!["no-equals".into()],
             quantize: false,
             allow_partial: false,
+            placement: None,
         };
         assert!(pack(&bad).is_err());
+    }
+
+    fn args_for(model: &Path, out: &Path, placement: Option<&str>) -> PackArgs {
+        PackArgs {
+            model: model.to_path_buf(),
+            out: out.to_path_buf(),
+            recipe: None,
+            calibration: None,
+            quality: vec![],
+            parent: vec![],
+            annotate: vec![],
+            quantize: false,
+            allow_partial: false,
+            placement: placement.map(String::from),
+        }
+    }
+
+    #[test]
+    fn placement_flag_stores_a_plan_that_verify_accepts() {
+        use crate::epiph::placement::Tier;
+        let dir = tempfile::tempdir().unwrap();
+        let (model, _) = synthetic_checkpoint(dir.path());
+
+        let streamed = dir.path().join("stream.epiph");
+        pack(&args_for(&model, &streamed, Some("0:0"))).unwrap();
+        let (_, manifest) = epiph::read(&streamed).unwrap();
+        let plan = manifest.placement.expect("the plan is stored");
+        assert!(plan.tensors.iter().all(|t| t.tier == Tier::Stream));
+        execute(EpiphArgs {
+            command: EpiphCommand::Verify {
+                file: streamed,
+                public_key: None,
+                require_signature: false,
+            },
+        })
+        .unwrap();
+
+        let on_gpu = dir.path().join("gpu.epiph");
+        pack(&args_for(&model, &on_gpu, Some("1:1"))).unwrap();
+        let (_, manifest) = epiph::read(&on_gpu).unwrap();
+        let plan = manifest.placement.expect("the plan is stored");
+        assert!(plan.tensors.iter().all(|t| t.tier == Tier::Gpu));
+    }
+
+    #[test]
+    fn bad_budget_is_an_error_and_writes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let (model, _) = synthetic_checkpoint(dir.path());
+        let out = dir.path().join("x.epiph");
+        let err = pack(&args_for(&model, &out, Some("x"))).unwrap_err();
+        assert!(format!("{err:#}").contains("VRAM_MIB:HOST_MIB"));
+        assert!(!out.exists());
+    }
+
+    #[test]
+    fn pack_without_placement_stores_no_plan() {
+        let dir = tempfile::tempdir().unwrap();
+        let (model, _) = synthetic_checkpoint(dir.path());
+        let out = dir.path().join("plain.epiph");
+        pack(&args_for(&model, &out, None)).unwrap();
+        let (_, manifest) = epiph::read(&out).unwrap();
+        assert!(manifest.placement.is_none());
     }
 }

@@ -377,3 +377,126 @@ fn scan_checks_templates_carried_inside_epiph_files() {
         .iter()
         .any(|f| f.detail.contains("tokenizer.ggml.tokens")));
 }
+
+fn imported(dir: &Path) -> ModelIR {
+    let (model_dir, _) = synthetic_checkpoint(dir);
+    ModelImporter::import(&model_dir).unwrap()
+}
+
+fn pack_placed(ir: &ModelIR, out: &Path, placement: Option<placement::Budget>) {
+    let options = PackOptions {
+        placement,
+        created_unix: Some(0),
+        ..PackOptions::default()
+    };
+    write(ir, &options, out).unwrap();
+}
+
+#[test]
+fn placement_is_stored_and_read_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let ir = imported(dir.path());
+    let total: u64 = ir
+        .tensors
+        .iter()
+        .map(|t| read_tensor_bytes(t).unwrap().len() as u64)
+        .sum();
+    let out = dir.path().join("placed.epiph");
+    let budget = placement::Budget {
+        vram_bytes: total - 1,
+        host_bytes: 1 << 20,
+    };
+    pack_placed(&ir, &out, Some(budget));
+    let (_, manifest) = read(&out).unwrap();
+    let plan = manifest.placement.clone().expect("plan is stored");
+    assert_eq!(plan.budget, budget);
+    assert_eq!(plan.gpu_bytes + plan.cpu_bytes + plan.stream_bytes, total);
+    let lengths: Vec<(String, u64)> = manifest
+        .tensors
+        .iter()
+        .map(|t| (t.name.clone(), t.length))
+        .collect();
+    assert!(plan.check(&lengths).is_ok(), "plan is in tensor order");
+    assert_eq!(verify(&out).unwrap().placement, Some(plan));
+}
+
+#[test]
+fn files_without_a_plan_are_unchanged() {
+    let dir = tempfile::tempdir().unwrap();
+    let ir = imported(dir.path());
+    let out = dir.path().join("plain.epiph");
+    pack_placed(&ir, &out, None);
+    let (_, manifest) = read(&out).unwrap();
+    assert!(manifest.placement.is_none());
+    assert!(verify(&out).unwrap().placement.is_none());
+    let bytes = std::fs::read(&out).unwrap();
+    let data = u64::from_le_bytes(bytes[24..32].try_into().unwrap());
+    let text = String::from_utf8_lossy(&bytes[32..data as usize]).to_string();
+    assert!(!text.contains("placement"));
+}
+
+#[test]
+fn a_plan_that_disagrees_with_the_tensors_fails_verify() {
+    let dir = tempfile::tempdir().unwrap();
+    let ir = imported(dir.path());
+    let out = dir.path().join("placed.epiph");
+    let budget = placement::Budget {
+        vram_bytes: 1 << 40,
+        host_bytes: 1 << 20,
+    };
+    pack_placed(&ir, &out, Some(budget));
+    let mut bytes = std::fs::read(&out).unwrap();
+    let needle = br#""cpu_bytes":0"#;
+    let at = bytes
+        .windows(needle.len())
+        .position(|w| w == needle)
+        .unwrap();
+    bytes[at + needle.len() - 1] = b'7';
+    let bad = dir.path().join("bad.epiph");
+    std::fs::write(&bad, &bytes).unwrap();
+    let err = verify(&bad).unwrap_err();
+    assert!(format!("{err:#}").contains("placement"), "{err:#}");
+}
+
+#[test]
+fn format_version_is_1_2_and_1_1_files_still_verify() {
+    let dir = tempfile::tempdir().unwrap();
+    let ir = imported(dir.path());
+    let out = dir.path().join("plain.epiph");
+    pack_placed(&ir, &out, None);
+    let bytes = std::fs::read(&out).unwrap();
+    assert_eq!(u16::from_le_bytes([bytes[10], bytes[11]]), 2);
+    assert_eq!(read(&out).unwrap().1.version, "1.2");
+
+    // The same file as a 1.1 writer would have left it: minor 1, manifest "1.1".
+    let mut old = bytes.clone();
+    old[10] = 1;
+    let needle = br#""version":"1.2""#;
+    let at = old.windows(needle.len()).position(|w| w == needle).unwrap();
+    old[at + needle.len() - 2] = b'1';
+    let old_path = dir.path().join("old.epiph");
+    std::fs::write(&old_path, &old).unwrap();
+    let (_, manifest) = read(&old_path).unwrap();
+    assert_eq!(manifest.version, "1.1");
+    assert!(manifest.placement.is_none());
+    assert!(verify(&old_path).is_ok());
+}
+
+#[test]
+fn signed_file_with_a_plan_verifies() {
+    let dir = tempfile::tempdir().unwrap();
+    let ir = imported(dir.path());
+    let out = dir.path().join("signed.epiph");
+    let budget = placement::Budget {
+        vram_bytes: 1 << 40,
+        host_bytes: 1 << 20,
+    };
+    pack_placed(&ir, &out, Some(budget));
+    let pair = minisign::KeyPair::generate_unencrypted_keypair().unwrap();
+    sign::sign(&out, &pair.sk, Some(&pair.pk)).unwrap();
+    assert!(matches!(
+        sign::check(&out, Some(&pair.pk)).unwrap(),
+        sign::SignatureStatus::Valid { .. }
+    ));
+    assert!(verify(&out).unwrap().placement.is_some());
+}

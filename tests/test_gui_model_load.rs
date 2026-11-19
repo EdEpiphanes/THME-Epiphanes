@@ -88,6 +88,7 @@ fn test_gui_loads_epiph_container() {
         annotate: Vec::new(),
         quantize: false,
         allow_partial: false,
+        placement: None,
     };
     pack(&args).expect("pack mock to epiph");
 
