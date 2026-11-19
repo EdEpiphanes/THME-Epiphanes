@@ -5,9 +5,7 @@ use thme::parser::ModelImporter;
 
 fn resolve_medgemma_path() -> Option<PathBuf> {
     // Tests that open a real model file are opt-in: set THME_REAL_MODEL_TESTS=1 to run them.
-    if std::env::var_os("THME_REAL_MODEL_TESTS").is_none() {
-        return None;
-    }
+    std::env::var_os("THME_REAL_MODEL_TESTS")?;
     let path = std::env::var("THME_MEDGEMMA_PATH")
         .map(PathBuf::from)
         .unwrap_or_else(|_| {
