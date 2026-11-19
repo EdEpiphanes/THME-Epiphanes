@@ -440,10 +440,10 @@ chat without moving files; each bridge lists what was tested and what was not.
 | v0.3.0.1 | `thme discover`: list models already on the machine from the Hugging Face cache, Ollama, LM Studio, llama.cpp and any folder (THME-3040) | **Done**: tested on fake folder layouts only |
 | v0.3.0.2 | `thme doctor`: what works on this machine and what to try next (THME-3041) | **Done**: tested on a facts struct; the Studio first-start summary is open (see v0.3.0.7) |
 | v0.3.0.3 | Tokenizer and chat templates: `thme tokenize`, `thme chat-template` (THME-3037) | **Done**: tested on fixtures; no real model template checked |
-| v0.3.0.4 | Studio chat tab on the reference forward pass (THME-3038) | Open |
-| v0.3.0.5 | Model download from the Hugging Face hub with checksum verification and scan on import (THME-3042, part 1) | Open |
+| v0.3.0.4 | Studio chat tab on the reference forward pass (THME-3038) | **Done**: tested on the mock model with a fixture tokenizer; never opened in a running window, and no real model was used |
+| v0.3.0.5 | Model download from the Hugging Face hub with checksum verification and scan on import (THME-3042, part 1) | **Done**: tested with a fake fetcher only; no real hub request has been made |
 | v0.3.0.6 | Bridges to Ollama, LM Studio and llama.cpp: read their model folders (done by discover), export GGUF they load (checks in THME-2208), documented MCP setup for editors and agents (THME-3042, part 2) | Open |
-| v0.3.0.7 | First-run guide in the Studio: the doctor summary and the discover list on first start | Open |
+| v0.3.0.7 | First-run guide in the Studio: the doctor summary and the discover list on first start | **Done**: the Welcome panel's state machine is tested; the window was not opened, so the look is unchecked by eye |
 | v0.3.0.8 | Notebook and Python bridge: documented JSON output of every command, with a small example | Open |
 | v0.3.0.9 | Install and docs for each background (analyst, engineer, scientist): one-command install, short guides, clean-machine test | Open |
 
