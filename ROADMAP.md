@@ -243,9 +243,9 @@ user-facing path.
 | :--- | :--- | :--- |
 | v0.2.0.1 | Reference CPU forward pass: LLaMA family and GPT-NeoX (`src/inference/`) | **Done**: measured on SmolLM-135M and Pythia-14M |
 | v0.2.0.2 | WikiText-2 tokenization with provenance and hashes (`scripts/prepare_eval_tokens.py`) | **Done** |
-| v0.2.0.3 | Measured quality gate: source vs exported GGUF vs recipe (`examples/production_verification.rs`) | **Done** |
+| v0.2.0.3 | Measured quality gate: source vs exported GGUF vs recipe (`examples/production_verification.rs`) | Implemented, re-measure pending (THME-3044) |
 | v0.2.0.4 | Dossier and charts generated only from reports (`scripts/generate_dossier.py`, `scripts/generate_charts.py`) | **Done** (reports removed 19 November 2026, to be re-measured) |
-| v0.2.0.5 | Measured experiments: precision sweep with random-placement control, depth probe | **Done** |
+| v0.2.0.5 | Measured experiments: precision sweep with random-placement control, depth probe | Implemented, re-measure pending (THME-3044) |
 | v0.2.0.6 | Cross-check the forward pass against the Hugging Face reference (logit agreement on fixed prompts) | Open; paused while no new model runs are being made |
 | v0.2.0.7 | Retire the analytic proxy from `thme validate`, the MCP quality tool and the co-surgery loop; route them through the measured gate | **Done**: `thme validate --report` gates measured reports; `thme co-surgery MODEL --tokens` scores candidates with the forward pass (`QualityEvaluator`, `MeasuredEvaluator`); supplied-value and proxy paths are labelled, including the Studio Co-Surgery tab |
 | v0.2.0.8 | Real Studio screenshots (`scripts/capture_studio.ps1`); fix missing-glyph labels and overlapping text in the Layer Tweaker dataflow row; show measured reports in the Studio | **Done** except showing measured reports in the Studio (moved to v0.2.1.9) |
@@ -290,10 +290,10 @@ SmolLM-135M, measured from the written file.
 | v0.2.2.2 | Q4_K, Q5_K and Q6_K encoders with round-trip tests against the decoders. **Done**: GGML-layout codecs (`src/exporter/kquant.rs`) checked against hand-built blocks; the forward pass reads K-quant tensors; `q4_k`, `q5_k`, `q6_k` usable in recipes, `thme evaluate` and `thme search --formats` |
 | v0.2.2.3 | Calibration activations captured from the forward pass. **Done**: the probe records per-input-channel mean \|x\|, rms and max \|x\| for every linear tensor; `thme calibrate` merges them over calibration windows and saves them keyed by tensor name (`inference::calibration`) |
 | v0.2.2.4 | Activation-aware scaling (AWQ-style). Implemented: `thme.awq_q4_0` and `thme.awq_q4_k` BYOA rules (`inference::awq`) choose a per-channel scale exponent by activation-weighted error, using `thme evaluate --calibration`; tested on synthetic weights and the synthetic model. Measurement on a real model against plain Q4_0 is pending (no model runs) |
-| v0.2.2.5 | Second-order rounding (GPTQ-style) |
+| v0.2.2.5 | Second-order rounding (GPTQ-style) | Implemented: Q4_0 and Q8_0 rounding follows the reference algorithm; tested on synthetic matrices, not measured on a real model |
 | v0.2.2.6 | Randomized Hadamard rotation of weight inputs (QuaRot-style), measured with and without |
 | v0.2.2.7 | SmoothQuant-style scale migration for activation outliers. **Done**: `inference::smoothing` folds per-channel scales (from calibration max \|x\|) into the preceding RMSNorm or LayerNorm and the linears that read it, for LLaMA and GPT-NeoX; tests confirm unchanged outputs before quantization. Its effect after quantization is not measured |
-| v0.2.2.8 | Format compatibility checks against llama.cpp on exported files |
+| v0.2.2.8 | Format compatibility checks against llama.cpp on exported files | Implemented in part: a GGUF checker (structure, data section, metadata keys); the run through llama.cpp is open |
 | v0.2.2.9 | Measured artifact size, including scales and metadata, in every report. **Done**: `thme evaluate` and `thme search` write the candidate as a per-tensor GGUF and report `export.artifact_bytes` beside the nominal estimate (`--artifact` keeps the file); candidates the exporter cannot write are reported as not measured, with the reason |
 
 ## v0.2.3 — Recovery and distillation
@@ -366,7 +366,7 @@ file, and converts to GGUF and back without losing its tokenizer.
 | v0.2.6.4 | Tokenizer and GGUF metadata attachments, lossless GGUF round trip (THME-3014) | **Done**: every GGUF key and type survives; HF files attached and extracted; format v1.1 |
 | v0.2.6.5 | Streaming writer and memory-mapped reader for models larger than memory | |
 | v0.2.6.6 | Lossless payload compression behind a per-payload encoding field (THME-3015) | |
-| v0.2.6.7 | GPU/CPU/disk placement plan from the exact allocator for a stated memory budget (THME-3016) | |
+| v0.2.6.7 | GPU/CPU/disk placement plan from the exact allocator for a stated memory budget (THME-3016) | **Done**: `src/epiph/placement.rs` plans GPU, CPU and streamed tensors exactly from a VRAM and host budget; stored in the manifest (`.epiph` 1.2); `thme epiph pack --placement`, `verify` checks it. Synthetic tensors only; no runtime reads it yet |
 | v0.2.6.8 | Studio support: open `.epiph`, show provenance, lineage, signature and quality evidence | |
 | v0.2.6.9 | Compatibility report per model and runtime: loads, runs, agrees, passes the gate (WP18) | |
 

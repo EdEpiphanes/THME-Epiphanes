@@ -76,8 +76,8 @@ bits per weight. Everything is read from the model file's header; no weights are
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/figures/pythia-14m-layers.gif" alt="Pythia-14M, one frame per layer: the tensors of the layer in turn light up" /><br><sub><b>Layers in turn</b>: real layer structure of Pythia-14M</sub></td>
-    <td width="50%"><img src="docs/figures/mock_llama-forward.gif" alt="The synthetic mock model: every tensor lights up in forward-pass order as ink glass" /><br><sub><b>Forward pass</b> on the synthetic mock model (not a trained model)</sub></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/figures/pythia-14m-layers-dark.gif"><img src="docs/figures/pythia-14m-layers.gif" alt="Pythia-14M, one frame per layer: the tensors of the layer in turn light up" /></picture><br><sub><b>Layers in turn</b>: real layer structure of Pythia-14M</sub></td>
+    <td width="50%"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/figures/mock_llama-forward-dark.gif"><img src="docs/figures/mock_llama-forward.gif" alt="The synthetic mock model: every tensor lights up in forward-pass order as ink glass" /></picture><br><sub><b>Forward pass</b> on the synthetic mock model (not a trained model)</sub></td>
   </tr>
 </table>
 
