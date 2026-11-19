@@ -351,6 +351,7 @@ flowchart LR
 | **v0.2.7 Security and trust** (in progress) | Scanner, permission record, supply chain; sandbox reserved for the commercial version | Every import scans first; untrusted code is never run |
 | v0.2.8 Quality gate and benchmarks | Versioned gate, benchmark harness, statistics, charts | A task file runs to a result with an interval and a three-state verdict |
 | v0.2.9 Translation layer and convergence | Operation graph, exact symmetries, compatibility reports | Every v0.2 exit criterion met or deferred with a reason |
+| **v0.3.0 Plug and play workspace** (in progress) | Models found on the machine, a doctor command, tokenizer and chat templates, then one Studio place to chat, test and tweak | A new user finds their models and runs a first chat without moving files |
 
 Full plan with sub-milestones: **[ROADMAP.md](ROADMAP.md)** · Tickets: **[BACKLOG.md](BACKLOG.md)**
 
