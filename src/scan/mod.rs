@@ -9,8 +9,13 @@
 //!   Loading such a file needs `allow_pickle=True` and can run code.
 //! - **Keras Lambda layers** in `.keras` files: a layer whose `class_name` is `Lambda`,
 //!   `TFOpLambda` or a `__lambda__` function carries Python code that runs when the model is
-//!   loaded with `safe_mode` disabled. Custom layer classes must be imported from user code;
-//!   legacy HDF5 `.h5` files are reported as not inspected.
+//!   loaded with `safe_mode` disabled. Custom layer classes must be imported from user code.
+//! - **Legacy Keras `.h5` files** (`hdf5`): the HDF5 signature is checked, then the bytes are
+//!   searched for the `model_config` JSON (at most 64 MiB) and the same Lambda and custom-class
+//!   rules run on it. Unknown class names are Medium because legacy files carry no module names.
+//!   Only raw JSON is read: compressed, chunked or fragmented attributes are missed, so a clean
+//!   `.h5` result is `hdf5-partial`, never a clean bill of health. Files without a readable
+//!   config are reported as not inspected, with the reason.
 //! - **ONNX external data** in `.onnx` files: a tensor whose `location` is an absolute path or
 //!   contains `..` makes a loader read a file outside the model folder; custom operator domains
 //!   are noted.
@@ -24,6 +29,7 @@
 //!
 //! A clean result means no rule fired. It is not proof that a file is safe.
 
+mod hdf5;
 pub mod onnx;
 pub mod pickle;
 
@@ -201,13 +207,6 @@ fn scan_file(path: &Path, rel: &str, remote_code: bool, report: &mut ScanReport)
         scan_npy(path, rel, PICKLE_LIMIT, report);
     } else if magic.starts_with(b"PK\x03\x04") {
         scan_zip(path, rel, report);
-    } else if magic.starts_with(b"\x89HDF\r\n\x1a\n") {
-        report.add(
-            Severity::Info,
-            "hdf5-not-inspected",
-            rel,
-            "HDF5 or legacy Keras file; layers (including Lambda) are not inspected".to_string(),
-        );
     } else if ext == "safetensors" {
         scan_safetensors(path, rel, report);
     } else if let Some(kind) = executable_kind(&magic, 0) {
@@ -217,6 +216,8 @@ fn scan_file(path: &Path, rel: &str, remote_code: bool, report: &mut ScanReport)
             rel,
             format!("{kind} executable shipped with the model"),
         );
+    } else if magic.starts_with(hdf5::MAGIC) || ext == "h5" {
+        hdf5::scan_h5(path, rel, hdf5::MAX_BYTES, report);
     } else if ext == "onnx" {
         scan_onnx_file(path, rel, report);
     } else if is_pickle_candidate(&magic, &ext) {
@@ -608,6 +609,103 @@ fn inspect_zip_pickle(
 
 /// Deepest JSON nesting walked in a Keras config; deeper configs are reported, not searched.
 const KERAS_JSON_DEPTH: usize = 64;
+/// Classes that carry Python code in their config. Checked first, so they are never "unknown".
+const KERAS_CODE_CLASSES: [&str; 3] = ["Lambda", "TFOpLambda", "__lambda__"];
+/// Built-in Keras classes that a legacy `.h5` config may name: models, layers, and the
+/// initializers, regularizers and constraints Keras nests inside layer configs. Any other name
+/// is reported as a custom class for review. Not proof that it runs code.
+const KERAS_BUILTIN_CLASSES: &[&str] = &[
+    "Sequential",
+    "Functional",
+    "Model",
+    "InputLayer",
+    "Dense",
+    "Activation",
+    "Dropout",
+    "SpatialDropout1D",
+    "SpatialDropout2D",
+    "GaussianDropout",
+    "GaussianNoise",
+    "AlphaDropout",
+    "Flatten",
+    "Reshape",
+    "Permute",
+    "RepeatVector",
+    "Embedding",
+    "Masking",
+    "Add",
+    "Subtract",
+    "Multiply",
+    "Average",
+    "Maximum",
+    "Minimum",
+    "Concatenate",
+    "Dot",
+    "Conv1D",
+    "Conv2D",
+    "Conv3D",
+    "Conv1DTranspose",
+    "Conv2DTranspose",
+    "Conv3DTranspose",
+    "SeparableConv1D",
+    "SeparableConv2D",
+    "DepthwiseConv2D",
+    "MaxPooling1D",
+    "MaxPooling2D",
+    "MaxPooling3D",
+    "AveragePooling1D",
+    "AveragePooling2D",
+    "AveragePooling3D",
+    "GlobalMaxPooling1D",
+    "GlobalMaxPooling2D",
+    "GlobalAveragePooling1D",
+    "GlobalAveragePooling2D",
+    "UpSampling1D",
+    "UpSampling2D",
+    "ZeroPadding1D",
+    "ZeroPadding2D",
+    "Cropping1D",
+    "Cropping2D",
+    "BatchNormalization",
+    "LayerNormalization",
+    "Normalization",
+    "SimpleRNN",
+    "LSTM",
+    "GRU",
+    "Bidirectional",
+    "TimeDistributed",
+    "ConvLSTM2D",
+    "Attention",
+    "AdditiveAttention",
+    "MultiHeadAttention",
+    "ReLU",
+    "LeakyReLU",
+    "PReLU",
+    "ELU",
+    "Softmax",
+    "ThresholdedReLU",
+    "Zeros",
+    "Ones",
+    "Constant",
+    "GlorotUniform",
+    "GlorotNormal",
+    "HeUniform",
+    "HeNormal",
+    "LecunUniform",
+    "LecunNormal",
+    "RandomNormal",
+    "RandomUniform",
+    "TruncatedNormal",
+    "VarianceScaling",
+    "Orthogonal",
+    "L1",
+    "L2",
+    "L1L2",
+    "MaxNorm",
+    "MinMaxNorm",
+    "NonNeg",
+    "UnitNorm",
+];
 
 /// Inspects a Keras 3 `config.json` entry: Lambda layers carry serialized Python code.
 fn inspect_zip_keras(bytes: &[u8], method: usize, rel: &str, name: &str, report: &mut ScanReport) {
@@ -636,15 +734,17 @@ fn inspect_zip_keras(bytes: &[u8], method: usize, rel: &str, name: &str, report:
             return;
         }
     };
-    walk_keras_config(&json, 0, &at, name, report);
+    walk_keras_config(&json, 0, &at, name, false, report);
 }
 
 /// Walks a Keras config, reporting Lambda layers and custom classes, and stops at the depth cap.
+/// `legacy` marks an HDF5 config, where unknown class names are also reported.
 fn walk_keras_config(
     value: &serde_json::Value,
     depth: usize,
     at: &str,
     name: &str,
+    legacy: bool,
     report: &mut ScanReport,
 ) {
     if depth > KERAS_JSON_DEPTH {
@@ -660,14 +760,14 @@ fn walk_keras_config(
     }
     match value {
         serde_json::Value::Object(map) => {
-            check_keras_object(map, at, report);
+            check_keras_object(map, at, legacy, report);
             for child in map.values() {
-                walk_keras_config(child, depth + 1, at, name, report);
+                walk_keras_config(child, depth + 1, at, name, legacy, report);
             }
         }
         serde_json::Value::Array(items) => {
             for child in items {
-                walk_keras_config(child, depth + 1, at, name, report);
+                walk_keras_config(child, depth + 1, at, name, legacy, report);
             }
         }
         _ => {}
@@ -675,16 +775,17 @@ fn walk_keras_config(
 }
 
 /// Rules for one object with a `class_name`: Lambda layers carry code; custom classes must be
-/// imported from user code.
+/// imported from user code. With `legacy`, a class outside the built-in list is custom too.
 fn check_keras_object(
     map: &serde_json::Map<String, serde_json::Value>,
     at: &str,
+    legacy: bool,
     report: &mut ScanReport,
 ) {
     let Some(class) = map.get("class_name").and_then(|v| v.as_str()) else {
         return;
     };
-    if matches!(class, "Lambda" | "TFOpLambda" | "__lambda__") {
+    if KERAS_CODE_CLASSES.contains(&class) {
         let name = map
             .get("config")
             .and_then(|config| config.get("name"))
@@ -703,7 +804,8 @@ fn check_keras_object(
     let module = map.get("module").and_then(|v| v.as_str());
     let registered = map.get("registered_name").and_then(|v| v.as_str());
     let custom = module.is_some_and(|m| !m.starts_with("keras") && !m.starts_with("tensorflow"))
-        || registered.is_some_and(|r| r.starts_with("Custom>"));
+        || registered.is_some_and(|r| r.starts_with("Custom>"))
+        || (legacy && !KERAS_BUILTIN_CLASSES.contains(&class));
     if custom {
         let origin = module
             .map(|m| format!("module '{m}'"))
