@@ -142,6 +142,94 @@ impl WeightAnalyzer {
                     break;
                 }
             }
+        } else if lower.contains("q4_k") {
+            let block_size = crate::exporter::kquant::Q4_K_BYTES;
+            let num_blocks = raw_data.len() / block_size;
+            let stride = (num_blocks / (max_samples / 256).max(1)).max(1);
+            for i in (0..num_blocks).step_by(stride) {
+                let offset = i * block_size;
+                if offset + block_size <= raw_data.len() {
+                    if let Ok(weights) =
+                        crate::exporter::kquant::decode_q4_k(&raw_data[offset..offset + block_size])
+                    {
+                        for w in weights {
+                            samples.push(w);
+                            if samples.len() >= max_samples {
+                                break;
+                            }
+                        }
+                    }
+                }
+                if samples.len() >= max_samples {
+                    break;
+                }
+            }
+        } else if lower.contains("q5_k") {
+            let block_size = crate::exporter::kquant::Q5_K_BYTES;
+            let num_blocks = raw_data.len() / block_size;
+            let stride = (num_blocks / (max_samples / 256).max(1)).max(1);
+            for i in (0..num_blocks).step_by(stride) {
+                let offset = i * block_size;
+                if offset + block_size <= raw_data.len() {
+                    if let Ok(weights) =
+                        crate::exporter::kquant::decode_q5_k(&raw_data[offset..offset + block_size])
+                    {
+                        for w in weights {
+                            samples.push(w);
+                            if samples.len() >= max_samples {
+                                break;
+                            }
+                        }
+                    }
+                }
+                if samples.len() >= max_samples {
+                    break;
+                }
+            }
+        } else if lower.contains("q6_k") {
+            let block_size = crate::exporter::kquant::Q6_K_BYTES;
+            let num_blocks = raw_data.len() / block_size;
+            let stride = (num_blocks / (max_samples / 256).max(1)).max(1);
+            for i in (0..num_blocks).step_by(stride) {
+                let offset = i * block_size;
+                if offset + block_size <= raw_data.len() {
+                    if let Ok(weights) =
+                        crate::exporter::kquant::decode_q6_k(&raw_data[offset..offset + block_size])
+                    {
+                        for w in weights {
+                            samples.push(w);
+                            if samples.len() >= max_samples {
+                                break;
+                            }
+                        }
+                    }
+                }
+                if samples.len() >= max_samples {
+                    break;
+                }
+            }
+        } else if lower.contains("iq4_xs") {
+            let block_size = crate::exporter::kquant::IQ4_XS_BYTES;
+            let num_blocks = raw_data.len() / block_size;
+            let stride = (num_blocks / (max_samples / 256).max(1)).max(1);
+            for i in (0..num_blocks).step_by(stride) {
+                let offset = i * block_size;
+                if offset + block_size <= raw_data.len() {
+                    if let Ok(weights) = crate::exporter::kquant::decode_iq4_xs(
+                        &raw_data[offset..offset + block_size],
+                    ) {
+                        for w in weights {
+                            samples.push(w);
+                            if samples.len() >= max_samples {
+                                break;
+                            }
+                        }
+                    }
+                }
+                if samples.len() >= max_samples {
+                    break;
+                }
+            }
         } else if lower.contains("i8") || lower.contains("int8") || lower.contains("q8") {
             let num_bytes = raw_data.len();
             let stride = (num_bytes / max_samples).max(1);
@@ -284,5 +372,19 @@ mod tests {
         assert!(profile.max_val >= 1.0);
         assert!(profile.sparsity > 0.0);
         assert_eq!(profile.histogram.len(), 32);
+    }
+
+    #[test]
+    fn test_weight_profiling_q4_k() {
+        let mut values = vec![0.0_f32; 256];
+        for (i, v) in values.iter_mut().enumerate() {
+            *v = (i as f32 - 128.0) / 128.0;
+        }
+        let mut block = Vec::new();
+        crate::exporter::kquant::encode_q4_k_block(&values, &mut block).expect("encode q4_k");
+        let profile = WeightAnalyzer::profile_tensor(&block, "Q4_K");
+        assert!(profile.min_val < -0.8);
+        assert!(profile.max_val > 0.8);
+        assert_eq!(profile.sample_weights.len(), 64);
     }
 }

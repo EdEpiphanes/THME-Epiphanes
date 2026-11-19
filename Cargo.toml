@@ -1,11 +1,33 @@
-[package]
-name = "thme"
+[workspace]
+resolver = "2"
+members = [
+    ".",
+    "crates/neutron-gpu",
+]
+
+[workspace.package]
 version = "0.1.9"
 edition = "2021"
 rust-version = "1.89"
 authors = ["Epiphanes <https://github.com/EdEpiphanes>"]
-description = "THME: Topological Heterogeneous Manifold Engine by Epiphanes - Open-source framework for LLM memory profiling, weight sensitivity analysis, and Pareto precision optimization."
 license = "AGPL-3.0-only"
+
+[workspace.dependencies]
+clap = { version = "4.5", features = ["derive", "cargo"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+wgpu = { version = "30.0", default-features = false, features = ["wgsl"] }
+bytemuck = { version = "1.25", features = ["derive"] }
+pollster = "0.4"
+
+[package]
+name = "thme"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "THME: Topological Heterogeneous Manifold Engine by Epiphanes - Open-source framework for LLM memory profiling, weight sensitivity analysis, and Pareto precision optimization."
 repository = "https://github.com/EdEpiphanes/THME-Epiphanes"
 readme = "README.md"
 keywords = ["llm", "quantization", "optimization", "transformer", "kv-cache"]
@@ -44,26 +66,29 @@ name = "depth_probe"
 path = "examples/depth_probe.rs"
 
 [dependencies]
-clap = { version = "4.5", features = ["derive", "cargo"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+wgpu = { workspace = true }
+bytemuck = { workspace = true }
+pollster = { workspace = true }
+neutron-gpu = { path = "crates/neutron-gpu", version = "0.1.9" }
 safetensors = "0.5"
 memmap2 = "0.9"
 comfy-table = "7.1"
 anyhow = "1.0"
 # Pure-Rust deflate backend (default features): inflating zip pickle entries during a scan.
 flate2 = "1.1"
-eframe = { version = "0.31", default-features = true }
+eframe = { version = "0.37", default-features = true }
 rfd = "0.15"
 minisign = "0.10.0"
 # Animated figures (report::animate): rasterize SVG and encode GIF in Rust.
 resvg = { version = "0.50", default-features = false, features = ["text", "system-fonts", "memmap-fonts"] }
 gif = "0.14"
+sysinfo = "0.40"
 
 [dev-dependencies]
 tempfile = "3.17"
-# Host description in examples/production_verification.rs only.
-sysinfo = "0.33"
 
 [profile.release]
 opt-level = 3
@@ -79,8 +104,6 @@ opt-level = "s"
 [profile.release.package.usvg]
 opt-level = "s"
 [profile.release.package.tiny-skia]
-opt-level = "s"
-[profile.release.package.rustybuzz]
 opt-level = "s"
 [profile.release.package.ttf-parser]
 opt-level = "s"

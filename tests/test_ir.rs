@@ -28,6 +28,64 @@ fn test_tensor_role_detection() {
         TensorRole::detect("model.norm.weight"),
         TensorRole::FinalNorm
     );
+    // GGUF tensor naming conventions (e.g. MedGemma / Gemma)
+    assert_eq!(
+        TensorRole::detect("token_embd.weight"),
+        TensorRole::Embedding
+    );
+    assert_eq!(
+        TensorRole::detect("output_norm.weight"),
+        TensorRole::FinalNorm
+    );
+    assert_eq!(
+        TensorRole::detect("blk.0.attn_q.weight"),
+        TensorRole::AttentionQ
+    );
+    assert_eq!(
+        TensorRole::detect("blk.0.attn_k.weight"),
+        TensorRole::AttentionK
+    );
+    assert_eq!(
+        TensorRole::detect("blk.0.attn_v.weight"),
+        TensorRole::AttentionV
+    );
+    assert_eq!(
+        TensorRole::detect("blk.0.attn_output.weight"),
+        TensorRole::AttentionOut
+    );
+    assert_eq!(
+        TensorRole::detect("blk.0.attn_norm.weight"),
+        TensorRole::LayerNorm
+    );
+    assert_eq!(
+        TensorRole::detect("blk.0.attn_q_norm.weight"),
+        TensorRole::LayerNorm
+    );
+    assert_eq!(
+        TensorRole::detect("blk.0.attn_k_norm.weight"),
+        TensorRole::LayerNorm
+    );
+    assert_eq!(
+        TensorRole::detect("blk.0.post_attention_norm.weight"),
+        TensorRole::LayerNorm
+    );
+    assert_eq!(
+        TensorRole::detect("blk.0.ffn_norm.weight"),
+        TensorRole::LayerNorm
+    );
+    assert_eq!(
+        TensorRole::detect("blk.0.ffn_gate.weight"),
+        TensorRole::MlpGate
+    );
+    assert_eq!(TensorRole::detect("blk.0.ffn_up.weight"), TensorRole::MlpUp);
+    assert_eq!(
+        TensorRole::detect("blk.0.ffn_down.weight"),
+        TensorRole::MlpDown
+    );
+    assert_eq!(
+        TensorRole::detect("blk.0.post_ffw_norm.weight"),
+        TensorRole::LayerNorm
+    );
 }
 
 #[test]
@@ -40,7 +98,10 @@ fn test_layer_index_extraction() {
         extract_layer_index("transformer.h.3.mlp.c_proj.weight"),
         Some(3)
     );
+    assert_eq!(extract_layer_index("blk.7.attn_q.weight"), Some(7));
+    assert_eq!(extract_layer_index("blk.33.ffn_down.weight"), Some(33));
     assert_eq!(extract_layer_index("model.embed_tokens.weight"), None);
+    assert_eq!(extract_layer_index("token_embd.weight"), None);
 }
 
 #[test]

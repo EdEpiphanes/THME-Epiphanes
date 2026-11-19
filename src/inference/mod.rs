@@ -12,6 +12,8 @@
 pub mod arch;
 pub mod calibration;
 pub mod evaluator;
+pub mod gemma;
+pub mod gpu;
 pub mod llama;
 pub mod neox;
 pub mod perplexity;
@@ -22,6 +24,11 @@ pub mod weights;
 pub use arch::{ArchConfig, CausalLm};
 pub use calibration::{collect_calibration, CalibrationFile, TensorCalibration};
 pub use evaluator::MeasuredEvaluator;
+pub use gemma::{GemmaConfig, GemmaModel};
+pub use gpu::{
+    dispatch_linear, dispatch_linear_slice, dispatch_score_head, dispatch_score_head_slice,
+    DeviceArg, GpuBackend, GpuContext, QuantDtype, QuantizedTensor, ThmeError,
+};
 pub use llama::{synthetic_demo, DepthExit, LlamaConfig, LlamaModel, WeightPrecision};
 pub use neox::{NeoxConfig, NeoxModel};
 pub use perplexity::{evaluate_perplexity, read_token_file, PerplexityConfig, PerplexityReport};

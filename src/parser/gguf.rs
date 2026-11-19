@@ -805,10 +805,27 @@ impl GgufParser {
             .map(|v| v as usize)
             .unwrap_or(4096);
 
+        // Prefer the architecture-scoped vocab size (e.g. `gemma3.vocab_size`),
+        // then any `*.vocab_size` metadata variant, then derive the true
+        // vocabulary length from `tokenizer.ggml.tokens`. The static fallback
+        // of 32000 is only a last resort when none of these exist.
         let vocab_size = metadata
             .get(&format!("{}.vocab_size", arch_str))
+            .or_else(|| {
+                metadata
+                    .keys()
+                    .filter(|k| k.ends_with(".vocab_size"))
+                    .max()
+                    .and_then(|k| metadata.get(k))
+            })
             .and_then(GgufValue::as_u64)
             .map(|v| v as usize)
+            .or_else(|| {
+                metadata.get("tokenizer.ggml.tokens").and_then(|v| match v {
+                    GgufValue::Array(tokens) => Some(tokens.len()),
+                    _ => None,
+                })
+            })
             .unwrap_or(32000);
 
         let model_name = path
@@ -833,10 +850,38 @@ impl GgufParser {
             tensors,
         );
         model_ir.source_gguf_metadata = source_gguf_metadata;
-        let float = |key: String| metadata.get(&key).and_then(GgufValue::as_f32);
+        if let Some(key_len) = metadata
+            .get(&format!("{arch_str}.attention.key_length"))
+            .or_else(|| metadata.get(&format!("{arch_str}.attention.head_dim")))
+            .or_else(|| metadata.get("attention.key_length"))
+            .or_else(|| metadata.get("attention.head_dim"))
+            .and_then(GgufValue::as_u64)
+            .map(|v| v as usize)
+        {
+            model_ir.head_dim = key_len;
+        }
+        let float = |key: String| {
+            metadata.get(&key).and_then(GgufValue::as_f32).or_else(|| {
+                metadata
+                    .get(&key)
+                    .and_then(GgufValue::as_u64)
+                    .map(|v| v as f32)
+            })
+        };
+        let str_val = |key: String| {
+            metadata
+                .get(&key)
+                .and_then(GgufValue::as_str)
+                .map(ToOwned::to_owned)
+        };
         model_ir.norm_eps = float(format!("{arch_str}.attention.layer_norm_rms_epsilon"))
             .or_else(|| float(format!("{arch_str}.attention.layer_norm_epsilon")));
-        model_ir.rope_theta = float(format!("{arch_str}.rope.freq_base"));
+        model_ir.rope_theta = float(format!("{arch_str}.rope.freq_base"))
+            .or_else(|| float("rope.freq_base".to_string()));
+        model_ir.rope_scaling_type = str_val(format!("{arch_str}.rope.scaling.type"))
+            .or_else(|| str_val("rope.scaling.type".to_string()));
+        model_ir.rope_scaling_factor = float(format!("{arch_str}.rope.scaling.factor"))
+            .or_else(|| float("rope.scaling.factor".to_string()));
 
         Ok(model_ir)
     }

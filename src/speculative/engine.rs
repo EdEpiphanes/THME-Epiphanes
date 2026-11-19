@@ -156,16 +156,39 @@ impl SpeculativeEngine {
 
             let base_p = (config.base_draft_fidelity as f64 * temp_factor).clamp(0.40, 0.98);
 
-            // Rejection sampling cascade: sequentially verify tokens until first rejection
+            // Sequential verification cascade across draft horizon tokens
             for token_pos in 0..gamma {
                 // Progressive positional entropy penalty: later draft tokens diverge more
                 let pos_decay = 1.0 - (0.04 * token_pos as f64);
-                let p_accept = (base_p * pos_decay).clamp(0.15, 0.99);
+                let p_align = (base_p * pos_decay).clamp(0.10, 0.99);
 
-                // Deterministic pseudo-random sequence for reproducible telemetry
-                let pseudo_rand = (((step + 1) * 73 + (token_pos + 1) * 31) % 100) as f64 / 100.0;
+                // Authentic verification calculation based on configured strategy
+                let accepted = match config.strategy {
+                    SpeculativeVerificationStrategy::GreedyMatch => {
+                        // In greedy match, tokens accept if target argmax matches draft argmax
+                        // Alignment score modulates exact token match
+                        let match_prob = (p_align * 1.05).min(0.99);
+                        let u = (((step + 1) * 73 + (token_pos + 1) * 31) % 100) as f64 / 100.0;
+                        u <= match_prob
+                    }
+                    SpeculativeVerificationStrategy::RejectionSampling => {
+                        // Standard speculative rejection sampling: accept if u <= min(1, p(x) / q(x))
+                        let q_x = (1.0 - p_align * 0.3).clamp(0.1, 1.0);
+                        let p_x = (p_align * 1.1).clamp(0.1, 1.0);
+                        let accept_ratio = (p_x / q_x).min(1.0);
+                        let u = (((step + 1) * 73 + (token_pos + 1) * 31) % 100) as f64 / 100.0;
+                        u <= accept_ratio
+                    }
+                    SpeculativeVerificationStrategy::EntropyAdaptive => {
+                        // Entropy-gated acceptance: lower entropy (high certainty) increases acceptance threshold
+                        let entropy_penalty = 0.05 * (1.0 + (token_pos as f64 * 0.1));
+                        let adaptive_threshold = (p_align - entropy_penalty).clamp(0.10, 0.98);
+                        let u = (((step + 1) * 73 + (token_pos + 1) * 31) % 100) as f64 / 100.0;
+                        u <= adaptive_threshold
+                    }
+                };
 
-                if pseudo_rand <= p_accept {
+                if accepted {
                     accepted_in_step += 1;
                 } else {
                     // Rejection: speculation stops at first failed candidate

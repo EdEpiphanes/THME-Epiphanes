@@ -238,6 +238,46 @@ impl NeoxModel {
         Ok((exit, trace))
     }
 
+    /// Runs a full forward pass and returns unnormalized logits for the final token position.
+    pub fn forward_logits(&self, tokens: &[u32]) -> Result<Vec<f32>> {
+        let t_len = tokens.len();
+        if t_len < 2 {
+            bail!("Forward pass requires at least 2 tokens, received {t_len}");
+        }
+        let schedule: Vec<usize> = (0..self.layers.len()).collect();
+        self.validate(tokens, &schedule, &[schedule.len()])?;
+
+        let d = self.config.hidden_size;
+        let head_dim = d / self.config.num_heads;
+        let mut x = vec![0.0f32; t_len * d];
+        for (row, &token) in x.chunks_exact_mut(d).zip(tokens) {
+            let start = token as usize * d;
+            row.copy_from_slice(&self.embed[start..start + d]);
+        }
+        let rope = RopeTable::new(
+            t_len,
+            head_dim,
+            self.config.rotary_dims(),
+            self.config.rope_theta,
+        );
+
+        for &index in &schedule {
+            self.apply_layer(&self.layers[index], &mut x, &rope, None);
+        }
+
+        let mut normed = vec![0.0f32; x.len()];
+        layer_norm(
+            &x,
+            &self.final_w,
+            &self.final_b,
+            self.config.layer_norm_eps,
+            &mut normed,
+        );
+        let last_normed = &normed[(t_len - 1) * d..t_len * d];
+        let head = self.head.as_deref().unwrap_or(&self.embed);
+        Ok(linear(last_normed, head, d, self.vocab_size))
+    }
+
     fn validate(&self, tokens: &[u32], schedule: &[usize], exits: &[usize]) -> Result<()> {
         let t_len = tokens.len();
         if t_len < 2 {

@@ -128,6 +128,12 @@ pub fn decode_payload(bytes: &[u8], dtype: &str, numel: usize) -> Result<Vec<f32
                 out.extend_from_slice(&kquant::decode_q6_k(block)?);
             }
         }
+        "IQ4_XS" => {
+            expect_len(blocks(QK_K, kquant::IQ4_XS_BYTES)?)?;
+            for block in bytes.chunks_exact(kquant::IQ4_XS_BYTES) {
+                out.extend_from_slice(&kquant::decode_iq4_xs(block)?);
+            }
+        }
         other => bail!("Unsupported tensor dtype '{other}' for the reference forward pass"),
     }
     Ok(out)
@@ -152,12 +158,19 @@ pub fn apply_selected_format(tensor: &TensorIR, values: &mut [f32]) -> Result<()
                 .with_context(|| format!("Invalid definition for algorithm '{id}'"))?;
             algorithm.measurable().map_err(|e| anyhow::anyhow!(e))?;
             use crate::transform::awq::{parse_format, ChannelStats, CALIBRATION_METADATA_KEY};
+            use crate::transform::gptq::{HessianProxy, HESSIAN_METADATA_KEY};
             let calibration: Option<ChannelStats> = tensor
                 .metadata
                 .get(CALIBRATION_METADATA_KEY)
                 .map(|json| serde_json::from_str(json))
                 .transpose()
                 .with_context(|| format!("Invalid calibration statistics on '{}'", tensor.name))?;
+            let hessian: Option<HessianProxy> = tensor
+                .metadata
+                .get(HESSIAN_METADATA_KEY)
+                .map(|json| serde_json::from_str(json))
+                .transpose()
+                .with_context(|| format!("Invalid Hessian proxy on '{}'", tensor.name))?;
             let round = |v: &mut [f32], name: &str| -> Result<(), String> {
                 let format = parse_format(name).map_err(|e| format!("{e:#}"))?;
                 fake_quantize(v, &format).map_err(|e| format!("{e:#}"))
@@ -165,6 +178,7 @@ pub fn apply_selected_format(tensor: &TensorIR, values: &mut [f32]) -> Result<()
             let ctx = crate::transform::byoa::ApplyContext {
                 row_width: tensor.shape.last().copied(),
                 calibration: calibration.as_ref(),
+                hessian: hessian.as_ref(),
                 round: Some(&round),
             };
             algorithm.apply_with(values, &ctx).map_err(|e| {

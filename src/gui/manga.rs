@@ -54,7 +54,7 @@ pub fn install_fonts(ctx: &egui::Context) {
         .families
         .insert(FontFamily::Name(DISPLAY.into()), display_stack);
     ctx.set_fonts(fonts);
-    ctx.style_mut(|style| {
+    ctx.all_styles_mut(|style| {
         style
             .text_styles
             .insert(egui::TextStyle::Heading, display(17.0));
@@ -244,7 +244,7 @@ pub fn speed_lines(painter: &egui::Painter, rect: Rect, color: Color32, count: u
 /// Paints the app backdrop on the background layer: liquid colour blobs, speed lines and
 /// screentone. Panels drawn with `glass_*` frames show it through their translucent fill.
 pub fn paint_backdrop(ctx: &egui::Context, p: &ThemePalette) {
-    let rect = ctx.screen_rect();
+    let rect = ctx.viewport_rect();
     let painter = ctx.layer_painter(LayerId::background());
     painter.rect_filled(rect, CornerRadius::ZERO, p.bg_dark);
     let light = p.is_light();

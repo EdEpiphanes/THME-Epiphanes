@@ -144,48 +144,125 @@ impl MicroTrainer {
             self.v_moments = vec![0.0; n_params];
         }
 
-        // Forward prediction simulation & gradient computation
-        // We compute loss against the input token sequence
-        let token_hash_sum: f32 = batch_tokens
+        // Forward prediction & analytical gradient computation
+        // Construct an input feature representation X from batch tokens
+        let n_classes = if n_params >= 64 {
+            (n_params / 32).clamp(2, 16)
+        } else {
+            2
+        };
+        let d_in = (n_params / n_classes).max(1);
+        let num_tokens = batch_tokens.len();
+
+        let mut x = vec![0.0f32; d_in];
+        for (pos, &token) in batch_tokens.iter().enumerate() {
+            let pos_scale = 1.0 / (num_tokens as f32).sqrt().max(1.0);
+            for (k, x_k) in x.iter_mut().enumerate() {
+                let freq = (token as f32) / (10000.0f32).powf((2 * (k / 2)) as f32 / d_in as f32);
+                let val = if k.is_multiple_of(2) {
+                    freq.sin()
+                } else {
+                    freq.cos()
+                };
+                *x_k += val * pos_scale * (1.0 + (pos as f32 * 0.05));
+            }
+        }
+
+        // Forward linear projection: logits Z = X * W
+        let mut logits = vec![0.0f32; n_classes];
+        for (c, logit) in logits.iter_mut().enumerate() {
+            let mut dot = 0.0f32;
+            for (k, &x_k) in x.iter().enumerate() {
+                let idx = (c * d_in + k) % n_params;
+                dot += x_k * weights[idx];
+            }
+            *logit = dot;
+        }
+
+        // Softmax probabilities: P = softmax(Z)
+        let max_logit = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+        let exp_sum: f32 = logits.iter().map(|&z| (z - max_logit).exp()).sum();
+        let probs: Vec<f32> = logits
             .iter()
-            .enumerate()
-            .map(|(idx, &t)| (t as f32 * 0.001 + idx as f32 * 0.1).sin() * 0.5 + 0.5)
-            .sum::<f32>()
-            / batch_tokens.len().max(1) as f32;
+            .map(|&z| (z - max_logit).exp() / exp_sum.max(1e-8))
+            .collect();
 
-        let weight_mean: f32 = weights.iter().sum::<f32>() / n_params as f32;
-        let weight_var: f32 = weights
-            .iter()
-            .map(|&w| (w - weight_mean).powi(2))
-            .sum::<f32>()
-            / n_params as f32;
+        // Target label derived from the terminal token
+        let target_class = (*batch_tokens.last().unwrap_or(&0) as usize) % n_classes;
 
-        // Base cross entropy loss model
-        let base_ce =
-            (weight_var.sqrt() * 2.0 + (1.0 - token_hash_sum) * 1.5 + 0.8).clamp(0.05, 12.0);
+        // Base cross entropy loss: -ln(P_target)
+        let p_target = probs[target_class].clamp(1e-7, 0.9999);
+        let base_ce = (-p_target.ln()).max(1e-4);
 
-        // Adjust loss based on objective
+        // Loss and logit gradients based on selected objective
+        let mut d_logits = vec![0.0f32; n_classes];
         let step_loss = match self.config.loss_type {
             TrainingLossType::CrossEntropy => {
-                // Progressive convergence factor
-                let decay = (-0.02 * step as f32).exp();
-                (base_ce * decay + 0.15).max(0.01)
+                for (c, d_logit) in d_logits.iter_mut().enumerate() {
+                    *d_logit = probs[c] - if c == target_class { 1.0 } else { 0.0 };
+                }
+                base_ce
             }
             TrainingLossType::KnowledgeDistillation => {
                 let tau = self.config.distillation_temperature.max(0.5);
-                let soft_loss = base_ce * 0.7 / (tau * tau);
-                let hard_loss = base_ce * 0.3;
-                (soft_loss + hard_loss).max(0.01)
+                // Soft teacher target centered around target_class with temperature smoothing
+                let mut teacher_logits = vec![0.0f32; n_classes];
+                for (c, teacher_logit) in teacher_logits.iter_mut().enumerate() {
+                    *teacher_logit = if c == target_class {
+                        1.5 / tau
+                    } else {
+                        -1.5 / tau
+                    };
+                }
+                let t_max = teacher_logits
+                    .iter()
+                    .fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+                let t_exp_sum: f32 = teacher_logits.iter().map(|&z| (z - t_max).exp()).sum();
+                let teacher_probs: Vec<f32> = teacher_logits
+                    .iter()
+                    .map(|&z| (z - t_max).exp() / t_exp_sum.max(1e-8))
+                    .collect();
+
+                let alpha = 0.5f32;
+                let mut kd_loss = 0.0f32;
+                for c in 0..n_classes {
+                    let kl_term = teacher_probs[c]
+                        * (teacher_probs[c].max(1e-7).ln() - probs[c].max(1e-7).ln());
+                    kd_loss += kl_term.max(0.0);
+                    d_logits[c] = (1.0 - alpha)
+                        * (probs[c] - if c == target_class { 1.0 } else { 0.0 })
+                        + alpha * (probs[c] - teacher_probs[c]);
+                }
+                ((1.0 - alpha) * base_ce + alpha * (tau * tau) * kd_loss).max(1e-4)
             }
             TrainingLossType::EwhaEnergyRegularized => {
-                let energy_term = self.config.energy_penalty_lambda * weight_mean.abs() * 10.0;
-                (base_ce + energy_term).max(0.01)
+                for (c, d_logit) in d_logits.iter_mut().enumerate() {
+                    *d_logit = probs[c] - if c == target_class { 1.0 } else { 0.0 };
+                }
+                let l1_norm: f32 = weights.iter().map(|w| w.abs()).sum::<f32>() / n_params as f32;
+                base_ce + self.config.energy_penalty_lambda * l1_norm * 5.0
             }
         };
 
         let perplexity = step_loss.exp().min(10000.0);
 
-        // Gradient computation: analytical directional gradients targeting optimal weight distribution
+        // Compute authentic backpropagated weight gradients: dW = dLogits * X^T
+        let mut grads = vec![0.0f32; n_params];
+        for (c, &dl) in d_logits.iter().enumerate() {
+            for (k, &x_k) in x.iter().enumerate() {
+                let idx = (c * d_in + k) % n_params;
+                grads[idx] += dl * x_k;
+            }
+        }
+
+        // Add regularizer gradient if EWHA
+        if self.config.loss_type == TrainingLossType::EwhaEnergyRegularized {
+            let reg_scale = self.config.energy_penalty_lambda * 5.0 / n_params as f32;
+            for (grad, weight) in grads.iter_mut().zip(weights.iter()) {
+                *grad += reg_scale * weight.signum();
+            }
+        }
+
         let lr = self.config.learning_rate;
         let decay = self.config.weight_decay;
 
@@ -196,9 +273,7 @@ impl MicroTrainer {
                 let eps = 1e-8f32;
 
                 for (i, w) in weights.iter_mut().enumerate() {
-                    // Synthetic gradient based on token context and parameter offset
-                    let grad = ((i as f32 + step as f32).sin() * 0.1 + (*w * 0.01))
-                        * (step_loss / base_ce.max(0.1));
+                    let grad = grads[i];
 
                     // Adam moment updates
                     self.m_moments[i] = beta1 * self.m_moments[i] + (1.0 - beta1) * grad;
@@ -213,8 +288,7 @@ impl MicroTrainer {
             }
             OptimizerType::SignSGD => {
                 for (i, w) in weights.iter_mut().enumerate() {
-                    let grad = ((i as f32 + step as f32).sin() * 0.1 + (*w * 0.01))
-                        * (step_loss / base_ce.max(0.1));
+                    let grad = grads[i];
                     let sign = if grad > 0.0 {
                         1.0
                     } else if grad < 0.0 {
@@ -228,8 +302,7 @@ impl MicroTrainer {
             OptimizerType::SGD => {
                 let momentum = 0.9f32;
                 for (i, w) in weights.iter_mut().enumerate() {
-                    let grad = ((i as f32 + step as f32).sin() * 0.1 + (*w * 0.01))
-                        * (step_loss / base_ce.max(0.1));
+                    let grad = grads[i];
                     self.m_moments[i] = momentum * self.m_moments[i] + grad;
                     *w -= lr * (self.m_moments[i] + decay * *w);
                 }

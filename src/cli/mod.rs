@@ -7,6 +7,7 @@ pub mod epiph;
 pub mod evaluate;
 pub mod export;
 pub mod figure;
+pub mod forward;
 pub mod inspect;
 pub mod interop;
 pub mod mcp;
@@ -17,6 +18,7 @@ pub mod roofline;
 pub mod scan;
 pub mod search;
 pub mod speculate;
+pub mod telemetry;
 pub mod tweak;
 pub mod validate;
 
@@ -57,6 +59,10 @@ pub enum Commands {
 
     /// Measure a surgery recipe's perplexity cost with the reference forward pass
     Evaluate(evaluate::EvaluateArgs),
+
+    /// Run authentic reference forward pass on token sequence and output logits
+    #[command(alias = "logits")]
+    Forward(forward::ForwardArgs),
 
     /// Search for a mixed-precision recipe from measured costs under a size budget
     Search(search::SearchArgs),
@@ -109,6 +115,9 @@ pub enum Commands {
     /// Run autonomous Closed-Loop Teacher-Student Co-Surgery optimization
     #[command(name = "co-surgery", alias = "cosurgery")]
     CoSurgery(co_surgery::CoSurgeryArgs),
+
+    /// Query real-time CPU, RAM, and discrete GPU hardware telemetry
+    Telemetry(telemetry::TelemetryArgs),
 }
 
 pub fn run() -> Result<()> {
@@ -120,6 +129,7 @@ pub fn run() -> Result<()> {
         Commands::Profile(args) => profile::execute(args),
         Commands::Plan(args) => plan::execute(args),
         Commands::Evaluate(args) => evaluate::execute(args),
+        Commands::Forward(args) => forward::execute(args),
         Commands::Search(args) => search::execute(args),
         Commands::Calibrate(args) => calibrate::execute(args),
         Commands::Validate(args) => validate::execute(args),
@@ -136,6 +146,7 @@ pub fn run() -> Result<()> {
         Commands::Interop(args) => interop::execute(args),
         Commands::Mcp(args) => mcp::execute(args),
         Commands::CoSurgery(args) => co_surgery::execute(args),
+        Commands::Telemetry(args) => telemetry::execute(args),
     }
 }
 
