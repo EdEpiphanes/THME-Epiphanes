@@ -10,11 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - v0.2.0 Measured Core
 
 ### Added
+- **Real-model tests are opt-in**: tests that open a real model file need `THME_REAL_MODEL_TESTS=1`.
 - **Third-party register**: `docs/third-party.md` and `scripts/third_party.py --check` (CI) for outside sources.
-- **GGUF structure check (`src/exporter/gguf_check.rs`)**: reports header, count, alignment, tensor-name, dimension and type problems of a finished GGUF v3 file. Data and metadata checks are not done yet.
-- **`.epiph` placement planner (`src/epiph/placement.rs`)**: deterministic GPU, CPU and streamed placement from budgets; not yet stored in the manifest.
+- **GGUF check (`src/exporter/gguf_check.rs`)**: reports header, alignment, tensor, data-section and metadata-key problems of a finished GGUF v3 file. Some spec rules were written from memory and are marked `shortcut:`; the run through llama.cpp is not done.
+- **`.epiph` placement (`src/epiph/placement.rs`)**: exact GPU, CPU and streamed placement from a VRAM and host budget, stored in the manifest (`.epiph` format 1.2, older files still verify); `thme epiph pack --placement VRAM_MIB:HOST_MIB`, and `verify` checks and prints the plan.
 - **Layers GIF**: `thme figure MODEL --gif` also writes one frame per layer from the real layer structure.
-- **Studio provenance labels (`src/gui/provenance.rs`)**: seven heuristic values are labelled Estimate or Simulated, with a test that fails when a label is lost; audit verdicts in `docs/research/studio-heuristics.md`.
+- **Studio provenance labels (`src/gui/provenance.rs`)**: twelve heuristic values, including five stats-ribbon boxes, are labelled Estimate or Simulated, with a test that fails when a label is lost; audit verdicts in `docs/research/studio-heuristics.md`.
 - **Gemma / MedGemma Reference Forward Pass (`src/inference/gemma.rs`)**: Reference causal forward pass for the Gemma3/MedGemma architecture (not yet compared with the Hugging Face reference; the real-model test is skipped unless a model file is present): embedding scaling by `sqrt(hidden_size)` (approx 50.5964), Grouped Query Attention (8 Q heads, 4 KV heads, head_dim 256), per-head QK-RMSNorm, dual residual layernorms (post-attention and post-FFW), GeGLU feedforward activation (`gelu_approx`), and tied embedding readout.
 - **GGUF Layer Indexing & Role Classification (`src/ir/tensor.rs`)**: Robust `blk.{i}` layer indexing and GGUF tensor role classification for attention, feedforward, normalization, and embeddings.
 - **K-Quant & IQ-Quant Weight Profiling (`src/profiling/weight_stats.rs`)**: Real statistical profiling for `Q4_K`, `Q5_K`, `Q6_K`, and `IQ4_XS` quantized tensors.

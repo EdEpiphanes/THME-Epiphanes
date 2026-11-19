@@ -99,7 +99,7 @@ closes it.
 ### [THME-2208] llama.cpp compatibility checks for exported files
 
 - **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.8 · **Priority**: p2 · **Area**: exporter · **Type**: feature · **Status**: ready
-- **Progress** (19 November 2026): `src/exporter/gguf_check.rs` checks the structure of a finished GGUF v3 file (magic, version, counts, alignment, tensor names, dimensions, types, truncation) with 15 tests on synthetic files. Not done: checks of tensor data and metadata keys, and the optional runtime check. The alignment rule (multiple of 8, power of two) was written without the GGUF specification at hand and must be confirmed against it.
+- **Progress** (19 November 2026): `src/exporter/gguf_check.rs` checks a finished GGUF v3 file: header, counts, alignment, tensor names, dimensions, types, truncation, and now the data section (offsets, sizes, bounds, overlap) and the metadata keys (architecture, the five llama keys). About 30 tests on synthetic files, plus a test that a file written by THME's own writer passes. Not done: the optional run through llama.cpp. Three spec facts were written from memory and are marked `shortcut:` in the code: the alignment rule (multiple of 8, power of two), the data-section start rule, and the llama key names. Confirm them against the GGUF specification before relying on the check.
 - **Problem**: Exported GGUF files are only re-read by THME itself.
 - **Done means**: The existing optional CI step runs a heterogeneous export through llama.cpp when the runtime is configured.
 
@@ -238,8 +238,8 @@ closes it.
 
 ### [THME-3016] `.epiph`: GPU/CPU placement plan
 
-- **Milestone**: v0.2.6 · **Roadmap**: v0.2.6.7 · **Priority**: p2 · **Area**: engine · **Type**: feature · **Status**: ready
-- **Progress** (19 November 2026): `src/epiph/placement.rs` plans GPU, CPU and streamed tensors from a VRAM and host budget (8 tests, including 200 seeded instances). Not done: the manifest field and `thme epiph pack --placement` / `verify`.
+- **Milestone**: v0.2.6 · **Roadmap**: v0.2.6.7 · **Priority**: p2 · **Area**: engine · **Type**: feature · **Status**: done
+- **Progress** (19 November 2026): `src/epiph/placement.rs` plans GPU, CPU and streamed tensors exactly from a VRAM and host budget; the plan is stored in the manifest (`.epiph` format 1.2, older files still verify), `thme epiph pack --placement VRAM_MIB:HOST_MIB` writes it and `verify` checks it against the tensors and prints it. Tested on synthetic tensor sets only. No runtime reads the plan yet, because the GPU runtime does not use `.epiph` files.
 - **Problem**: Owner asks for files that place their own parameters across GPU and CPU. THME has no GPU backend yet (v0.3).
 - **Done means**: A `placement` section from the exact allocator for a stated memory budget per tier; tested on synthetic budgets; used by the GPU runtime when it exists.
 
@@ -345,7 +345,7 @@ closes it.
 ### [THME-3035] Replace mock and simulated data in the Studio and engine
 
 - **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: gui · **Type**: bug · **Status**: ready
-- **Progress** (19 November 2026): Slice 1: `docs/research/studio-heuristics.md` records a verdict for each audit claim (three are stale, two confirmed); seven Studio values (baseline profile and throughput, tuner scorecard) now carry an Estimate or Simulated label, and a test fails when a listed value loses its label (`src/gui/provenance.rs`, 12 tests). Not done: the stats ribbon (energy per token, throughput, traffic, depth) is not labelled yet.
+- **Progress** (19 November 2026): Slice 1 and 2: `docs/research/studio-heuristics.md` holds a verdict for each audit claim (three stale, two confirmed). Twelve Studio values now carry an Estimate or Simulated label (baseline profile and throughput, tuner scorecard, and five stats-ribbon boxes: VRAM storage, traffic, depth, energy, throughput), and a test fails when a listed value loses its label (`src/gui/provenance.rs`). Not done: the two confirmed audit items, the pseudo-random speculative acceptance rate and the hard-coded demo constants.
 - **Problem**: The Studio telemetry and baseline figures are heuristic formulas and the micro-trainer, speculative acceptance and token flow are synthetic (see the audit in `docs/research/THME_AUTHENTICITY_AUDIT_AND_ROADMAP.md`, which still needs to be checked line by line). The Studio screenshots show them next to measured numbers.
 - **Done means**: Each such value is either computed from the reference forward pass or carries a visible "simulated" label; a test fails on an unlabelled constant.
 
