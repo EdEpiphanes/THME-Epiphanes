@@ -538,8 +538,14 @@ pub fn draw_waterfall_chart(ui: &mut egui::Ui, layers: &[LayerNode], p: &ThemePa
                     layer.beta_ternary * 100.0,
                     layer.gamma_phase * 100.0
                 ));
+                // provenance: layer-latency
+                let latency_tag = if layer.is_optimized {
+                    crate::gui::provenance::Evidence::Simulated.tag()
+                } else {
+                    crate::gui::provenance::Evidence::Demo.tag()
+                };
                 ui.label(format!(
-                    "Est. Latency: {:.2} ms",
+                    "Est. Latency: {:.2} ms {latency_tag}",
                     layer.benchmarked_latency_ms
                 ));
             });

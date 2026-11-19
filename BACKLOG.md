@@ -345,8 +345,8 @@ closes it.
 
 ### [THME-3035] Replace mock and simulated data in the Studio and engine
 
-- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: gui · **Type**: bug · **Status**: ready
-- **Progress** (19 November 2026): Slice 1 and 2: `docs/research/studio-heuristics.md` holds a verdict for each audit claim (three stale, two confirmed). Twelve Studio values now carry an Estimate or Simulated label (baseline profile and throughput, tuner scorecard, and five stats-ribbon boxes: VRAM storage, traffic, depth, energy, throughput), and a test fails when a listed value loses its label (`src/gui/provenance.rs`). Not done: the two confirmed audit items, the pseudo-random speculative acceptance rate and the hard-coded demo constants.
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: gui · **Type**: bug · **Status**: done
+- **Progress** (19 November 2026): all five audit verdicts are handled. Studio values are labelled Estimate, Simulated or Demo (a guard test fails when one loses its label), including the stats ribbon, the speculative acceptance rate (Simulated) and the hard-coded demo constants (Demo), in the Studio, `thme speculate` and the MCP tool text. No number or algorithm was changed. Known smell: the speculative engine imports `gui::provenance`; moving the module to a neutral place is a small follow-up.
 - **Problem**: The Studio telemetry and baseline figures are heuristic formulas and the micro-trainer, speculative acceptance and token flow are synthetic (see the audit in `docs/research/THME_AUTHENTICITY_AUDIT_AND_ROADMAP.md`, which still needs to be checked line by line). The Studio screenshots show them next to measured numbers.
 - **Done means**: Each such value is either computed from the reference forward pass or carries a visible "simulated" label; a test fails on an unlabelled constant.
 
@@ -358,7 +358,8 @@ closes it.
 
 ### [THME-3037] Tokenizer and chat templates
 
-- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: feature · **Status**: done
+- **Progress** (19 November 2026): `thme tokenize MODEL_DIR TEXT` and `thme chat-template MODEL_DIR --messages FILE` encode, decode and render a model's own chat template (string or named-list form, bos/eos tokens, `raise_exception` errors). New direct crates, all Apache-2.0 and pure Rust: `tokenizers` 0.22.2 (no onig, no C++), `minijinja` 3.1.0 and `minijinja-contrib` 3.1.0. 15 tests on fixtures built in the test; no real Hugging Face model or real Llama or Mistral template was used. The release CLI grew to about 12.5 MiB, so the CLI limit was raised from 10 MiB to 16 MiB (owner decision, 19 November 2026).
 - **Problem**: THME cannot encode text or apply a chat template, so it cannot chat with a model or run text benchmarks itself.
 - **Done means**: Encode and decode through a permissively licensed tokenizer crate and render `chat_template` with a template engine, each proposed with its licence and binary-size cost first; round trips tested on committed fixtures.
 

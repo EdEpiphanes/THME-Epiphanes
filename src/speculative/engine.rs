@@ -96,14 +96,16 @@ pub struct SpeculativeTelemetryReport {
 
 impl SpeculativeTelemetryReport {
     pub fn format_summary(&self) -> String {
+        // provenance: spec-telemetry
+        let sim = crate::gui::provenance::Evidence::Simulated.tag();
         format!(
             "Speculative Decoding Telemetry Report (Horizon gamma={})\n\
-            - Total Tokens Emitted       : {}\n\
-            - Mean Acceptance Rate alpha : {:.1}%\n\
-            - Tokens Generated / Pass    : {:.2} tok/pass\n\
+            - Total Tokens Emitted       : {} {sim}\n\
+            - Mean Acceptance Rate alpha : {:.1}% {sim}\n\
+            - Tokens Generated / Pass    : {:.2} tok/pass {sim}\n\
             - Draft Latency Cost Ratio r : {:.3}\n\
-            - Effective Latency Speedup  : {:.2}x\n\
-            - Memory Bandwidth Savings   : {:.1}%\n\
+            - Effective Latency Speedup  : {:.2}x {sim}\n\
+            - Memory Bandwidth Savings   : {:.1}% {sim}\n\
             - Status                     : {}",
             self.lookahead_horizon,
             self.total_tokens_emitted,

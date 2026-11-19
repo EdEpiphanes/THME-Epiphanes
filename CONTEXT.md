@@ -20,6 +20,9 @@ _Avoid_: projection presented as a result
 **Simulated**:
 A figure from a toy or synthetic simulation; says nothing about a trained model.
 
+**Demo**:
+A built-in constant that stands in for a real value so a screen or command has something to show (for example a sample ratio in the Studio). Always labelled Demo where it is shown; says nothing about any model.
+
 **Oracle**:
 An answer known independently of the code under test: an analytic solution, an exhaustive search, a published value, or a conservation law.
 

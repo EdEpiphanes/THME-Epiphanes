@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Real-model tests are opt-in**: tests that open a real model file need `THME_REAL_MODEL_TESTS=1`.
+- **Tokenizer and chat templates**: `thme tokenize` and `thme chat-template` (Hugging Face `tokenizers` and `minijinja`, both Apache-2.0, pure Rust). Tested on fixtures only.
 - **`thme doctor`**: says what works on this machine (OS, memory, disk, GPU adapter, models found) and what to try next; read-only, `--json` available.
 - **`thme discover`**: lists the models already on the machine (Hugging Face cache, Ollama, LM Studio, llama.cpp, any folder). Read-only; tested on fake folder layouts.
 - **README**: figures section (Pythia-14M structure, layer and forward-pass GIFs) and a plug-and-play section.
@@ -18,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **GGUF check (`src/exporter/gguf_check.rs`)**: reports header, alignment, tensor, data-section and metadata-key problems of a finished GGUF v3 file. Some spec rules were written from memory and are marked `shortcut:`; the run through llama.cpp is not done.
 - **`.epiph` placement (`src/epiph/placement.rs`)**: exact GPU, CPU and streamed placement from a VRAM and host budget, stored in the manifest (`.epiph` format 1.2, older files still verify); `thme epiph pack --placement VRAM_MIB:HOST_MIB`, and `verify` checks and prints the plan.
 - **Layers GIF**: `thme figure MODEL --gif` also writes one frame per layer from the real layer structure. The lit layer is ink glass and the other layers fade back.
+- **Demo and Simulated labels**: the speculative acceptance rate is labelled Simulated and the hard-coded demo constants Demo, in the Studio, `thme speculate` and the MCP tool text; numbers unchanged. "Demo" is now in CONTEXT.md.
 - **Studio provenance labels (`src/gui/provenance.rs`)**: twelve heuristic values, including five stats-ribbon boxes, are labelled Estimate or Simulated, with a test that fails when a label is lost; audit verdicts in `docs/research/studio-heuristics.md`.
 - **Gemma / MedGemma Reference Forward Pass (`src/inference/gemma.rs`)**: Reference causal forward pass for the Gemma3/MedGemma architecture (not yet compared with the Hugging Face reference; the real-model test is skipped unless a model file is present): embedding scaling by `sqrt(hidden_size)` (approx 50.5964), Grouped Query Attention (8 Q heads, 4 KV heads, head_dim 256), per-head QK-RMSNorm, dual residual layernorms (post-attention and post-FFW), GeGLU feedforward activation (`gelu_approx`), and tied embedding readout.
 - **GGUF Layer Indexing & Role Classification (`src/ir/tensor.rs`)**: Robust `blk.{i}` layer indexing and GGUF tensor role classification for attention, feedforward, normalization, and embeddings.
@@ -25,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CodeGPT MCP Service Real Binding (`src/cli/mcp.rs`)**: Connected `thme_auto_decide` and `thme_apply_surgery` to active model IR, fixed `thme_validate_quality` format string bug, and added end-to-end integration test suite in `tests/test_mcp.rs`.
 
 ### Changed
+- **CLI size limit** raised from 10 MiB to 16 MiB (release check and AGENTS.md); the release CLI is about 12.5 MiB with the tokenizer stack. The GUI limit stays 15 MiB.
 - **Dependencies**: eframe/egui 0.31 to 0.37, wgpu 30, sysinfo 0.40; the Studio capture, tooltip, panel and style calls follow the new APIs. `deny.toml` no longer ignores RUSTSEC-2026-0194 and RUSTSEC-2026-0195; `cargo deny check` passes.
 - **Minimum Rust version** is now 1.95 (was 1.89), because eframe/egui 0.37 and sysinfo 0.40 require it; the pinned toolchain stays 1.100.0.
 - **Workspace**: `Cargo.toml` is now a workspace; its only extra member is `crates/neutron-gpu` (PCI and GPU recipe discovery, used by the profiler).
