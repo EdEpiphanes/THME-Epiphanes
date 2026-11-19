@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Real-model tests are opt-in**: tests that open a real model file need `THME_REAL_MODEL_TESTS=1`.
+- **`thme discover`**: lists the models already on the machine (Hugging Face cache, Ollama, LM Studio, llama.cpp, any folder). Read-only; tested on fake folder layouts.
+- **README**: figures section (Pythia-14M structure, layer and forward-pass GIFs) and a plug-and-play section.
 - **Third-party register**: `docs/third-party.md` and `scripts/third_party.py --check` (CI) for outside sources.
 - **GGUF check (`src/exporter/gguf_check.rs`)**: reports header, alignment, tensor, data-section and metadata-key problems of a finished GGUF v3 file. Some spec rules were written from memory and are marked `shortcut:`; the run through llama.cpp is not done.
 - **`.epiph` placement (`src/epiph/placement.rs`)**: exact GPU, CPU and streamed placement from a VRAM and host budget, stored in the manifest (`.epiph` format 1.2, older files still verify); `thme epiph pack --placement VRAM_MIB:HOST_MIB`, and `verify` checks and prints the plan.
@@ -33,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 - `agent-hub/` and 18 unrelated `neutron-*` crates are no longer part of this repository.
+- Committed benchmark reports, charts and the benchmark dossier (`docs/benchmarks/`, `docs/benchmark_dossier.md`, `docs/benchmark_dossier.csv`) were removed because they were measured before the FP16 rounding fix (THME-3023). The scripts and the CI pipeline stay; results will be re-measured and published with their method.
 
 ### License
 - **THME is now dual-licensed: AGPL-3.0-only or a commercial license from Epiphanes**
