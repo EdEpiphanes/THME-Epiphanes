@@ -6,6 +6,7 @@ pub mod co_surgery;
 pub mod convert;
 pub mod discover;
 pub mod doctor;
+pub mod download;
 pub mod epiph;
 pub mod evaluate;
 pub mod export;
@@ -134,6 +135,9 @@ pub enum Commands {
 
     /// Render a model's own chat template for a JSON list of messages
     ChatTemplate(chat_template::ChatTemplateArgs),
+
+    /// Download a model from the Hugging Face hub, then run the safety scan on it
+    Download(download::DownloadArgs),
 }
 
 pub fn run() -> Result<()> {
@@ -167,6 +171,7 @@ pub fn run() -> Result<()> {
         Commands::Telemetry(args) => telemetry::execute(args),
         Commands::Tokenize(args) => tokenize::execute(args),
         Commands::ChatTemplate(args) => chat_template::execute(args),
+        Commands::Download(args) => download::execute(args),
     }
 }
 
