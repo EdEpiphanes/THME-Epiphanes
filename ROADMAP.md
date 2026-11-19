@@ -147,7 +147,9 @@ flowchart LR
 - Corrected: the scanner ticket (THME-3022) is back to *ready*, because legacy `.h5` files are flagged, not inspected; the Studio no longer loads a model from a developer-machine path at startup.
 - Cleaned: `agent-hub` and 18 unrelated `neutron-*` crates moved out of the repository; only `neutron-gpu` remains as a workspace member.
 - Done (Haiku builder agents, Hermes paused): third-party register and CI check (THME-3034); GGUF checks for structure, data section and metadata keys, first part of THME-2208 (the llama.cpp run is not done); `.epiph` placement plan in the manifest with `pack --placement` and `verify` (THME-3016, format 1.2); per-layer figure GIF code (THME-3039); Studio provenance labels for twelve values (THME-3035). 61 new tests since the 14 November status board (495 to 556), all on synthetic data. Still open: a visual check of the layers figure, the two remaining audit items in THME-3035, and recaptured Studio screenshots.
-- Not done: new README GIFs. The other Studio tabs do not move, so their recordings collapse to one frame, and the Live 3D crop needs adjusting for the new layout. A forward-pass animation already exists (`thme figure MODEL --gif`); THME-3039 covers a per-layer view.
+- Done later on 19 November: `thme discover` (THME-3040, model discovery across the Hugging Face cache, Ollama, LM Studio and llama.cpp, tested on fake folder layouts only); the stale benchmark reports, charts and dossier were removed (THME-3023) because they were measured before the FP16 rounding fix, and the scripts and CI stay; README figures and a plug-and-play section; Pythia-14M downloaded for local testing (Apache-2.0, not committed).
+- Not done: Studio recordings. The other Studio tabs do not move and the Live 3D crop needs adjusting, so re-recording waits until the whole thing is finalized, as the owner asked (THME-3039 covers the figure GIFs, which are separate).
+- Added to the backlog: `thme doctor` (3041), bridges to existing tools (3042), review of the `neutron-iso` anatomy port (3043), re-measuring on Pythia-14M (3044).
 - Added to the backlog (triage): third-party code register (3034), mock and simulated data in the Studio (3035), LoRA training (3036), tokenizer and chat templates (3037), Studio chat tab (3038), live-layers figure (3039).
 
 ### Changes in the previous update (14 November 2026)
@@ -238,7 +240,7 @@ user-facing path.
 | v0.2.0.1 | Reference CPU forward pass: LLaMA family and GPT-NeoX (`src/inference/`) | **Done**: measured on SmolLM-135M and Pythia-14M |
 | v0.2.0.2 | WikiText-2 tokenization with provenance and hashes (`scripts/prepare_eval_tokens.py`) | **Done** |
 | v0.2.0.3 | Measured quality gate: source vs exported GGUF vs recipe (`examples/production_verification.rs`) | **Done** |
-| v0.2.0.4 | Dossier and charts generated only from reports (`scripts/generate_dossier.py`, `scripts/generate_charts.py`) | **Done** |
+| v0.2.0.4 | Dossier and charts generated only from reports (`scripts/generate_dossier.py`, `scripts/generate_charts.py`) | **Done** (reports removed 19 November 2026, to be re-measured) |
 | v0.2.0.5 | Measured experiments: precision sweep with random-placement control, depth probe | **Done** |
 | v0.2.0.6 | Cross-check the forward pass against the Hugging Face reference (logit agreement on fixed prompts) | Open; paused while no new model runs are being made |
 | v0.2.0.7 | Retire the analytic proxy from `thme validate`, the MCP quality tool and the co-surgery loop; route them through the measured gate | **Done**: `thme validate --report` gates measured reports; `thme co-surgery MODEL --tokens` scores candidates with the forward pass (`QualityEvaluator`, `MeasuredEvaluator`); supplied-value and proxy paths are labelled, including the Studio Co-Surgery tab |

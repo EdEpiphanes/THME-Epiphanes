@@ -11,10 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Real-model tests are opt-in**: tests that open a real model file need `THME_REAL_MODEL_TESTS=1`.
+- **`thme doctor`**: says what works on this machine (OS, memory, disk, GPU adapter, models found) and what to try next; read-only, `--json` available.
+- **`thme discover`**: lists the models already on the machine (Hugging Face cache, Ollama, LM Studio, llama.cpp, any folder). Read-only; tested on fake folder layouts.
+- **README**: figures section (Pythia-14M structure, layer and forward-pass GIFs) and a plug-and-play section.
 - **Third-party register**: `docs/third-party.md` and `scripts/third_party.py --check` (CI) for outside sources.
 - **GGUF check (`src/exporter/gguf_check.rs`)**: reports header, alignment, tensor, data-section and metadata-key problems of a finished GGUF v3 file. Some spec rules were written from memory and are marked `shortcut:`; the run through llama.cpp is not done.
 - **`.epiph` placement (`src/epiph/placement.rs`)**: exact GPU, CPU and streamed placement from a VRAM and host budget, stored in the manifest (`.epiph` format 1.2, older files still verify); `thme epiph pack --placement VRAM_MIB:HOST_MIB`, and `verify` checks and prints the plan.
-- **Layers GIF**: `thme figure MODEL --gif` also writes one frame per layer from the real layer structure.
+- **Layers GIF**: `thme figure MODEL --gif` also writes one frame per layer from the real layer structure. The lit layer is ink glass and the other layers fade back.
 - **Studio provenance labels (`src/gui/provenance.rs`)**: twelve heuristic values, including five stats-ribbon boxes, are labelled Estimate or Simulated, with a test that fails when a label is lost; audit verdicts in `docs/research/studio-heuristics.md`.
 - **Gemma / MedGemma Reference Forward Pass (`src/inference/gemma.rs`)**: Reference causal forward pass for the Gemma3/MedGemma architecture (not yet compared with the Hugging Face reference; the real-model test is skipped unless a model file is present): embedding scaling by `sqrt(hidden_size)` (approx 50.5964), Grouped Query Attention (8 Q heads, 4 KV heads, head_dim 256), per-head QK-RMSNorm, dual residual layernorms (post-attention and post-FFW), GeGLU feedforward activation (`gelu_approx`), and tied embedding readout.
 - **GGUF Layer Indexing & Role Classification (`src/ir/tensor.rs`)**: Robust `blk.{i}` layer indexing and GGUF tensor role classification for attention, feedforward, normalization, and embeddings.
@@ -33,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 - `agent-hub/` and 18 unrelated `neutron-*` crates are no longer part of this repository.
+- Committed benchmark reports, charts and the benchmark dossier (`docs/benchmarks/`, `docs/benchmark_dossier.md`, `docs/benchmark_dossier.csv`) were removed because they were measured before the FP16 rounding fix (THME-3023). The scripts and the CI pipeline stay; results will be re-measured and published with their method.
 
 ### License
 - **THME is now dual-licensed: AGPL-3.0-only or a commercial license from Epiphanes**

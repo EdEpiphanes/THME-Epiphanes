@@ -371,8 +371,8 @@ def main():
     if search and search.get("search", {}).get("pareto"):
         charts.append(("pareto", lambda t: chart_pareto(search, t)))
     if not charts:
-        print(f"error: no measured reports found in {args.data_dir}", file=sys.stderr)
-        return 1
+        print(f"no committed reports in {args.data_dir}, nothing to render")
+        return 0
 
     os.makedirs(args.out_dir, exist_ok=True)
     for name, build in charts:

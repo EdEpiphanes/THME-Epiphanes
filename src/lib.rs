@@ -16,6 +16,8 @@ pub mod allocator;
 pub mod bench;
 pub mod cli;
 pub mod dataset;
+pub mod discover;
+pub mod doctor;
 pub mod engine;
 pub mod epiph;
 pub mod experiment;

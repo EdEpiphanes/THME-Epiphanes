@@ -3,6 +3,8 @@ pub mod bench;
 pub mod calibrate;
 pub mod co_surgery;
 pub mod convert;
+pub mod discover;
+pub mod doctor;
 pub mod epiph;
 pub mod evaluate;
 pub mod export;
@@ -99,6 +101,12 @@ pub enum Commands {
     /// Security scan of a model file or folder for code execution, hidden payloads and malformed headers
     Scan(scan::ScanArgs),
 
+    /// List models already on this machine (Hugging Face, Ollama, LM Studio, llama.cpp); read-only
+    Discover(discover::DiscoverArgs),
+
+    /// Say what works on this machine (OS, memory, disk, GPU adapter, models) and what to try next
+    Doctor(doctor::DoctorArgs),
+
     /// Benchmark registry: list and check task files and result records
     Bench(bench::BenchArgs),
 
@@ -141,6 +149,8 @@ pub fn run() -> Result<()> {
         Commands::Export(args) => export::execute(args),
         Commands::Epiph(args) => epiph::execute(args),
         Commands::Scan(args) => scan::execute(args),
+        Commands::Discover(args) => discover::execute(args),
+        Commands::Doctor(args) => doctor::execute(args),
         Commands::Bench(args) => bench::execute(args),
         Commands::Figure(args) => figure::execute(args),
         Commands::Interop(args) => interop::execute(args),
