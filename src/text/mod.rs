@@ -40,6 +40,26 @@ impl Tokenizer {
             .decode(ids, true)
             .map_err(|e| anyhow!("cannot decode ids: {e}"))
     }
+
+    /// The id of a token string in this vocabulary, if it has one.
+    pub fn token_id(&self, token: &str) -> Option<u32> {
+        self.inner.token_to_id(token)
+    }
+}
+
+/// The `eos_token` string named by a model folder's `tokenizer_config.json`, if any.
+pub fn eos_token(dir: &Path) -> Option<String> {
+    read_config(dir)
+        .ok()
+        .map(|config| special_token(&config, "eos_token"))
+        .filter(|token| !token.is_empty())
+}
+
+/// True when `tokenizer_config.json` names a chat template (a string, or a list with `default`).
+pub fn has_chat_template(dir: &Path) -> bool {
+    read_config(dir)
+        .and_then(|config| template_of(&config))
+        .is_ok()
 }
 
 /// One chat turn, as the messages file and the chat template see it.

@@ -96,9 +96,12 @@ so it reads what you already have instead of asking you to move files.
 - **Talk to it from your editor or agent.** `thme mcp` runs a stdio server that other tools can drive.
 - **One window.** The Studio shows the same models, and the numbers it can only estimate say so.
 
+- **Chat in the Studio.** The Chat tab talks to a loaded model through THME's own CPU forward pass, with the model's chat
+  template, and shows the measured speed. It is slow by design (no KV cache yet) and has not been tried on a real
+  model.
 - **Text in, text out.** `thme tokenize` encodes and decodes text with a model's own `tokenizer.json`, and
   `thme chat-template` renders the model's own chat template from a messages file. Tested on fixtures; a
-  chat tab in the Studio is planned (THME-3038).
+  the Studio's Chat tab builds on them.
 - **Know your machine.** `thme doctor` says what works here (system, memory, disk, GPU adapter, the models
   found) and what to try next. It marks each fact as checked or assumed.
 
