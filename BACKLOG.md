@@ -372,6 +372,7 @@ closes it.
 
 - **Milestone**: v0.2.5 · **Roadmap**: v0.2.5.8 · **Priority**: p3 · **Area**: figures · **Type**: feature · **Status**: ready
 - **Progress** (19 November 2026): `thme figure MODEL --gif` also writes a per-layer GIF (one frame per layer, from the real layer structure; 5 tests on the mock model). Not done: a person must look at the rendered figure, because the lit layer is subtle in the light theme.
+- **Progress** (19 November 2026, later): the lit layer is now ink glass with the rest faded back (checked by eye in light and dark). Still to do: our own Epiphanes card and layout, dark-theme GIFs, and the ink splash on the layer frames.
 - **Problem**: README GIFs of the other Studio tabs came out static (identical frames collapse to one), so only Live 3D is animated. The committed `thme figure MODEL --gif` (`src/report/animate.rs`, `docs/figures/mock_llama-forward.gif`) walks the forward pass tensor by tensor; a per-layer view of the whole transformer stack is not built yet.
 - **Done means**: `thme figure MODEL --gif` shows the layers lighting in turn from the real structure of the model; frames checked by eye; no invented figures.
 
@@ -383,7 +384,8 @@ closes it.
 
 ### [THME-3041] `thme doctor` and a guided first run
 
-- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: onboarding · **Type**: feature · **Status**: triage
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: onboarding · **Type**: feature · **Status**: done
+- **Progress** (19 November 2026): `thme doctor [--json]` reports operating system, memory, disk, CPU threads, GPU adapters found through wgpu and the models `thme discover` finds, each marked checked or assumed, then prints a short Next list. 9 tests on a `HostFacts` struct, none depending on this machine. Not done: the Studio first-start summary.
 - **Problem**: People come from different backgrounds and tools. They need one command that says what works on their machine and what to do next.
 - **Done means**: `thme doctor` reports operating system, memory, disk, GPU adapter found through wgpu, and the models `thme discover` finds, then prints the next command to try. The Studio shows the same summary on first start. Every line states what was checked and what was only assumed.
 
