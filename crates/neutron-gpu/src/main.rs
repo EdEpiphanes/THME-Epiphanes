@@ -53,7 +53,11 @@ fn main() {
         Commands::Scan { json } => {
             let devices = PciScanner::scan();
             if json {
-                println!("{}", serde_json::to_string_pretty(&devices).unwrap());
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&devices)
+                        .unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}"))
+                );
             } else {
                 println!("=== Neutron-GPU: Hardware Accelerator & Topology Discovery ===");
                 println!(
@@ -100,7 +104,11 @@ fn main() {
             };
 
             if json {
-                println!("{}", serde_json::to_string_pretty(&filtered).unwrap());
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&filtered)
+                        .unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}"))
+                );
             } else {
                 println!("=== Neutron-GPU: Hardware Recipes ===");
                 println!(
@@ -139,7 +147,11 @@ fn main() {
             };
 
             if json {
-                println!("{}", serde_json::to_string_pretty(&filtered).unwrap());
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&filtered)
+                        .unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}"))
+                );
             } else {
                 println!("=== Neutron-GPU: Deep Accelerator & Precision Architecture Profile ===");
                 for dev in &filtered {
