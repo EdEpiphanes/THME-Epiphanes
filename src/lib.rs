@@ -32,6 +32,7 @@ pub mod report;
 pub mod scan;
 pub mod speculative;
 pub mod surgery;
+pub mod text;
 pub mod trainer;
 pub mod transform;
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pub mod bench;
 pub mod calibrate;
+pub mod chat_template;
 pub mod co_surgery;
 pub mod convert;
 pub mod discover;
@@ -20,6 +21,7 @@ pub mod scan;
 pub mod search;
 pub mod speculate;
 pub mod telemetry;
+pub mod tokenize;
 pub mod tweak;
 pub mod validate;
 
@@ -122,6 +124,12 @@ pub enum Commands {
 
     /// Query real-time CPU, RAM, and discrete GPU hardware telemetry
     Telemetry(telemetry::TelemetryArgs),
+
+    /// Encode text with a model's tokenizer.json and decode it back
+    Tokenize(tokenize::TokenizeArgs),
+
+    /// Render a model's own chat template for a JSON list of messages
+    ChatTemplate(chat_template::ChatTemplateArgs),
 }
 
 pub fn run() -> Result<()> {
@@ -152,6 +160,8 @@ pub fn run() -> Result<()> {
         Commands::Mcp(args) => mcp::execute(args),
         Commands::CoSurgery(args) => co_surgery::execute(args),
         Commands::Telemetry(args) => telemetry::execute(args),
+        Commands::Tokenize(args) => tokenize::execute(args),
+        Commands::ChatTemplate(args) => chat_template::execute(args),
     }
 }
 

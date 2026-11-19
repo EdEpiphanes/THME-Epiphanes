@@ -86,6 +86,11 @@ minisign = "0.10.0"
 resvg = { version = "0.50", default-features = false, features = ["text", "system-fonts", "memmap-fonts"] }
 gif = "0.14"
 sysinfo = "0.40"
+# Text in and out (THME-3037): Hugging Face tokenizer.json with the pure-Rust fancy-regex backend
+# (no onig C library, no esaxx C++ build), and Jinja chat templates via minijinja.
+tokenizers = { version = "0.22", default-features = false, features = ["fancy-regex"] }
+minijinja = { version = "3.1", features = ["json", "loop_controls", "serde"] }
+minijinja-contrib = { version = "3.1", features = ["pycompat"] }
 
 [dev-dependencies]
 tempfile = "3.17"
