@@ -28,8 +28,9 @@ also writes every frame as a PNG.
 ## Animated: layers in turn
 
 `thme figure MODEL --out DIR --gif` also writes `<stem>-layers.gif`: one frame per layer, with
-every tensor of that layer lit at once. The readout names the layer, its tensor count and its
-stored bytes, all read from the model file. The layers come from the model's own layer structure,
+every tensor of that layer lit at once as glossy ink glass with the forward pass's sheen, while the
+rest of the figure fades so the lit layer reads at a glance. The readout names the layer, its
+tensor count and its stored bytes, all read from the model file. The layers come from the model's own layer structure,
 not from a count. The GIF is not committed to the repository; `--frames DIR` writes the frames as
 PNGs to `DIR/layers` so they can be checked by eye.
 
