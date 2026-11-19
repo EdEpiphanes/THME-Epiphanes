@@ -150,6 +150,7 @@ pub fn pack(args: &PackArgs) -> Result<epiph::PackSummary> {
             .collect::<Result<_>>()?,
         annotations,
         created_unix: None,
+        placement: None,
         store_selected: args.quantize,
         hf_files: if args.model.is_dir() {
             epiph::HF_FILES

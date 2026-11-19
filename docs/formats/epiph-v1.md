@@ -1,4 +1,4 @@
-# The Epiphanes model format (`.epiph`), version 1.1
+# The Epiphanes model format (`.epiph`), version 1.2
 
 **Status:** draft, open specification. The reference reader and writer are `src/epiph/` in this
 repository (AGPL-3.0-only). Anyone may implement this specification.
@@ -29,7 +29,7 @@ All integers are little-endian.
 | ---: | ---: | :--- | :--- |
 | 0 | 8 | magic | `89 45 50 49 50 48 0D 0A` (`\x89EPIPH\r\n`) |
 | 8 | 2 | major version | `1` |
-| 10 | 2 | minor version | `1` |
+| 10 | 2 | minor version | `2` |
 | 12 | 4 | flags | `0` (all bits reserved; a reader refuses a file with any bit set) |
 | 16 | 8 | manifest length `M` | bytes of UTF-8 JSON |
 | 24 | 8 | data offset `D` | multiple of 64, at least `32 + M` |
@@ -49,7 +49,7 @@ the file; a data offset that is not a multiple of 64.
 ```json
 {
   "format": "epiph",
-  "version": "1.1",
+  "version": "1.2",
   "model": { "...": "the model description (section 3.1)" },
   "tensors": [ { "name": "...", "offset": 0, "length": 4096, "sha256": "..." } ],
   "attachments": [ { "kind": "calibration", "encoding": "json", "offset": 4096, "length": 900, "sha256": "..." } ],
@@ -104,6 +104,15 @@ it does not know.
   of edits can be followed.
 - `annotations`: free string key-value pairs.
 
+### 3.5 `placement`
+
+Optional. Present only when the file was packed with a memory budget; otherwise the key is absent.
+An object with `budget` (`vram_bytes`, `host_bytes`), the byte totals `gpu_bytes`, `cpu_bytes`
+and `stream_bytes`, and `tensors`: one entry per manifest tensor, in manifest order, with `name`,
+`bytes`, `tier` (`gpu`, `cpu` or `stream`) and `reason`. THME's exact allocator plans it on the
+stored payload sizes. A reader that does not know this section ignores it. It says where a runtime
+should put each tensor; it says nothing about measured speed.
+
 ## 4. Verifying a file
 
 A file is valid when the header and manifest pass the checks in section 2, every payload's
@@ -141,12 +150,12 @@ Each lands as a minor version with tests before it is used:
 - **Compression.** A per-payload `encoding` field (`raw` by default) for lossless compression
   of payloads, decompressed while streaming to memory. Needs a pure-Rust codec dependency,
   proposed before it is added.
-- **Placement plan.** A `placement` section assigning each tensor to a device tier (GPU, CPU,
-  disk) for a stated memory budget, chosen by THME's exact allocator, so a runtime can load the
-  model across GPU and CPU without planning at load time. Optional larger payload alignment
-  (4096 bytes) for page-aligned transfers.
+- Optional larger payload alignment (4096 bytes) for page-aligned transfers.
 
 ## 8. Versioning
 
 A minor version adds optional manifest fields or attachment kinds; older readers still read the
 file. A major version may change the layout; readers refuse majors they do not implement.
+
+Changes: 1.1 added `name` on attachments and the `gguf-metadata` and `hf-file` kinds. 1.2 adds
+`placement`.

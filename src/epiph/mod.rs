@@ -25,7 +25,7 @@ pub const EXTENSION: &str = "epiph";
 pub const MAGIC: [u8; 8] = [0x89, b'E', b'P', b'I', b'P', b'H', 0x0D, 0x0A];
 /// Format version this module reads and writes.
 pub const MAJOR: u16 = 1;
-pub const MINOR: u16 = 1;
+pub const MINOR: u16 = 2;
 /// Every payload starts on a multiple of this many bytes.
 pub const ALIGN: u64 = 64;
 const HEADER_LEN: u64 = 32;
@@ -95,6 +95,8 @@ pub struct Manifest {
     pub lineage: Lineage,
     #[serde(default)]
     pub annotations: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub placement: Option<placement::Placement>,
 }
 
 /// Everything besides the weights that a packed file should carry.
@@ -108,6 +110,8 @@ pub struct PackOptions {
     pub annotations: BTreeMap<String, String>,
     /// Fixed creation time for reproducible files; the current time when `None`.
     pub created_unix: Option<u64>,
+    /// Plan GPU/CPU placement for these budgets and store it in the manifest.
+    pub placement: Option<placement::Budget>,
     /// Store every tensor in its selected format (as `thme export` would), not as stored.
     pub store_selected: bool,
     /// Files to attach as `hf-file` (tokenizer, config); each stored under its file name.
@@ -257,6 +261,14 @@ pub fn write(model: &ModelIR, options: &PackOptions, out: &Path) -> Result<PackS
             .map(|d| d.as_secs())
             .unwrap_or(0),
     };
+    let names_and_lengths = tensors
+        .iter()
+        .map(|t| (t.name.clone(), t.length))
+        .collect::<Vec<_>>();
+    let placement = options
+        .placement
+        .map(|b| placement::plan(&names_and_lengths, b))
+        .transpose()?;
     let manifest = Manifest {
         format: "epiph".into(),
         version: format!("{MAJOR}.{MINOR}"),
@@ -284,6 +296,7 @@ pub fn write(model: &ModelIR, options: &PackOptions, out: &Path) -> Result<PackS
             parents: options.parents.clone(),
         },
         annotations: options.annotations.clone(),
+        placement,
     };
     let manifest_bytes = serde_json::to_vec(&manifest)?;
     let data_offset = align(HEADER_LEN + manifest_bytes.len() as u64);
@@ -512,6 +525,7 @@ pub struct VerifyReport {
     pub tensors: usize,
     pub attachments: usize,
     pub payload_bytes: u64,
+    pub placement: Option<placement::Placement>,
 }
 
 /// Checks every payload digest and that each tensor decodes at its declared shape and type.
@@ -533,6 +547,15 @@ pub fn verify(path: &Path) -> Result<VerifyReport> {
         })?;
         payload_bytes += entry.length;
     }
+    if let Some(plan) = &manifest.placement {
+        let pairs: Vec<(String, u64)> = manifest
+            .tensors
+            .iter()
+            .map(|t| (t.name.clone(), t.length))
+            .collect();
+        plan.check(&pairs)
+            .with_context(|| format!("{path:?}: placement plan does not match the tensors"))?;
+    }
     for entry in &manifest.attachments {
         let bytes = read_range(&mut file, data_offset + entry.offset, entry.length)?;
         if compute_sha256(&bytes) != entry.sha256 {
@@ -547,6 +570,7 @@ pub fn verify(path: &Path) -> Result<VerifyReport> {
         tensors: manifest.tensors.len(),
         attachments: manifest.attachments.len(),
         payload_bytes,
+        placement: manifest.placement,
     })
 }
 
