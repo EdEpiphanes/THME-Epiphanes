@@ -77,6 +77,11 @@ safetensors = "0.5"
 memmap2 = "0.9"
 comfy-table = "7.1"
 anyhow = "1.0"
+# Model download (hub module, THME-3042): HTTPS client on rustls with the ring provider and the OS
+# certificate store (no OpenSSL, no webpki-roots: its CDLA data licence is not on deny.toml's list).
+# sha2 is already in the lock file through other crates.
+ureq = { version = "3.5", default-features = false, features = ["rustls-no-provider", "_ring", "platform-verifier"] }
+sha2 = "0.10"
 # Pure-Rust deflate backend (default features): inflating zip pickle entries during a scan.
 flate2 = "1.1"
 eframe = { version = "0.37", default-features = true }
