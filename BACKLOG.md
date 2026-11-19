@@ -345,8 +345,8 @@ closes it.
 
 ### [THME-3035] Replace mock and simulated data in the Studio and engine
 
-- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: gui · **Type**: bug · **Status**: ready
-- **Progress** (19 November 2026): Slice 1 and 2: `docs/research/studio-heuristics.md` holds a verdict for each audit claim (three stale, two confirmed). Twelve Studio values now carry an Estimate or Simulated label (baseline profile and throughput, tuner scorecard, and five stats-ribbon boxes: VRAM storage, traffic, depth, energy, throughput), and a test fails when a listed value loses its label (`src/gui/provenance.rs`). Not done: the two confirmed audit items, the pseudo-random speculative acceptance rate and the hard-coded demo constants.
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: gui · **Type**: bug · **Status**: done
+- **Progress** (19 November 2026): all five audit verdicts are handled. Studio values are labelled Estimate, Simulated or Demo (a guard test fails when one loses its label), including the stats ribbon, the speculative acceptance rate (Simulated) and the hard-coded demo constants (Demo), in the Studio, `thme speculate` and the MCP tool text. No number or algorithm was changed. Known smell: the speculative engine imports `gui::provenance`; moving the module to a neutral place is a small follow-up.
 - **Problem**: The Studio telemetry and baseline figures are heuristic formulas and the micro-trainer, speculative acceptance and token flow are synthetic (see the audit in `docs/research/THME_AUTHENTICITY_AUDIT_AND_ROADMAP.md`, which still needs to be checked line by line). The Studio screenshots show them next to measured numbers.
 - **Done means**: Each such value is either computed from the reference forward pass or carries a visible "simulated" label; a test fails on an unlabelled constant.
 
