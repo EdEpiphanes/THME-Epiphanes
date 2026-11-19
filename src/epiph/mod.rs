@@ -16,7 +16,7 @@ use std::path::Path;
 
 use crate::exporter::{compute_file_sha256, compute_sha256};
 use crate::inference::{decode_payload, read_tensor_bytes, CalibrationFile};
-use crate::ir::tensor::TensorSource;
+use crate::ir::tensor::{SourceEncoding, TensorSource};
 use crate::ir::ModelIR;
 
 /// File extension, without the dot.
@@ -25,20 +25,62 @@ pub const EXTENSION: &str = "epiph";
 pub const MAGIC: [u8; 8] = [0x89, b'E', b'P', b'I', b'P', b'H', 0x0D, 0x0A];
 /// Format version this module reads and writes.
 pub const MAJOR: u16 = 1;
-pub const MINOR: u16 = 2;
+pub const MINOR: u16 = 3;
 /// Every payload starts on a multiple of this many bytes.
 pub const ALIGN: u64 = 64;
 const HEADER_LEN: u64 = 32;
 /// Largest manifest accepted, to refuse corrupt length fields before allocating.
 const MAX_MANIFEST: u64 = 1 << 30;
+/// Largest expansion a DEFLATE stream can give. A declared length beyond it cannot be real.
+// shortcut: 1032:1 is the DEFLATE bound from the zlib FAQ, taken as given and not re-derived here.
+const MAX_DEFLATE_RATIO: u64 = 1032;
+/// Largest decoded payload accepted, which bounds the memory one tensor can take.
+// shortcut: a fixed 16 GiB cap, not checked against free memory; verify would need to stream
+// each tensor to lift it.
+const MAX_DECODED_PAYLOAD: u64 = 1 << 34;
 
 /// Where one payload lives in the data section, and its digest.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TensorEntry {
     pub name: String,
     pub offset: u64,
+    /// Length of the stored bytes.
     pub length: u64,
+    /// SHA-256 of the stored bytes.
     pub sha256: String,
+    /// How the stored bytes encode the payload (1.3). Absent means `identity`.
+    #[serde(default, skip_serializing_if = "Encoding::is_identity")]
+    pub encoding: Encoding,
+    /// Length of the decoded payload; present for `deflate` only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decoded_length: Option<u64>,
+    /// SHA-256 of the decoded payload; present for `deflate` only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decoded_sha256: Option<String>,
+}
+
+impl TensorEntry {
+    /// Length of the payload once decoded.
+    fn decoded_len(&self) -> u64 {
+        self.decoded_length.unwrap_or(self.length)
+    }
+}
+
+/// How a tensor's stored bytes encode its payload.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Encoding {
+    /// The payload is stored as it is.
+    #[default]
+    Identity,
+    /// The payload is a raw DEFLATE stream (RFC 1951).
+    Deflate,
+}
+
+impl Encoding {
+    fn is_identity(&self) -> bool {
+        *self == Encoding::Identity
+    }
 }
 
 /// A non-tensor payload, such as calibration statistics.
@@ -114,6 +156,8 @@ pub struct PackOptions {
     pub placement: Option<placement::Budget>,
     /// Store every tensor in its selected format (as `thme export` would), not as stored.
     pub store_selected: bool,
+    /// Compress tensor payloads with this encoding, for those it makes smaller.
+    pub compress: Option<Encoding>,
     /// Files to attach as `hf-file` (tokenizer, config); each stored under its file name.
     pub hf_files: Vec<std::path::PathBuf>,
 }
@@ -147,6 +191,21 @@ pub struct PackSummary {
     pub attachments: usize,
     pub file_bytes: u64,
     pub sha256: String,
+    /// Stored bytes of all tensor payloads, and their decoded bytes.
+    pub tensor_stored_bytes: u64,
+    pub tensor_decoded_bytes: u64,
+    /// Tensors stored compressed.
+    pub compressed_tensors: usize,
+}
+
+impl PackSummary {
+    /// Decoded bytes over stored tensor bytes: 1.0 when nothing is compressed.
+    pub fn ratio(&self) -> f64 {
+        if self.tensor_stored_bytes == 0 {
+            return 1.0;
+        }
+        self.tensor_decoded_bytes as f64 / self.tensor_stored_bytes as f64
+    }
 }
 
 /// True when `path` names an `.epiph` file (by extension).
@@ -191,14 +250,30 @@ pub fn write(model: &ModelIR, options: &PackOptions, out: &Path) -> Result<PackS
             read_tensor_bytes(tensor)
                 .with_context(|| format!("Cannot pack tensor '{}'", tensor.name))?
         };
+        let decoded_len = bytes.len() as u64;
+        let (encoding, stored, decoded_digest) = match options.compress {
+            Some(Encoding::Deflate) => {
+                let packed = deflate_payload(&bytes)?;
+                if packed.len() < bytes.len() {
+                    (Encoding::Deflate, packed, Some(compute_sha256(&bytes)))
+                } else {
+                    (Encoding::Identity, bytes, None)
+                }
+            }
+            Some(Encoding::Identity) | None => (Encoding::Identity, bytes, None),
+        };
+        let deflated = encoding == Encoding::Deflate;
         tensors.push(TensorEntry {
             name: tensor.name.clone(),
             offset,
-            length: bytes.len() as u64,
-            sha256: compute_sha256(&bytes),
+            length: stored.len() as u64,
+            sha256: compute_sha256(&stored),
+            encoding,
+            decoded_length: deflated.then_some(decoded_len),
+            decoded_sha256: decoded_digest,
         });
-        offset = align(offset + bytes.len() as u64);
-        payloads.push(bytes);
+        offset = align(offset + stored.len() as u64);
+        payloads.push(stored);
     }
     let mut attachments = Vec::new();
     let mut attach = |kind: &str, name: Option<String>, encoding: &str, bytes: Vec<u8>| {
@@ -337,6 +412,13 @@ pub fn write(model: &ModelIR, options: &PackOptions, out: &Path) -> Result<PackS
         attachments: manifest.attachments.len(),
         file_bytes: written,
         sha256: compute_file_sha256(out)?,
+        tensor_stored_bytes: manifest.tensors.iter().map(|t| t.length).sum(),
+        tensor_decoded_bytes: manifest.tensors.iter().map(TensorEntry::decoded_len).sum(),
+        compressed_tensors: manifest
+            .tensors
+            .iter()
+            .filter(|t| t.encoding != Encoding::Identity)
+            .count(),
     })
 }
 
@@ -411,12 +493,47 @@ pub(crate) fn open(path: &Path) -> Result<Opened> {
         }
         end = stop.unwrap_or(u64::MAX);
     }
+    for entry in &manifest.tensors {
+        check_encoding(entry).with_context(|| format!("{path:?}: tensor '{}'", entry.name))?;
+    }
     Ok(Opened {
         manifest,
         manifest_bytes,
         data_offset,
         payload_end: data_offset + end,
     })
+}
+
+/// The encoding fields of a tensor entry must agree with each other and stay within bounds. This
+/// runs before any payload is read, so an absurd declared length costs no allocation.
+fn check_encoding(entry: &TensorEntry) -> Result<()> {
+    match entry.encoding {
+        Encoding::Identity => {
+            if entry.decoded_length.is_some() || entry.decoded_sha256.is_some() {
+                bail!("has decoded-payload fields but identity encoding");
+            }
+        }
+        Encoding::Deflate => {
+            let Some(decoded) = entry.decoded_length else {
+                bail!("is deflate but has no decoded_length");
+            };
+            if entry.decoded_sha256.is_none() {
+                bail!("is deflate but has no decoded_sha256");
+            }
+            if decoded > MAX_DECODED_PAYLOAD {
+                bail!(
+                    "declares {decoded} decoded bytes, beyond the limit of {MAX_DECODED_PAYLOAD}"
+                );
+            }
+            if decoded > entry.length.saturating_mul(MAX_DEFLATE_RATIO) {
+                bail!(
+                    "declares {decoded} decoded bytes from {} stored, and no DEFLATE stream expands that far",
+                    entry.length
+                );
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Reads a file into a model whose tensors point into it, plus its manifest.
@@ -443,10 +560,25 @@ pub fn read(path: &Path) -> Result<(ModelIR, Manifest)> {
                 entry.name
             );
         }
+        let byte_len = entry.decoded_len();
+        if entry.encoding != Encoding::Identity && byte_len != tensor.byte_size as u64 {
+            bail!(
+                "{path:?}: tensor '{}' declares {byte_len} decoded bytes but its description has {}",
+                entry.name,
+                tensor.byte_size
+            );
+        }
+        let encoding = match entry.encoding {
+            Encoding::Identity => SourceEncoding::Identity,
+            Encoding::Deflate => SourceEncoding::Deflate {
+                stored_len: entry.length,
+            },
+        };
         tensor.source = Some(TensorSource {
             path: path.to_path_buf(),
             byte_offset: data_offset + entry.offset,
-            byte_len: entry.length,
+            byte_len,
+            encoding,
         });
     }
     if let Some((_, bytes)) = read_attachments(path, "gguf-metadata")?.into_iter().next() {
@@ -519,6 +651,54 @@ fn collect_floats(value: &crate::ir::model::ModelMetadataValue, out: &mut Vec<f6
     }
 }
 
+/// Compresses `bytes` as a raw DEFLATE stream.
+fn deflate_payload(bytes: &[u8]) -> Result<Vec<u8>> {
+    let mut encoder =
+        flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
+    encoder.write_all(bytes)?;
+    Ok(encoder.finish()?)
+}
+
+/// Decodes a DEFLATE payload to exactly `decoded_len` bytes. The output buffer is allocated once,
+/// one byte past the declared length, so a stream that expands further is caught without being
+/// expanded further, and an allocation failure is an error rather than an abort.
+pub(crate) fn inflate_payload(stored: &[u8], decoded_len: u64) -> Result<Vec<u8>> {
+    let limit = usize::try_from(decoded_len.saturating_add(1))
+        .context("decoded payload exceeds addressable memory")?;
+    let mut out = Vec::new();
+    out.try_reserve_exact(limit)
+        .context("cannot allocate the decoded payload")?;
+    out.resize(limit, 0);
+    let mut decoder = flate2::read::DeflateDecoder::new(stored);
+    let mut filled = 0usize;
+    while filled < limit {
+        match decoder.read(&mut out[filled..]) {
+            Ok(0) => break,
+            Ok(n) => filled += n,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(e) => {
+                return Err(anyhow::Error::new(e).context("DEFLATE stream is truncated or corrupt"))
+            }
+        }
+    }
+    out.truncate(filled);
+    let produced = filled as u64;
+    if produced > decoded_len {
+        bail!("DEFLATE stream decodes past its declared {decoded_len} bytes");
+    }
+    if produced < decoded_len {
+        bail!("DEFLATE stream decodes to {produced} bytes, not the declared {decoded_len}");
+    }
+    let used = decoder.total_in();
+    if used != stored.len() as u64 {
+        bail!(
+            "DEFLATE stream is followed by {} bytes of trailing data",
+            (stored.len() as u64).saturating_sub(used)
+        );
+    }
+    Ok(out)
+}
+
 /// Result of a full verification.
 #[derive(Debug, Clone, PartialEq)]
 pub struct VerifyReport {
@@ -535,10 +715,25 @@ pub fn verify(path: &Path) -> Result<VerifyReport> {
     let mut file = File::open(path)?;
     let mut payload_bytes = 0u64;
     for (tensor, entry) in model.tensors.iter().zip(&manifest.tensors) {
-        let bytes = read_range(&mut file, data_offset + entry.offset, entry.length)?;
-        if compute_sha256(&bytes) != entry.sha256 {
+        let stored = read_range(&mut file, data_offset + entry.offset, entry.length)?;
+        if compute_sha256(&stored) != entry.sha256 {
             bail!("{path:?}: tensor '{}' fails its SHA-256 check", entry.name);
         }
+        let bytes = match entry.encoding {
+            Encoding::Identity => stored,
+            Encoding::Deflate => {
+                let decoded = inflate_payload(&stored, entry.decoded_len()).with_context(|| {
+                    format!("{path:?}: tensor '{}' does not decode", entry.name)
+                })?;
+                if Some(compute_sha256(&decoded)) != entry.decoded_sha256 {
+                    bail!(
+                        "{path:?}: tensor '{}' decodes to bytes that fail their SHA-256 check",
+                        entry.name
+                    );
+                }
+                decoded
+            }
+        };
         decode_payload(&bytes, &tensor.original_dtype, tensor.numel).with_context(|| {
             format!(
                 "{path:?}: tensor '{}' does not match its shape and type",

@@ -6,7 +6,7 @@ use std::fs::File;
 use std::path::Path;
 
 use crate::ir::model::ModelMetadataValue;
-use crate::ir::tensor::TensorSource;
+use crate::ir::tensor::{SourceEncoding, TensorSource};
 use crate::ir::{ModelArchitecture, ModelIR, TensorIR};
 use crate::profiling::WeightAnalyzer;
 
@@ -748,6 +748,7 @@ impl GgufParser {
                             .context("GGUF tensor source offset exceeds u64")?,
                         byte_len: u64::try_from(range.len())
                             .context("GGUF tensor source length exceeds u64")?,
+                        encoding: SourceEncoding::Identity,
                     });
                 }
             } else {

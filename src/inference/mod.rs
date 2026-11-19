@@ -34,6 +34,6 @@ pub use neox::{NeoxConfig, NeoxModel};
 pub use perplexity::{evaluate_perplexity, read_token_file, PerplexityConfig, PerplexityReport};
 pub use probe::{ForwardTrace, InputChannelStats, LayerTrace, TensorActivity, ACTIVITY_BINS};
 pub use weights::{
-    apply_selected_format, decode_payload, fake_quantize, read_tensor_bytes, read_tensor_f32,
-    BYOA_METADATA_KEY,
+    apply_selected_format, decode_payload, fake_quantize, open_payload, read_tensor_bytes,
+    read_tensor_f32, BYOA_METADATA_KEY,
 };

@@ -168,8 +168,22 @@ pub struct TensorIR {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TensorSource {
     pub path: PathBuf,
+    /// Where the stored bytes start in the file.
     pub byte_offset: u64,
+    /// Length of the decoded payload, the bytes the tensor's dtype describes.
     pub byte_len: u64,
+    /// How the stored bytes encode the decoded payload.
+    pub encoding: SourceEncoding,
+}
+
+/// How a file-backed payload is stored. The decoded length is always `TensorSource::byte_len`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceEncoding {
+    Identity,
+    /// A raw DEFLATE stream of `stored_len` bytes.
+    Deflate {
+        stored_len: u64,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -286,6 +300,7 @@ mod tests {
             path: PathBuf::from("local-model.safetensors"),
             byte_offset: 16,
             byte_len: 1,
+            encoding: SourceEncoding::Identity,
         });
 
         let value = serde_json::to_value(tensor).expect("serialize tensor metadata");
