@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Real-model tests are opt-in**: tests that open a real model file need `THME_REAL_MODEL_TESTS=1`.
+- **`thme download`**: fetch a model from the Hugging Face hub (config, tokenizer, safetensors or GGUF), licence printed first, checksum verified, pickle files skipped unless named, import scan after. Tested with a fake fetcher only.
 - **Tokenizer and chat templates**: `thme tokenize` and `thme chat-template` (Hugging Face `tokenizers` and `minijinja`, both Apache-2.0, pure Rust). Tested on fixtures only.
 - **`thme doctor`**: says what works on this machine (OS, memory, disk, GPU adapter, models found) and what to try next; read-only, `--json` available.
 - **`thme discover`**: lists the models already on the machine (Hugging Face cache, Ollama, LM Studio, llama.cpp, any folder). Read-only; tested on fake folder layouts.
@@ -27,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CodeGPT MCP Service Real Binding (`src/cli/mcp.rs`)**: Connected `thme_auto_decide` and `thme_apply_surgery` to active model IR, fixed `thme_validate_quality` format string bug, and added end-to-end integration test suite in `tests/test_mcp.rs`.
 
 ### Changed
+- **Licences allowed**: `CDLA-Permissive-2.0` (certificate data, wasm-only path) added to `deny.toml`.
 - **CLI size limit** raised from 10 MiB to 16 MiB (release check and AGENTS.md); the release CLI is about 12.5 MiB with the tokenizer stack. The GUI limit stays 15 MiB.
 - **Dependencies**: eframe/egui 0.31 to 0.37, wgpu 30, sysinfo 0.40; the Studio capture, tooltip, panel and style calls follow the new APIs. `deny.toml` no longer ignores RUSTSEC-2026-0194 and RUSTSEC-2026-0195; `cargo deny check` passes.
 - **Minimum Rust version** is now 1.95 (was 1.89), because eframe/egui 0.37 and sysinfo 0.40 require it; the pinned toolchain stays 1.100.0.
