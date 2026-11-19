@@ -7,17 +7,19 @@ use std::path::Path;
 
 use resvg::{tiny_skia, usvg};
 
-use crate::engine::iso::{Palette, Theme};
+use crate::engine::iso::Theme;
 use crate::ir::model::ModelIR;
 use crate::report::figure::{
-    forward_order, layer_indices, model_figure_frame, model_figure_layer_frame, Highlight,
+    forward_steps, layer_indices, model_figure_frame, model_figure_layer_frame,
 };
 
-/// Frames per tensor in the forward-pass animation, and each frame's delay in 1/100 s.
-const STEPS: usize = 4;
+/// Each forward-pass frame's delay in 1/100 s.
 const DELAY: u16 = 7;
 /// One layer per 0.4 s in the layers animation.
 const LAYER_DELAY: u16 = 40;
+/// The Chakra Petch faces of the manga card, so the frames do not depend on installed fonts.
+const CHAKRA_BOLD: &[u8] = include_bytes!("../../assets/fonts/ChakraPetch-Bold.ttf");
+const CHAKRA_MEDIUM: &[u8] = include_bytes!("../../assets/fonts/ChakraPetch-Medium.ttf");
 
 /// Rasterizes SVG frames and writes them as a looping GIF. Every frame must have the same size.
 pub struct GifWriter {
@@ -34,6 +36,8 @@ impl GifWriter {
     pub fn create(path: &Path, png_dir: Option<&Path>) -> Result<Self> {
         let mut options = usvg::Options::default();
         options.fontdb_mut().load_system_fonts();
+        options.fontdb_mut().load_font_data(CHAKRA_BOLD.to_vec());
+        options.fontdb_mut().load_font_data(CHAKRA_MEDIUM.to_vec());
         if let Some(d) = png_dir {
             std::fs::create_dir_all(d)?;
         }
@@ -96,42 +100,37 @@ impl GifWriter {
     }
 }
 
-/// The forward-pass animation: every tensor lights up in order as ink glass with a manga ink
-/// splash. Manga is black ink on paper, so it uses the light theme.
-pub fn model_forward_gif(model: &ModelIR, path: &Path, png_dir: Option<&Path>) -> Result<usize> {
-    let palette = Palette::of(Theme::Light);
-    let (ink, sheen) = (
-        palette.get("hi").to_string(),
-        palette.get("card").to_string(),
-    );
+/// The forward-pass animation on the `theme` card: every tensor lights up in forward order as
+/// ink glass with an ink splash (black on paper in the light theme, blood-red in the dark).
+/// Returns the number of frames.
+pub fn model_forward_gif(
+    model: &ModelIR,
+    theme: Theme,
+    path: &Path,
+    png_dir: Option<&Path>,
+) -> Result<usize> {
     let mut gif = GifWriter::create(path, png_dir)?;
-    for active in forward_order(model) {
-        for step in 0..STEPS {
-            let phase = (step as f64 + 0.5) / STEPS as f64;
-            let h = Highlight {
-                active,
-                phase,
-                ink: ink.clone(),
-                sheen: sheen.clone(),
-            };
-            gif.frame(&model_figure_frame(model, Theme::Light, &h), DELAY)?;
-        }
+    for h in forward_steps(model) {
+        gif.frame(&model_figure_frame(model, theme, &h), DELAY)?;
     }
     gif.finish()
 }
 
-/// The layers animation: one frame per layer, every tensor of that layer lit in turn.
-pub fn model_layers_gif(model: &ModelIR, path: &Path, png_dir: Option<&Path>) -> Result<usize> {
+/// The layers animation on the `theme` card: one frame per layer, every tensor of that layer
+/// lit in turn, with one splash under it. Returns the number of frames.
+pub fn model_layers_gif(
+    model: &ModelIR,
+    theme: Theme,
+    path: &Path,
+    png_dir: Option<&Path>,
+) -> Result<usize> {
     let layers = layer_indices(model);
     if layers.is_empty() {
         return Err(anyhow!("model has no layer structure"));
     }
     let mut gif = GifWriter::create(path, png_dir)?;
     for l in layers {
-        gif.frame(
-            &model_figure_layer_frame(model, Theme::Light, l),
-            LAYER_DELAY,
-        )?;
+        gif.frame(&model_figure_layer_frame(model, theme, l), LAYER_DELAY)?;
     }
     gif.finish()
 }
@@ -174,16 +173,8 @@ mod tests {
         crate::parser::ModelImporter::import(&model_dir).unwrap()
     }
 
-    #[test]
-    fn layers_gif_has_one_frame_per_layer_and_is_deterministic() {
-        let m = mock();
-        let dir = tempfile::tempdir().unwrap();
-        let (a, b) = (dir.path().join("a.gif"), dir.path().join("b.gif"));
-        let n = model_layers_gif(&m, &a, None).unwrap();
-        assert_eq!(n, layer_indices(&m).len());
-        model_layers_gif(&m, &b, None).unwrap();
-        let bytes = std::fs::read(&a).unwrap();
-        assert_eq!(bytes, std::fs::read(&b).unwrap());
+    fn frame_count(path: &Path) -> usize {
+        let bytes = std::fs::read(path).unwrap();
         let mut decoder = gif::DecodeOptions::new()
             .read_info(std::io::Cursor::new(bytes))
             .unwrap();
@@ -191,7 +182,34 @@ mod tests {
         while decoder.read_next_frame().unwrap().is_some() {
             frames += 1;
         }
-        assert_eq!(frames, n);
+        frames
+    }
+
+    #[test]
+    fn layers_gif_has_one_frame_per_layer_and_is_deterministic() {
+        let m = mock();
+        let dir = tempfile::tempdir().unwrap();
+        let (a, b) = (dir.path().join("a.gif"), dir.path().join("b.gif"));
+        let n = model_layers_gif(&m, Theme::Light, &a, None).unwrap();
+        assert_eq!(n, layer_indices(&m).len());
+        model_layers_gif(&m, Theme::Light, &b, None).unwrap();
+        assert_eq!(
+            std::fs::read(&a).unwrap(),
+            std::fs::read(&b).unwrap(),
+            "deterministic"
+        );
+        assert_eq!(frame_count(&a), n);
+    }
+
+    #[test]
+    fn dark_gifs_have_the_same_frame_counts_as_the_light_ones() {
+        let m = mock();
+        let dir = tempfile::tempdir().unwrap();
+        let (f, d) = (dir.path().join("f.gif"), dir.path().join("fd.gif"));
+        let n = model_forward_gif(&m, Theme::Light, &f, None).unwrap();
+        assert_eq!(n, forward_steps(&m).len());
+        assert_eq!(model_forward_gif(&m, Theme::Dark, &d, None).unwrap(), n);
+        assert_eq!(frame_count(&d), n);
     }
 
     #[test]
@@ -201,7 +219,7 @@ mod tests {
             t.layer_index = None;
         }
         let dir = tempfile::tempdir().unwrap();
-        let err = model_layers_gif(&m, &dir.path().join("x.gif"), None).unwrap_err();
+        let err = model_layers_gif(&m, Theme::Light, &dir.path().join("x.gif"), None).unwrap_err();
         assert!(err.to_string().contains("no layer structure"), "{err}");
     }
 }
