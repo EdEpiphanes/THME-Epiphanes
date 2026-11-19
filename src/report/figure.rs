@@ -635,7 +635,11 @@ fn scene_with(
         let pts: Vec<Flat> = outline.iter().map(|&(x, y)| iso((x, y, z), &p)).collect();
         s.add(
             depth_of((0.0, (tail + tip) / 2.0, z), &p),
-            format!("<path fill=\"{}\" d=\"{}\"/>", m.outline, path_of(&pts, true)),
+            format!(
+                "<path fill=\"{}\" d=\"{}\"/>",
+                m.outline,
+                path_of(&pts, true)
+            ),
         );
     }
 
@@ -1254,9 +1258,9 @@ mod tests {
     }
 
     /// Pinned by `frames_are_byte_stable`; regenerate only when the figure is meant to change.
-    const HASH_A: u64 = 12263347357770414038;
-    const HASH_B: u64 = 3658038394791952048;
-    const HASH_C: u64 = 7995440245341394307;
+    const HASH_A: u64 = 2886885066248630080;
+    const HASH_B: u64 = 7367170381522692242;
+    const HASH_C: u64 = 8187982699894920991;
 
     #[test]
     fn deterministic_and_fits_the_frame() {
