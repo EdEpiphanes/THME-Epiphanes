@@ -1677,38 +1677,46 @@ impl eframe::App for THMEApp {
                             p.primary,
                             &p,
                         );
+                        // provenance: ribbon-vram
                         render_stat_box(
                             &mut cols[1],
                             "VRAM STORAGE",
-                            f!("{:.1} MB", store_mb),
+                            provenance::labelled(f!("{:.1} MB", store_mb), Evidence::Estimate),
                             p.success,
                             &p,
                         );
+                        // provenance: ribbon-traffic
                         render_stat_box(
                             &mut cols[2],
                             "TRAFFIC/TOKEN",
-                            f!("{:.2} MB", tr_mb),
+                            provenance::labelled(f!("{:.2} MB", tr_mb), Evidence::Estimate),
                             p.secondary,
                             &p,
                         );
+                        // provenance: ribbon-depth
                         render_stat_box(
                             &mut cols[3],
                             "DEPTH (MEAN)",
-                            f!("{:.0}%", f_bar * 100.0),
+                            provenance::labelled(f!("{:.0}%", f_bar * 100.0), Evidence::Estimate),
                             p.warning,
                             &p,
                         );
+                        // provenance: ribbon-energy
                         render_stat_box(
                             &mut cols[4],
                             "ENERGY/TOKEN",
-                            f!("{:.2} mJ", joules * 1000.0),
+                            provenance::labelled(
+                                f!("{:.2} mJ", joules * 1000.0),
+                                Evidence::Estimate,
+                            ),
                             p.danger,
                             &p,
                         );
+                        // provenance: ribbon-throughput
                         render_stat_box(
                             &mut cols[5],
                             "THROUGHPUT",
-                            f!("{:.0} tok/s", tok_sec),
+                            provenance::labelled(f!("{:.0} tok/s", tok_sec), Evidence::Estimate),
                             p.accent,
                             &p,
                         );
