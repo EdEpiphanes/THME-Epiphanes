@@ -7,7 +7,17 @@ use std::fmt;
 
 use anyhow::Result;
 
-use crate::parser::gguf::{GgmlType, GgufReader};
+use crate::parser::gguf::{GgmlType, GgufReader, GgufValue};
+
+/// Keys an llama loader reads; a file without them loads with defaults or fails later.
+// shortcut: key names recalled from llama.cpp's loader, not checked offline, re-check before merge.
+const LLAMA_KEYS: [&str; 5] = [
+    "llama.context_length",
+    "llama.embedding_length",
+    "llama.block_count",
+    "llama.feed_forward_length",
+    "llama.attention.head_count",
+];
 
 /// How serious a finding is: an `Error` makes the file unusable, a `Warning` does not.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,8 +76,13 @@ struct Scan {
     tensors: Vec<TensorInfo>,
     /// Byte offset where the tensor table ends (the data section starts after alignment).
     table_end: usize,
-    /// `general.alignment`, 32 when the file does not set it.
-    alignment: u64,
+    /// `general.alignment`, 32 when the file does not set it; `None` when it is invalid, so the
+    /// data section cannot be read against it.
+    alignment: Option<u64>,
+    /// Every metadata key in the file.
+    keys: HashSet<String>,
+    /// The value of `general.architecture`, when it is a string.
+    architecture: Option<String>,
 }
 
 impl Scan {
@@ -76,7 +91,9 @@ impl Scan {
             findings: Vec::new(),
             tensors: Vec::new(),
             table_end: 0,
-            alignment: 32,
+            alignment: Some(32),
+            keys: HashSet::new(),
+            architecture: None,
         }
     }
 
@@ -143,21 +160,40 @@ fn scan_table(bytes: &[u8], scan: &mut Scan) -> Result<()> {
             // The GGUF spec asks for a multiple of 8; llama.cpp's loader also needs a power of two.
             // shortcut: spec text not checked offline, re-check against the GGUF spec before merge.
             match value.as_u64() {
-                Some(a) if a >= 8 && a.is_power_of_two() => scan.alignment = a,
-                Some(a) => scan.push(
+                Some(a) if a >= 8 && a.is_power_of_two() => scan.alignment = Some(a),
+                Some(a) => {
+                    scan.alignment = None;
+                    scan.push(
+                        Severity::Error,
+                        "alignment",
+                        None,
+                        format!(
+                            "general.alignment is {a}; it must be a power of two and at least 8"
+                        ),
+                    );
+                }
+                None => {
+                    scan.alignment = None;
+                    scan.push(
+                        Severity::Error,
+                        "alignment",
+                        None,
+                        "general.alignment is not an unsigned integer",
+                    );
+                }
+            }
+        } else if key == "general.architecture" {
+            match value {
+                GgufValue::String(name) => scan.architecture = Some(name),
+                _ => scan.push(
                     Severity::Error,
-                    "alignment",
+                    "meta-architecture",
                     None,
-                    format!("general.alignment is {a}; it must be a power of two and at least 8"),
-                ),
-                None => scan.push(
-                    Severity::Error,
-                    "alignment",
-                    None,
-                    "general.alignment is not an unsigned integer",
+                    "general.architecture is not a string",
                 ),
             }
         }
+        scan.keys.insert(key);
     }
 
     let mut names = HashSet::new();
@@ -179,7 +215,140 @@ fn scan_table(bytes: &[u8], scan: &mut Scan) -> Result<()> {
         });
     }
     scan.table_end = reader.cursor;
+    check_data_section(scan, bytes.len());
+    check_metadata(scan);
     Ok(())
+}
+
+/// Rules 6 and 7: the architecture key and, for `llama`, the keys its loader reads.
+fn check_metadata(scan: &mut Scan) {
+    if !scan.keys.contains("general.architecture") {
+        scan.push(
+            Severity::Error,
+            "meta-architecture",
+            None,
+            "general.architecture is missing",
+        );
+    }
+    if scan.architecture.as_deref() != Some("llama") {
+        return;
+    }
+    for key in LLAMA_KEYS {
+        if !scan.keys.contains(key) {
+            scan.push(
+                Severity::Warning,
+                "meta-arch-keys",
+                None,
+                format!("architecture llama expects the key '{key}', which is missing"),
+            );
+        }
+    }
+}
+
+/// Rules 1 to 5: the data section start, then each tensor's offset, size, bounds and overlap.
+/// Skipped when `general.alignment` is invalid, since the offsets cannot be read against it.
+// shortcut: data start = table end rounded up to the alignment and offsets as multiples of it are
+// recalled from the GGUF spec, not checked offline; re-check before merge.
+fn check_data_section(scan: &mut Scan, file_len: usize) {
+    let Some(alignment) = scan.alignment else {
+        return;
+    };
+    let Some(data_start) = (scan.table_end as u64)
+        .div_ceil(alignment)
+        .checked_mul(alignment)
+    else {
+        scan.push(
+            Severity::Error,
+            "alignment",
+            None,
+            "the start of the data section overflows 64 bits",
+        );
+        return;
+    };
+    let file_len = file_len as u64;
+
+    let tensors = std::mem::take(&mut scan.tensors);
+    // (offset, end, name) of each tensor whose size is known, for the overlap rule.
+    let mut placed: Vec<(u64, u64, &str)> = Vec::new();
+    for tensor in &tensors {
+        let name = tensor.name.as_str();
+        if tensor.offset % alignment != 0 {
+            scan.push(
+                Severity::Error,
+                "tensor-offset",
+                Some(name),
+                format!(
+                    "offset {} is not a multiple of the alignment {alignment}",
+                    tensor.offset
+                ),
+            );
+        }
+        match payload_bytes(tensor) {
+            Err(message) => scan.push(Severity::Error, "tensor-size", Some(name), message),
+            Ok(None) => {}
+            Ok(Some(expected)) => {
+                let end = data_start
+                    .checked_add(tensor.offset)
+                    .and_then(|start| start.checked_add(expected));
+                if end.is_none_or(|end| end > file_len) {
+                    scan.push(
+                        Severity::Error,
+                        "tensor-bounds",
+                        Some(name),
+                        format!(
+                            "{expected} bytes at offset {} run past the {file_len}-byte file",
+                            tensor.offset
+                        ),
+                    );
+                }
+                placed.push((tensor.offset, tensor.offset.saturating_add(expected), name));
+            }
+        }
+    }
+
+    placed.sort_by_key(|&(offset, _, _)| offset);
+    let mut covered = 0u64;
+    for &(offset, end, name) in &placed {
+        if offset < covered {
+            scan.push(
+                Severity::Error,
+                "tensor-overlap",
+                Some(name),
+                format!(
+                    "starts at {offset}, inside the data of the tensor before it (up to {covered})"
+                ),
+            );
+        }
+        covered = covered.max(end);
+    }
+    scan.tensors = tensors;
+}
+
+/// Bytes the tensor's payload must take. `Ok(None)` for an unknown type or no dimensions, which
+/// their own rules report. `Err` when the shape does not fit whole blocks of the type.
+fn payload_bytes(tensor: &TensorInfo) -> Result<Option<u64>, String> {
+    let Some(&row) = tensor.dims.first() else {
+        return Ok(None);
+    };
+    if matches!(tensor.ty, GgmlType::Unknown(_)) {
+        return Ok(None);
+    }
+    let numel = tensor
+        .dims
+        .iter()
+        .try_fold(1u64, |n, &d| n.checked_mul(d))
+        .ok_or_else(|| "the element count overflows 64 bits".to_string())?;
+    let block = tensor.ty.block_size() as u64;
+    if numel % block != 0 || row % block != 0 {
+        return Err(format!(
+            "{numel} elements in rows of {row}; both must be a multiple of the {} block size {block}",
+            tensor.ty.type_name()
+        ));
+    }
+    (numel / block)
+        .checked_mul(tensor.ty.type_size() as u64)
+        .map(Some)
+        .ok_or_else(|| "the payload size overflows 64 bits".to_string())
 }
 
 fn check_tensor(
@@ -242,12 +411,19 @@ mod tests {
     use super::*;
     use crate::exporter::gguf_writer::GgufWriter;
 
-    /// The header (24 bytes) plus the one metadata pair of `valid_writer`: 24 + 45 = 69 bytes.
-    const METADATA_END: usize = 69;
-
-    fn valid_writer() -> GgufWriter {
+    /// Metadata of a llama file, without the key `skip` (pass "" to keep all of them).
+    fn metadata_writer(skip: &str) -> GgufWriter {
         let mut writer = GgufWriter::new();
         writer.add_string("general.architecture", "llama");
+        for key in LLAMA_KEYS {
+            if key != skip {
+                writer.add_u32(key, 1);
+            }
+        }
+        writer
+    }
+
+    fn add_tensors(writer: &mut GgufWriter) {
         writer.add_tensor("token_embd.weight", vec![2, 4], GgmlType::F32, vec![0; 32]);
         writer.add_tensor(
             "blk.0.attn_q.weight",
@@ -255,6 +431,11 @@ mod tests {
             GgmlType::Q8_0,
             vec![0; GgmlType::Q8_0.type_size()],
         );
+    }
+
+    fn valid_writer() -> GgufWriter {
+        let mut writer = metadata_writer("");
+        add_tensors(&mut writer);
         writer
     }
 
@@ -269,18 +450,41 @@ mod tests {
     }
 
     fn single_tensor(name: &str, dims: Vec<usize>, ty: GgmlType) -> Vec<u8> {
-        let mut writer = GgufWriter::new();
-        writer.add_string("general.architecture", "llama");
+        let mut writer = metadata_writer("");
         writer.add_tensor(name, dims, ty, vec![0; GgmlType::Q8_0.type_size()]);
         writer.write_to_bytes().expect("write tensor fixture")
     }
 
+    /// Position of a tensor's name bytes. Found by search, so the metadata layout can change.
+    fn name_at(bytes: &[u8], name: &str) -> usize {
+        bytes
+            .windows(name.len())
+            .position(|window| window == name.as_bytes())
+            .expect("tensor name in fixture")
+    }
+
+    /// A tensor entry is a `u64` name length, the name, a `u32` dimension count, one `u64` per
+    /// dimension (fastest first), a `u32` type and a `u64` offset.
+    fn dims_at(bytes: &[u8], name: &str) -> usize {
+        name_at(bytes, name) + name.len() + 4
+    }
+
+    fn offset_at(bytes: &[u8], name: &str, n_dims: usize) -> usize {
+        dims_at(bytes, name) + 8 * n_dims + 4
+    }
+
+    fn patch_u64(bytes: &mut [u8], at: usize, value: u64) {
+        bytes[at..at + 8].copy_from_slice(&value.to_le_bytes());
+    }
+
     fn empty_name() -> Vec<u8> {
-        // The writer refuses an empty name, so cut the one-byte name "x" out of the table
-        // and zero its length. The table is read in order, so the rest still parses.
-        let mut bytes = single_tensor("x", vec![1, 32], GgmlType::Q8_0);
-        bytes.remove(METADATA_END + 8);
-        bytes[METADATA_END..METADATA_END + 8].copy_from_slice(&0u64.to_le_bytes());
+        // The writer refuses an empty name, so cut the name bytes out of the table and zero
+        // its length. The table is read in order, so the rest still parses.
+        let name = "blk.0.empty";
+        let mut bytes = single_tensor(name, vec![1, 32], GgmlType::Q8_0);
+        let at = name_at(&bytes, name);
+        bytes.drain(at..at + name.len());
+        patch_u64(&mut bytes, at - 8, 0);
         bytes
     }
 
@@ -393,12 +597,118 @@ mod tests {
     #[test]
     fn truncated_files_report_truncated_and_do_not_panic() {
         let bytes = valid();
-        for len in [10, 30, METADATA_END] {
+        let inside_table = name_at(&bytes, "token_embd.weight");
+        // 30 bytes would hit the `counts` guard first: the file cannot hold its own key count.
+        for len in [10, 60, inside_table] {
             assert_eq!(
                 rules(&check_gguf(&bytes[..len])),
                 vec!["truncated"],
                 "length {len}"
             );
+        }
+    }
+
+    #[test]
+    fn truncated_tensor_data_is_a_bounds_error_on_the_last_tensor() {
+        let bytes = valid();
+        // Each payload is padded to 32 bytes, so the 30 pad bytes after the 34-byte Q8_0
+        // payload are not data. Cut 5 bytes into that payload instead of into the padding.
+        let padding = 32 - GgmlType::Q8_0.type_size() % 32;
+        let findings = check_gguf(&bytes[..bytes.len() - padding - 5]);
+        assert_eq!(rules(&findings), vec!["tensor-bounds"]);
+        assert_eq!(findings[0].tensor.as_deref(), Some("blk.0.attn_q.weight"));
+    }
+
+    #[test]
+    fn row_width_not_a_multiple_of_the_block_is_a_tensor_size_error() {
+        let mut bytes = valid();
+        let at = dims_at(&bytes, "blk.0.attn_q.weight");
+        patch_u64(&mut bytes, at, 31);
+        let findings = check_gguf(&bytes);
+        assert_eq!(rules(&findings), vec!["tensor-size"]);
+        assert_eq!(findings[0].tensor.as_deref(), Some("blk.0.attn_q.weight"));
+    }
+
+    #[test]
+    fn dimensions_that_overflow_are_a_tensor_size_error() {
+        let mut bytes = valid();
+        let at = dims_at(&bytes, "blk.0.attn_q.weight");
+        patch_u64(&mut bytes, at, u64::MAX);
+        patch_u64(&mut bytes, at + 8, u64::MAX);
+        assert_eq!(rules(&check_gguf(&bytes)), vec!["tensor-size"]);
+    }
+
+    #[test]
+    fn offset_off_the_alignment_is_a_tensor_offset_error() {
+        let mut bytes = valid();
+        let at = offset_at(&bytes, "blk.0.attn_q.weight", 2);
+        patch_u64(&mut bytes, at, 33);
+        let findings = check_gguf(&bytes);
+        assert_eq!(rules(&findings), vec!["tensor-offset"]);
+        assert_eq!(findings[0].tensor.as_deref(), Some("blk.0.attn_q.weight"));
+        assert!(findings[0]
+            .to_string()
+            .starts_with("error[tensor-offset] tensor 'blk.0.attn_q.weight'"));
+    }
+
+    #[test]
+    fn tensor_starting_inside_the_previous_one_is_an_overlap_error() {
+        let mut bytes = valid();
+        let at = offset_at(&bytes, "blk.0.attn_q.weight", 2);
+        patch_u64(&mut bytes, at, 0);
+        let findings = check_gguf(&bytes);
+        assert_eq!(rules(&findings), vec!["tensor-overlap"]);
+        assert_eq!(findings[0].tensor.as_deref(), Some("blk.0.attn_q.weight"));
+    }
+
+    #[test]
+    fn missing_architecture_is_an_error() {
+        let mut writer = GgufWriter::new();
+        add_tensors(&mut writer);
+        let bytes = writer.write_to_bytes().expect("write fixture");
+        assert_eq!(rules(&check_gguf(&bytes)), vec!["meta-architecture"]);
+    }
+
+    #[test]
+    fn architecture_that_is_not_a_string_is_an_error() {
+        let mut writer = GgufWriter::new();
+        writer.add_u32("general.architecture", 7);
+        add_tensors(&mut writer);
+        let bytes = writer.write_to_bytes().expect("write fixture");
+        assert_eq!(rules(&check_gguf(&bytes)), vec!["meta-architecture"]);
+    }
+
+    #[test]
+    fn llama_without_block_count_is_a_warning_naming_the_key() {
+        let mut writer = metadata_writer("llama.block_count");
+        add_tensors(&mut writer);
+        let findings = check_gguf(&writer.write_to_bytes().expect("write fixture"));
+        assert_eq!(rules(&findings), vec!["meta-arch-keys"]);
+        assert_eq!(findings[0].severity, Severity::Warning);
+        assert!(findings[0].message.contains("llama.block_count"));
+    }
+
+    #[test]
+    fn other_architectures_get_no_key_warnings() {
+        let mut writer = GgufWriter::new();
+        writer.add_string("general.architecture", "foo");
+        add_tensors(&mut writer);
+        assert!(check_gguf(&writer.write_to_bytes().expect("write fixture")).is_empty());
+    }
+
+    #[test]
+    fn random_bytes_after_a_valid_header_never_panic() {
+        let mut state = 0x9e37_79b9_7f4a_7c15u64;
+        for _ in 0..256 {
+            let mut bytes = b"GGUF".to_vec();
+            bytes.extend_from_slice(&3u32.to_le_bytes());
+            for _ in 0..64 {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                bytes.push(state as u8);
+            }
+            let _ = check_gguf(&bytes);
         }
     }
 
