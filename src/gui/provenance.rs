@@ -14,6 +14,8 @@ pub enum Evidence {
     Simulated,
     /// A hard-coded placeholder value, not computed from anything.
     Demo,
+    /// A time or rate timed in a run on this machine. Unbracketed, so it reads as a phrase.
+    Measured,
 }
 
 impl Evidence {
@@ -23,6 +25,7 @@ impl Evidence {
             Evidence::Estimate => "[estimate]",
             Evidence::Simulated => "[simulated]",
             Evidence::Demo => "[demo]",
+            Evidence::Measured => "measured on this machine",
         }
     }
 }
@@ -167,6 +170,12 @@ pub const LISTED: &[Listed] = &[
         file: "src/gui/theme.rs",
         formula: "benchmarked_latency_ms: demo constant 2.8 (create_synthetic) or 3.2 (from_model_ir); tuned layers take the tuner-winner formula",
         evidence: Evidence::Demo,
+    },
+    Listed {
+        id: "chat-speed",
+        file: "src/gui/app/chat.rs",
+        formula: "tokens generated, wall seconds and tok/s = tokens / wall seconds, timed around the greedy decode of the Chat tab",
+        evidence: Evidence::Measured,
     },
 ];
 

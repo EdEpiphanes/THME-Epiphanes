@@ -62,6 +62,9 @@ pub struct UniversalModel {
     /// Original file-backed tensors, retained for exact source exports.
     #[serde(skip)]
     pub source_model: Option<crate::ir::ModelIR>,
+    /// The model file or folder this was loaded from; the Chat tab needs it for the tokenizer.
+    #[serde(skip)]
+    pub source_path: Option<std::path::PathBuf>,
 }
 
 #[derive(Clone, Debug)]
@@ -335,6 +338,7 @@ impl UniversalModel {
             layers,
             tensors,
             source_model: None,
+            source_path: None,
         }
     }
 
@@ -356,7 +360,9 @@ impl UniversalModel {
             "SafeTensors".to_string()
         };
 
-        Ok(Self::from_model_ir(model_ir, &fmt_name))
+        let mut model = Self::from_model_ir(model_ir, &fmt_name);
+        model.source_path = Some(path.to_path_buf());
+        Ok(model)
     }
 
     pub fn from_model_ir(model_ir: crate::ir::ModelIR, format_name: &str) -> Self {
@@ -429,6 +435,7 @@ impl UniversalModel {
             layers,
             tensors,
             source_model,
+            source_path: None,
         }
     }
 
@@ -620,6 +627,8 @@ pub struct THMEApp {
     capture: Option<super::capture::CaptureState>,
     /// Live 3D model view (tab 10).
     live: super::live::LiveView,
+    /// Chat with a loaded model (tab 11, THME-3038).
+    chat: chat::ChatTab,
 
     // Closed-Loop Co-Surgery Dashboard (v0.1.9)
     cosurgery_budget_iterations: usize,
@@ -796,6 +805,7 @@ impl THMEApp {
             active_tab: 0,
             capture: super::capture::CaptureState::from_env(),
             live: super::live::LiveView::default(),
+            chat: chat::ChatTab::default(),
             status_msg: "THME Master Engine initialized. System ready.".to_string(),
             start_instant,
             exit_ratio_pct: 80.0,
@@ -1781,6 +1791,7 @@ impl eframe::App for THMEApp {
                     tab_button(ui, "Dev Lab & Training", 8, &mut self.active_tab, &p);
                     tab_button(ui, "Co-Surgery", 9, &mut self.active_tab, &p);
                     tab_button(ui, "Live 3D", 10, &mut self.active_tab, &p);
+                    tab_button(ui, "Chat", 11, &mut self.active_tab, &p);
                 });
 
                 ui.separator();
@@ -1801,6 +1812,7 @@ impl eframe::App for THMEApp {
                         let p = self.palette();
                         self.live.ui(ui, &p);
                     }
+                    11 => self.render_tab_chat(ui),
                     _ => {}
                 }
             });
@@ -1811,6 +1823,7 @@ impl eframe::App for THMEApp {
 // Tab renderers live in one module each under src/gui/app/ (THME-2003).
 mod audit_log;
 mod benchmarks;
+mod chat;
 mod co_surgery;
 mod dashboard;
 mod dev_lab;

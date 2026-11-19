@@ -14,8 +14,8 @@ use eframe::egui;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-/// File-name stems for tabs 0..=10, in tab order.
-pub const TAB_NAMES: [&str; 11] = [
+/// File-name stems for tabs 0..=11, in tab order.
+pub const TAB_NAMES: [&str; 12] = [
     "dashboard",
     "models",
     "layer-tweaker",
@@ -27,6 +27,7 @@ pub const TAB_NAMES: [&str; 11] = [
     "dev-lab",
     "co-surgery",
     "live-3d",
+    "chat",
 ];
 
 /// Frames to let a tab lay out and settle before it is captured.

@@ -14,6 +14,7 @@
 
 pub mod allocator;
 pub mod bench;
+pub mod chat;
 pub mod cli;
 pub mod dataset;
 pub mod discover;
