@@ -158,7 +158,7 @@ E13 matters as much as the rest: a sandbox that blocks everything proves nothing
 
 - **WebAssembly runtime (Wasmtime).** Strong isolation, but cannot run CPython with native
   extensions, which remote-code models and most benchmark code need, and it would roughly double
-  the CLI binary against its 10 MB limit.
+  the CLI binary against its 16 MB limit.
 - **Containers (Docker, Podman).** Good isolation where installed, but an external runtime that
   many users do not have, and unavailable on stock Windows and macOS without a VM. May be offered
   later as an optional backend behind the same interface.
