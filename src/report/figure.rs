@@ -13,8 +13,8 @@
 
 use crate::engine::iso::{
     card_svg, dots_svg, fit_projection, inset_plan, iso, line_svg, plan_outline, segment, slab_of,
-    solid_svg, Card, Flat, Plan, Point3, Projection, Scene, SolidStyle, Theme, Tone, AZIMUTH,
-    ELEVATION,
+    solid_svg, Card, Flat, Palette, Plan, Point3, Projection, Scene, SolidStyle, Theme, Tone,
+    AZIMUTH, ELEVATION,
 };
 use crate::ir::model::ModelIR;
 use crate::ir::tensor::{TensorIR, TensorRole};
@@ -172,19 +172,26 @@ pub fn model_figure_svg(model: &ModelIR, theme: Theme) -> String {
         W,
         H,
         &format!("{} drawn as a parts tray", model.name),
-        &scene(model),
+        &scene_with(model, None, None, theme),
         &card,
         theme,
     )
 }
 
-fn scene(model: &ModelIR) -> String {
-    scene_with(model, None, None)
-}
+/// Phase of the glass sweep on every lit tensor of a layers frame: the band sits mid-tensor.
+const LAYER_GLASS_PHASE: f64 = 0.5;
+/// Opacity of the tensors outside the lit layer in a layers frame.
+const CALM_OPACITY: &str = "0.45";
 
 /// `lit_layer` lights every tensor of one layer (the layers animation); it overrides the
-/// highlight and the largest-tensor accent.
-fn scene_with(model: &ModelIR, highlight: Option<&Highlight>, lit_layer: Option<usize>) -> String {
+/// highlight and the largest-tensor accent. Lit tensors in either animation carry the glass;
+/// the layers animation calms the rest, and takes its glass colours from `theme`.
+fn scene_with(
+    model: &ModelIR,
+    highlight: Option<&Highlight>,
+    lit_layer: Option<usize>,
+    theme: Theme,
+) -> String {
     let (blocks, trays, base, _) = layout(model);
     let p = fit(&blocks, &base);
     let mut s = Scene::new();
@@ -292,8 +299,16 @@ fn scene_with(model: &ModelIR, highlight: Option<&Highlight>, lit_layer: Option<
     // largest tensor is the lit accent; with one, the active tensor is.
     let largest = blocks.iter().map(|b| b.tensor.byte_size).max().unwrap_or(0);
     let active = highlight.and_then(|h| model.tensors.get(h.active));
+    // Glass colours: the forward pass passes its own; the layers animation uses the theme's ink
+    // (`hi`) with the card as sheen, the same pair the forward pass uses in light.
+    let palette = Palette::of(theme);
+    let (ink, sheen) = match highlight {
+        Some(h) => (h.ink.clone(), h.sheen.clone()),
+        None => (palette.get("hi").into(), palette.get("card").into()),
+    };
+    let phase = highlight.map_or(LAYER_GLASS_PHASE, |h| h.phase);
     let mut lit_done = false;
-    for b in &blocks {
+    for (i, b) in blocks.iter().enumerate() {
         let z = base_h
             + if b.tensor.layer_index.is_some() {
                 1.2
@@ -314,15 +329,28 @@ fn scene_with(model: &ModelIR, highlight: Option<&Highlight>, lit_layer: Option<
         };
         let near = (b.plan.x + b.plan.w, b.plan.y + b.plan.d, z);
         let depth = crate::engine::iso::depth_of(near, &p);
-        match highlight {
-            Some(h) if lit => {
-                s.add(depth - 1e-6, ink_splash(b, z, &p, h));
-                let mut svg = solid_svg(&solid, &style);
-                svg.push_str(&glass(b, z, &p, &solid.fill, h));
-                s.add(depth, svg);
-            }
-            _ => s.add(depth, solid_svg(&solid, &style)),
+        if let Some(h) = highlight.filter(|_| lit) {
+            s.add(depth - 1e-6, ink_splash(b, z, &p, h));
         }
+        let mut svg = solid_svg(&solid, &style);
+        if lit && (highlight.is_some() || lit_layer.is_some()) {
+            // One gradient id per lit tensor: several can be lit at once in a layers frame.
+            let id = if lit_layer.is_some() {
+                format!("glass-{i}")
+            } else {
+                "glass".into()
+            };
+            let g = Glass {
+                id,
+                phase,
+                ink: &ink,
+                sheen: &sheen,
+            };
+            svg.push_str(&glass(b, z, &p, &solid.fill, &g));
+        } else if lit_layer.is_some() {
+            svg = format!("<g opacity=\"{CALM_OPACITY}\">{svg}</g>");
+        }
+        s.add(depth, svg);
     }
     s.render()
 }
@@ -378,22 +406,32 @@ fn screen_box(b: &Block, z: f64, p: &Projection) -> (f64, f64, f64, f64) {
     bx
 }
 
+/// The look of the glass on one lit tensor: its gradient id (unique on the page), the sweep
+/// phase and the ink and sheen colours.
+struct Glass<'a> {
+    id: String,
+    phase: f64,
+    ink: &'a str,
+    sheen: &'a str,
+}
+
 /// The active block as glossy ink glass: ink over its silhouette, then a bright band sweeping
 /// diagonally across it with the phase.
-fn glass(b: &Block, z: f64, p: &Projection, fill: &str, h: &Highlight) -> String {
+fn glass(b: &Block, z: f64, p: &Projection, fill: &str, g: &Glass) -> String {
     let (x0, y0, x1, y1) = screen_box(b, z, p);
     let (w, hh) = (x1 - x0, y1 - y0);
-    let c = -0.4 + h.phase * 1.8;
+    let c = -0.4 + g.phase * 1.8;
     let (gx, gy) = (x0 + c * w, y0 + c * hh);
     let half = 0.22 * w.max(hh);
     format!(
-        "<defs><linearGradient id=\"glass\" gradientUnits=\"userSpaceOnUse\" x1=\"{:.1}\" y1=\"{:.1}\" x2=\"{:.1}\" y2=\"{:.1}\"><stop offset=\"0\" stop-color=\"{s}\" stop-opacity=\"0\"/><stop offset=\"0.5\" stop-color=\"{s}\" stop-opacity=\"0.7\"/><stop offset=\"1\" stop-color=\"{s}\" stop-opacity=\"0\"/></linearGradient></defs><path d=\"{fill}\" fill=\"{ink}\" fill-opacity=\"0.9\"/><path d=\"{fill}\" fill=\"url(#glass)\"/><path d=\"{fill}\" fill=\"none\" stroke=\"{s}\" stroke-opacity=\"0.5\" stroke-width=\"0.6\"/>",
+        "<defs><linearGradient id=\"{id}\" gradientUnits=\"userSpaceOnUse\" x1=\"{:.1}\" y1=\"{:.1}\" x2=\"{:.1}\" y2=\"{:.1}\"><stop offset=\"0\" stop-color=\"{s}\" stop-opacity=\"0\"/><stop offset=\"0.5\" stop-color=\"{s}\" stop-opacity=\"0.7\"/><stop offset=\"1\" stop-color=\"{s}\" stop-opacity=\"0\"/></linearGradient></defs><path d=\"{fill}\" fill=\"{ink}\" fill-opacity=\"0.9\"/><path d=\"{fill}\" fill=\"url(#{id})\"/><path d=\"{fill}\" fill=\"none\" stroke=\"{s}\" stroke-opacity=\"0.5\" stroke-width=\"0.6\"/>",
         gx - half,
         gy - half,
         gx + half,
         gy + half,
-        s = h.sheen,
-        ink = h.ink,
+        id = g.id,
+        s = g.sheen,
+        ink = g.ink,
     )
 }
 
@@ -591,7 +629,7 @@ pub fn model_figure_frame(model: &ModelIR, theme: Theme, highlight: &Highlight) 
         W,
         H,
         &format!("{} forward pass", model.name),
-        &scene_with(model, Some(highlight), None),
+        &scene_with(model, Some(highlight), None, theme),
         &card,
         theme,
     )
@@ -635,7 +673,7 @@ pub fn model_figure_layer_frame(model: &ModelIR, theme: Theme, layer: usize) -> 
         W,
         H,
         &format!("{} layers in turn", model.name),
-        &scene_with(model, None, Some(layer)),
+        &scene_with(model, None, Some(layer), theme),
         &card,
         theme,
     )
@@ -675,7 +713,7 @@ mod tests {
         let (blocks, trays, _, _) = layout(&m);
         assert_eq!(blocks.len(), m.tensors.len());
         assert_eq!(trays.len(), m.num_layers);
-        let body = scene(&m);
+        let body = scene_with(&m, None, None, Theme::Light);
         // Feet, base and trays plus one solid per tensor.
         assert_eq!(
             body.matches("class=\"iso-solid\"").count(),
@@ -821,7 +859,7 @@ mod tests {
                 .iter()
                 .filter(|t| t.layer_index == Some(l))
                 .collect();
-            let raw = scene_with(&m, None, Some(l));
+            let raw = scene_with(&m, None, Some(l), Theme::Light);
             assert_eq!(
                 raw.matches("data-lit=\"\"").count(),
                 members.len(),
@@ -838,9 +876,51 @@ mod tests {
     }
 
     #[test]
+    fn lit_layer_tensors_carry_the_glass_and_the_rest_do_not() {
+        let m = mock();
+        for theme in [Theme::Light, Theme::Dark] {
+            for l in layer_indices(&m) {
+                let members = m
+                    .tensors
+                    .iter()
+                    .filter(|t| t.layer_index == Some(l))
+                    .count();
+                let raw = scene_with(&m, None, Some(l), Theme::Light);
+                assert_eq!(raw.matches("url(#glass").count(), members, "layer {l}");
+                assert_eq!(
+                    raw.matches("<linearGradient id=\"glass").count(),
+                    members,
+                    "one glass gradient per lit tensor, all ids unique"
+                );
+                let frame = model_figure_layer_frame(&m, theme, l);
+                assert!(
+                    !frame.contains("<style") && !frame.contains("class="),
+                    "layer frames need no stylesheet"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn layer_frames_calm_the_tensors_outside_the_lit_layer() {
+        let m = mock();
+        let l = layer_indices(&m)[0];
+        let outside = m.tensors.len()
+            - m.tensors
+                .iter()
+                .filter(|t| t.layer_index == Some(l))
+                .count();
+        let raw = scene_with(&m, None, Some(l), Theme::Light);
+        assert_eq!(raw.matches("<g opacity=\"").count(), outside);
+    }
+
+    #[test]
     fn layer_frames_differ_only_in_the_lit_layer() {
         let m = mock();
-        let (a, b) = (scene_with(&m, None, Some(0)), scene_with(&m, None, Some(1)));
+        let (a, b) = (
+            scene_with(&m, None, Some(0), Theme::Dark),
+            scene_with(&m, None, Some(1), Theme::Dark),
+        );
         assert_eq!(
             a.matches("class=\"iso-solid\"").count(),
             b.matches("class=\"iso-solid\"").count()
