@@ -164,7 +164,8 @@ fn folder_declares_remote_code(dir: &Path) -> bool {
         .is_some_and(|v| v.get("auto_map").is_some())
 }
 
-fn head(path: &Path, n: usize) -> Vec<u8> {
+/// Reads at most `n` leading bytes; a file that cannot be read gives an empty buffer.
+pub(crate) fn head(path: &Path, n: usize) -> Vec<u8> {
     let mut buf = Vec::with_capacity(n);
     if let Ok(file) = File::open(path) {
         let _ = file.take(n as u64).read_to_end(&mut buf);
@@ -172,7 +173,8 @@ fn head(path: &Path, n: usize) -> Vec<u8> {
     buf
 }
 
-fn extension(path: &Path) -> String {
+/// Lower-cased file extension without the dot; empty when there is none.
+pub(crate) fn extension(path: &Path) -> String {
     path.extension()
         .and_then(|e| e.to_str())
         .unwrap_or("")
