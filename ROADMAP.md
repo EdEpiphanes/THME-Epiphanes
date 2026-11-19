@@ -22,6 +22,7 @@ sub-milestones further down:
 | Security | [v0.2.7](#v027--security-and-trust) |
 | Quality and evidence | [v0.2.8](#v028--quality-gate-and-benchmarks) |
 | Translation layer, convergence | [v0.2.9](#v029--translation-layer-and-v03-convergence) |
+| Plug and play workspace | [v0.3.0](#v030--plug-and-play-workspace) |
 | Formats and calibration; recovery; runtime | [v0.2.2](#v022--formats-and-calibration), [v0.2.3](#v023--recovery-and-distillation), [v0.2.4](#v024--runtime-speed-and-kv-cache) |
 
 ```mermaid
@@ -96,6 +97,7 @@ flowchart LR
 | Formats and calibration | **llama.cpp compatibility check** (THME-2208) on synthetic exported files; the runtime check runs only when a tool is configured | Not started | Exporter |
 | Security | **Scanner coverage** (THME-3022, v0.2.7.2): legacy HDF5 `.h5` Keras files | Partly done: `.h5` is flagged, not inspected | Scanner v1 |
 | Quality and evidence | **Benchmark runner, native and bridged modes** (v0.2.8.3): produce outputs with THME's forward pass or an external tool; resume and cache | Blocked | Model runs paused |
+| Plug and play workspace | **v0.3.0** (THME-3037 to 3042): discover, doctor and tokenizer are done, tested on fixtures; Studio chat, Hub download, bridges, first-run guide, notebook bridge and installs are open | Partly done | Reference forward pass |
 
 ### Next: planned
 
@@ -151,6 +153,7 @@ flowchart LR
 - Not done: Studio recordings. The other Studio tabs do not move and the Live 3D crop needs adjusting, so re-recording waits until the whole thing is finalized, as the owner asked (THME-3039 covers the figure GIFs, which are separate).
 - Added to the backlog: `thme doctor` (3041), bridges to existing tools (3042), review of the `neutron-iso` anatomy port (3043), re-measuring on Pythia-14M (3044).
 - Added to the backlog (triage): third-party code register (3034), mock and simulated data in the Studio (3035), LoRA training (3036), tokenizer and chat templates (3037), Studio chat tab (3038), live-layers figure (3039).
+- Added milestone v0.3.0 Plug and Play Workspace (nine sub-milestones, THME-3037 to 3042). Done: discover, doctor, and the tokenizer and chat templates, all tested on fixtures only. Open: the Studio chat tab, Hub download, bridges, first-run guide, notebook bridge and installs.
 
 ### Changes in the previous update (14 November 2026)
 
@@ -191,8 +194,9 @@ flowchart LR
     J["v0.2.7<br/>Security and trust"]:::active
     K["v0.2.8<br/>Quality gate, benchmarks"]:::next
     L["v0.2.9<br/>Translation layer,<br/>convergence"]:::next
+    M["v0.3.0<br/>Plug and play workspace"]:::active
     G["v0.3<br/>Routing, distillation,<br/>GPU, scale-out"]:::next
-    A --> B --> C --> D --> E --> F --> H --> I --> J --> K --> L --> G
+    A --> B --> C --> D --> E --> F --> H --> I --> J --> K --> L --> M --> G
 ```
 
 ### Evidence levels
@@ -423,9 +427,29 @@ transformations prove themselves by test, and every v0.2 track meets its exit cr
 | v0.2.9.8 | Documentation pass: tutorials for every command, glossary and specifications current | |
 | v0.2.9.9 | Convergence gate: every v0.2 exit criterion met or explicitly deferred with a reason | |
 
-## v0.3 and later
+## v0.3.0 — Plug and Play Workspace
 
-Opened once v0.2.9 converges:
+**Goal:** THME works for people from any background and tool. Analysts, AI engineers and data
+scientists get one place to inspect, chat with, test, tweak and train models, and THME reads
+what they already have on their machine.
+**Exit criteria:** a new user finds their models, checks what the machine can do and runs a first
+chat without moving files; each bridge lists what was tested and what was not.
+
+| # | Item | Status |
+| :--- | :--- | :--- |
+| v0.3.0.1 | `thme discover`: list models already on the machine from the Hugging Face cache, Ollama, LM Studio, llama.cpp and any folder (THME-3040) | **Done**: tested on fake folder layouts only |
+| v0.3.0.2 | `thme doctor`: what works on this machine and what to try next (THME-3041) | **Done**: tested on a facts struct; the Studio first-start summary is open (see v0.3.0.7) |
+| v0.3.0.3 | Tokenizer and chat templates: `thme tokenize`, `thme chat-template` (THME-3037) | **Done**: tested on fixtures; no real model template checked |
+| v0.3.0.4 | Studio chat tab on the reference forward pass (THME-3038) | Open |
+| v0.3.0.5 | Model download from the Hugging Face hub with checksum verification and scan on import (THME-3042, part 1) | Open |
+| v0.3.0.6 | Bridges to Ollama, LM Studio and llama.cpp: read their model folders (done by discover), export GGUF they load (checks in THME-2208), documented MCP setup for editors and agents (THME-3042, part 2) | Open |
+| v0.3.0.7 | First-run guide in the Studio: the doctor summary and the discover list on first start | Open |
+| v0.3.0.8 | Notebook and Python bridge: documented JSON output of every command, with a small example | Open |
+| v0.3.0.9 | Install and docs for each background (analyst, engineer, scientist): one-command install, short guides, clean-machine test | Open |
+
+## v0.3.1 and later
+
+v0.3.0 (above) is open now. These later themes open once v0.2.9 converges:
 
 - **Routing and needles** (dossier Appendix P): calibration metrics, routers, hierarchical
   scoring, needle training, routing charts.
