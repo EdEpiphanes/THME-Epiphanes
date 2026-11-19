@@ -5,9 +5,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use tempfile::tempdir;
+use thme::exporter::gguf_check;
 use thme::exporter::safetensors_writer::SafeTensorsWriter;
-use thme::exporter::{ExportConfig, ExportFormat, ExportQuantType, ModelExporter};
+use thme::exporter::{ExportConfig, ExportFormat, ExportQuantType, GgufWriter, ModelExporter};
 use thme::ir::{ModelArchitecture, ModelIR};
+use thme::parser::gguf::GgmlType;
 use thme::parser::SafetensorsScanner;
 
 fn safetensors_source(path: &Path) -> (ModelIR, Vec<u8>) {
@@ -67,6 +69,41 @@ fn run(command: &mut Command, message: &str) {
     assert!(output.status.success(), "{message}");
 }
 
+#[test]
+fn exported_gguf_passes_the_structure_check() {
+    let dir = tempdir().expect("create temporary directory");
+    let path = dir.path().join("structure.gguf");
+    let mut writer = GgufWriter::new();
+    writer.add_string("general.architecture", "llama");
+    writer.add_tensor("token_embd.weight", vec![2, 4], GgmlType::F32, vec![0; 32]);
+    writer.add_tensor(
+        "blk.0.attn_q.weight",
+        vec![1, 32],
+        GgmlType::Q8_0,
+        vec![0; GgmlType::Q8_0.type_size()],
+    );
+    writer.add_tensor(
+        "blk.0.ffn_up.weight",
+        vec![1, 32],
+        GgmlType::Q4_0,
+        vec![0; GgmlType::Q4_0.type_size()],
+    );
+    writer.write_to_file(&path).expect("write GGUF fixture");
+
+    let bytes = std::fs::read(&path).expect("read GGUF fixture back");
+    let findings = gguf_check::check_gguf(&bytes);
+    let listed: Vec<String> = findings.iter().map(ToString::to_string).collect();
+    assert!(
+        !findings
+            .iter()
+            .any(|finding| finding.severity == gguf_check::Severity::Error),
+        "exported GGUF has structure errors: {}",
+        listed.join("; ")
+    );
+}
+
+/// Optional runtime check. It runs only when THME_COMPAT_MODEL, THME_LLAMA_CPP and THME_OLLAMA
+/// are all set. CI never requires it unless it is configured (THME_REQUIRE_RUNTIME_COMPAT=1).
 #[test]
 fn exported_gguf_runs_in_configured_llama_cpp_and_ollama() {
     let required = std::env::var("THME_REQUIRE_RUNTIME_COMPAT").as_deref() == Ok("1");
