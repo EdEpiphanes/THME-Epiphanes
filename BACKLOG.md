@@ -99,6 +99,7 @@ closes it.
 ### [THME-2208] llama.cpp compatibility checks for exported files
 
 - **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.8 · **Priority**: p2 · **Area**: exporter · **Type**: feature · **Status**: ready
+- **Progress** (19 November 2026): `src/exporter/gguf_check.rs` checks the structure of a finished GGUF v3 file (magic, version, counts, alignment, tensor names, dimensions, types, truncation) with 15 tests on synthetic files. Not done: checks of tensor data and metadata keys, and the optional runtime check. The alignment rule (multiple of 8, power of two) was written without the GGUF specification at hand and must be confirmed against it.
 - **Problem**: Exported GGUF files are only re-read by THME itself.
 - **Done means**: The existing optional CI step runs a heterogeneous export through llama.cpp when the runtime is configured.
 
@@ -237,7 +238,8 @@ closes it.
 
 ### [THME-3016] `.epiph`: GPU/CPU placement plan
 
-- **Milestone**: v0.2.6 · **Roadmap**: v0.2.6.7 · **Priority**: p2 · **Area**: engine · **Type**: feature · **Status**: triage
+- **Milestone**: v0.2.6 · **Roadmap**: v0.2.6.7 · **Priority**: p2 · **Area**: engine · **Type**: feature · **Status**: ready
+- **Progress** (19 November 2026): `src/epiph/placement.rs` plans GPU, CPU and streamed tensors from a VRAM and host budget (8 tests, including 200 seeded instances). Not done: the manifest field and `thme epiph pack --placement` / `verify`.
 - **Problem**: Owner asks for files that place their own parameters across GPU and CPU. THME has no GPU backend yet (v0.3).
 - **Done means**: A `placement` section from the exact allocator for a stated memory budget per tier; tested on synthetic budgets; used by the GPU runtime when it exists.
 
@@ -335,13 +337,15 @@ closes it.
 
 ### [THME-3034] Third-party code register
 
-- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: governance · **Type**: chore · **Status**: triage
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: governance · **Type**: chore · **Status**: done
+- **Progress** (19 November 2026): `docs/third-party.md` lists the outside sources the repository already uses (crate licences checked against `cargo metadata`); `scripts/third_party.py --check` runs in CI beside the SPDX check and fails when a file whose header names a non-AGPL licence has no row. Code copied without any header is not detected.
 - **Problem**: Reused algorithms and crates need a record of source, licence and notice. Code under GPL, non-commercial or "do not copy" terms is never copied; the idea is rewritten from the paper.
 - **Done means**: A table in the repository lists every outside source (name, URL, licence read from the LICENSE file, what was reused, notice kept) and CI fails when a copied file lacks its row.
 
 ### [THME-3035] Replace mock and simulated data in the Studio and engine
 
-- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: gui · **Type**: bug · **Status**: triage
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: gui · **Type**: bug · **Status**: ready
+- **Progress** (19 November 2026): Slice 1: `docs/research/studio-heuristics.md` records a verdict for each audit claim (three are stale, two confirmed); seven Studio values (baseline profile and throughput, tuner scorecard) now carry an Estimate or Simulated label, and a test fails when a listed value loses its label (`src/gui/provenance.rs`, 12 tests). Not done: the stats ribbon (energy per token, throughput, traffic, depth) is not labelled yet.
 - **Problem**: The Studio telemetry and baseline figures are heuristic formulas and the micro-trainer, speculative acceptance and token flow are synthetic (see the audit in `docs/research/THME_AUTHENTICITY_AUDIT_AND_ROADMAP.md`, which still needs to be checked line by line). The Studio screenshots show them next to measured numbers.
 - **Done means**: Each such value is either computed from the reference forward pass or carries a visible "simulated" label; a test fails on an unlabelled constant.
 
@@ -365,7 +369,8 @@ closes it.
 
 ### [THME-3039] Animated live-layers figure
 
-- **Milestone**: v0.2.5 · **Roadmap**: v0.2.5.8 · **Priority**: p3 · **Area**: figures · **Type**: feature · **Status**: triage
+- **Milestone**: v0.2.5 · **Roadmap**: v0.2.5.8 · **Priority**: p3 · **Area**: figures · **Type**: feature · **Status**: ready
+- **Progress** (19 November 2026): `thme figure MODEL --gif` also writes a per-layer GIF (one frame per layer, from the real layer structure; 5 tests on the mock model). Not done: a person must look at the rendered figure, because the lit layer is subtle in the light theme.
 - **Problem**: README GIFs of the other Studio tabs came out static (identical frames collapse to one), so only Live 3D is animated. The committed `thme figure MODEL --gif` (`src/report/animate.rs`, `docs/figures/mock_llama-forward.gif`) walks the forward pass tensor by tensor; a per-layer view of the whole transformer stack is not built yet.
 - **Done means**: `thme figure MODEL --gif` shows the layers lighting in turn from the real structure of the model; frames checked by eye; no invented figures.
 
