@@ -81,6 +81,36 @@ pub const LISTED: &[Listed] = &[
         formula: "speedup = 1 / (f_bar * 0.80 + 0.15); storage = stored MB from the tuned layers",
         evidence: Evidence::Estimate,
     },
+    Listed {
+        id: "ribbon-vram",
+        file: "src/gui/app.rs",
+        formula: "stored MB = channel_width^2 * bytes_per_weight * 3 / 2^20, summed over layers",
+        evidence: Evidence::Estimate,
+    },
+    Listed {
+        id: "ribbon-traffic",
+        file: "src/gui/app.rs",
+        formula: "traffic MB = reach_probability * stored MB per layer, summed over layers",
+        evidence: Evidence::Estimate,
+    },
+    Listed {
+        id: "ribbon-depth",
+        file: "src/gui/app.rs",
+        formula: "f_bar = mean reach_probability over layers",
+        evidence: Evidence::Estimate,
+    },
+    Listed {
+        id: "ribbon-energy",
+        file: "src/gui/app.rs",
+        formula: "mJ per token = traffic MB / 1024 * 8 * 15 * 1000",
+        evidence: Evidence::Estimate,
+    },
+    Listed {
+        id: "ribbon-throughput",
+        file: "src/gui/app.rs",
+        formula: "tok/s = 1000 / (f_bar * 38 + 10)",
+        evidence: Evidence::Estimate,
+    },
 ];
 
 const MARKER: &str = "// provenance: ";
