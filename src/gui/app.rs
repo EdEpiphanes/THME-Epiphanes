@@ -12,6 +12,7 @@ use std::path::Path;
 use std::time::Instant;
 
 use super::manga;
+use super::provenance::{self, Evidence};
 use super::theme::{self, GuiTheme, ThemePalette};
 
 // Layer node and model representations
@@ -1181,11 +1182,12 @@ impl THMEApp {
             latencies.push(ms_per_tok / num_layers as f32);
         }
 
-        let gen_text = f!(
+        // provenance: baseline-profile
+        let gen_text = provenance::labelled(f!(
             "{}\n\n[Baseline Architecture Scan & Benchmark]\nArchitecture: {} • {} Layers • Hidden Dim {} • Parameters: {}M.\nExecution profile: {:.1} tok/s | TTFT: {:.1}ms | KV Cache: {:.2} MB.\nReady for Sequential Layer-by-Layer Auto-Tuning.",
             self.baseline_prompt, self.model().architecture, num_layers, hidden, self.model().total_parameters / 1_000_000,
             tokens_per_sec, ttft_ms, kv_cache_mb
-        );
+        ), Evidence::Estimate);
 
         self.baseline_results = Some(BaselineMetrics {
             prompt: self.baseline_prompt.clone(),
@@ -1199,11 +1201,15 @@ impl THMEApp {
             layer_latencies: latencies,
         });
 
-        self.status_msg = f!(
-            "Model scanned: {} layers, {} params. Baseline benchmark: {:.1} tok/s",
-            num_layers,
-            self.model().total_parameters / 1_000_000,
-            tokens_per_sec
+        // provenance: baseline-throughput
+        self.status_msg = provenance::labelled(
+            f!(
+                "Model scanned: {} layers, {} params. Baseline benchmark: {:.1} tok/s",
+                num_layers,
+                self.model().total_parameters / 1_000_000,
+                tokens_per_sec
+            ),
+            Evidence::Estimate,
         );
     }
 
@@ -1297,11 +1303,12 @@ impl THMEApp {
                 });
             let cand_distortion = (cand.alpha * 0.04) + (cand.beta * 0.012) + (cand.gamma * 0.018);
 
-            self.live_tuner_log.push(f!(
+            // provenance: tuner-candidate
+            self.live_tuner_log.push(provenance::labelled(f!(
                 "[Layer {}] Iteration {}/{} testing '{}' ({}%α, {}%β, {}%γ) -> Latency: {:.2}ms, Distortion: {:.4}",
                 l_idx, iter + 1, candidates.len(), cand.name, (cand.alpha*100.0) as u32, (cand.beta*100.0) as u32, (cand.gamma*100.0) as u32,
                 cand_latency, cand_distortion
-            ));
+            ), Evidence::Simulated));
 
             self.current_tune_iteration += 1;
         } else {
@@ -1351,11 +1358,12 @@ impl THMEApp {
             layer.benchmarked_latency_ms = opt_lat;
             layer.estimated_distortion = opt_dist;
 
-            self.live_tuner_log.push(f!(
+            // provenance: tuner-winner
+            self.live_tuner_log.push(provenance::labelled(f!(
                 "--> WINNER LOCKED for Layer {}: {} ({}%α / {}%β / {}%γ) | Latency: {:.2}ms | Storage: {:.2} MB",
                 l_idx, best_mixer, (best_alpha * 100.0) as u32, (best_beta * 100.0) as u32, (best_gamma * 100.0) as u32,
                 opt_lat, layer_size_mb
-            ));
+            ), Evidence::Simulated));
 
             self.audit_trail.push(AuditRow {
                 layer: l_idx,
@@ -1442,18 +1450,24 @@ impl THMEApp {
             energy_savings_percent: 72.0,
         });
 
-        self.status_msg = f!(
+        // provenance: scorecard
+        self.status_msg = provenance::labelled(f!(
             "Auto-Tuning Complete! All {} layers optimized. Final Speedup: {:.2}x, Storage: {:.1} MB",
             num_layers, speedup, total_stored
-        );
-        self.live_tuner_log.push(f!(
+        ), Evidence::Estimate);
+        // provenance: scorecard-log
+        self.live_tuner_log.push(provenance::labelled(f!(
             "[SUCCESS] All {} layers tuned & matched to research paper specification! Speedup: {:.2}x.",
             num_layers, speedup
-        ));
+        ), Evidence::Estimate));
 
+        // provenance: scorecard-checkpoint
         self.create_checkpoint(
             "Sequential Auto-Tuner Complete",
-            &format!("Speedup: {:.2}x, Storage: {:.1} MB", speedup, total_stored),
+            &provenance::labelled(
+                format!("Speedup: {:.2}x, Storage: {:.1} MB", speedup, total_stored),
+                Evidence::Estimate,
+            ),
         );
     }
 }

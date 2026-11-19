@@ -5,8 +5,6 @@
 //! `[simulated]`. Each listed value has a `// provenance: <id>` marker above the statement that
 //! builds its text, and the statement must call [`labelled`] within 12 lines of the marker.
 
-use std::path::Path;
-
 /// How a displayed figure was obtained (see CONTEXT.md).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Evidence {
@@ -40,7 +38,50 @@ pub struct Listed {
 }
 
 /// Every marked value in the Studio. A marker without a row, or a row without a marker, fails.
-pub const LISTED: &[Listed] = &[];
+pub const LISTED: &[Listed] = &[
+    Listed {
+        id: "baseline-profile",
+        file: "src/gui/app.rs",
+        formula: "tok/s = tokens / (TTFT + tokens * ms_per_tok); TTFT and KV cache from prompt length and layer count",
+        evidence: Evidence::Estimate,
+    },
+    Listed {
+        id: "baseline-throughput",
+        file: "src/gui/app.rs",
+        formula: "tok/s = tokens / (TTFT + tokens * ms_per_tok), ms_per_tok = params * 0.5 / (bandwidth from a timer)",
+        evidence: Evidence::Estimate,
+    },
+    Listed {
+        id: "tuner-candidate",
+        file: "src/gui/app.rs",
+        formula: "latency = 3.2 * (bytes_per_weight / 0.5) * mixer factor; distortion = 0.04a + 0.012b + 0.018g",
+        evidence: Evidence::Simulated,
+    },
+    Listed {
+        id: "tuner-winner",
+        file: "src/gui/app.rs",
+        formula: "latency = 1.65 + 0.4 * depth; distortion = 0.008 + 0.004 * depth; storage from channel width and bit shares",
+        evidence: Evidence::Simulated,
+    },
+    Listed {
+        id: "scorecard",
+        file: "src/gui/app.rs",
+        formula: "speedup = 1 / (f_bar * 0.80 + 0.15); storage = stored MB from the tuned layers",
+        evidence: Evidence::Estimate,
+    },
+    Listed {
+        id: "scorecard-log",
+        file: "src/gui/app.rs",
+        formula: "speedup = 1 / (f_bar * 0.80 + 0.15)",
+        evidence: Evidence::Estimate,
+    },
+    Listed {
+        id: "scorecard-checkpoint",
+        file: "src/gui/app.rs",
+        formula: "speedup = 1 / (f_bar * 0.80 + 0.15); storage = stored MB from the tuned layers",
+        evidence: Evidence::Estimate,
+    },
+];
 
 const MARKER: &str = "// provenance: ";
 const WINDOW: usize = 12;
@@ -61,8 +102,10 @@ pub fn check_marker(source: &str, id: &str) -> Result<(), String> {
         _ => return Err(format!("`{id}` marker appears {} times", hits.len())),
     };
     let end = (at + 1 + WINDOW).min(lines.len());
+    // A label that belongs to the next marker's statement does not count for this one.
     let labelled = lines[at + 1..end]
         .iter()
+        .take_while(|line| marker_id(line).is_none())
         .any(|line| line.contains("labelled(") || line.contains(".tag()"));
     if labelled {
         Ok(())
@@ -80,6 +123,7 @@ fn marker_id(line: &str) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
 
     #[test]
     fn labelled_appends_estimate_tag() {
@@ -125,6 +169,13 @@ mod tests {
     fn check_marker_fails_on_duplicate_id() {
         let src = "// provenance: demo\nlet s = labelled(x, Evidence::Estimate);\n// provenance: demo\nlet t = labelled(y, Evidence::Estimate);\n";
         assert!(check_marker(src, "demo").is_err());
+    }
+
+    #[test]
+    fn check_marker_ignores_label_owned_by_next_marker() {
+        let src = "// provenance: a\nlet x = 1;\n// provenance: b\nlet s = labelled(x, Evidence::Estimate);\n";
+        assert!(check_marker(src, "a").is_err());
+        assert!(check_marker(src, "b").is_ok());
     }
 
     #[test]
