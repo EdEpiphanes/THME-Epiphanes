@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use crate::falcon::{FalconPayload, FalconRopSynthesizer};
 use crate::pci::PciDevice;
 use crate::recipes::{CardRecipe, UNLOCK_RATE_FULL_IMLA4, UNLOCK_RATE_FULL_MMA};

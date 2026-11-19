@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use crate::recipes::{find_recipe, find_recipe_with_vram, CardRecipe};
 use serde::Serialize;
 use std::fs;

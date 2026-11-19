@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 use clap::{Parser, Subcommand};
 use neutron_gpu::mdev::MdevManager;
 use neutron_gpu::pci::PciScanner;
