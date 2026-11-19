@@ -4,7 +4,7 @@
 Render the README "Status" board from the repository's own records.
 
 Sources (nothing is typed in by hand):
-  - ROADMAP.md: v0.1.x sub-milestone checkboxes and v0.2.x sub-milestone tables
+  - ROADMAP.md: v0.1.x sub-milestone checkboxes and v0.2.x and v0.3.x sub-milestone tables
   - BACKLOG.md: active tickets (between the backlog:start/end markers) by area and status
   - src/ and tests/: #[test] functions per module
   - docs/benchmarks/*/data/*.json: committed measured reports
@@ -49,19 +49,19 @@ def roadmap_milestones():
         states = ["done" if box == "x" else "open"
                   for box in re.findall(r"^\s*- \[([ x])\] \*\*v0\.1\.%s\.\d\*\*" % number, block, re.M)]
         milestones.append(("v0.1", f"v0.1.{number}", name, states))
-    # v0.2.x: "## v0.2.N — Name" followed by "| v0.2.N.k | ... |" table rows.
-    for match in re.finditer(r"^## v0\.2\.(\d+) — (.+?)(?: \(.*\))?$", text, re.M):
-        number, name = match.group(1), match.group(2).strip()
+    # v0.2.x and v0.3.x: "## v0.N.M — Name" followed by "| v0.N.M.k | ... |" table rows.
+    for match in re.finditer(r"^## v0\.([23])\.(\d+) — (.+?)(?: \(.*\))?$", text, re.M):
+        minor, number, name = match.group(1), match.group(2), match.group(3).strip()
         block = text[match.end():].split("\n## ", 1)[0]
         states = []
-        for row in re.findall(r"^\| v0\.2\.%s\.\d \|.*$" % number, block, re.M):
+        for row in re.findall(r"^\| v0\.%s\.%s\.\d \|.*$" % (minor, number), block, re.M):
             if "**Done**" in row:
                 states.append("done")
             elif "Implemented" in row or "in progress" in row.lower():
                 states.append("progress")
             else:
                 states.append("open")
-        milestones.append(("v0.2", f"v0.2.{number}", name, states))
+        milestones.append((f"v0.{minor}", f"v0.{minor}.{number}", name, states))
     return milestones
 
 
@@ -226,6 +226,7 @@ def build(theme_name, data):
     svg = Svg(width, t)
     v01 = [m for m in milestones if m[0] == "v0.1"]
     v02 = [m for m in milestones if m[0] == "v0.2"]
+    v03 = [m for m in milestones if m[0] == "v0.3"]
     subs = [s for m in milestones for s in m[3]]
     done_subs = sum(s == "done" for s in subs)
     done_ms = sum(1 for m in milestones if m[3] and all(s == "done" for s in m[3]))
@@ -256,6 +257,11 @@ def build(theme_name, data):
     total02 = sum(len(m[3]) for m in v02)
     svg.text(24, y + 22, f"v0.2 series: {done02}/{total02} sub-milestones (measured core and beyond)", size=14, weight=700)
     y = milestone_grid(svg, 24, y + 34, v02, 5, pw, 108)
+
+    done03 = sum(s == "done" for m in v03 for s in m[3])
+    total03 = sum(len(m[3]) for m in v03)
+    svg.text(24, y + 22, f"v0.3 series: {done03}/{total03} sub-milestones (plug and play workspace)", size=14, weight=700)
+    y = milestone_grid(svg, 24, y + 34, v03, 5, pw, 108)
 
     col_w = (width - 48 - 24) / 2
     top = y + 14
