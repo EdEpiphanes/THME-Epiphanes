@@ -7,8 +7,10 @@ project-wide model and `LICENSES/anatomy-MIT.txt` for the anatomy figure kit's f
 text. Code under GPL, non-commercial or "do not copy" terms is never copied: the idea is
 rewritten from the paper. Tracked files whose header names a non-AGPL licence must have a
 row here (enforced by `scripts/third_party.py --check`).
-> Note: `THIRD_PARTY_LICENSES.html` in release archives is generated from
-> `about.hbs` + `cargo about generate`, and covers the crates below.
+
+`THIRD_PARTY_LICENSES.html` in release archives is generated from `about.hbs` and
+`cargo about generate`, and covers the crates below. The crate licences below were checked
+against `cargo metadata` on 19 November 2026.
 
 | Name | URL | Licence | What was reused | Notice kept | Files |
 | :--- | :--- | :--- | :--- | :--- | :--- |

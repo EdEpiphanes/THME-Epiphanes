@@ -7,6 +7,7 @@
 Checks that every tracked source file whose header names a non-AGPL licence has a row in
 docs/third-party.md (backticked tokens in the Files column).
 """
+import re
 import subprocess
 import sys
 
@@ -52,7 +53,13 @@ def notice_expression(first_lines):
 
 def listed_paths(doc_text):
     """Return the set of backticked tokens in the register document."""
-    return set(__import__("re").findall(r"`([^`]+)`", doc_text))
+    return set(re.findall(r"`([^`]+)`", doc_text))
+
+
+def missing_rows(notices, doc_text):
+    """Return the noticed paths that have no row in the register document."""
+    listed = listed_paths(doc_text)
+    return [p for p in notices if p not in listed]
 
 
 def _self_test():
@@ -65,15 +72,18 @@ def _self_test():
     assert notice_expression(["// SPDX-License-Identifier: AGPL-3.0-only"]) is None
     assert notice_expression(["fn main() {}"]) is None
     assert listed_paths(
-        "| a | b | c | d | e | `src/x.rs`, `y.css` |)"
+        "| a | b | c | d | e | `src/x.rs`, `y.css` |"
     ) == {"src/x.rs", "y.css"}
+    # The failing path: a noticed file with no row is reported, a listed one is not.
+    assert missing_rows(["src/x.rs", "z.rs"], "`src/x.rs`") == ["z.rs"]
+    assert missing_rows(["src/x.rs"], "`src/x.rs`") == []
     print("ok")
 
 
 def check():
     notices = []
-    for path, ext in tracked():
-        with open(path, encoding="utf-8", newline="") as f:
+    for path, _ in tracked():
+        with open(path, encoding="utf-8", errors="replace", newline="") as f:
             text = f.read()
         body = text.lstrip("﻿")
         lines = body.split("\n")[:3]
@@ -86,8 +96,7 @@ def check():
     except FileNotFoundError:
         print("::error file=docs/third-party.md::docs/third-party.md not found")
         return 1
-    listed = listed_paths(doc)
-    missing = [p for p in notices if p not in listed]
+    missing = missing_rows(notices, doc)
     if missing:
         for path in missing:
             print(
