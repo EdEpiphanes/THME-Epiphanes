@@ -141,7 +141,8 @@ pub fn execute(args: SpeculateArgs) -> Result<()> {
                     "accepted_branch_tokens": acc,
                     "tree_acceptance_rate": rate
                 })
-            })
+            }),
+            "provenance": provenance_block()
         });
         println!("{}", serde_json::to_string_pretty(&report_obj)?);
     } else {
@@ -155,11 +156,7 @@ pub fn execute(args: SpeculateArgs) -> Result<()> {
 
         if let Some((total, path_len, acc, rate)) = tree_info {
             println!("------------------------------------------------------------");
-            println!("Tree-Based Speculation (Medusa/Eagle Multi-Branch Topology):");
-            println!("- Total Tree Candidate Nodes : {}", total);
-            println!("- Longest Accepted Path Nodes: {}", path_len);
-            println!("- Accepted Branch Tokens     : {}", acc);
-            println!("- Tree Acceptance Rate       : {:.1}%", rate * 100.0);
+            println!("{}", tree_block(total, path_len, acc, rate));
         }
 
         let (opt_gamma, opt_s) = SpeculativeEngine::find_optimal_horizon(
@@ -167,12 +164,69 @@ pub fn execute(args: SpeculateArgs) -> Result<()> {
             synthesis_report.latency_cost_ratio,
         );
         println!("------------------------------------------------------------");
-        println!(
-            "Optimal Lookahead Recommendation: gamma = {} tokens (Estimated Speedup: {:.2}x)",
-            opt_gamma, opt_s
-        );
+        println!("{}", optimal_horizon_line(opt_gamma, opt_s));
         println!("============================================================");
     }
 
     Ok(())
+}
+
+/// Tree speculation block for the CLI report; its draws are simulated.
+fn tree_block(total: usize, path_len: usize, acc: usize, rate: f64) -> String {
+    // provenance: spec-cli-tree
+    let sim = crate::gui::provenance::Evidence::Simulated.tag();
+    format!(
+        "Tree-Based Speculation (Medusa/Eagle Multi-Branch Topology):\n\
+        - Total Tree Candidate Nodes : {total}\n\
+        - Longest Accepted Path Nodes: {path_len} {sim}\n\
+        - Accepted Branch Tokens     : {acc} {sim}\n\
+        - Tree Acceptance Rate       : {:.1}% {sim}",
+        rate * 100.0
+    )
+}
+
+/// Optimal horizon line; its speedup comes from a simulated run.
+fn optimal_horizon_line(gamma: usize, speedup: f64) -> String {
+    // provenance: spec-cli-optimal
+    let sim = crate::gui::provenance::Evidence::Simulated.tag();
+    format!(
+        "Optimal Lookahead Recommendation: gamma = {gamma} tokens (Estimated Speedup: {speedup:.2}x {sim})"
+    )
+}
+
+/// Provenance keys for the JSON report: the three simulated parts.
+fn provenance_block() -> serde_json::Value {
+    // provenance: spec-cli-json
+    let sim = crate::gui::provenance::Evidence::Simulated.tag();
+    serde_json::json!({
+        "telemetry": sim,
+        "tree_speculation": sim,
+        "optimal_horizon": sim
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cli_tree_block_is_labelled_simulated() {
+        let text = tree_block(6, 2, 1, 0.25);
+        assert!(text.contains("Tree Acceptance Rate       : 25.0% [simulated]"));
+        assert!(text.contains("[simulated]"));
+    }
+
+    #[test]
+    fn cli_optimal_line_is_labelled_simulated() {
+        let text = optimal_horizon_line(3, 1.5);
+        assert!(text.contains("(Estimated Speedup: 1.50x [simulated])"));
+    }
+
+    #[test]
+    fn cli_json_provenance_is_labelled_simulated() {
+        let block = provenance_block();
+        assert_eq!(block["telemetry"], "[simulated]");
+        assert_eq!(block["tree_speculation"], "[simulated]");
+        assert_eq!(block["optimal_horizon"], "[simulated]");
+    }
 }

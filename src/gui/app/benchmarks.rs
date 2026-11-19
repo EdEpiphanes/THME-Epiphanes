@@ -224,6 +224,12 @@ impl THMEApp {
         manga::glass_frame(&p, p.accent)
             .inner_margin(egui::Margin::same(12))
             .show(ui, |ui| {
+                // provenance: spec-studio-values
+                let tag = if self.spec_simulated {
+                    crate::gui::provenance::Evidence::Simulated.tag()
+                } else {
+                    crate::gui::provenance::Evidence::Demo.tag()
+                };
                 ui.horizontal(|ui| {
                     ui.label(
                         egui::RichText::new("SPECULATIVE DECODING & MULTI-TOKEN DRAFT SYNTHESIZER (v0.1.6)")
@@ -234,7 +240,7 @@ impl THMEApp {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.label(
                             egui::RichText::new(format!(
-                                "Estimated Speedup: {:.2}x | Acc: {:.1}%",
+                                "Estimated Speedup: {:.2}x {tag} | Acc: {:.1}% {tag}",
                                 self.spec_speedup_val, self.spec_acceptance_val
                             ))
                             .strong()
@@ -252,10 +258,10 @@ impl THMEApp {
 
                 ui.add_space(8.0);
                 ui.columns(4, |sub| {
-                    render_stat_box(&mut sub[0], "SPEEDUP MULTIPLIER", format!("{:.2}x", self.spec_speedup_val), p.success, &p);
-                    render_stat_box(&mut sub[1], "ACCEPTANCE RATE (α)", format!("{:.1}%", self.spec_acceptance_val), p.primary, &p);
-                    render_stat_box(&mut sub[2], "TOKENS / TARGET PASS", format!("{:.2}", self.spec_tokens_per_pass), p.secondary, &p);
-                    render_stat_box(&mut sub[3], "MEMORY TRAFFIC SAVED", format!("{:.1}%", self.spec_traffic_savings), p.warning, &p);
+                    render_stat_box(&mut sub[0], "SPEEDUP MULTIPLIER", format!("{:.2}x {tag}", self.spec_speedup_val), p.success, &p);
+                    render_stat_box(&mut sub[1], "ACCEPTANCE RATE (α)", format!("{:.1}% {tag}", self.spec_acceptance_val), p.primary, &p);
+                    render_stat_box(&mut sub[2], "TOKENS / TARGET PASS", format!("{:.2} {tag}", self.spec_tokens_per_pass), p.secondary, &p);
+                    render_stat_box(&mut sub[3], "MEMORY TRAFFIC SAVED", format!("{:.1}% {tag}", self.spec_traffic_savings), p.warning, &p);
                 });
 
                 ui.add_space(8.0);
@@ -307,19 +313,22 @@ impl THMEApp {
                             self.spec_acceptance_val = tel.mean_acceptance_rate * 100.0;
                             self.spec_tokens_per_pass = tel.mean_tokens_per_pass;
                             self.spec_traffic_savings = tel.memory_traffic_savings_pct;
+                            self.spec_simulated = true;
 
                             let (opt_g, opt_s) = crate::speculative::SpeculativeEngine::find_optimal_horizon(0.82, synth_rep.latency_cost_ratio);
 
+                            // provenance: spec-studio-report
+                            let sim_report = crate::gui::provenance::Evidence::Simulated.tag();
                             let tree_str = if self.spec_use_tree {
                                 let tree = crate::speculative::SpeculativeTreeTopology::build_canonical(&[3, 2, 1]);
                                 let (_, acc, rate) = tree.evaluate_tree_acceptance(0.82);
-                                format!("\n- Multi-Branch Tree Speculation: {} candidate nodes, {} accepted tokens ({:.1}% branch acc)", tree.total_nodes, acc, rate * 100.0)
+                                format!("\n- Multi-Branch Tree Speculation: {} candidate nodes, {} accepted tokens {sim_report} ({:.1}% branch acc {sim_report})", tree.total_nodes, acc, rate * 100.0)
                             } else {
                                 String::new()
                             };
 
                             let summary = format!(
-                                "{}\n------------------------------------------------------------\n{}\n- Optimal Horizon: gamma = {} (Est. Speedup: {:.2}x){}",
+                                "{}\n------------------------------------------------------------\n{}\n- Optimal Horizon: gamma = {} (Est. Speedup: {:.2}x {sim_report}){}",
                                 synth_rep.format_summary(),
                                 tel.format_summary(),
                                 opt_g,
@@ -328,8 +337,10 @@ impl THMEApp {
                             );
                             let m_name = self.model().name.clone();
                             self.spec_last_report = Some(summary);
-                            self.log_audit("BENCHMARK", "SpeculationSimulated", &format!("Speculative speedup: {:.2}x at gamma={}", tel.effective_speedup_multiplier, self.spec_lookahead_horizon), &m_name);
-                            self.status_msg = format!("Speculative simulation evaluated: {:.2}x effective speedup!", tel.effective_speedup_multiplier);
+                            // provenance: spec-studio-status
+                            let sim_status = crate::gui::provenance::Evidence::Simulated.tag();
+                            self.log_audit("BENCHMARK", "SpeculationSimulated", &format!("Speculative speedup: {:.2}x at gamma={} {sim_status}", tel.effective_speedup_multiplier, self.spec_lookahead_horizon), &m_name);
+                            self.status_msg = format!("Speculative simulation evaluated: {:.2}x effective speedup! {sim_status}", tel.effective_speedup_multiplier);
                         }
                     }
 

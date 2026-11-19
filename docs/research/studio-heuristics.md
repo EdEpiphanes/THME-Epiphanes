@@ -1,6 +1,6 @@
 # Studio heuristic values: audit and labelling plan
 
-Status: THME-3035, step A (docs only). Checked against the code on this branch.
+Status: THME-3035, step A (docs) and slice 3 (speculative and demo labels, section 3b). Checked against the code on this branch.
 Source claims: `docs/research/THME_AUTHENTICITY_AUDIT_AND_ROADMAP.md`, section 3.
 
 Vocabulary (CONTEXT.md): **Estimate** = a figure from a stated formula, never from a run.
@@ -17,9 +17,11 @@ code does not exist).
 | A | `src/profiling/token_flow.rs:296-327` | Generated words in the Live Token Flow tab | With a caller vocabulary: index = `(seed + 19 * generated) % vocab.len()`. Without one: prompt words cycled by `step % prompt_len`. | A fixed 20-word array indexed by modulo | stale: no 20-word array exists. The vocabulary comes from the caller (`with_vocabulary`, `src/gui/app/benchmarks.rs`). Modulo cycling remains in the fallback path. | Simulated | no |
 | B | `src/gui/app.rs:1137-1200` (`auto_scan_and_benchmark`) | Baseline tok/s, TTFT, KV cache, energy | The `42.0 + 1.8L ms` and `28.0 + 1.1L ms` forms are gone. Now a micro-benchmark timing gives `base_ns_per_param`; `est_hw_bw_gbps` (l.1169), `ms_per_tok` (l.1170), `ttft_ms` (l.1171), `tokens_per_sec` (l.1173), `kv_cache_mb` (l.1175), `energy_mj` (l.1177). | Linear telemetry formulas in `app.rs` | stale: the linear form is not in the code. The values are still formulas, not measurements: they depend on a timer over sample weights, then fixed scale factors. | Estimate | yes (group `baseline-*`) |
 | C | `src/trainer/mod.rs:147-200` | Micro-trainer loss and weights | Forward input uses `sin`/`cos` positional features of token ids (l.163). Gradients are analytic: `dW = dLogits * X^T` (l.249-254), then AdamW-style moments (l.276-280). | Sine wave used as a surrogate gradient | stale: the sine is an input feature, not the gradient. The gradient is analytic. | none (backend, not in slice 1) | no |
-| D | `src/speculative/engine.rs:166-186` | Acceptance rate, speedup | Accept test uses `u = ((step+1)*73 + (token_pos+1)*31) % 100 / 100` (l.171, 179, 186) against the acceptance ratio. | Deterministic pseudo-random hash instead of joint forward verification | confirmed (lines moved from 160-175). The draw is still a hash, not a verification. | Simulated (backend, not in slice 1) | no |
-| E1 | `src/gui/app.rs:177` (in `create_synthetic`, l.147) | `benchmarked_latency_ms` of the demo model | constant `2.8` | GUI demo constant 2.8 | confirmed | Estimate ("Est. Latency" tooltip exists, `src/gui/theme.rs:542`) | no |
-| E2 | `src/gui/app.rs:392` (in `from_model_ir`, l.361) | `benchmarked_latency_ms` of a loaded model | constant `3.2` | GUI demo constant 3.2 | confirmed | none beyond the theme tooltip | no |
+| D | `src/speculative/engine.rs:166-186` | Acceptance rate, speedup, tokens emitted, tokens/pass, traffic saved | Accept test uses `u = ((step+1)*73 + (token_pos+1)*31) % 100 / 100` (l.171, 179, 186) against the acceptance ratio. | Deterministic pseudo-random hash instead of joint forward verification | confirmed (lines moved from 160-175). The draw is still a hash, not a verification. | Simulated: `spec-telemetry` (`format_summary`), `spec-mcp`, `spec-studio-*`, `spec-cli-*` | slice 3 |
+| D2 | `src/speculative/tree.rs:162-163` (`evaluate_tree_acceptance`) | Tree acceptance rate, accepted tokens, best path length | Per node draw `((node_idx+1)*47 + step*29) % 100 / 100` against `confidence * fidelity`. Same kind of hash as D. | not in audit (new) | not in audit (new). The `find_optimal_horizon` search also runs `simulate_speculative_run`, so its speedup inherits D. | Simulated: `spec-cli-tree`, `spec-cli-optimal`, `spec-studio-report` | slice 3 |
+| E1 | `src/gui/app.rs:178` (in `create_synthetic`, l.147) | `benchmarked_latency_ms` of the demo model, shown as "Est. Latency" | constant `2.8` | GUI demo constant 2.8 | confirmed | Demo for untuned layers (`layer-latency`, `src/gui/theme.rs`); tuned layers show Simulated | slice 3 |
+| E2 | `src/gui/app.rs:393` (in `from_model_ir`, l.361) | `benchmarked_latency_ms` of a loaded model, shown as "Est. Latency" | constant `3.2` | GUI demo constant 3.2 | confirmed | Demo (`layer-latency`), as E1 | slice 3 |
+| E3 | `src/gui/app.rs:874-877` (struct init) | Speculative stat boxes and header before the first run: `2.14x`, `78.5%`, `3.92`, `64.2%` | hard-coded demo defaults | not in audit (new) | new. Shown before any run. | Demo until the first run, then Simulated (`spec-studio-values`, state flag `spec_simulated`) | slice 3 |
 
 ## 2. Other Studio values from a formula or constant
 
@@ -31,14 +33,14 @@ code does not exist).
 | F4 | `src/gui/app.rs:472-500` (`compute_costs`) | Stats ribbon: VRAM, traffic/token, depth, energy/token, throughput | `joules = traffic_MB/1024 * 8 * 15`; `throughput = 1000 / (f_bar*38 + 10)` | not in audit | not in audit (new) | Estimate (slice 2; PARAMETERS is a count, left unlabelled) | In slice 1 = yes (slice 2): `ribbon-vram`, `ribbon-traffic`, `ribbon-depth`, `ribbon-energy`, `ribbon-throughput` |
 | F5 | `src/gui/app/benchmarks.rs:96-102` | Live simulator stats (tok/s, TTFT, KV, bandwidth) | from the `LiveFlowSimulator` snapshot | Simulated source | inherits A | none | no |
 | F6 | `src/gui/app/benchmarks.rs:188-191` | Depth, traffic, energy, est. throughput | same formulas as F4 | not in audit | not in audit | "EST." on one box only | no |
-| F7 | `src/gui/app/benchmarks.rs:255-258` | Speculative speedup, acceptance, tokens/pass, traffic saved | from `SpeculativeEngine` telemetry | Simulated (D) | inherits D | none | no |
+| F7 | `src/gui/app/benchmarks.rs:255-258` | Speculative speedup, acceptance, tokens/pass, traffic saved | from `SpeculativeEngine` telemetry | Simulated (D) | inherits D | Simulated or Demo (E3), slice 3 | slice 3 |
 | F8 | `src/gui/app/benchmarks.rs:444-447`, `:533` | Roofline ceilings, bandwidth, knee, bound split, est. latency | hardware DB constants and roofline formulas (`src/profiling/roofline.rs`, `hardware.rs`) | not in audit | not checked in depth | none | no |
 | F9 | `src/gui/app/matrix_engine.rs:320-321` | BYOA compression ratio and hardware speedup | `16.0 / bits` | not in audit | not in audit | none | no |
 | F10 | `src/gui/app/dashboard.rs:100` | KV cache (dashboard) | from the `LiveFlowSimulator` snapshot | Simulated source | inherits A | none | no |
 | F11 | `src/gui/app/surgery_export.rs:254` | "EST. SPEEDUP" box | `diff.estimated_speedup` | not in audit | not in audit | partial ("EST." in the title) | no |
 | F12 | `src/gui/app/co_surgery.rs:25` | Co-Surgery perplexity figures | analytic proxy | not in audit | already labelled | "SIMULATED" | no |
 | F13 | `src/gui/app/dev_lab.rs:712-750` | Training live telemetry (tok/s, mJ) | from live training stats | not in audit | not checked in depth | none | no |
-| F14 | `src/gui/theme.rs:542` | Layer tooltip "Est. Latency" | reads `benchmarked_latency_ms` (E1, E2) | not in audit | confirmed; the values are demo constants | "Est. Latency" | no |
+| F14 | `src/gui/theme.rs:542` | Layer tooltip "Est. Latency" | reads `benchmarked_latency_ms` (E1, E2) | not in audit | confirmed; the values are demo constants | "Demo" or "Simulated" tag, slice 3 | slice 3 |
 
 ## 3. Slice 1 (labelled in THME-3035 step C)
 
@@ -56,11 +58,34 @@ code does not exist).
 Evidence: baseline values and the scorecard are `Estimate` (formulas). Tuner candidate and winner
 are `Simulated` (fixed candidate list and fixed latency model).
 
+## 3b. Slice 3 (labelled in THME-3035, step D; no number or algorithm changed)
+
+1. Speculative telemetry (D): `spec-telemetry` in `format_summary` (emitted tokens, acceptance,
+   tokens per pass, speedup, traffic saved). Every CLI, MCP and Studio report that prints this
+   summary carries the label.
+2. CLI `thme speculate` (D, D2): `spec-cli-tree` (tree path, accepted tokens, rate),
+   `spec-cli-optimal` (optimal gamma speedup, from `find_optimal_horizon`, which runs the same
+   simulation) and `spec-cli-json` (a `provenance` key in the JSON report). The text is built by
+   `tree_block`, `optimal_horizon_line` and `provenance_block`, tested in `src/cli/speculate.rs`.
+   The text "Est." is kept, but it now also says the value is simulated.
+3. MCP `speculate` tool (D): `spec-mcp` (acceptance, tokens per pass, speedup, traffic, optimal
+   speedup). Tested in `src/cli/mcp.rs`.
+4. Studio speculative panel (D, E3): `spec-studio-values` (header and four stat boxes; Demo until
+   the first run, then Simulated), `spec-studio-report` (optimal line and tree block in the
+   report), `spec-studio-status` (audit log and status line).
+5. Layer tooltip "Est. Latency" (E1, E2): `layer-latency` in `src/gui/theme.rs`. Tag is Demo for
+   untuned layers, Simulated for tuned layers (their latency comes from the tuner-winner formula).
+
+Not done in this slice: the constants themselves (2.8, 3.2, 2.14, 78.5, 3.92, 64.2) are still
+in place, and the acceptance draw is still a hash. Both are behaviour changes, so they wait for
+the follow-up tickets below.
+
 ## 4. Follow-up tickets (proposed; BACKLOG.md not edited here)
 
 - Label the stats ribbon (F4) and the Benchmarks tab boxes (F6, F8) as Estimate or Simulated.
-- Label the speculative stat boxes (F7) and live simulator values (F5, F10) as Simulated.
-- Remove the two demo latency constants (E1, E2) or label them as demo values.
-- Replace the speculative pseudo-random accept draw (D) with a joint forward verification.
+- Label the live simulator values (F5, F10) as Simulated.
+- Replace the demo latency constants (E1, E2) and the speculative demo defaults (E3) with computed
+  values, or remove them.
+- Replace the speculative pseudo-random accept draw (D, D2) with a joint forward verification.
 - Confirm the trainer's sine encoding (C) is documented as an input feature map, not a gradient.
 - Label or remove the unused `Scorecard` fields and the baseline energy and per-token values.
