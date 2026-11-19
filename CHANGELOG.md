@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - v0.2.0 Measured Core
 
+### Added
+- **Gemma / MedGemma Reference Forward Pass (`src/inference/gemma.rs`)**: Reference causal forward pass for the Gemma3/MedGemma architecture (not yet compared with the Hugging Face reference; the real-model test is skipped unless a model file is present): embedding scaling by `sqrt(hidden_size)` (approx 50.5964), Grouped Query Attention (8 Q heads, 4 KV heads, head_dim 256), per-head QK-RMSNorm, dual residual layernorms (post-attention and post-FFW), GeGLU feedforward activation (`gelu_approx`), and tied embedding readout.
+- **GGUF Layer Indexing & Role Classification (`src/ir/tensor.rs`)**: Robust `blk.{i}` layer indexing and GGUF tensor role classification for attention, feedforward, normalization, and embeddings.
+- **K-Quant & IQ-Quant Weight Profiling (`src/profiling/weight_stats.rs`)**: Real statistical profiling for `Q4_K`, `Q5_K`, `Q6_K`, and `IQ4_XS` quantized tensors.
+- **CodeGPT MCP Service Real Binding (`src/cli/mcp.rs`)**: Connected `thme_auto_decide` and `thme_apply_surgery` to active model IR, fixed `thme_validate_quality` format string bug, and added end-to-end integration test suite in `tests/test_mcp.rs`.
+
+### Changed
+- **Dependencies**: eframe/egui 0.31 to 0.37, wgpu 30, sysinfo 0.40; the Studio capture, tooltip, panel and style calls follow the new APIs. `deny.toml` no longer ignores RUSTSEC-2026-0194 and RUSTSEC-2026-0195; `cargo deny check` passes.
+- **Workspace**: `Cargo.toml` is now a workspace; its only extra member is `crates/neutron-gpu` (PCI and GPU recipe discovery, used by the profiler).
+- **GPTQ rounding (`src/transform/gptq.rs`)**: rewritten to the reference algorithm (per-group scale fitting, inverse-Hessian Cholesky, damping with retry); supports `Q4_0` and `Q8_0`. Tested on synthetic matrices; not measured on a real model.
+
+### Fixed
+- The Studio no longer loads a model from a developer-machine path at startup (set `THME_MODEL` to load one).
+- Hessian-proxy test values were wrong; recomputed by hand.
+
+### Removed
+- `agent-hub/` and 18 unrelated `neutron-*` crates are no longer part of this repository.
+
 ### License
 - **THME is now dual-licensed: AGPL-3.0-only or a commercial license from Epiphanes**
   ([LICENSING.md](LICENSING.md)). Source obtained before 2026-11-13, up to and including commit

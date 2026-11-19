@@ -22,6 +22,7 @@ closes it.
 
 - **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: dependencies · **Type**: chore · **Status**: ready
 - **Problem**: eframe 0.31 pulls quick-xml 0.30 (two advisories, ignored in deny.toml with this ticket) and several unmaintained transitive crates.
+- **Progress** (19 November 2026): eframe and egui upgraded to 0.37; the two `ignore` entries are gone from deny.toml and `cargo deny check` passes; fmt, clippy and tests are green. Still open: all Studio tabs recaptured and visually checked (a recording on 19 November showed the Live 3D capture crop no longer fits the new layout).
 - **Done means**: eframe upgraded; the two `ignore` entries removed from deny.toml; `cargo deny check` passes; all Studio tabs recaptured and visually checked.
 
 ### [THME-2003] Split src/gui/app.rs into tab modules
@@ -80,6 +81,7 @@ closes it.
 
 - **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.5 · **Priority**: p2 · **Area**: byoa · **Type**: feature · **Status**: ready
 - **Problem**: Error compensation across columns is the strongest known post-training method.
+- **Progress** (19 November 2026): `thme.gptq_q4_0` and `thme.gptq_q8_0` follow the reference algorithm (scales fitted per 32-column group, Cholesky of the inverse Hessian, damping with retry). Tested on synthetic matrices: output error below plain rounding, result exactly on the exporter grid. Not measured on a real model; K-quants not supported yet.
 - **Done means**: Implemented as a BYOA rule using calibration activations; measured against THME-2204.
 
 ### [THME-2206] Measure Hadamard rotation on real models
@@ -273,6 +275,7 @@ closes it.
 ### [THME-3022] Scanner: more formats and compressed pickles
 
 - **Milestone**: v0.2.7 · **Roadmap**: v0.2.7.2 · **Priority**: p2 · **Area**: security · **Type**: feature · **Status**: ready
+- **Progress**: deflate pickles, NumPy object arrays, oversize pickles, Keras and ONNX are done and tested; legacy HDF5 `.h5` files are flagged as not inspected.
 - **Problem**: Legacy HDF5 `.h5` Keras files are still not inspected.
 - **Done means**: Each format added with fixtures; compressed pickles inspected with a pure-Rust inflate dependency proposed first.
 
@@ -329,6 +332,42 @@ closes it.
 - **Milestone**: v0.2.2 · **Roadmap**: none · **Priority**: p1 · **Area**: research · **Type**: chore · **Status**: blocked
 - **Problem**: Until 13 November 2026, f32-to-f16 conversion lost the rounding carry for values just below a power of two, so about 1 in 2,000 Q8_0, Q4_0 and TQ1_0 block scales (and FP16 values) were stored at half their size. Committed reports were measured with that code.
 - **Done means**: The verification, precision-sweep and depth-probe reports for both models are re-run with the fixed code and committed; the dossier caveat is removed. Blocked while model runs are paused.
+
+### [THME-3034] Third-party code register
+
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: governance · **Type**: chore · **Status**: triage
+- **Problem**: Reused algorithms and crates need a record of source, licence and notice. Code under GPL, non-commercial or "do not copy" terms is never copied; the idea is rewritten from the paper.
+- **Done means**: A table in the repository lists every outside source (name, URL, licence read from the LICENSE file, what was reused, notice kept) and CI fails when a copied file lacks its row.
+
+### [THME-3035] Replace mock and simulated data in the Studio and engine
+
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: gui · **Type**: bug · **Status**: triage
+- **Problem**: The Studio telemetry and baseline figures are heuristic formulas and the micro-trainer, speculative acceptance and token flow are synthetic (see the audit in `docs/research/THME_AUTHENTICITY_AUDIT_AND_ROADMAP.md`, which still needs to be checked line by line). The Studio screenshots show them next to measured numbers.
+- **Done means**: Each such value is either computed from the reference forward pass or carries a visible "simulated" label; a test fails on an unlabelled constant.
+
+### [THME-3036] LoRA training with a real backward pass
+
+- **Milestone**: v0.2.3 · **Roadmap**: v0.2.3.1 · **Priority**: p2 · **Area**: trainer · **Type**: feature · **Status**: triage
+- **Problem**: THME has no backward pass, so it cannot fine-tune; the current trainer is synthetic.
+- **Done means**: Hand-written CPU backward for the LLaMA and Gemma blocks, checked against finite differences, then LoRA adapters with AdamW on a tiny model. Written from the published formulas (permissive references only); a heavy training framework is not added.
+
+### [THME-3037] Tokenizer and chat templates
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: THME cannot encode text or apply a chat template, so it cannot chat with a model or run text benchmarks itself.
+- **Done means**: Encode and decode through a permissively licensed tokenizer crate and render `chat_template` with a template engine, each proposed with its licence and binary-size cost first; round trips tested on committed fixtures.
+
+### [THME-3038] Studio chat tab
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p3 · **Area**: gui · **Type**: feature · **Status**: triage
+- **Problem**: Users cannot talk to or test a loaded model inside the Studio.
+- **Done means**: A tab that sends a prompt through the reference forward pass and shows the reply, labelled with the measured speed. Depends on THME-3037.
+
+### [THME-3039] Animated live-layers figure
+
+- **Milestone**: v0.2.5 · **Roadmap**: v0.2.5.8 · **Priority**: p3 · **Area**: figures · **Type**: feature · **Status**: triage
+- **Problem**: README GIFs of the other Studio tabs came out static (identical frames collapse to one), so only Live 3D is animated. An animation of a forward pass walking through the transformer layers is wanted; the earlier draft was never committed and could not be found.
+- **Done means**: `thme figure MODEL --gif` shows the layers lighting in turn from the real structure of the model; frames checked by eye; no invented figures.
 
 <!-- backlog:end -->
 
@@ -952,16 +991,17 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Production Pipeline / CI/CD Impact**: Enables high-performance NVIDIA GPU execution without requiring Python or PyTorch installed.
 - **Done Means**: `cargo test test_cuda_driver_backend` initializes CUDA context and executes vector-add kernel on available NVIDIA GPU.
 
-### [THME-1003] Vulkan 1.3 SPIR-V Compute Pipeline Backend
+### [THME-1003] Vulkan 1.3 SPIR-V / WGSL Compute Pipeline Backend
 
-- **Component**: `thme::hardware::vulkan` (`src/hardware/vulkan.rs`)
-- **Problem**: Cross-platform GPU execution across Linux, Windows, and AMD/Intel GPUs requires standard Vulkan compute shaders.
+- **Component**: `thme::inference::gpu` (`src/inference/gpu/`)
+- **Problem**: Cross-platform GPU execution across Linux, Windows, and AMD/Intel/NVIDIA GPUs requires standard Vulkan compute shaders with fused quantized GEMV kernels.
 - **Acceptance Criteria**:
-  - Initialize Vulkan 1.3 compute instance and device queue via `ash`.
-  - Load embedded SPIR-V shader modules for matrix multiplication and activation layers.
-  - Manage descriptor sets, storage buffers, and pipeline execution barriers.
-- **Production Pipeline / CI/CD Impact**: Delivers zero-dependency GPU acceleration on non-NVIDIA hardware in standard CI testbeds.
-- **Done Means**: `cargo test test_vulkan_compute_backend` successfully runs matrix multiply on Vulkan compute device.
+  - Initialize Vulkan compute device via WGPU backend with Ada Lovelace / NVIDIA hardware recipe resolution via `neutron-gpu`.
+  - Compile and dispatch WGSL compute shaders for GEMV and fused dequantization (`gemv_f32`, `gemv_q4_k`, `gemv_q5_k`, `gemv_iq4_xs`).
+  - Manage dynamic staging buffers, parameter uniforms, and graceful CPU fallback for oversized vocab projection matrices.
+- **Production Pipeline / CI/CD Impact**: Delivers zero-dependency pure-Rust GPU acceleration on host hardware with automated CPU SIMD parity verification.
+- **Done Means**: `cargo test --test test_gpu_acceleration` passes 100% on host GPU with numerical parity matching CPU reference outputs within $10^{-3}$ tolerance.
+- **Status**: implemented; `cargo test --test test_gpu_acceleration` (8 tests) passes on one machine with an NVIDIA GeForce RTX 4060 Ti over Vulkan, 19 November 2026. No committed report yet, and no speed figure is claimed.
 
 ### [THME-1004] Apple Metal 3 Performance Shaders Backend
 
