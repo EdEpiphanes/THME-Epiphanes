@@ -365,7 +365,8 @@ closes it.
 
 ### [THME-3038] Studio chat tab
 
-- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p3 · **Area**: gui · **Type**: feature · **Status**: triage
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p3 · **Area**: gui · **Type**: feature · **Status**: ready
+- **Progress** (19 November 2026): the Studio has a Chat tab. `src/chat.rs` renders the model's own chat template, encodes, and decodes greedily on a background thread with Cancel, a max-new-tokens slider and a status line (tokens, seconds, tokens per second, labelled Measured on this machine). A banner says replies come from the slow CPU reference forward pass, and that the mock model's text is meaningless. 9 tests on the mock model with a fixture tokenizer. Not done: the live window was never opened, so layout and look are unchecked by eye; there is no KV cache, so long replies are slow; chat needs a model loaded from a file (the synthetic demo model has no folder). No real model was used.
 - **Problem**: Users cannot talk to or test a loaded model inside the Studio.
 - **Done means**: A tab that sends a prompt through the reference forward pass and shows the reply, labelled with the measured speed. Depends on THME-3037.
 
