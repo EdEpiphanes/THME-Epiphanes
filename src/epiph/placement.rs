@@ -35,6 +35,29 @@ pub struct Budget {
     pub host_bytes: u64,
 }
 
+impl Budget {
+    /// "8192:32768" -> VRAM 8192 MiB, host RAM 32768 MiB (bytes = MiB * 1_048_576, checked).
+    pub fn parse_mib(text: &str) -> Result<Budget> {
+        let mib = |part: &str| {
+            part.parse::<u64>()
+                .ok()
+                .and_then(|n| n.checked_mul(1 << 20))
+        };
+        text.split_once(':')
+            .and_then(|(vram, host)| {
+                Some(Budget {
+                    vram_bytes: mib(vram)?,
+                    host_bytes: mib(host)?,
+                })
+            })
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "budget '{text}' is not VRAM_MIB:HOST_MIB (two whole numbers of MiB, such as 8192:32768)"
+                )
+            })
+    }
+}
+
 /// One tensor's tier, size and the reason for that tier.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Placed {
@@ -338,5 +361,29 @@ mod tests {
         assert!(json.contains("\"tier\":\"cpu\""));
         assert!(json.contains("\"tier\":\"stream\""));
         assert_eq!(serde_json::from_str::<Placement>(&json).unwrap(), p);
+    }
+
+    #[test]
+    fn parse_mib_reads_vram_and_host_in_mib() {
+        assert_eq!(
+            Budget::parse_mib("8192:32768").unwrap(),
+            budget(8192 * 1_048_576, 32768 * 1_048_576)
+        );
+        assert_eq!(Budget::parse_mib("0:0").unwrap(), budget(0, 0));
+    }
+
+    #[test]
+    fn parse_mib_refuses_bad_text_without_panicking() {
+        for text in [
+            "",
+            "5",
+            "1:2:3",
+            "a:1",
+            "-1:1",
+            "1:",
+            "18446744073709551615:1",
+        ] {
+            assert!(Budget::parse_mib(text).is_err(), "{text:?}");
+        }
     }
 }
