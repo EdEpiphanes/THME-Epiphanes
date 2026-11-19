@@ -332,6 +332,7 @@ closes it.
 ### [THME-3023] Re-measure reports affected by the FP16 rounding fix
 
 - **Milestone**: v0.2.2 · **Roadmap**: none · **Priority**: p1 · **Area**: research · **Type**: chore · **Status**: blocked
+- **Progress** (19 November 2026): the stale committed reports, charts and dossier were removed instead of re-run for now; results will be re-measured and published with their method.
 - **Problem**: Until 13 November 2026, f32-to-f16 conversion lost the rounding carry for values just below a power of two, so about 1 in 2,000 Q8_0, Q4_0 and TQ1_0 block scales (and FP16 values) were stored at half their size. Committed reports were measured with that code.
 - **Done means**: The verification, precision-sweep and depth-probe reports for both models are re-run with the fixed code and committed; the dossier caveat is removed. Blocked while model runs are paused.
 

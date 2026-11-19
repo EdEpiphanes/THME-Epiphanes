@@ -238,7 +238,7 @@ user-facing path.
 | v0.2.0.1 | Reference CPU forward pass: LLaMA family and GPT-NeoX (`src/inference/`) | **Done**: measured on SmolLM-135M and Pythia-14M |
 | v0.2.0.2 | WikiText-2 tokenization with provenance and hashes (`scripts/prepare_eval_tokens.py`) | **Done** |
 | v0.2.0.3 | Measured quality gate: source vs exported GGUF vs recipe (`examples/production_verification.rs`) | **Done** |
-| v0.2.0.4 | Dossier and charts generated only from reports (`scripts/generate_dossier.py`, `scripts/generate_charts.py`) | **Done** |
+| v0.2.0.4 | Dossier and charts generated only from reports (`scripts/generate_dossier.py`, `scripts/generate_charts.py`) | **Done** (reports removed 19 November 2026, to be re-measured) |
 | v0.2.0.5 | Measured experiments: precision sweep with random-placement control, depth probe | **Done** |
 | v0.2.0.6 | Cross-check the forward pass against the Hugging Face reference (logit agreement on fixed prompts) | Open; paused while no new model runs are being made |
 | v0.2.0.7 | Retire the analytic proxy from `thme validate`, the MCP quality tool and the co-surgery loop; route them through the measured gate | **Done**: `thme validate --report` gates measured reports; `thme co-surgery MODEL --tokens` scores candidates with the forward pass (`QualityEvaluator`, `MeasuredEvaluator`); supplied-value and proxy paths are labelled, including the Studio Co-Surgery tab |

@@ -1,10 +1,10 @@
 # THME Subsystem Reference
 
 > **Evidence notice.** This document describes what each subsystem is designed to do.
-> Unless a figure links to the [benchmark dossier](benchmark_dossier.md), it is a
+> Unless a figure is backed by a committed report (none are committed right now), it is a
 > design target, a nominal bit-width calculation, or the output of an analytic model.
 > It is **not a measurement**.
-> Measured results live in the dossier and are summarised in the [README](../README.md).
+> Measured results are being re-run; the [README](../README.md#measurements) says how they will be published.
 > Real Studio screenshots are in [`assets/screenshots/`](../assets/screenshots/).
 
 ---
