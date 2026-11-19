@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Dependencies**: eframe/egui 0.31 to 0.37, wgpu 30, sysinfo 0.40; the Studio capture, tooltip, panel and style calls follow the new APIs. `deny.toml` no longer ignores RUSTSEC-2026-0194 and RUSTSEC-2026-0195; `cargo deny check` passes.
+- **Minimum Rust version** is now 1.95 (was 1.89), because eframe/egui 0.37 and sysinfo 0.40 require it; the pinned toolchain stays 1.100.0.
 - **Workspace**: `Cargo.toml` is now a workspace; its only extra member is `crates/neutron-gpu` (PCI and GPU recipe discovery, used by the profiler).
 - **GPTQ rounding (`src/transform/gptq.rs`)**: rewritten to the reference algorithm (per-group scale fitting, inverse-Hessian Cholesky, damping with retry); supports `Q4_0` and `Q8_0`. Tested on synthetic matrices; not measured on a real model.
 

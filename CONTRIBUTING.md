@@ -25,7 +25,7 @@ All contributors and maintainers are expected to follow our [Code of Conduct](CO
 
 ## Development Setup
 
-1. Install the Rust toolchain (version >= 1.89 required):
+1. Install the Rust toolchain (version >= 1.95 required):
    ```bash
    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
    ```

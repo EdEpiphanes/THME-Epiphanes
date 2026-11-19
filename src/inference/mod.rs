@@ -6,7 +6,7 @@
 //! implementation favours clarity and determinism over throughput: it is a
 //! correctness reference for the quality gate, not a serving runtime.
 
-// `as_chunks` needs Rust 1.88; kept for readability; the minimum toolchain (1.89) also has s_chunks.
+// `as_chunks` needs Rust 1.88; kept for readability; the minimum toolchain (1.95) also has s_chunks.
 #![allow(clippy::chunks_exact_to_as_chunks)]
 
 pub mod arch;
