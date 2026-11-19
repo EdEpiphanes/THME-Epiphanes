@@ -46,7 +46,7 @@ committed to the repository; generate them locally and open them.
 
 | File | What it shows | Frames |
 | :--- | :--- | :--- |
-| `<stem>-forward.gif` | Light card. Each tensor lights up in forward-pass order as ink glass with a black ink splash. | 4 per tensor; a model with more than 120 tensors lights consecutive tensors together so the GIF has at most 120 frames |
+| `<stem>-forward.gif` | Light card. Each tensor lights up in forward-pass order as ink glass with a black ink splash. | Up to 4 per tensor, fewer for a bigger model (the 30-tensor mock gets 4 each, the 76-tensor Pythia-14M gets 1); never more than 120 in total. Only a model with more tensors than frames lights consecutive tensors together |
 | `<stem>-forward-dark.gif` | Dark card (Manga Night). The same pass, with a blood-red splash: a deep red core (`#C8102E`), a near-black red edge (`#3A0610`) and a few small red droplets. | As above |
 | `<stem>-layers.gif` | Light card. One frame per layer: every tensor of that layer is lit as glass, the rest fade, and one black splash sits under the lit layer. | One per layer, 0.4 s each |
 | `<stem>-layers-dark.gif` | Dark card, with the red splash. | One per layer |
