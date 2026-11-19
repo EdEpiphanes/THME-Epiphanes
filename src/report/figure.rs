@@ -48,6 +48,10 @@ const LAYER_GLASS_PHASE: f64 = 0.5;
 const LAYER_SPLASH_PHASE: f64 = 0.7;
 /// Opacity of the tensors outside the lit layer in a layers frame.
 const CALM_OPACITY: &str = "0.45";
+/// Flow arrows: half-width of the shaft, half-width of the head, and the head's length.
+const ARROW_SHAFT: f64 = 0.55;
+const ARROW_HALF: f64 = 2.4;
+const ARROW_HEAD: f64 = 4.2;
 /// Scale of the core of a two-tone splash inside its outer edge.
 const CORE_SCALE: f64 = 0.72;
 /// Droplets drawn on a two-tone splash.
@@ -416,7 +420,10 @@ fn plate_svg(
         "<g transform=\"translate({} {})\">{}</g>",
         margin + pad,
         margin + top,
-        inline_styles(body, &pal)
+        match theme {
+            Theme::Light => brand_greys(&inline_styles(body, &pal)),
+            Theme::Dark => inline_styles(body, &pal),
+        }
     );
     for (i, line) in plate.caption.iter().enumerate() {
         s += &label(
@@ -431,6 +438,26 @@ fn plate_svg(
     }
     s.push_str("</svg>\n");
     s
+}
+
+/// The light body's kit greys, one step toward the brand paper and grey tones (the kit's light
+/// palette is read from `assets/iso.css`, which this layer does not change). Lowercase kit hex
+/// only, so the card's own uppercase colours and the glass are untouched.
+fn brand_greys(markup: &str) -> String {
+    const MAP: [(&str, &str); 10] = [
+        ("#dcdcd9", "#BDBDBA"),
+        ("#e5e5e2", "#CFCFCC"),
+        ("#ededea", "#DEDEDB"),
+        ("#f4f4f1", "#EAEAE7"),
+        ("#eeeeeb", "#E1E1DE"),
+        ("#ffffff", "#F6F6F4"),
+        ("#b4b4b8", "#A3A3A3"),
+        ("#8a8a8f", "#7A7A7A"),
+        ("#d4d4d6", "#C8C8C8"),
+        ("#26262a", "#0B0B0B"),
+    ];
+    MAP.iter()
+        .fold(markup.to_string(), |s, (from, to)| s.replace(from, to))
 }
 
 /// Phase and glass colours of one lit block.
@@ -589,19 +616,26 @@ fn scene_with(
     }
 
     // Flow arrows: from the back edge of each step across the bench to the front of the next.
+    // Each arrow is a filled shaft with a broad head, drawn in the outline ink so it reads at
+    // README width. The shaft runs back from the tip (the next step's front edge).
     for pair in lay.trays.windows(2) {
         let (a, b) = (&pair[0].plan, &pair[1].plan);
         let z = BENCH_H + 0.3;
-        let (start, tip) = ((0.0, a.y - 2.0, z), (0.0, b.y + b.d + 2.0, z));
-        let wings = [(tip.0 - 1.6, tip.1 + 2.6, z), (tip.0 + 1.6, tip.1 + 2.6, z)];
-        let d = format!(
-            "{}{}",
-            path_of(&[iso(start, &p), iso(tip, &p)], false),
-            path_of(&[iso(wings[0], &p), iso(tip, &p), iso(wings[1], &p)], false)
-        );
+        let (tail, tip) = (a.y - 2.0, b.y + b.d + 2.0);
+        let head = tip + ARROW_HEAD;
+        let outline = [
+            (-ARROW_SHAFT, tail),
+            (ARROW_SHAFT, tail),
+            (ARROW_SHAFT, head),
+            (ARROW_HALF, head),
+            (0.0, tip),
+            (-ARROW_HALF, head),
+            (-ARROW_SHAFT, head),
+        ];
+        let pts: Vec<Flat> = outline.iter().map(|&(x, y)| iso((x, y, z), &p)).collect();
         s.add(
-            depth_of((0.0, (a.y + b.y + b.d) / 2.0, z), &p),
-            line_svg(&d, Tone::Hi),
+            depth_of((0.0, (tail + tip) / 2.0, z), &p),
+            format!("<path fill=\"{}\" d=\"{}\"/>", m.outline, path_of(&pts, true)),
         );
     }
 
@@ -732,19 +766,21 @@ pub fn forward_order(model: &ModelIR) -> Vec<usize> {
     idx
 }
 
-/// The forward-pass animation frames. Up to [`FORWARD_MAX_FRAMES`] tensors, every tensor gets
-/// [`FORWARD_STEPS`] frames. A model with more tensors lights consecutive tensors together, in
-/// forward order, with as many frames per run as the cap allows, so the GIF stays under the cap.
+/// The forward-pass animation frames, at most [`FORWARD_MAX_FRAMES`] in total. Each tensor gets
+/// up to [`FORWARD_STEPS`] frames, fewer for a bigger model (never below one). Only when there
+/// are more tensors than frames do consecutive tensors light together, in forward order.
 pub fn forward_steps(model: &ModelIR) -> Vec<Highlight> {
     let order = forward_order(model);
     let mut out = Vec::new();
     if order.len() <= FORWARD_MAX_FRAMES {
+        // As many frames per tensor as the cap allows: at most FORWARD_STEPS, never below 1.
+        let per = (FORWARD_MAX_FRAMES / order.len().max(1)).clamp(1, FORWARD_STEPS);
         for &active in &order {
-            for step in 0..FORWARD_STEPS {
+            for step in 0..per {
                 out.push(Highlight {
                     active,
                     lit: vec![active],
-                    phase: (step as f64 + 0.5) / FORWARD_STEPS as f64,
+                    phase: (step as f64 + 0.5) / per as f64,
                 });
             }
         }
@@ -1376,8 +1412,11 @@ mod tests {
     fn forward_frames_for_76_tensors_are_unchanged_in_count() {
         let m = with_tensors(&mock(), 76);
         let steps = forward_steps(&m);
-        assert_eq!(steps.len(), 76 * FORWARD_STEPS);
+        assert!(steps.len() <= FORWARD_MAX_FRAMES, "{} frames", steps.len());
+        assert_eq!(steps.len(), 76, "one frame per tensor");
         assert!(steps.iter().all(|h| h.lit.len() == 1));
+        let actives: Vec<usize> = steps.iter().map(|h| h.active).collect();
+        assert_eq!(actives, forward_order(&m), "forward order");
     }
 
     #[test]
