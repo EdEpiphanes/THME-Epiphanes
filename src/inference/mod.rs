@@ -21,7 +21,7 @@ pub mod probe;
 pub mod smoothing;
 pub mod weights;
 
-pub use arch::{ArchConfig, CausalLm};
+pub use arch::{load_reference_model, ArchConfig, CausalLm};
 pub use calibration::{collect_calibration, CalibrationFile, TensorCalibration};
 pub use evaluator::MeasuredEvaluator;
 pub use gemma::{GemmaConfig, GemmaModel};

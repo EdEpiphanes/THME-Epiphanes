@@ -358,14 +358,15 @@ closes it.
 
 ### [THME-3037] Tokenizer and chat templates
 
-- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: feature · **Status**: done
+- **Milestone**: v0.3.0 · **Roadmap**: v0.3.0.3 · **Priority**: p2 · **Area**: inference · **Type**: feature · **Status**: done
 - **Progress** (19 November 2026): `thme tokenize MODEL_DIR TEXT` and `thme chat-template MODEL_DIR --messages FILE` encode, decode and render a model's own chat template (string or named-list form, bos/eos tokens, `raise_exception` errors). New direct crates, all Apache-2.0 and pure Rust: `tokenizers` 0.22.2 (no onig, no C++), `minijinja` 3.1.0 and `minijinja-contrib` 3.1.0. 15 tests on fixtures built in the test; no real Hugging Face model or real Llama or Mistral template was used. The release CLI grew to about 12.5 MiB, so the CLI limit was raised from 10 MiB to 16 MiB (owner decision, 19 November 2026).
 - **Problem**: THME cannot encode text or apply a chat template, so it cannot chat with a model or run text benchmarks itself.
 - **Done means**: Encode and decode through a permissively licensed tokenizer crate and render `chat_template` with a template engine, each proposed with its licence and binary-size cost first; round trips tested on committed fixtures.
 
 ### [THME-3038] Studio chat tab
 
-- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p3 · **Area**: gui · **Type**: feature · **Status**: triage
+- **Milestone**: v0.3.0 · **Roadmap**: v0.3.0.4 · **Priority**: p3 · **Area**: gui · **Type**: feature · **Status**: ready
+- **Progress** (19 November 2026): the Studio has a Chat tab. `src/chat.rs` renders the model's own chat template, encodes, and decodes greedily on a background thread with Cancel, a max-new-tokens slider and a status line (tokens, seconds, tokens per second, labelled Measured on this machine). A banner says replies come from the slow CPU reference forward pass, and that the mock model's text is meaningless. 9 tests on the mock model with a fixture tokenizer. Not done: the live window was never opened, so layout and look are unchecked by eye; there is no KV cache, so long replies are slow; chat needs a model loaded from a file (the synthetic demo model has no folder). No real model was used.
 - **Problem**: Users cannot talk to or test a loaded model inside the Studio.
 - **Done means**: A tab that sends a prompt through the reference forward pass and shows the reply, labelled with the measured speed. Depends on THME-3037.
 
@@ -379,20 +380,20 @@ closes it.
 
 ### [THME-3040] `thme discover`: find the models already on this machine
 
-- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p1 · **Area**: onboarding · **Type**: feature · **Status**: ready
+- **Milestone**: v0.3.0 · **Roadmap**: v0.3.0.1 · **Priority**: p1 · **Area**: onboarding · **Type**: feature · **Status**: ready
 - **Problem**: A new user should not have to move files to start. Models already sit in the Hugging Face cache, Ollama, LM Studio and llama.cpp folders.
 - **Done means**: A read-only command lists the models found in those places (name, tool, format, size, path) and accepts extra folders; tested on fake folder layouts built in a temporary directory; no network and no writes.
 
 ### [THME-3041] `thme doctor` and a guided first run
 
-- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: onboarding · **Type**: feature · **Status**: done
+- **Milestone**: v0.3.0 · **Roadmap**: v0.3.0.2 · **Priority**: p2 · **Area**: onboarding · **Type**: feature · **Status**: done
 - **Progress** (19 November 2026): `thme doctor [--json]` reports operating system, memory, disk, CPU threads, GPU adapters found through wgpu and the models `thme discover` finds, each marked checked or assumed, then prints a short Next list. 9 tests on a `HostFacts` struct, none depending on this machine. Not done: the Studio first-start summary.
 - **Problem**: People come from different backgrounds and tools. They need one command that says what works on their machine and what to do next.
 - **Done means**: `thme doctor` reports operating system, memory, disk, GPU adapter found through wgpu, and the models `thme discover` finds, then prints the next command to try. The Studio shows the same summary on first start. Every line states what was checked and what was only assumed.
 
 ### [THME-3042] Bridges to the tools people already use
 
-- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: onboarding · **Type**: feature · **Status**: triage
+- **Milestone**: v0.3.0 · **Roadmap**: v0.3.0.5 · **Priority**: p2 · **Area**: onboarding · **Type**: feature · **Status**: triage
 - **Problem**: Analysts, engineers and scientists start from notebooks, Ollama, LM Studio, llama.cpp or Hugging Face. THME should read what they have and write what they can use.
 - **Done means**: Download from the Hugging Face hub through a permissively licensed client crate (licence and binary-size cost proposed first); export GGUF that llama.cpp and Ollama load (already tested for structure by THME-2208); a documented MCP setup for editors and agents. Each bridge lists what was tested and what was not.
 

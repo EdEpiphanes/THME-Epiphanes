@@ -96,9 +96,12 @@ so it reads what you already have instead of asking you to move files.
 - **Talk to it from your editor or agent.** `thme mcp` runs a stdio server that other tools can drive.
 - **One window.** The Studio shows the same models, and the numbers it can only estimate say so.
 
+- **Chat in the Studio.** The Chat tab talks to a loaded model through THME's own CPU forward pass, with the model's chat
+  template, and shows the measured speed. It is slow by design (no KV cache yet) and has not been tried on a real
+  model.
 - **Text in, text out.** `thme tokenize` encodes and decodes text with a model's own `tokenizer.json`, and
   `thme chat-template` renders the model's own chat template from a messages file. Tested on fixtures; a
-  chat tab in the Studio is planned (THME-3038).
+  the Studio's Chat tab builds on them.
 - **Know your machine.** `thme doctor` says what works here (system, memory, disk, GPU adapter, the models
   found) and what to try next. It marks each fact as checked or assumed.
 
@@ -348,6 +351,7 @@ flowchart LR
 | **v0.2.7 Security and trust** (in progress) | Scanner, permission record, supply chain; sandbox reserved for the commercial version | Every import scans first; untrusted code is never run |
 | v0.2.8 Quality gate and benchmarks | Versioned gate, benchmark harness, statistics, charts | A task file runs to a result with an interval and a three-state verdict |
 | v0.2.9 Translation layer and convergence | Operation graph, exact symmetries, compatibility reports | Every v0.2 exit criterion met or deferred with a reason |
+| **v0.3.0 Plug and play workspace** (in progress) | Models found on the machine, a doctor command, tokenizer and chat templates, then one Studio place to chat, test and tweak | A new user finds their models and runs a first chat without moving files |
 
 Full plan with sub-milestones: **[ROADMAP.md](ROADMAP.md)** · Tickets: **[BACKLOG.md](BACKLOG.md)**
 
