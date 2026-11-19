@@ -12,6 +12,8 @@ pub enum Evidence {
     Estimate,
     /// A figure from a toy or synthetic simulation.
     Simulated,
+    /// A hard-coded placeholder value, not computed from anything.
+    Demo,
 }
 
 impl Evidence {
@@ -20,6 +22,7 @@ impl Evidence {
         match self {
             Evidence::Estimate => "[estimate]",
             Evidence::Simulated => "[simulated]",
+            Evidence::Demo => "[demo]",
         }
     }
 }
@@ -111,6 +114,60 @@ pub const LISTED: &[Listed] = &[
         formula: "tok/s = 1000 / (f_bar * 38 + 10)",
         evidence: Evidence::Estimate,
     },
+    Listed {
+        id: "spec-telemetry",
+        file: "src/speculative/engine.rs",
+        formula: "accept draw u = ((step+1)*73 + (pos+1)*31) % 100 / 100 against the acceptance ratio; alpha, emitted, tokens per pass, speedup and traffic from that run",
+        evidence: Evidence::Simulated,
+    },
+    Listed {
+        id: "spec-cli-tree",
+        file: "src/cli/speculate.rs",
+        formula: "tree accept draw per node: ((node+1)*47 + step*29) % 100 / 100 against confidence * fidelity",
+        evidence: Evidence::Simulated,
+    },
+    Listed {
+        id: "spec-cli-optimal",
+        file: "src/cli/speculate.rs",
+        formula: "optimal gamma and speedup: simulate_speculative_run for gamma 1..=12",
+        evidence: Evidence::Simulated,
+    },
+    Listed {
+        id: "spec-cli-json",
+        file: "src/cli/speculate.rs",
+        formula: "provenance keys for the telemetry, tree and optimal horizon values in the JSON report",
+        evidence: Evidence::Simulated,
+    },
+    Listed {
+        id: "spec-mcp",
+        file: "src/cli/mcp.rs",
+        formula: "acceptance, tokens per pass, speedup and traffic from the speculative run; optimal horizon speedup from the same run",
+        evidence: Evidence::Simulated,
+    },
+    Listed {
+        id: "spec-studio-values",
+        file: "src/gui/app/benchmarks.rs",
+        formula: "Simulated after a run; before the first run the defaults 2.14x, 78.5%, 3.92 and 64.2% are Demo constants (app.rs)",
+        evidence: Evidence::Simulated,
+    },
+    Listed {
+        id: "spec-studio-report",
+        file: "src/gui/app/benchmarks.rs",
+        formula: "optimal horizon speedup and tree branch acceptance from the run",
+        evidence: Evidence::Simulated,
+    },
+    Listed {
+        id: "spec-studio-status",
+        file: "src/gui/app/benchmarks.rs",
+        formula: "effective speedup from the run, in the status line and the audit log",
+        evidence: Evidence::Simulated,
+    },
+    Listed {
+        id: "layer-latency",
+        file: "src/gui/theme.rs",
+        formula: "benchmarked_latency_ms: demo constant 2.8 (create_synthetic) or 3.2 (from_model_ir); tuned layers take the tuner-winner formula",
+        evidence: Evidence::Demo,
+    },
 ];
 
 const MARKER: &str = "// provenance: ";
@@ -169,6 +226,11 @@ mod tests {
             labelled(String::from("3.20 ms"), Evidence::Simulated),
             "3.20 ms [simulated]"
         );
+    }
+
+    #[test]
+    fn labelled_appends_demo_tag() {
+        assert_eq!(labelled("2.80 ms", Evidence::Demo), "2.80 ms [demo]");
     }
 
     #[test]
@@ -232,7 +294,7 @@ mod tests {
 
     #[test]
     fn every_marker_is_listed() {
-        let dirs = ["src/gui", "src/gui/app"];
+        let dirs = ["src/gui", "src/gui/app", "src/cli", "src/speculative"];
         for dir in dirs {
             let base = Path::new(env!("CARGO_MANIFEST_DIR")).join(dir);
             for entry in std::fs::read_dir(&base).expect("read gui dir") {

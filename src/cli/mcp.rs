@@ -1141,16 +1141,18 @@ fn tool_simulate_speculative_decoding(
         synth_report.latency_cost_ratio,
     );
 
+    // provenance: spec-mcp
+    let sim = crate::gui::provenance::Evidence::Simulated.tag();
     Ok(format!(
         "### Speculative Decoding Simulation Completed\n\
         - **Target Model**: `{}` ({} layers, {} params)\n\
         - **Synthesized Draft**: `{}` ({} layers, {} params, {:.1}% size reduction)\n\
         - **Lookahead Horizon (gamma)**: {} tokens\n\
-        - **Mean Acceptance Rate (alpha)**: {:.1}%\n\
-        - **Tokens Generated per Target Pass**: {:.2}\n\
-        - **Effective Wall-Clock Speedup**: **{:.2}x**\n\
-        - **Memory Bandwidth Reduction**: {:.1}%\n\
-        - **Optimal Horizon Recommendation**: gamma = {} (Est. Speedup: {:.2}x)",
+        - **Mean Acceptance Rate (alpha)**: {:.1}% {sim}\n\
+        - **Tokens Generated per Target Pass**: {:.2} {sim}\n\
+        - **Effective Wall-Clock Speedup**: **{:.2}x** {sim}\n\
+        - **Memory Bandwidth Reduction**: {:.1}% {sim}\n\
+        - **Optimal Horizon Recommendation**: gamma = {} (Est. Speedup: {:.2}x {sim})",
         target_model.name,
         target_model.num_layers,
         target_model.num_parameters,
@@ -1385,4 +1387,20 @@ fn tool_forward_pass(
         "logits": slice,
     }))
     .unwrap_or_default())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn speculative_tool_labels_simulated_values() {
+        let mut active = None;
+        let text = tool_simulate_speculative_decoding(&json!({}), &mut active)
+            .expect("speculative tool runs on the synthetic baseline");
+        assert!(text.contains("**Mean Acceptance Rate (alpha)**: "));
+        assert!(text.contains("[simulated]"));
+        assert!(text.contains("(Est. Speedup: "));
+        assert!(text.contains("x [simulated])"));
+    }
 }

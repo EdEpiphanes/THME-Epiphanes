@@ -726,6 +726,8 @@ pub struct THMEApp {
     spec_acceptance_val: f64,
     spec_tokens_per_pass: f64,
     spec_traffic_savings: f64,
+    /// False until a speculative run replaces the demo defaults below.
+    spec_simulated: bool,
 
     // Roofline & Micro-Kernel Profiler State (v0.1.7)
     roofline_hardware_idx: usize,
@@ -875,6 +877,7 @@ impl THMEApp {
             spec_acceptance_val: 78.5,
             spec_tokens_per_pass: 3.92,
             spec_traffic_savings: 64.2,
+            spec_simulated: false,
 
             // Roofline & Micro-Kernel Profiler State (v0.1.7)
             roofline_hardware_idx: 0,
