@@ -35,8 +35,8 @@ jobs:
             exit 1
           fi
 
-      - name: SPDX licence header on every source file
-        run: python3 scripts/spdx.py --check
+      - name: Third-party notice has a row in the register
+        run: python3 scripts/third_party.py --check
 
       - name: Claim register matches its JSON
         run: python3 scripts/claim_register.py --check
