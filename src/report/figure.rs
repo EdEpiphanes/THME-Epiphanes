@@ -179,10 +179,12 @@ pub fn model_figure_svg(model: &ModelIR, theme: Theme) -> String {
 }
 
 fn scene(model: &ModelIR) -> String {
-    scene_with(model, None)
+    scene_with(model, None, None)
 }
 
-fn scene_with(model: &ModelIR, highlight: Option<&Highlight>) -> String {
+/// `lit_layer` lights every tensor of one layer (the layers animation); it overrides the
+/// highlight and the largest-tensor accent.
+fn scene_with(model: &ModelIR, highlight: Option<&Highlight>, lit_layer: Option<usize>) -> String {
     let (blocks, trays, base, _) = layout(model);
     let p = fit(&blocks, &base);
     let mut s = Scene::new();
@@ -298,9 +300,10 @@ fn scene_with(model: &ModelIR, highlight: Option<&Highlight>) -> String {
             } else {
                 0.0
             };
-        let lit = match active {
-            Some(a) => std::ptr::eq(a, b.tensor),
-            None => !lit_done && b.tensor.byte_size == largest,
+        let lit = match (lit_layer, active) {
+            (Some(l), _) => b.tensor.layer_index == Some(l),
+            (None, Some(a)) => std::ptr::eq(a, b.tensor),
+            (None, None) => !lit_done && b.tensor.byte_size == largest,
         };
         lit_done |= lit;
         let solid = slab_of(&b.plan, z, b.height, &p, 4, (b.plan.w * 0.04).min(0.6));
@@ -588,7 +591,51 @@ pub fn model_figure_frame(model: &ModelIR, theme: Theme, highlight: &Highlight) 
         W,
         H,
         &format!("{} forward pass", model.name),
-        &scene_with(model, Some(highlight)),
+        &scene_with(model, Some(highlight), None),
+        &card,
+        theme,
+    )
+}
+
+/// The layer indices that occur among the model's tensors, sorted (the real structure, not
+/// `num_layers`).
+pub fn layer_indices(model: &ModelIR) -> Vec<usize> {
+    let set: std::collections::BTreeSet<usize> =
+        model.tensors.iter().filter_map(|t| t.layer_index).collect();
+    set.into_iter().collect()
+}
+
+/// One layers-animation frame on its card: every tensor of layer `layer` is lit, and the
+/// readout names the layer with its tensor count and stored bytes.
+pub fn model_figure_layer_frame(model: &ModelIR, theme: Theme, layer: usize) -> String {
+    let members = || {
+        model
+            .tensors
+            .iter()
+            .filter(|t| t.layer_index == Some(layer))
+    };
+    let bytes: usize = members().map(|t| t.byte_size).sum();
+    let card = Card {
+        fig: "Fig 3".into(),
+        title: format!("{} layers", model.name),
+        hint: "Layers".into(),
+        readout: format!(
+            "Layer {} of {} \u{b7} {} tensors \u{b7} {}",
+            layer,
+            layer_indices(model).len(),
+            members().count(),
+            human_bytes(bytes)
+        ),
+        caption: vec![
+            "Each frame lights one layer in turn: every tensor of that layer, read from the model's".into(),
+            "real layer structure. Block sizes follow stored bytes and measured bits per weight, as in Fig 1.".into(),
+        ],
+    };
+    card_svg(
+        W,
+        H,
+        &format!("{} layers in turn", model.name),
+        &scene_with(model, None, Some(layer)),
         &card,
         theme,
     )
@@ -756,5 +803,54 @@ mod tests {
         }
         let svg = model_figure_svg(&m, Theme::Dark);
         assert!(svg.contains("Fig 1") && svg.contains("tensors \u{b7}"));
+    }
+
+    #[test]
+    fn layer_indices_are_the_real_layers() {
+        let m = mock();
+        assert_eq!(layer_indices(&m), (0..m.num_layers).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn each_layer_frame_lights_exactly_its_tensors() {
+        let m = mock();
+        let count = layer_indices(&m).len();
+        for l in layer_indices(&m) {
+            let members: Vec<&TensorIR> = m
+                .tensors
+                .iter()
+                .filter(|t| t.layer_index == Some(l))
+                .collect();
+            let raw = scene_with(&m, None, Some(l));
+            assert_eq!(
+                raw.matches("data-lit=\"\"").count(),
+                members.len(),
+                "layer {l}"
+            );
+            let bytes: usize = members.iter().map(|t| t.byte_size).sum();
+            let frame = model_figure_layer_frame(&m, Theme::Light, l);
+            assert!(
+                frame.contains(&format!("Layer {l} of {count}")),
+                "layer {l}"
+            );
+            assert!(frame.contains(&human_bytes(bytes)), "layer {l} bytes");
+        }
+    }
+
+    #[test]
+    fn layer_frames_differ_only_in_the_lit_layer() {
+        let m = mock();
+        let (a, b) = (scene_with(&m, None, Some(0)), scene_with(&m, None, Some(1)));
+        assert_eq!(
+            a.matches("class=\"iso-solid\"").count(),
+            b.matches("class=\"iso-solid\"").count()
+        );
+        assert_eq!(a.matches("<path").count(), b.matches("<path").count());
+        assert_ne!(a, b);
+        assert_eq!(
+            model_figure_layer_frame(&m, Theme::Dark, 1),
+            model_figure_layer_frame(&m, Theme::Dark, 1),
+            "deterministic"
+        );
     }
 }

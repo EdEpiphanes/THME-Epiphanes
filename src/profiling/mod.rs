@@ -5,6 +5,7 @@ pub mod intensity;
 pub mod kv_cache;
 pub mod roofline;
 pub mod sensitivity;
+pub mod telemetry;
 pub mod thermal;
 pub mod token_flow;
 pub mod weight_stats;
@@ -24,6 +25,9 @@ pub use roofline::{
     RooflineReport,
 };
 pub use sensitivity::{LayerSensitivityReport, SensitivityProfiler};
+pub use telemetry::{
+    CpuTelemetry, GpuTelemetry, SystemTelemetry, SystemTelemetrySnapshot, TelemetryError,
+};
 pub use thermal::{DynamicThermalModel, ThermalConfig, ThermalModel, ThermalStepReport};
 pub use token_flow::{LiveFlowSimulator, LiveFlowSnapshot, TokenFlowStatus, TransformerStage};
 pub use weight_stats::WeightAnalyzer;

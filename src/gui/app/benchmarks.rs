@@ -37,7 +37,7 @@ impl THMEApp {
                     match snap.status {
                         crate::profiling::TokenFlowStatus::Idle | crate::profiling::TokenFlowStatus::Completed => {
                             if ui.button(egui::RichText::new("Start Live Flow Benchmark").strong().color(p.text_main)).clicked() {
-                                self.simulator = crate::profiling::LiveFlowSimulator::new(
+                                let mut sim = crate::profiling::LiveFlowSimulator::new(
                                     &self.baseline_prompt,
                                     self.baseline_tokens,
                                     self.model().layers.len(),
@@ -45,6 +45,24 @@ impl THMEApp {
                                     self.checkpoint_layer_idx,
                                     self.exit_ratio_pct / 100.0,
                                 );
+                                if let Some(ref sm) = self.model().source_model {
+                                    if let Some(crate::ir::model::ModelMetadataValue::Array(tokens)) =
+                                        sm.source_gguf_metadata.get("tokenizer.ggml.tokens")
+                                    {
+                                        let v: Vec<String> = tokens
+                                            .iter()
+                                            .filter_map(|t| match t {
+                                                crate::ir::model::ModelMetadataValue::String(s) => Some(s.clone()),
+                                                _ => None,
+                                            })
+                                            .take(10000)
+                                            .collect();
+                                        if !v.is_empty() {
+                                            sim = sim.with_vocabulary(v);
+                                        }
+                                    }
+                                }
+                                self.simulator = sim;
                                 self.simulator.start();
                                 let m_name = self.model().name.clone();
                                 self.log_audit("BENCHMARK", "TokenFlow", "Started live token flow benchmark", &m_name);

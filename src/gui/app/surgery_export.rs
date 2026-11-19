@@ -109,6 +109,38 @@ impl THMEApp {
                 manga::glass_frame(&p, p.primary)
                     .inner_margin(egui::Margin::same(10))
                     .show(ui, |ui| {
+                        ui.label(egui::RichText::new("EPIPHANES (.epiph) MODEL EXPORT").strong().color(p.primary).size(11.0));
+                        ui.label(egui::RichText::new("Pack the loaded model into a single, verifiable .epiph container (weights + provenance).").size(9.0).color(p.text_muted));
+                        ui.add_space(6.0);
+
+                        if self.model().source_model.is_none() {
+                            ui.label(egui::RichText::new("Load a file-backed GGUF or SafeTensors model before packing.").size(9.0).color(p.text_muted));
+                        } else if ui.button(egui::RichText::new("Export to Epiphanes (.epiph)").strong().color(p.text_main)).clicked() {
+                            if let Some(source_model) = self.model().source_model.clone() {
+                                let path = rfd::FileDialog::new()
+                                    .add_filter("Epiphanes Model (*.epiph)", &["epiph"])
+                                    .set_file_name("model.epiph")
+                                    .save_file()
+                                    .unwrap_or_default();
+                                if !path.as_os_str().is_empty() {
+                                    match crate::epiph::write(&source_model, &crate::epiph::PackOptions::default(), &path) {
+                                        Ok(summary) => {
+                                            self.log_audit("INFO", "EpiphanesPack", &format!("Packed {} tensors to {}", summary.tensors, path.display()), &source_model.name);
+                                            self.status_msg = format!("Packed {} tensors to {} ({} bytes).", summary.tensors, path.display(), summary.file_bytes);
+                                        }
+                                        Err(err) => {
+                                            self.status_msg = format!("Epiphanes pack failed: {err:#}");
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+
+                ui.add_space(16.0);
+                manga::glass_frame(&p, p.primary)
+                    .inner_margin(egui::Margin::same(10))
+                    .show(ui, |ui| {
                         ui.label(egui::RichText::new("PYTORCH & CUDA ECOSYSTEM BRIDGE").strong().color(p.primary).size(11.0));
                         ui.label(egui::RichText::new("Generate standalone PyTorch/CUDA fine-tuning scripts and Hugging Face configs.").size(9.0).color(p.text_muted));
                         ui.add_space(6.0);

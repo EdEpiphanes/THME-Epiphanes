@@ -33,6 +33,8 @@ local_deferred_audit.md
 *.local.md
 *.local.log
 .local/
+tmp/
+THME-Epiphanes/
 
 # Editor and backup files
 **/*.rs.bk
@@ -42,6 +44,9 @@ Thumbs.db
 # VS Code extension build artifacts
 editors/vscode/node_modules/
 editors/vscode/out/
+agent-hub/node_modules/
+agent-hub/out/
+agent-hub/*.vsix
 *.vsix
 
 # Python cache artifacts

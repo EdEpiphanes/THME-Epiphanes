@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod awq;
 pub mod byoa;
+pub mod gptq;
 pub mod rea;
 
 pub use byoa::*;

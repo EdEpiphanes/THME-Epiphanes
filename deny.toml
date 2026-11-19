@@ -9,13 +9,7 @@ version = 2
 # Transitive "unmaintained" notices are warnings; direct dependencies must stay maintained.
 unmaintained = "workspace"
 # Every entry needs a backlog ticket and a reason. Review at each release.
-ignore = [
-    # quick-xml 0.30 via egui-winit -> accesskit_unix -> zbus_xml (Linux AT-SPI accessibility).
-    # Needs a malicious same-user process on the local accessibility bus; impact is a Studio
-    # slowdown or memory exhaustion. Fixed by THME-2002 (upgrade egui/eframe).
-    { id = "RUSTSEC-2026-0194", reason = "local AT-SPI bus only; THME-2002" },
-    { id = "RUSTSEC-2026-0195", reason = "local AT-SPI bus only; THME-2002" },
-]
+ignore = []
 
 [licenses]
 version = 2
@@ -26,6 +20,7 @@ confidence-threshold = 0.8
 # OFL-1.1, UFL-1.0 and Ubuntu-font-1.0 cover the fonts bundled by egui.
 exceptions = [
     { allow = ["AGPL-3.0-only"], crate = "thme" },
+    { allow = ["AGPL-3.0-only"], crate = "neutron-gpu" },
 ]
 allow = [
     "0BSD",

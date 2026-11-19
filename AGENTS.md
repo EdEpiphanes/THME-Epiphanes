@@ -54,7 +54,7 @@ cargo clippy -- -D warnings
 cargo test
 ```
 
-- **Toolchain**: Rust 2021 edition (version >= 1.89, enforced by the CI `msrv` job).
+- **Toolchain**: Rust 2021 edition (version >= 1.95, enforced by the CI `msrv` job).
 - **Binary Footprint Constraints**:
   - Release GUI binary (`thme-gui`): <= 15 MB.
   - Release CLI binary (`thme` / `llm-tweaker`): <= 10 MB.

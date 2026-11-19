@@ -305,6 +305,42 @@ pub fn decode_q6_k(block: &[u8]) -> Result<[f32; QK_K]> {
     Ok(out)
 }
 
+/// The 16 lookup values of the non-linear 4-bit IQ grid (`kvalues_iq4nl`).
+const KVALUES_IQ4NL: [i8; 16] = [
+    -127, -104, -83, -65, -49, -35, -22, -10, 1, 13, 25, 38, 53, 69, 89, 113,
+];
+
+/// Bytes per IQ4_XS super-block: f16 delta + u16 high scales + 4 low scales + 128 payload.
+pub const IQ4_XS_BYTES: usize = 2 + 2 + QK_K / 64 + QK_K / 2;
+
+/// Decodes one IQ4_XS block.
+///
+/// Layout follows GGML's `block_iq4_xs` (see llama.cpp `ggml-common.h`): a shared
+/// f16 delta, `scales_h` (2 high bits per sub-block scale), `scales_l` (low nibbles,
+/// two sub-blocks per byte) and 128 bytes of nibble payloads — eight 32-value
+/// sub-blocks whose values index [`KVALUES_IQ4NL`].
+pub fn decode_iq4_xs(block: &[u8]) -> Result<[f32; QK_K]> {
+    check_len(block, IQ4_XS_BYTES, "IQ4_XS")?;
+    let d = f16_at(block, 0);
+    let scales_h = u16::from_le_bytes([block[2], block[3]]);
+    let scales_l = &block[4..8];
+    let qs = &block[8..8 + QK_K / 2];
+    let mut out = [0.0f32; QK_K];
+    for ib in 0..QK_K / 32 {
+        let ls = i32::from((scales_l[ib / 2] >> (4 * (ib % 2))) & 0xF)
+            | (i32::from((scales_h >> (2 * ib)) & 3) << 4);
+        let dl = d * (ls - 32) as f32;
+        let nibbles = &qs[ib * 16..ib * 16 + 16];
+        for (j, byte) in nibbles.iter().enumerate() {
+            let lo = KVALUES_IQ4NL[(byte & 0xF) as usize];
+            let hi = KVALUES_IQ4NL[(byte >> 4) as usize];
+            out[ib * 32 + j] = dl * f32::from(lo);
+            out[ib * 32 + j + 16] = dl * f32::from(hi);
+        }
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -429,5 +465,36 @@ mod tests {
         encode_q4_k_block(&zeros, &mut out).unwrap();
         assert!(decode_q4_k(&out).unwrap().iter().all(|v| *v == 0.0));
         assert!(decode_q6_k(&[0u8; 10]).is_err());
+    }
+}
+
+#[cfg(test)]
+mod iq4_xs_tests {
+    use super::*;
+
+    /// Regression: a scale of 32 (`ls - 32 == 0`) and the mid grid index both
+    /// decode to exactly zero, catching sign/scale assembly errors.
+    #[test]
+    fn decode_iq4_xs_matches_hand_derived_values() {
+        // Two bytes of f16 delta = 2.0; scales_h = 0 -> ls = 32 for every sub-block
+        // except sub-block 1, where scales_l nibble sets ls = 33 -> dl = 2.0.
+        let mut block = vec![0u8; IQ4_XS_BYTES];
+        block[0..2].copy_from_slice(&f32_to_f16(2.0).to_le_bytes());
+        block[2] = 0; // scales_h low byte: high bits of sub-block scales
+        block[3] = 0;
+        block[4] = 0x01; // scales_l[0]: sub-block 0 low nibble = 1? no — sub-block 0 low = 1
+                         // sub-block 0: ls = 1 | 0 << 4 = 1 -> dl = 2 * (1 - 32) = -62
+                         // sub-block 1: ls = (0) | 0 = 0 -> dl = 2 * (0 - 32) = -64
+                         // First payload byte 0x0F: low nibble -> kvalues[0xF] = 113, high nibble ->
+                         // kvalues[0] = -127 (matches the C reference: `y[j+0] = kvalues[qs[j] & 0xf]`,
+                         // `y[j+16] = kvalues[qs[j] >> 4]`).
+        block[8] = 0x0F;
+        let out = decode_iq4_xs(&block).unwrap();
+        assert_eq!(out[0], -62.0 * 113.0);
+        assert_eq!(out[16], -62.0 * -127.0);
+        assert_eq!(out[32], -64.0 * -127.0);
+        // Sub-block 2 payload byte untouched -> lo nibble 0 -> value 1 * dl.
+        let dl2 = 2.0 * (0i32 - 32) as f32;
+        assert_eq!(out[64], dl2 * f32::from(KVALUES_IQ4NL[0]));
     }
 }

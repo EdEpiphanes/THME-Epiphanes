@@ -37,6 +37,10 @@ pub struct RooflineArgs {
     #[arg(long)]
     pub thermal: bool,
 
+    /// Auto-detect host accelerator hardware telemetry and inject live operating metrics
+    #[arg(long)]
+    pub detect: bool,
+
     /// Operating ambient or die temperature in degrees Celsius (e.g. 25.0, 75.0, 88.0)
     #[arg(long)]
     pub temperature: Option<f32>,
@@ -60,14 +64,59 @@ pub fn execute(args: RooflineArgs) -> Result<()> {
         ParadigmConverter::create_synthetic_baseline()
     };
 
-    let hw = HardwareTarget::from_str(&args.hardware)
-        .ok()
-        .map(HardwareSpec::from_target)
-        .or_else(|| HardwareDevice::find_device(&args.hardware))
-        .unwrap_or_else(HardwareDevice::predefined_h100);
+    let (hw, live_temp_opt) = if args.detect {
+        let live_gpus = crate::profiling::telemetry::SystemTelemetry::collect_gpu().ok();
+        if let Some(ref gpus) = live_gpus {
+            if let Some(primary) = gpus.first() {
+                if !args.json {
+                    println!(
+                        "Auto-detected GPU: {} (PCI {}, VRAM: {} MiB, Temp: {:.1}°C, Power: {:.1}W)",
+                        primary.name,
+                        primary.pci_bus_id.as_deref().unwrap_or("unknown"),
+                        primary.vram_total_bytes / (1024 * 1024),
+                        primary.temp_celsius,
+                        primary.power_draw_watts
+                    );
+                }
+                let dev = if primary.device_id == Some(0x2803)
+                    || primary.device_id == Some(0x2805)
+                    || primary.name.contains("4060")
+                {
+                    HardwareDevice::predefined_rtx4060ti()
+                } else if primary.device_id == Some(0x2684) || primary.name.contains("4090") {
+                    HardwareDevice::predefined_rtx4090()
+                } else {
+                    HardwareDevice::find_device(&primary.name)
+                        .unwrap_or_else(HardwareDevice::predefined_rtx4060ti)
+                };
+                (dev, Some(primary.temp_celsius))
+            } else {
+                let default_dev = HardwareTarget::from_str(&args.hardware)
+                    .ok()
+                    .map(HardwareSpec::from_target)
+                    .or_else(|| HardwareDevice::find_device(&args.hardware))
+                    .unwrap_or_else(HardwareDevice::predefined_h100);
+                (default_dev, None)
+            }
+        } else {
+            let default_dev = HardwareTarget::from_str(&args.hardware)
+                .ok()
+                .map(HardwareSpec::from_target)
+                .or_else(|| HardwareDevice::find_device(&args.hardware))
+                .unwrap_or_else(HardwareDevice::predefined_h100);
+            (default_dev, None)
+        }
+    } else {
+        let default_dev = HardwareTarget::from_str(&args.hardware)
+            .ok()
+            .map(HardwareSpec::from_target)
+            .or_else(|| HardwareDevice::find_device(&args.hardware))
+            .unwrap_or_else(HardwareDevice::predefined_h100);
+        (default_dev, None)
+    };
 
-    let thermal_factor = if args.thermal || args.temperature.is_some() {
-        let temp = args.temperature.unwrap_or_else(|| {
+    let thermal_factor = if args.thermal || args.temperature.is_some() || live_temp_opt.is_some() {
+        let temp = args.temperature.or(live_temp_opt).unwrap_or_else(|| {
             let tm = DynamicThermalModel::new(hw.clone(), ThermalConfig::default());
             tm.steady_state_temp(1.0, 1.0) as f32
         });

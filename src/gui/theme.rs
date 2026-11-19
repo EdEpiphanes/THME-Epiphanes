@@ -376,7 +376,7 @@ pub fn configure_visuals(ctx: &egui::Context, p: &ThemePalette) {
     ctx.set_visuals(visuals);
 
     // Spacing and layout calibration
-    ctx.style_mut(|style| {
+    ctx.global_style_mut(|style| {
         style.spacing.item_spacing = Vec2::new(8.0, 6.0);
         style.spacing.button_padding = Vec2::new(12.0, 6.0);
         style.spacing.slider_width = 160.0;
@@ -521,27 +521,28 @@ pub fn draw_waterfall_chart(ui: &mut egui::Ui, layers: &[LayerNode], p: &ThemePa
 
         // Interactive hover tooltip displaying layer metrics
         if is_hovered {
-            egui::show_tooltip_at_pointer(
-                ui.ctx(),
+            egui::Tooltip::always_open(
+                ui.ctx().clone(),
                 ui.layer_id(),
                 resp.id.with(i),
-                |ui: &mut egui::Ui| {
-                    ui.label(
-                        egui::RichText::new(format!("Layer {}: {}", i, layer.layer_type)).strong(),
-                    );
-                    ui.label(format!("Reach Probability: {:.1}%", reach * 100.0));
-                    ui.label(format!(
-                        "Bit-width: {:.0}% α / {:.0}% β / {:.0}% γ",
-                        layer.alpha_binary * 100.0,
-                        layer.beta_ternary * 100.0,
-                        layer.gamma_phase * 100.0
-                    ));
-                    ui.label(format!(
-                        "Est. Latency: {:.2} ms",
-                        layer.benchmarked_latency_ms
-                    ));
-                },
-            );
+                egui::PopupAnchor::Pointer,
+            )
+            .show(|ui: &mut egui::Ui| {
+                ui.label(
+                    egui::RichText::new(format!("Layer {}: {}", i, layer.layer_type)).strong(),
+                );
+                ui.label(format!("Reach Probability: {:.1}%", reach * 100.0));
+                ui.label(format!(
+                    "Bit-width: {:.0}% α / {:.0}% β / {:.0}% γ",
+                    layer.alpha_binary * 100.0,
+                    layer.beta_ternary * 100.0,
+                    layer.gamma_phase * 100.0
+                ));
+                ui.label(format!(
+                    "Est. Latency: {:.2} ms",
+                    layer.benchmarked_latency_ms
+                ));
+            });
         }
     }
 }
@@ -684,7 +685,7 @@ mod tests {
         configure_visuals(&ctx, &p);
 
         // Verify visuals applied
-        let visuals = ctx.style().visuals.clone();
+        let visuals = ctx.global_style().visuals.clone();
         assert!(visuals.dark_mode);
         assert!(visuals.slider_trailing_fill);
         assert_eq!(visuals.panel_fill, Color32::TRANSPARENT);

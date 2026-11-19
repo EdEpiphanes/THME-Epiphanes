@@ -9,11 +9,15 @@ use resvg::{tiny_skia, usvg};
 
 use crate::engine::iso::{Palette, Theme};
 use crate::ir::model::ModelIR;
-use crate::report::figure::{forward_order, model_figure_frame, Highlight};
+use crate::report::figure::{
+    forward_order, layer_indices, model_figure_frame, model_figure_layer_frame, Highlight,
+};
 
 /// Frames per tensor in the forward-pass animation, and each frame's delay in 1/100 s.
 const STEPS: usize = 4;
 const DELAY: u16 = 7;
+/// One layer per 0.4 s in the layers animation.
+const LAYER_DELAY: u16 = 40;
 
 /// Rasterizes SVG frames and writes them as a looping GIF. Every frame must have the same size.
 pub struct GifWriter {
@@ -116,6 +120,22 @@ pub fn model_forward_gif(model: &ModelIR, path: &Path, png_dir: Option<&Path>) -
     gif.finish()
 }
 
+/// The layers animation: one frame per layer, every tensor of that layer lit in turn.
+pub fn model_layers_gif(model: &ModelIR, path: &Path, png_dir: Option<&Path>) -> Result<usize> {
+    let layers = layer_indices(model);
+    if layers.is_empty() {
+        return Err(anyhow!("model has no layer structure"));
+    }
+    let mut gif = GifWriter::create(path, png_dir)?;
+    for l in layers {
+        gif.frame(
+            &model_figure_layer_frame(model, Theme::Light, l),
+            LAYER_DELAY,
+        )?;
+    }
+    gif.finish()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -146,5 +166,42 @@ mod tests {
             .unwrap()
             .finish()
             .is_err());
+    }
+
+    fn mock() -> ModelIR {
+        let dir = tempfile::tempdir().unwrap();
+        let (model_dir, _) = crate::cli::evaluate::tests::synthetic_checkpoint(dir.path());
+        crate::parser::ModelImporter::import(&model_dir).unwrap()
+    }
+
+    #[test]
+    fn layers_gif_has_one_frame_per_layer_and_is_deterministic() {
+        let m = mock();
+        let dir = tempfile::tempdir().unwrap();
+        let (a, b) = (dir.path().join("a.gif"), dir.path().join("b.gif"));
+        let n = model_layers_gif(&m, &a, None).unwrap();
+        assert_eq!(n, layer_indices(&m).len());
+        model_layers_gif(&m, &b, None).unwrap();
+        let bytes = std::fs::read(&a).unwrap();
+        assert_eq!(bytes, std::fs::read(&b).unwrap());
+        let mut decoder = gif::DecodeOptions::new()
+            .read_info(std::io::Cursor::new(bytes))
+            .unwrap();
+        let mut frames = 0;
+        while decoder.read_next_frame().unwrap().is_some() {
+            frames += 1;
+        }
+        assert_eq!(frames, n);
+    }
+
+    #[test]
+    fn layers_gif_refuses_a_model_without_layer_structure() {
+        let mut m = mock();
+        for t in &mut m.tensors {
+            t.layer_index = None;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let err = model_layers_gif(&m, &dir.path().join("x.gif"), None).unwrap_err();
+        assert!(err.to_string().contains("no layer structure"), "{err}");
     }
 }

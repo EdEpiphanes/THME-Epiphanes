@@ -81,6 +81,12 @@ pub struct ModelIR {
     /// RoPE base frequency from `config.json` or GGUF metadata.
     #[serde(default)]
     pub rope_theta: Option<f32>,
+    /// RoPE scaling type (e.g. "linear", "yarn") from GGUF metadata or config.json.
+    #[serde(default)]
+    pub rope_scaling_type: Option<String>,
+    /// RoPE scaling factor from GGUF metadata or config.json.
+    #[serde(default)]
+    pub rope_scaling_factor: Option<f32>,
     #[serde(skip)]
     pub source_gguf_metadata: BTreeMap<String, ModelMetadataValue>,
 }
@@ -117,6 +123,8 @@ impl ModelIR {
             tensors,
             norm_eps: None,
             rope_theta: None,
+            rope_scaling_type: None,
+            rope_scaling_factor: None,
             source_gguf_metadata: BTreeMap::new(),
         }
     }

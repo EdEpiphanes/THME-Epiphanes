@@ -124,8 +124,16 @@ impl GgufMetadataSynchronizer {
                 t.name.contains("mlp.up_proj")
                     || t.name.contains("mlp.gate_proj")
                     || t.name.contains("feed_forward")
+                    || t.name.contains("ffn_up")
+                    || t.name.contains("ffn_gate")
             })
-            .and_then(|t| t.shape.first().copied())
+            .and_then(|t| {
+                t.shape
+                    .iter()
+                    .copied()
+                    .find(|&d| d != model.hidden_size)
+                    .or_else(|| t.shape.first().copied())
+            })
             .unwrap_or_else(|| (model.hidden_size * 8) / 3);
 
         meta.push((
@@ -149,6 +157,18 @@ impl GgufMetadataSynchronizer {
             format!("{arch}.rope.freq_base"),
             GgufValue::Float32(model.rope_theta.unwrap_or(10_000.0)),
         ));
+        if let Some(ref scaling_type) = model.rope_scaling_type {
+            meta.push((
+                format!("{arch}.rope.scaling.type"),
+                GgufValue::String(scaling_type.clone()),
+            ));
+        }
+        if let Some(factor) = model.rope_scaling_factor {
+            meta.push((
+                format!("{arch}.rope.scaling.factor"),
+                GgufValue::Float32(factor),
+            ));
+        }
         meta.push((
             format!("{arch}.attention.layer_norm_rms_epsilon"),
             GgufValue::Float32(model.norm_eps.unwrap_or(1e-5)),

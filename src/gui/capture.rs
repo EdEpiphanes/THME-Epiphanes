@@ -38,6 +38,22 @@ const RECORD_SETTLE_FRAMES: u32 = 150;
 /// Render frames between recorded frames (about 15 recorded frames per second at 60 FPS).
 const RECORD_STRIDE: u32 = 4;
 
+/// Slot the screenshot callback fills; egui 0.37 delivers screenshots by callback, not event.
+type Shot = std::sync::Arc<std::sync::Mutex<Option<std::sync::Arc<egui::ColorImage>>>>;
+
+fn take_shot(shot: &Shot) -> Option<std::sync::Arc<egui::ColorImage>> {
+    shot.lock().ok().and_then(|mut slot| slot.take())
+}
+
+fn request_shot(ctx: &egui::Context, shot: &Shot) {
+    let slot = shot.clone();
+    ctx.request_screenshot(move |image| {
+        if let Ok(mut guard) = slot.lock() {
+            *guard = Some(image);
+        }
+    });
+}
+
 struct Record {
     tab: usize,
     total: usize,
@@ -50,6 +66,7 @@ pub struct CaptureState {
     frames: u32,
     requested: bool,
     record: Option<Record>,
+    shot: Shot,
 }
 
 impl CaptureState {
@@ -60,6 +77,7 @@ impl CaptureState {
             tab: 0,
             frames: 0,
             requested: false,
+            shot: Shot::default(),
             record: std::env::var("THME_GUI_RECORD")
                 .ok()
                 .and_then(|spec| parse_record(&spec)),
@@ -75,12 +93,7 @@ impl CaptureState {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             return TAB_NAMES.len() - 1;
         }
-        let shot = ctx.input(|input| {
-            input.events.iter().find_map(|event| match event {
-                egui::Event::Screenshot { image, .. } => Some(image.clone()),
-                _ => None,
-            })
-        });
+        let shot = take_shot(&self.shot);
         if let Some(image) = shot {
             let path = self
                 .dir
@@ -94,7 +107,7 @@ impl CaptureState {
         } else {
             self.frames += 1;
             if self.frames >= SETTLE_FRAMES && !self.requested {
-                ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(Default::default()));
+                request_shot(ctx, &self.shot);
                 self.requested = true;
             }
         }
@@ -113,12 +126,7 @@ impl CaptureState {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             return tab;
         }
-        let shot = ctx.input(|input| {
-            input.events.iter().find_map(|event| match event {
-                egui::Event::Screenshot { image, .. } => Some(image.clone()),
-                _ => None,
-            })
-        });
+        let shot = take_shot(&self.shot);
         self.frames += 1;
         if let Some(image) = shot {
             let path = self.dir.join(format!("rec-{:03}.bmp", record.saved));
@@ -131,7 +139,7 @@ impl CaptureState {
             && self.frames >= RECORD_SETTLE_FRAMES
             && self.frames.is_multiple_of(RECORD_STRIDE)
         {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(Default::default()));
+            request_shot(ctx, &self.shot);
             self.requested = true;
         }
         ctx.request_repaint();
@@ -201,7 +209,7 @@ mod tests {
 
     #[test]
     fn bmp_has_padded_rows_and_correct_header() {
-        let image = egui::ColorImage::new([3, 2], egui::Color32::from_rgb(10, 20, 30));
+        let image = egui::ColorImage::new([3, 2], vec![egui::Color32::from_rgb(10, 20, 30); 6]);
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("x.bmp");
         write_bmp(&path, &image).unwrap();

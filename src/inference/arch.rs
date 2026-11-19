@@ -3,7 +3,10 @@
 
 use anyhow::{bail, Context, Result};
 use std::path::Path;
+use std::sync::Arc;
 
+use super::gemma::{GemmaConfig, GemmaModel};
+use super::gpu::GpuBackend;
 use super::llama::{DepthExit, LlamaConfig, LlamaModel, WeightPrecision};
 use super::neox::{NeoxConfig, NeoxModel};
 use super::probe::ForwardTrace;
@@ -37,6 +40,9 @@ pub trait CausalLm: Send + Sync {
             .map(|exit| exit.nll)
             .context("Forward pass produced no readout")
     }
+
+    /// Forward pass returning unnormalized logits of shape `[vocab_size]` for the final token position.
+    fn forward_logits(&self, tokens: &[u32]) -> Result<Vec<f32>>;
 }
 
 impl CausalLm for LlamaModel {
@@ -60,6 +66,9 @@ impl CausalLm for LlamaModel {
         schedule: &[usize],
     ) -> Result<(DepthExit, ForwardTrace)> {
         LlamaModel::forward_traced(self, tokens, schedule)
+    }
+    fn forward_logits(&self, tokens: &[u32]) -> Result<Vec<f32>> {
+        LlamaModel::forward_logits(self, tokens)
     }
 }
 
@@ -85,6 +94,36 @@ impl CausalLm for NeoxModel {
     ) -> Result<(DepthExit, ForwardTrace)> {
         NeoxModel::forward_traced(self, tokens, schedule)
     }
+    fn forward_logits(&self, tokens: &[u32]) -> Result<Vec<f32>> {
+        NeoxModel::forward_logits(self, tokens)
+    }
+}
+
+impl CausalLm for GemmaModel {
+    fn vocab_size(&self) -> usize {
+        GemmaModel::vocab_size(self)
+    }
+    fn num_layers(&self) -> usize {
+        GemmaModel::num_layers(self)
+    }
+    fn forward_scheduled(
+        &self,
+        tokens: &[u32],
+        schedule: &[usize],
+        exits: &[usize],
+    ) -> Result<Vec<DepthExit>> {
+        GemmaModel::forward_scheduled(self, tokens, schedule, exits)
+    }
+    fn forward_traced(
+        &self,
+        tokens: &[u32],
+        schedule: &[usize],
+    ) -> Result<(DepthExit, ForwardTrace)> {
+        GemmaModel::forward_traced(self, tokens, schedule)
+    }
+    fn forward_logits(&self, tokens: &[u32]) -> Result<Vec<f32>> {
+        GemmaModel::forward_logits(self, tokens)
+    }
 }
 
 /// Hyperparameters for one of the supported architecture families.
@@ -92,23 +131,38 @@ impl CausalLm for NeoxModel {
 pub enum ArchConfig {
     Llama(LlamaConfig),
     NeoX(NeoxConfig),
+    Gemma(GemmaConfig),
 }
 
 impl ArchConfig {
     /// Detects the architecture from tensor names and reads `config.json` beside the weights.
     pub fn detect(model: &ModelIR, model_path: &Path) -> Result<Self> {
         let has = |fragment: &str| model.tensors.iter().any(|t| t.name.contains(fragment));
-        if has("query_key_value") && has("dense_h_to_4h") {
+        if model.architecture == crate::ir::ModelArchitecture::Gemma
+            || (has("attn_q") && (has("attn_q_norm") || has("post_attention_norm")))
+        {
+            Ok(Self::Gemma(
+                GemmaConfig::from_model_ir(model).with_hf_config(model_path)?,
+            ))
+        } else if has("query_key_value") && has("dense_h_to_4h") {
             Ok(Self::NeoX(
                 NeoxConfig::from_model_ir(model).with_hf_config(model_path)?,
             ))
-        } else if has("q_proj") && has("gate_proj") {
+        } else if (has("q_proj") && has("gate_proj"))
+            || (has("attn_q") && has("ffn_gate"))
+            || matches!(
+                model.architecture,
+                crate::ir::ModelArchitecture::Llama
+                    | crate::ir::ModelArchitecture::Mistral
+                    | crate::ir::ModelArchitecture::Qwen
+            )
+        {
             Ok(Self::Llama(
                 LlamaConfig::from_model_ir(model).with_hf_config(model_path)?,
             ))
         } else {
             bail!(
-                "Unsupported architecture for the reference forward pass; supported families are LLaMA (q_proj/gate_proj) and GPT-NeoX (query_key_value/dense_h_to_4h)"
+                "Unsupported architecture for the reference forward pass; supported families are LLaMA (q_proj/gate_proj), GPT-NeoX (query_key_value/dense_h_to_4h), and Gemma (attn_q/attn_q_norm)"
             )
         }
     }
@@ -117,14 +171,38 @@ impl ArchConfig {
         match self {
             Self::Llama(_) => "LLaMA",
             Self::NeoX(_) => "GPT-NeoX",
+            Self::Gemma(_) => "Gemma",
         }
     }
 
     /// Loads `model`'s weights into a runnable model of this architecture.
     pub fn load(&self, model: &ModelIR, precision: WeightPrecision) -> Result<Box<dyn CausalLm>> {
+        self.load_with_gpu(model, precision, None)
+    }
+
+    /// Loads `model`'s weights into a runnable model with optional GPU compute acceleration.
+    pub fn load_with_gpu(
+        &self,
+        model: &ModelIR,
+        precision: WeightPrecision,
+        gpu: Option<Arc<dyn GpuBackend>>,
+    ) -> Result<Box<dyn CausalLm>> {
         Ok(match self {
-            Self::Llama(config) => Box::new(LlamaModel::load(model, config.clone(), precision)?),
+            Self::Llama(config) => {
+                let mut m = LlamaModel::load(model, config.clone(), precision)?;
+                if let Some(backend) = gpu {
+                    m.set_gpu(Some(backend));
+                }
+                Box::new(m)
+            }
             Self::NeoX(config) => Box::new(NeoxModel::load(model, config.clone(), precision)?),
+            Self::Gemma(config) => {
+                let mut m = GemmaModel::load(model, config.clone(), precision)?;
+                if let Some(backend) = gpu {
+                    m = m.with_gpu(backend);
+                }
+                Box::new(m)
+            }
         })
     }
 }

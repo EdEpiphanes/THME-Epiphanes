@@ -63,6 +63,7 @@ impl FromStr for PrecisionType {
 pub enum HardwareTarget {
     H100,
     RTX4090,
+    RTX4060Ti,
     AppleM3Max,
     MI300X,
     IntelEmeraldRapids,
@@ -73,6 +74,7 @@ impl fmt::Display for HardwareTarget {
         match self {
             Self::H100 => write!(f, "NVIDIA H100 SXM5"),
             Self::RTX4090 => write!(f, "NVIDIA GeForce RTX 4090"),
+            Self::RTX4060Ti => write!(f, "NVIDIA GeForce RTX 4060 Ti"),
             Self::AppleM3Max => write!(f, "Apple M3 Max"),
             Self::MI300X => write!(f, "AMD Instinct MI300X"),
             Self::IntelEmeraldRapids => write!(f, "Intel Xeon Platinum 8592+"),
@@ -87,6 +89,8 @@ impl FromStr for HardwareTarget {
         let norm = s.trim().to_lowercase();
         if norm.contains("h100") || norm.contains("hopper") {
             Ok(Self::H100)
+        } else if norm.contains("4060") {
+            Ok(Self::RTX4060Ti)
         } else if norm.contains("4090") || norm.contains("ada") {
             Ok(Self::RTX4090)
         } else if norm.contains("m3") || norm.contains("apple") {
@@ -159,9 +163,56 @@ impl HardwareDevice {
         match target {
             HardwareTarget::H100 => Self::predefined_h100(),
             HardwareTarget::RTX4090 => Self::predefined_rtx4090(),
+            HardwareTarget::RTX4060Ti => Self::predefined_rtx4060ti(),
             HardwareTarget::AppleM3Max => Self::predefined_apple_m3_max(),
             HardwareTarget::MI300X => Self::predefined_mi300x(),
             HardwareTarget::IntelEmeraldRapids => Self::predefined_intel_emerald_rapids(),
+        }
+    }
+
+    /// Resolves an authentic HardwareDevice profile from PCI vendor/device ID matching `neutron-gpu` recipes.
+    pub fn from_pci_recipe(vendor_id: u16, device_id: u16) -> Option<Self> {
+        let recipe = neutron_gpu::get_recipe(vendor_id, device_id)?;
+        if recipe.device_id == 0x2803 || recipe.device_id == 0x2805 {
+            Some(Self::predefined_rtx4060ti())
+        } else if recipe.device_id == 0x2684 {
+            Some(Self::predefined_rtx4090())
+        } else {
+            None
+        }
+    }
+
+    pub fn predefined_rtx4060ti() -> Self {
+        Self {
+            name: "NVIDIA GeForce RTX 4060 Ti".to_string(),
+            vendor: "NVIDIA".to_string(),
+            architecture: "Ada Lovelace AD106".to_string(),
+            peak_fp32_tflops: 22.06,
+            peak_fp16_tflops: 88.25,
+            peak_int8_tops: 176.5,
+            dram_bandwidth_gbps: 288.0,
+            tdp_watts: 165.0,
+            idle_power_watts: 14.0,
+            caches: vec![
+                CacheTierSpec {
+                    name: "L1 SRAM".to_string(),
+                    capacity_bytes: 4_352_000,
+                    bandwidth_gbps: 4_500.0,
+                    latency_ns: 1.8,
+                },
+                CacheTierSpec {
+                    name: "L2 Cache".to_string(),
+                    capacity_bytes: 32_000_000,
+                    bandwidth_gbps: 1_200.0,
+                    latency_ns: 12.0,
+                },
+                CacheTierSpec {
+                    name: "GDDR6 DRAM".to_string(),
+                    capacity_bytes: 16_380_000_000,
+                    bandwidth_gbps: 288.0,
+                    latency_ns: 160.0,
+                },
+            ],
         }
     }
 

@@ -199,7 +199,7 @@ pub(crate) fn encode_tq1_block(values: &[f32], out: &mut Vec<u8>) -> Result<()> 
 }
 
 /// IEEE half precision, nearest-even (shared implementation in `engine::minifloat`).
-pub(crate) fn f32_to_f16(value: f32) -> u16 {
+pub fn f32_to_f16(value: f32) -> u16 {
     crate::engine::minifloat::f32_to_f16(value)
 }
 

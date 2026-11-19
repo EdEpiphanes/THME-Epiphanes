@@ -78,43 +78,53 @@ pub enum TensorRole {
 impl TensorRole {
     pub fn detect(name: &str) -> Self {
         let lower = name.to_lowercase();
-        if lower.contains("lm_head")
+        if lower.contains("o_proj")
+            || lower.contains("out_proj")
+            || lower.contains("attn_output")
+            || lower.contains("attn_out")
+            || (lower.contains("dense") && lower.contains("attn"))
+            || lower.contains("attention.dense")
+        {
+            Self::AttentionOut
+        } else if lower.contains("lm_head")
             || lower.contains("output.weight")
             || lower.contains("embed_out")
         {
             Self::OutputHead
-        } else if lower.contains("embed") || lower.contains("wte") {
+        } else if lower.contains("embed") || lower.contains("embd") || lower.contains("wte") {
             Self::Embedding
-        } else if lower.contains("query_key_value") {
-            Self::AttentionQkv
-        } else if lower.contains("q_proj") || lower.contains("query") {
-            Self::AttentionQ
-        } else if lower.contains("k_proj") || lower.contains("key") {
-            Self::AttentionK
-        } else if lower.contains("v_proj") || lower.contains("value") {
-            Self::AttentionV
-        } else if lower.contains("o_proj")
-            || lower.contains("out_proj")
-            || lower.contains("dense") && lower.contains("attn")
-            || lower.contains("attention.dense")
-        {
-            Self::AttentionOut
-        } else if lower.contains("dense_h_to_4h") {
-            Self::MlpUp
-        } else if lower.contains("dense_4h_to_h") {
-            Self::MlpDown
-        } else if lower.contains("gate_proj") || lower.contains("w1") {
-            Self::MlpGate
-        } else if lower.contains("up_proj") || lower.contains("w3") {
-            Self::MlpUp
-        } else if lower.contains("down_proj") || lower.contains("w2") {
-            Self::MlpDown
         } else if lower.contains("norm") || lower.contains("ln_") {
-            if lower.contains("model.norm") || lower.contains("final_layer_norm") {
+            if lower.contains("model.norm")
+                || lower.contains("final_layer_norm")
+                || lower.contains("output_norm")
+            {
                 Self::FinalNorm
             } else {
                 Self::LayerNorm
             }
+        } else if lower.contains("query_key_value") {
+            Self::AttentionQkv
+        } else if lower.contains("q_proj") || lower.contains("query") || lower.contains("attn_q") {
+            Self::AttentionQ
+        } else if lower.contains("k_proj") || lower.contains("key") || lower.contains("attn_k") {
+            Self::AttentionK
+        } else if lower.contains("v_proj") || lower.contains("value") || lower.contains("attn_v") {
+            Self::AttentionV
+        } else if lower.contains("dense_h_to_4h")
+            || lower.contains("ffn_up")
+            || lower.contains("up_proj")
+            || lower.contains("w3")
+        {
+            Self::MlpUp
+        } else if lower.contains("dense_4h_to_h")
+            || lower.contains("ffn_down")
+            || lower.contains("down_proj")
+            || lower.contains("w2")
+        {
+            Self::MlpDown
+        } else if lower.contains("gate_proj") || lower.contains("w1") || lower.contains("ffn_gate")
+        {
+            Self::MlpGate
         } else {
             Self::Unknown
         }
@@ -249,7 +259,12 @@ impl TensorIR {
 pub fn extract_layer_index(name: &str) -> Option<usize> {
     let parts: Vec<&str> = name.split('.').collect();
     for i in 0..parts.len() {
-        if (parts[i] == "layers" || parts[i] == "layer" || parts[i] == "h" || parts[i] == "blocks")
+        if (parts[i] == "layers"
+            || parts[i] == "layer"
+            || parts[i] == "h"
+            || parts[i] == "blocks"
+            || parts[i] == "block"
+            || parts[i] == "blk")
             && i + 1 < parts.len()
         {
             if let Ok(idx) = parts[i + 1].parse::<usize>() {

@@ -402,12 +402,14 @@ fn read_provenance(token_path: &Path) -> Value {
 }
 
 fn host_info() -> Value {
-    let mut system = sysinfo::System::new();
-    system.refresh_cpu_all();
+    let cpu = sysinfo::System::new().ok().and_then(|mut system| {
+        system.refresh_cpu_all();
+        system.cpus().first().map(|c| c.brand().trim().to_string())
+    });
     json!({
         "os": std::env::consts::OS,
         "arch": std::env::consts::ARCH,
-        "cpu": system.cpus().first().map(|c| c.brand().trim().to_string()),
+        "cpu": cpu,
         "logical_cpus": std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1),
         "backend": "THME reference CPU forward pass (f32, multithreaded)",
     })

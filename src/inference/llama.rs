@@ -7,7 +7,9 @@
 
 use anyhow::{bail, Context, Result};
 use std::path::Path;
+use std::sync::Arc;
 
+use super::gpu::{dispatch_linear_slice, dispatch_score_head_slice, GpuBackend};
 use super::probe::{
     dead_fraction, rms, update_ratio, ForwardTrace, InputChannelStats, LayerTrace, TensorActivity,
 };
@@ -116,14 +118,63 @@ pub struct LlamaModel {
     pub(crate) final_norm: Vec<f32>,
     /// `None` when the output head is tied to the embedding matrix.
     pub(crate) lm_head: Option<Vec<f32>>,
+    pub(crate) gpu_backend: Option<Arc<dyn GpuBackend>>,
 }
 
-pub(crate) fn find_tensor<'a>(model: &'a ModelIR, name: &str) -> Option<&'a TensorIR> {
+pub fn find_tensor<'a>(model: &'a ModelIR, name: &str) -> Option<&'a TensorIR> {
     let dotted = format!(".{name}");
-    model
+    if let Some(t) = model
         .tensors
         .iter()
         .find(|t| t.name == name || t.name.ends_with(&dotted))
+    {
+        return Some(t);
+    }
+
+    // GGUF tensor naming alias fallback
+    let gguf_alias = if name == "model.embed_tokens.weight" {
+        Some("token_embd.weight".to_string())
+    } else if name == "model.norm.weight" {
+        Some("output_norm.weight".to_string())
+    } else if name == "lm_head.weight" {
+        Some("output.weight".to_string())
+    } else if name.starts_with("model.layers.") {
+        let parts: Vec<&str> = name.split('.').collect();
+        if parts.len() >= 4 {
+            let layer_idx = parts[2];
+            let suffix = parts[3..].join(".");
+            let gguf_suffix = match suffix.as_str() {
+                "input_layernorm.weight" => Some("attn_norm.weight"),
+                "self_attn.q_proj.weight" => Some("attn_q.weight"),
+                "self_attn.k_proj.weight" => Some("attn_k.weight"),
+                "self_attn.v_proj.weight" => Some("attn_v.weight"),
+                "self_attn.o_proj.weight" => Some("attn_output.weight"),
+                "post_attention_layernorm.weight" => Some("ffn_norm.weight"),
+                "mlp.gate_proj.weight" => Some("ffn_gate.weight"),
+                "mlp.up_proj.weight" => Some("ffn_up.weight"),
+                "mlp.down_proj.weight" => Some("ffn_down.weight"),
+                _ => None,
+            };
+            gguf_suffix.map(|s| format!("blk.{layer_idx}.{s}"))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    if let Some(ref alias) = gguf_alias {
+        let alias_dotted = format!(".{alias}");
+        if let Some(t) = model
+            .tensors
+            .iter()
+            .find(|t| t.name == *alias || t.name.ends_with(&alias_dotted))
+        {
+            return Some(t);
+        }
+    }
+
+    None
 }
 
 pub(crate) fn load_tensor(
@@ -238,7 +289,21 @@ impl LlamaModel {
             layers,
             final_norm,
             lm_head,
+            gpu_backend: None,
         })
+    }
+
+    pub fn with_gpu(mut self, backend: Arc<dyn GpuBackend>) -> Self {
+        self.gpu_backend = Some(backend);
+        self
+    }
+
+    pub fn set_gpu(&mut self, backend: Option<Arc<dyn GpuBackend>>) {
+        self.gpu_backend = backend;
+    }
+
+    pub fn gpu_backend(&self) -> Option<&dyn GpuBackend> {
+        self.gpu_backend.as_deref()
     }
 
     pub fn vocab_size(&self) -> usize {
@@ -293,6 +358,41 @@ impl LlamaModel {
             .pop()
             .context("Forward pass produced no readout")?;
         Ok((exit, trace))
+    }
+
+    /// Runs a full forward pass and returns unnormalized logits for the final token position.
+    pub fn forward_logits(&self, tokens: &[u32]) -> Result<Vec<f32>> {
+        let t_len = tokens.len();
+        if t_len < 2 {
+            bail!("Forward pass requires at least 2 tokens, received {t_len}");
+        }
+        let schedule: Vec<usize> = (0..self.num_layers()).collect();
+        self.validate(tokens, &schedule, &[schedule.len()])?;
+
+        let d = self.config.hidden_size;
+        let head_dim = d / self.config.num_heads;
+        let mut x = vec![0.0f32; t_len * d];
+        for (row, &token) in x.chunks_exact_mut(d).zip(tokens) {
+            let start = token as usize * d;
+            row.copy_from_slice(&self.embed[start..start + d]);
+        }
+        let rope = RopeTable::new(t_len, head_dim, head_dim, self.config.rope_theta);
+        let mut normed = vec![0.0f32; t_len * d];
+
+        for &index in &schedule {
+            self.apply_layer(&self.layers[index], &mut x, &mut normed, &rope, None);
+        }
+
+        rms_norm(&x, &self.final_norm, self.config.rms_norm_eps, &mut normed);
+        let last_normed = &normed[(t_len - 1) * d..t_len * d];
+        let head = self.lm_head.as_deref().unwrap_or(&self.embed);
+        Ok(dispatch_linear_slice(
+            self.gpu_backend.as_deref(),
+            last_normed,
+            head,
+            d,
+            self.vocab_size,
+        ))
     }
 
     fn validate(&self, tokens: &[u32], schedule: &[usize], exits: &[usize]) -> Result<()> {
@@ -393,10 +493,11 @@ impl LlamaModel {
                 }
             };
 
+        let gpu = self.gpu_backend.as_deref();
         rms_norm(x, &layer.attn_norm, cfg.rms_norm_eps, normed);
-        let mut q = linear(normed, &layer.q, d, d);
-        let mut k = linear(normed, &layer.k, d, kv_dim);
-        let v = linear(normed, &layer.v, d, kv_dim);
+        let mut q = dispatch_linear_slice(gpu, normed, &layer.q, d, d);
+        let mut k = dispatch_linear_slice(gpu, normed, &layer.k, d, kv_dim);
+        let v = dispatch_linear_slice(gpu, normed, &layer.v, d, kv_dim);
         record("q", normed, d, &q, d);
         record("k", normed, d, &k, kv_dim);
         record("v", normed, d, &v, kv_dim);
@@ -410,19 +511,19 @@ impl LlamaModel {
             num_kv_heads: cfg.num_kv_heads,
             head_dim,
         });
-        let attn_out = linear(&mixed, &layer.o, d, d);
+        let attn_out = dispatch_linear_slice(gpu, &mixed, &layer.o, d, d);
         record("o", &mixed, d, &attn_out, d);
         add_in_place(x, &attn_out);
 
         rms_norm(x, &layer.mlp_norm, cfg.rms_norm_eps, normed);
-        let mut hidden = linear(normed, &layer.gate, d, inter);
-        let up = linear(normed, &layer.up, d, inter);
+        let mut hidden = dispatch_linear_slice(gpu, normed, &layer.gate, d, inter);
+        let up = dispatch_linear_slice(gpu, normed, &layer.up, d, inter);
         record("gate", normed, d, &hidden, inter);
         record("up", normed, d, &up, inter);
         for (g, u) in hidden.iter_mut().zip(&up) {
             *g = *g / (1.0 + (-*g).exp()) * u;
         }
-        let mlp_out = linear(&hidden, &layer.down, inter, d);
+        let mlp_out = dispatch_linear_slice(gpu, &hidden, &layer.down, inter, d);
         record("down", &hidden, inter, &mlp_out, d);
         if let Some(t) = trace {
             t.mlp_dead_fraction = dead_fraction(&hidden);
@@ -439,7 +540,8 @@ impl LlamaModel {
     ) -> DepthExit {
         rms_norm(x, &self.final_norm, self.config.rms_norm_eps, normed);
         let head = self.lm_head.as_deref().unwrap_or(&self.embed);
-        score_head(
+        dispatch_score_head_slice(
+            self.gpu_backend.as_deref(),
             head,
             self.config.hidden_size,
             self.vocab_size,
@@ -452,7 +554,7 @@ impl LlamaModel {
 
 /// Applies an output head of shape `[vocab, d]` to normalized states and scores each
 /// position against the next token: negative log-likelihood and most likely token.
-pub(crate) fn score_head(
+pub fn score_head(
     head: &[f32],
     d: usize,
     vocab: usize,
@@ -522,7 +624,7 @@ where
 }
 
 /// `y[t] = W · x[t]` for a row-major `W` of shape `[out_dim, in_dim]`.
-pub(crate) fn linear(x: &[f32], w: &[f32], in_dim: usize, out_dim: usize) -> Vec<f32> {
+pub fn linear(x: &[f32], w: &[f32], in_dim: usize, out_dim: usize) -> Vec<f32> {
     let rows = x.len() / in_dim;
     let mut y = vec![0.0f32; rows * out_dim];
     par_row_ranges(&mut y, out_dim, |first, chunk| {
@@ -764,7 +866,7 @@ pub(crate) fn add_in_place(x: &mut [f32], delta: &[f32]) {
     }
 }
 
-fn rms_norm(x: &[f32], weight: &[f32], eps: f32, out: &mut [f32]) {
+pub(crate) fn rms_norm(x: &[f32], weight: &[f32], eps: f32, out: &mut [f32]) {
     let d = weight.len();
     for (row, out_row) in x.chunks_exact(d).zip(out.chunks_exact_mut(d)) {
         let mean_square = row.iter().map(|v| v * v).sum::<f32>() / d as f32;
@@ -786,14 +888,29 @@ pub(crate) struct RopeTable {
 
 impl RopeTable {
     pub(crate) fn new(t_len: usize, head_dim: usize, rotary_dims: usize, theta: f32) -> Self {
+        Self::new_scaled(t_len, head_dim, rotary_dims, theta, 1.0)
+    }
+
+    pub(crate) fn new_scaled(
+        t_len: usize,
+        head_dim: usize,
+        rotary_dims: usize,
+        theta: f32,
+        scaling_factor: f32,
+    ) -> Self {
         let rotary_dims = rotary_dims.min(head_dim) / 2 * 2;
         let half = rotary_dims / 2;
+        let factor = if scaling_factor > 0.0 {
+            scaling_factor as f64
+        } else {
+            1.0
+        };
         let mut cos = Vec::with_capacity(t_len * half);
         let mut sin = Vec::with_capacity(t_len * half);
         for t in 0..t_len {
             for j in 0..half {
                 let inv_freq = f64::from(theta).powf(-((2 * j) as f64) / rotary_dims as f64);
-                let angle = t as f64 * inv_freq;
+                let angle = (t as f64 / factor) * inv_freq;
                 cos.push(angle.cos() as f32);
                 sin.push(angle.sin() as f32);
             }
@@ -991,6 +1108,7 @@ pub fn synthetic_demo(seed: u64) -> (LlamaModel, Vec<Vec<(&'static str, TensorFo
         layers,
         final_norm: vec![1.0; d],
         lm_head: None,
+        gpu_backend: None,
     };
     (model, composition)
 }
@@ -1043,6 +1161,7 @@ pub(crate) mod tests {
             layers,
             final_norm: vec![1.0; d],
             lm_head: None,
+            gpu_backend: None,
         }
     }
 

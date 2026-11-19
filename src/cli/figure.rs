@@ -19,11 +19,11 @@ pub struct FigureArgs {
     #[arg(long)]
     pub out: PathBuf,
 
-    /// Also write <name>-forward.gif: tensors light up in forward-pass order
+    /// Also write <name>-forward.gif and <name>-layers.gif
     #[arg(long)]
     pub gif: bool,
 
-    /// With --gif, also write every frame as a PNG into this folder
+    /// With --gif, also write every frame as a PNG into this folder (layers go to DIR/layers)
     #[arg(long, requires = "gif")]
     pub frames: Option<PathBuf>,
 }
@@ -51,6 +51,11 @@ pub fn execute(args: FigureArgs) -> Result<()> {
         let path = args.out.join(format!("{stem}-forward.gif"));
         let frames =
             crate::report::animate::model_forward_gif(&model, &path, args.frames.as_deref())?;
+        println!("wrote {} ({frames} frames)", path.display());
+        let path = args.out.join(format!("{stem}-layers.gif"));
+        let layers_frames = args.frames.as_ref().map(|d| d.join("layers"));
+        let frames =
+            crate::report::animate::model_layers_gif(&model, &path, layers_frames.as_deref())?;
         println!("wrote {} ({frames} frames)", path.display());
     }
     Ok(())

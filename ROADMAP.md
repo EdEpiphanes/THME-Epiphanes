@@ -1,7 +1,7 @@
 # THME Roadmap
 
 > **Topological Heterogeneous Manifold Engine (THME)** by **Epiphanes**
-> Updated 14 November 2026. **Direction: finish the open-source engine and tools first.** THME
+> Updated 19 November 2026. **Direction: finish the open-source engine and tools first.** THME
 > is AGPL-3.0-only now; a commercial release follows once the foundations are complete (version
 > and timing to be decided). Model runs are paused, so work that needs a measurement on a real
 > model is built and tested but marked *measurement pending*. Every claim stays measured, or
@@ -32,7 +32,7 @@ flowchart LR
     classDef later fill:#ffffff,stroke:#0b0b0b,stroke-width:1.5px,stroke-dasharray:4 3,color:#52514e;
 
     subgraph NOW["Now"]
-        N1["GPTQ-style rounding"]:::now
+        N1["GPTQ-style rounding (real-model measurement pending)"]:::now
         N2["llama.cpp check (synthetic)"]:::now
         N3["Scanner: legacy Keras .h5"]:::now
     end
@@ -92,7 +92,7 @@ flowchart LR
 
 | Track | Item | Status | Depends on |
 | :--- | :--- | :--- | :--- |
-| Formats and calibration | **GPTQ-style rounding** (THME-2205): second-order rounding with a full-Hessian calibration step (`faer`, approved) | Not started | Calibration |
+| Formats and calibration | **GPTQ-style rounding** (THME-2205): second-order rounding with a full-Hessian calibration step | Implemented for Q4_0 and Q8_0, tested on synthetic matrices; real-model measurement pending, K-quants not supported | Calibration |
 | Formats and calibration | **llama.cpp compatibility check** (THME-2208) on synthetic exported files; the runtime check runs only when a tool is configured | Not started | Exporter |
 | Security | **Scanner coverage** (THME-3022, v0.2.7.2): legacy HDF5 `.h5` Keras files | Partly done: `.h5` is flagged, not inspected | Scanner v1 |
 | Quality and evidence | **Benchmark runner, native and bridged modes** (v0.2.8.3): produce outputs with THME's forward pass or an external tool; resume and cache | Blocked | Model runs paused |
@@ -141,7 +141,16 @@ flowchart LR
 - **Legal review.** Format-name trademark (THME-3017) and the commercial licence wording need a
   lawyer before any announcement.
 
-### Changes this update (14 November 2026)
+### Changes this update (19 November 2026)
+
+- Done: build repaired for eframe and egui 0.37, wgpu 30 and sysinfo 0.40 (fmt, clippy and the test suite green; `cargo deny check` passes without the two advisory ignores); GPTQ rounding rewritten to the reference algorithm and tested on synthetic matrices; wgpu GPU kernels pass their eight tests on one RTX 4060 Ti (no speed figure claimed).
+- Corrected: the scanner ticket (THME-3022) is back to *ready*, because legacy `.h5` files are flagged, not inspected; the Studio no longer loads a model from a developer-machine path at startup.
+- Cleaned: `agent-hub` and 18 unrelated `neutron-*` crates moved out of the repository; only `neutron-gpu` remains as a workspace member.
+- Done (Haiku builder agents, Hermes paused): third-party register and CI check (THME-3034); GGUF checks for structure, data section and metadata keys, first part of THME-2208 (the llama.cpp run is not done); `.epiph` placement plan in the manifest with `pack --placement` and `verify` (THME-3016, format 1.2); per-layer figure GIF code (THME-3039); Studio provenance labels for twelve values (THME-3035). 61 new tests since the 14 November status board (495 to 556), all on synthetic data. Still open: a visual check of the layers figure, the two remaining audit items in THME-3035, and recaptured Studio screenshots.
+- Not done: new README GIFs. The other Studio tabs do not move, so their recordings collapse to one frame, and the Live 3D crop needs adjusting for the new layout. A forward-pass animation already exists (`thme figure MODEL --gif`); THME-3039 covers a per-layer view.
+- Added to the backlog (triage): third-party code register (3034), mock and simulated data in the Studio (3035), LoRA training (3036), tokenizer and chat templates (3037), Studio chat tab (3038), live-layers figure (3039).
+
+### Changes in the previous update (14 November 2026)
 
 - Done: scanner coverage parts 1-5 (deflate pickles, NumPy object arrays, oversize pickles,
   Keras, ONNX), toolchain 1.100.0, ODE steppers (WP6), optimal transport (WP4), ink-glass
@@ -149,7 +158,7 @@ flowchart LR
 - Now: GPTQ-style rounding and the llama.cpp check move up from Next; legacy Keras `.h5` stays.
 - Next: `.epiph` placement plan (THME-3016) and lossless compression (THME-3015).
 
-### Changes in the previous update (13 November 2026)
+### Changes in an earlier update (13 November 2026)
 
 - Added the engine, `.epiph` and security tracks from the research dossier v3.1 and the owner's
   direction; existing milestones keep their numbers.

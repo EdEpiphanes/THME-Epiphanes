@@ -78,6 +78,16 @@ pub enum TransformationRule {
         format: String,
         alpha_grid: Vec<f32>,
     },
+    /// GPTQ-style second-order rounding: round columns in a Cholesky-pivot order and let the
+    /// not-yet-quantized columns absorb each rounding error, weighted by the calibration
+    /// input second moments. Needs calibration statistics and the Hessian proxy attached to
+    /// the tensor (`thme evaluate --calibration`).
+    SecondOrderRounding {
+        format: String,
+        /// Damping on the propagated error: 0 is plain per-column rounding, 1 is full
+        /// compensation. Values above 1 overshoot and are clamped.
+        damping: f32,
+    },
 }
 
 /// Rounds a slice in place to the named block format (e.g. `Q4_0`).
@@ -91,6 +101,8 @@ pub struct ApplyContext<'a> {
     pub row_width: Option<usize>,
     /// Per-input-channel activation statistics from `thme calibrate`.
     pub calibration: Option<&'a crate::transform::awq::ChannelStats>,
+    /// Input second moments from `thme calibrate` (GPTQ-style error compensation).
+    pub hessian: Option<&'a crate::transform::gptq::HessianProxy>,
     /// Replaces a slice by what it becomes after storage in the named block format
     /// (e.g. `Q4_0`); supplied by the inference path, which owns the codecs.
     pub round: Option<&'a FormatRounder<'a>>,
@@ -110,7 +122,10 @@ pub enum WeightContract {
 impl TransformationRule {
     /// True for rules that read calibration activations and cannot run on weights alone.
     pub fn needs_calibration(&self) -> bool {
-        matches!(self, Self::ActivationAware { .. })
+        matches!(
+            self,
+            Self::ActivationAware { .. } | Self::SecondOrderRounding { .. }
+        )
     }
 
     pub fn contract(&self) -> WeightContract {
@@ -119,7 +134,8 @@ impl TransformationRule {
             | Self::QuantizeCodebook { .. }
             | Self::StructuredSparsity { .. }
             | Self::SmoothQuantOutlier { .. }
-            | Self::ActivationAware { .. } => WeightContract::Reconstruct,
+            | Self::ActivationAware { .. }
+            | Self::SecondOrderRounding { .. } => WeightContract::Reconstruct,
             Self::OrthogonalRotation { .. } => WeightContract::Rotation,
             Self::AffineProject { .. } => WeightContract::NotWeightOnly(
                 "AffineProject attenuates weights by position; it is not a low-rank projection",
@@ -299,6 +315,19 @@ fn apply_rule(
                 stats,
                 &round_in_format,
                 alpha_grid,
+            )
+            .map_err(|e| format!("{e:#}"))?;
+        }
+        TransformationRule::SecondOrderRounding { format, damping } => {
+            let stats = ctx.calibration.ok_or(
+                "second-order rounding needs calibration statistics; run `thme calibrate` and pass `--calibration` to `thme evaluate`",
+            )?;
+            let hessian = ctx.hessian.ok_or(
+                "second-order rounding needs the input second moments; run `thme calibrate` and pass `--calibration` to `thme evaluate`",
+            )?;
+            let in_dim = ctx.row_width.unwrap_or(n);
+            crate::transform::gptq::second_order_round(
+                weights, in_dim, stats, hessian, format, *damping,
             )
             .map_err(|e| format!("{e:#}"))?;
         }
@@ -555,6 +584,33 @@ impl AlgorithmRegistry {
                 },
             });
         }
+        for (format, bits) in [("Q4_0", 4.5f32), ("Q4_K", 4.5), ("Q6_K", 6.5)] {
+            self.register(AlgorithmDefinition {
+                id: format!("thme.gptq_{}", format.to_ascii_lowercase()),
+                name: format!("Second-order rounding {format} (GPTQ-style)"),
+                author: "Frantar et al. (ICLR 2023) / Epiphanes".to_string(),
+                version: "1.0.0".to_string(),
+                category: AlgorithmCategory::Quantization,
+                description: "Rounds columns in the order of least remaining second moment and lets the pending columns absorb each rounding error, weighted by the calibration input second moments. Needs `thme evaluate --calibration`.".to_string(),
+                effective_bits_per_param: bits,
+                compression_ratio: 16.0 / bits,
+                hardware_speedup_factor: 1.0,
+                target_roles: vec![
+                    TensorRole::AttentionQ,
+                    TensorRole::AttentionK,
+                    TensorRole::AttentionV,
+                    TensorRole::AttentionQkv,
+                    TensorRole::AttentionOut,
+                    TensorRole::MlpGate,
+                    TensorRole::MlpUp,
+                    TensorRole::MlpDown,
+                ],
+                rule: TransformationRule::SecondOrderRounding {
+                    format: format.to_string(),
+                    damping: 1.0,
+                },
+            });
+        }
         // 2. Semi-Structured 2:4 Sparsity
         self.register(AlgorithmDefinition {
             id: "thme.sparse_2to4".to_string(),
@@ -742,6 +798,7 @@ mod tests {
     #[test]
     fn activation_aware_rule_runs_through_the_apply_context() {
         use crate::transform::awq::ChannelStats;
+        use crate::transform::gptq::HessianProxy;
         let rule = AlgorithmDefinition {
             rule: TransformationRule::ActivationAware {
                 format: "grid".into(),
@@ -768,9 +825,11 @@ mod tests {
         let w: Vec<f32> = (0..32)
             .map(|i| ((i * 7 % 32) as f32 - 15.5) / 20.0)
             .collect();
+        let hessian = HessianProxy::measure(&w, 8);
         let ctx = ApplyContext {
             row_width: Some(8),
             calibration: Some(&stats),
+            hessian: Some(&hessian),
             round: Some(&round),
         };
         let mut out = w.clone();

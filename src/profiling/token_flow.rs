@@ -95,6 +95,7 @@ pub struct LiveFlowSimulator {
     pub prompt: String,
     pub prompt_tokens: Vec<String>,
     pub generated_tokens: Vec<String>,
+    pub vocab: Vec<String>,
     pub target_tokens: usize,
     pub num_layers: usize,
     pub hidden_size: usize,
@@ -141,6 +142,7 @@ impl LiveFlowSimulator {
             prompt: prompt.to_string(),
             prompt_tokens,
             generated_tokens: Vec::new(),
+            vocab: Vec::new(),
             target_tokens,
             num_layers,
             hidden_size,
@@ -157,6 +159,11 @@ impl LiveFlowSimulator {
             layer_latencies: vec![2.4; num_layers],
             early_exit_count: 0,
         }
+    }
+
+    pub fn with_vocabulary(mut self, vocab: Vec<String>) -> Self {
+        self.vocab = vocab;
+        self
     }
 
     pub fn start(&mut self) {
@@ -285,32 +292,44 @@ impl LiveFlowSimulator {
                 self.active_stage = TransformerStage::SampleToken;
             }
             TransformerStage::SampleToken => {
-                // Emit new token
-                let vocab_samples = [
-                    "heterogeneous",
-                    "manifold",
-                    "representation",
-                    "topology",
-                    "latency",
-                    "throughput",
-                    "quantization",
-                    "recurrent",
-                    "deltanet",
-                    "phase",
-                    "compression",
-                    "bandwidth",
-                    "memory",
-                    "efficiency",
-                    "sparsity",
-                    "attention",
-                    "checkpoint",
-                    "speedup",
-                    "Pareto",
-                    "optimal",
-                ];
-                let idx = (self.generated_tokens.len() + (self.elapsed_time_ms as usize))
-                    % vocab_samples.len();
-                self.generated_tokens.push(vocab_samples[idx].to_string());
+                // Emit new token from genuine model vocabulary or prompt-directed autoregressive context
+                let token = if !self.vocab.is_empty() {
+                    let mut seed = 0usize;
+                    for t in self
+                        .prompt_tokens
+                        .iter()
+                        .chain(self.generated_tokens.iter())
+                    {
+                        let sum: usize = t.as_bytes().iter().map(|&b| b as usize).sum();
+                        seed = seed.wrapping_mul(31).wrapping_add(sum);
+                    }
+                    let idx =
+                        (seed.wrapping_add(self.generated_tokens.len() * 19)) % self.vocab.len();
+                    self.vocab[idx].clone()
+                } else {
+                    let p_len = self.prompt_tokens.len().max(1);
+                    let step = self.generated_tokens.len();
+                    let context_word = self.prompt_tokens[step % p_len].clone();
+                    let connectors = [
+                        "is",
+                        "optimal",
+                        "yielding",
+                        "calibrated",
+                        "manifold",
+                        "with",
+                        "stable",
+                        "representation",
+                        "across",
+                        "layers",
+                    ];
+                    let conn = connectors[(step * 7 + p_len) % connectors.len()];
+                    if step.is_multiple_of(2) {
+                        format!("{}_{}", context_word, conn)
+                    } else {
+                        conn.to_string()
+                    }
+                };
+                self.generated_tokens.push(token);
 
                 if self.generated_tokens.len() >= self.target_tokens {
                     self.status = TokenFlowStatus::Completed;
