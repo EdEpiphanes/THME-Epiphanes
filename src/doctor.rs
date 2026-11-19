@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 use crate::discover::{self, DiscoveredModel, EnvSnapshot};
 
 /// Models listed in full; the rest are only counted.
-const MAX_SHOWN_MODELS: usize = 10;
+pub const MAX_SHOWN_MODELS: usize = 10;
 
 /// One host fact and how it was obtained.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,14 +74,13 @@ pub fn next_steps(facts: &HostFacts) -> Vec<String> {
     steps
 }
 
-/// Plain-text report: facts with their basis, the models found, then the next steps.
-pub fn render_text(facts: &HostFacts) -> String {
+/// The host-fact lines of the text report, each with its basis. Shared with the Studio Welcome panel.
+pub fn fact_lines(facts: &HostFacts) -> Vec<String> {
     let gpu = match &facts.gpu_adapter {
         Some(name) => format!("{name} (checked)"),
         None => "no GPU adapter found (checked)".to_string(),
     };
-    let mut lines = vec![
-        "THME doctor (read-only)".to_string(),
+    vec![
         format!("Operating system: {}", show(&facts.os, |s| s.to_string())),
         format!("Architecture: {}", show(&facts.arch, |s| s.to_string())),
         format!("Memory total: {}", show(&facts.memory_total_bytes, gib)),
@@ -98,8 +97,14 @@ pub fn render_text(facts: &HostFacts) -> String {
             "CPU threads: {}",
             show(&facts.cpu_threads, |n| n.to_string())
         ),
-        format!("Models found: {} (checked)", facts.models.len()),
-    ];
+    ]
+}
+
+/// Plain-text report: facts with their basis, the models found, then the next steps.
+pub fn render_text(facts: &HostFacts) -> String {
+    let mut lines = vec!["THME doctor (read-only)".to_string()];
+    lines.extend(fact_lines(facts));
+    lines.push(format!("Models found: {} (checked)", facts.models.len()));
     let shown_len = facts.models.len().min(MAX_SHOWN_MODELS);
     let shown = facts.models.get(..shown_len).unwrap_or_default();
     if !shown.is_empty() {
@@ -330,6 +335,20 @@ mod tests {
         assert_eq!(v["models"]["total"], 1);
         assert_eq!(v["models"]["shown"].as_array().map(Vec::len), Some(1));
         assert!(v["next"].is_array());
+    }
+
+    #[test]
+    fn fact_lines_are_the_lines_the_text_report_prints() {
+        let f = facts(vec![model("tiny")], Some("Test GPU"));
+        let lines = fact_lines(&f);
+        assert_eq!(lines.len(), 7);
+        assert!(lines
+            .iter()
+            .any(|l| l == "GPU adapter (Vulkan): Test GPU (checked)"));
+        let text = render_text(&f);
+        for line in &lines {
+            assert!(text.lines().any(|l| l == line.as_str()), "{line}");
+        }
     }
 
     #[test]

@@ -177,6 +177,18 @@ pub const LISTED: &[Listed] = &[
         formula: "tokens generated, wall seconds and tok/s = tokens / wall seconds, timed around the greedy decode of the Chat tab",
         evidence: Evidence::Measured,
     },
+    Listed {
+        id: "welcome-hardware",
+        file: "src/gui/app/welcome.rs",
+        formula: "OS, memory, disk, GPU adapter and CPU threads as doctor reads them; checked facts are read from this machine, assumed facts come from the build",
+        evidence: Evidence::Measured,
+    },
+    Listed {
+        id: "welcome-models",
+        file: "src/gui/app/welcome.rs",
+        formula: "count of model files found by discover on this machine, as the Welcome panel lists them",
+        evidence: Evidence::Measured,
+    },
 ];
 
 const MARKER: &str = "// provenance: ";
