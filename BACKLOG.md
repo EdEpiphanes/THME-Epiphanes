@@ -374,6 +374,36 @@ closes it.
 - **Problem**: README GIFs of the other Studio tabs came out static (identical frames collapse to one), so only Live 3D is animated. The committed `thme figure MODEL --gif` (`src/report/animate.rs`, `docs/figures/mock_llama-forward.gif`) walks the forward pass tensor by tensor; a per-layer view of the whole transformer stack is not built yet.
 - **Done means**: `thme figure MODEL --gif` shows the layers lighting in turn from the real structure of the model; frames checked by eye; no invented figures.
 
+### [THME-3040] `thme discover`: find the models already on this machine
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p1 · **Area**: onboarding · **Type**: feature · **Status**: ready
+- **Problem**: A new user should not have to move files to start. Models already sit in the Hugging Face cache, Ollama, LM Studio and llama.cpp folders.
+- **Done means**: A read-only command lists the models found in those places (name, tool, format, size, path) and accepts extra folders; tested on fake folder layouts built in a temporary directory; no network and no writes.
+
+### [THME-3041] `thme doctor` and a guided first run
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: onboarding · **Type**: feature · **Status**: triage
+- **Problem**: People come from different backgrounds and tools. They need one command that says what works on their machine and what to do next.
+- **Done means**: `thme doctor` reports operating system, memory, disk, GPU adapter found through wgpu, and the models `thme discover` finds, then prints the next command to try. The Studio shows the same summary on first start. Every line states what was checked and what was only assumed.
+
+### [THME-3042] Bridges to the tools people already use
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: onboarding · **Type**: feature · **Status**: triage
+- **Problem**: Analysts, engineers and scientists start from notebooks, Ollama, LM Studio, llama.cpp or Hugging Face. THME should read what they have and write what they can use.
+- **Done means**: Download from the Hugging Face hub through a permissively licensed client crate (licence and binary-size cost proposed first); export GGUF that llama.cpp and Ollama load (already tested for structure by THME-2208); a documented MCP setup for editors and agents. Each bridge lists what was tested and what was not.
+
+### [THME-3043] Evaluate the `neutron-iso` Rust port of the anatomy kit
+
+- **Milestone**: v0.2.5 · **Roadmap**: v0.2.5.8 · **Priority**: p3 · **Area**: figures · **Type**: chore · **Status**: triage
+- **Problem**: The owner ported the anatomy kit into `neutron-iso` (sibling folder `neutron-lab`). It builds and `neutron iso` renders valid SVG, but `shadow` writes HTML entities into an `.svg`, `gallery` writes HTML into a file named `.svg`, the crate has no tests, and the files carry no MIT notice for the anatomy kit. THME already has `engine::iso`, byte-compared with the kit.
+- **Done means**: Either the useful renderers move into THME with tests and the notice, or the crate stays outside with its output fixed; the decision is written down.
+
+### [THME-3044] Re-measure on Pythia-14M with the corrected code
+
+- **Milestone**: v0.2.0 · **Roadmap**: v0.2.0.9 · **Priority**: p1 · **Area**: research · **Type**: chore · **Status**: ready
+- **Problem**: The earlier reports were measured before the FP16 rounding fix and have been removed. Pythia-14M (Apache-2.0, 14,067,712 parameters, 6 layers) is downloaded for local testing and loads in `thme inspect`.
+- **Done means**: Perplexity of the source model, the Q8_0 round trip and a precision sweep are re-run with the fixed code, committed as reports under `docs/benchmarks/` with their method, and charts regenerate from them. Results are published as they come, with the method beside them.
+
 <!-- backlog:end -->
 
 ---
