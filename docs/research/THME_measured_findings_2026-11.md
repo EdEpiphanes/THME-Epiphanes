@@ -2,7 +2,7 @@
 
 **Date:** 12 November 2026
 **Applies to:** THME Research Programme v2.2 and the draft v3.0 concepts
-**Evidence:** [`docs/benchmark_dossier.md`](../benchmark_dossier.md), generated from real forward passes
+**Evidence:** `docs/benchmark_dossier.md` (removed, to be re-measured), generated from real forward passes
 
 ## 1. Status
 

@@ -409,6 +409,10 @@ def main():
     parser.add_argument("--output-csv", default="docs/benchmark_dossier.csv", help="Output CSV file")
     args = parser.parse_args()
 
+    if not any(os.path.exists(path) for path in args.input):
+        print("no committed reports, nothing to render")
+        return 0
+
     reports = load_reports(args.input)
     os.makedirs(os.path.dirname(args.output_md) or ".", exist_ok=True)
     def load_all(paths):
