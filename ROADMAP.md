@@ -447,9 +447,9 @@ chat without moving files; each bridge lists what was tested and what was not.
 | v0.3.0.8 | Notebook and Python bridge: documented JSON output of every command, with a small example | Open |
 | v0.3.0.9 | Install and docs for each background (analyst, engineer, scientist): one-command install, short guides, clean-machine test | Open |
 
-## v0.3 and later
+## v0.3.1 and later
 
-Opened once v0.2.9 converges:
+v0.3.0 (above) is open now. These later themes open once v0.2.9 converges:
 
 - **Routing and needles** (dossier Appendix P): calibration metrics, routers, hierarchical
   scoring, needle training, routing charts.
