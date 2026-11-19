@@ -413,7 +413,7 @@ closes it.
 
 - **Milestone**: v0.2.7 · **Roadmap**: none · **Priority**: p1 · **Area**: legal · **Type**: chore · **Status**: done
 - **Problem**: `crates/neutron-gpu` was ported from an upstream GPU-unlock project whose kernel module and packaging are GPL-2.0-only (its README says so; the firmware part has its own notice). GPL-2.0-only is incompatible with this repository's AGPL-3.0-only and with the planned commercial licence, and a port is a derivative work that would itself have to be GPL-2.0 with attribution. THME shipped it under AGPL with no attribution, so it is removed. The unlock engine, ROP payload synthesis and register-offset data are gone.
-- **Done means**: `crates/neutron-gpu/src/` contains only PCI/vGPU discovery and a plain hardware recipe table; the unlock engine, ROP synthesis and register-offset data are gone. A future ticket designs an original, tested, Rust-native unlock engine from scratch, not derived from any unlicensed source.
+- **Done means**: `crates/neutron-gpu/src/` contains only PCI/vGPU discovery and a plain hardware recipe table; the unlock engine, ROP synthesis and register-offset data are gone. A future ticket designs an original, tested, Rust-native unlock engine from scratch, not derived from any GPL or otherwise incompatibly licensed source.
 
 ### [THME-3046] Original Rust GPU-unlock engine (placeholder)
 
