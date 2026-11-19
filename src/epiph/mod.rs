@@ -550,6 +550,7 @@ pub fn verify(path: &Path) -> Result<VerifyReport> {
     })
 }
 
+pub mod placement;
 pub mod sign;
 
 #[cfg(test)]
