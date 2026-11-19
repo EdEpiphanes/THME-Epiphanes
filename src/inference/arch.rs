@@ -206,3 +206,19 @@ impl ArchConfig {
         })
     }
 }
+
+/// Imports a model file or folder and loads its weights as stored, the path `thme forward` takes.
+pub fn load_reference_model(
+    path: &Path,
+    device: super::gpu::DeviceArg,
+) -> Result<(ModelIR, ArchConfig, Box<dyn CausalLm>)> {
+    let model_ir = crate::parser::ModelImporter::import(path)
+        .with_context(|| format!("Failed to import model {path:?}"))?;
+    let arch_cfg = ArchConfig::detect(&model_ir, path)
+        .with_context(|| format!("Failed to detect architecture for {path:?}"))?;
+    let gpu = device.resolve();
+    let runnable = arch_cfg
+        .load_with_gpu(&model_ir, WeightPrecision::AsStored, gpu)
+        .context("Failed to load runnable model weights")?;
+    Ok((model_ir, arch_cfg, runnable))
+}

@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Real-model tests are opt-in**: tests that open a real model file need `THME_REAL_MODEL_TESTS=1`.
+- **Studio Chat tab**: talk to a loaded model through the reference CPU forward pass; template, tokenizer, background generation with Cancel, measured speed line. Tested on the mock model; not yet seen in a running window.
 - **Tokenizer and chat templates**: `thme tokenize` and `thme chat-template` (Hugging Face `tokenizers` and `minijinja`, both Apache-2.0, pure Rust). Tested on fixtures only.
 - **Scanner: legacy Keras `.h5`**: `thme scan` now looks for the Keras model config inside `.h5` files and flags `Lambda` layers (High) and unknown custom layers (Medium). Bounded and partial by design; a clean result is not a safety claim.
 - **`thme doctor`**: says what works on this machine (OS, memory, disk, GPU adapter, models found) and what to try next; read-only, `--json` available.

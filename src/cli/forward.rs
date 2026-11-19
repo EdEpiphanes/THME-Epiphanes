@@ -6,11 +6,9 @@ use clap::Args;
 use serde_json::json;
 use std::path::PathBuf;
 
-use crate::inference::arch::ArchConfig;
 use crate::inference::gpu::DeviceArg;
+use crate::inference::load_reference_model;
 use crate::inference::perplexity::read_token_file;
-use crate::inference::WeightPrecision;
-use crate::parser::ModelImporter;
 
 #[derive(Args, Debug)]
 pub struct ForwardArgs {
@@ -61,14 +59,7 @@ pub fn execute(args: ForwardArgs) -> Result<()> {
         );
     }
 
-    let model_ir = ModelImporter::import(&args.model)
-        .with_context(|| format!("Failed to import model {:?}", args.model))?;
-    let arch_cfg = ArchConfig::detect(&model_ir, &args.model)
-        .with_context(|| format!("Failed to detect architecture for {:?}", args.model))?;
-    let gpu = args.device.resolve();
-    let runnable = arch_cfg
-        .load_with_gpu(&model_ir, WeightPrecision::AsStored, gpu)
-        .context("Failed to load runnable model weights")?;
+    let (model_ir, arch_cfg, runnable) = load_reference_model(&args.model, args.device)?;
 
     let full_logits = runnable.forward_logits(&tokens)?;
     let vocab_size = runnable.vocab_size();
