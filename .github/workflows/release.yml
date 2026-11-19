@@ -59,7 +59,7 @@ jobs:
           cli_bytes=$(wc -c < "$dir/thme${{ matrix.ext }}")
           gui_bytes=$(wc -c < "$dir/thme-gui${{ matrix.ext }}")
           echo "CLI ${cli_bytes} bytes, GUI ${gui_bytes} bytes"
-          test "$cli_bytes" -le $((10 * 1024 * 1024)) || { echo "::error::CLI binary exceeds 10 MiB"; exit 1; }
+          test "$cli_bytes" -le $((16 * 1024 * 1024)) || { echo "::error::CLI binary exceeds 16 MiB"; exit 1; }
           test "$gui_bytes" -le $((15 * 1024 * 1024)) || { echo "::error::GUI binary exceeds 15 MiB"; exit 1; }
 
       - uses: taiki-e/install-action@v2

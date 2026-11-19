@@ -22,5 +22,8 @@ against `cargo metadata` on 19 November 2026.
 | eframe (egui) | https://crates.io/crates/egui | MIT OR Apache-2.0 | linked as a dependency, no source copied | `THIRD_PARTY_LICENSES.html` in release archives (`about.hbs`) | `Cargo.toml` |
 | safetensors | https://crates.io/crates/safetensors | Apache-2.0 | linked as a dependency, no source copied | `THIRD_PARTY_LICENSES.html` in release archives (`about.hbs`) | `Cargo.toml` |
 | memmap2 | https://crates.io/crates/memmap2 | MIT OR Apache-2.0 | linked as a dependency, no source copied | `THIRD_PARTY_LICENSES.html` in release archives (`about.hbs`) | `Cargo.toml` |
+| tokenizers | https://crates.io/crates/tokenizers | Apache-2.0 | linked as a dependency, no source copied | `THIRD_PARTY_LICENSES.html` in release archives (`about.hbs`) | `Cargo.toml` |
+| minijinja | https://crates.io/crates/minijinja | Apache-2.0 | linked as a dependency, no source copied | `THIRD_PARTY_LICENSES.html` in release archives (`about.hbs`) | `Cargo.toml` |
+| minijinja-contrib | https://crates.io/crates/minijinja-contrib | Apache-2.0 | linked as a dependency, no source copied | `THIRD_PARTY_LICENSES.html` in release archives (`about.hbs`) | `Cargo.toml` |
 | Chakra Petch font | https://github.com/m4rc1e/Chakra-Petch.git | SIL Open Font License 1.1 | Bundled font for the GUI; no source copied | `assets/fonts/OFL.txt` | `assets/fonts/ChakraPetch-Bold.ttf`, `assets/fonts/ChakraPetch-Medium.ttf` |
 | anatomy figure kit | https://github.com/wheresryan22/anatomy | MIT | `src/engine/iso.rs` ported from the kit's core (TypeScript) to Rust; `assets/iso.css` copied | File headers plus `LICENSES/anatomy-MIT.txt` (see `LICENSING.md`) | `src/engine/iso.rs`, `assets/iso.css` |
