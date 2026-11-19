@@ -395,6 +395,7 @@ closes it.
 ### [THME-3042] Bridges to the tools people already use
 
 - **Milestone**: v0.3.0 · **Roadmap**: v0.3.0.5 · **Priority**: p2 · **Area**: onboarding · **Type**: feature · **Status**: triage
+- **Progress** (19 November 2026): part 1 is built: `thme download ORG/NAME [--revision] [--out] [--file] [--dry-run]` picks the config, tokenizer and weight files from the hub listing, prints the licence first, skips pickle files unless named, verifies size and sha256 where the hub gives one, renames atomically, never prints the `HF_TOKEN`, and runs the import scan on the result. 19 tests with a fake fetcher; no real hub request was made. New crates: `ureq` 3.5.2 (MIT OR Apache-2.0) and `rustls` with `ring` (build script contains C and assembly; no OpenSSL, no aws-lc); `hf-hub` was not used. Not done: bridges to Ollama, LM Studio and llama.cpp (part 2), resume, a real download test, Windows trust-store check.
 - **Problem**: Analysts, engineers and scientists start from notebooks, Ollama, LM Studio, llama.cpp or Hugging Face. THME should read what they have and write what they can use.
 - **Done means**: Download from the Hugging Face hub through a permissively licensed client crate (licence and binary-size cost proposed first); export GGUF that llama.cpp and Ollama load (already tested for structure by THME-2208); a documented MCP setup for editors and agents. Each bridge lists what was tested and what was not.
 

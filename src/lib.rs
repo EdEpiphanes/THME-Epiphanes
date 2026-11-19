@@ -24,6 +24,7 @@ pub mod epiph;
 pub mod experiment;
 pub mod exporter;
 pub mod gui;
+pub mod hub;
 pub mod inference;
 pub mod interop;
 pub mod ir;
