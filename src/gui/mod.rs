@@ -3,6 +3,7 @@ pub mod app;
 pub mod capture;
 pub mod live;
 pub mod manga;
+pub mod provenance;
 pub mod theme;
 
 pub use app::{LayerNode, THMEApp, TensorInfo, UniversalModel};
