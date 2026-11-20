@@ -42,6 +42,9 @@ struct Cli {
     /// Use the old 64 x 64 matmul kernel (paired baseline)
     #[arg(long, global = true)]
     old_gemm: bool,
+    /// Use the one-workgroup-per-query attention kernel (paired baseline)
+    #[arg(long, global = true)]
+    old_attention: bool,
     /// Resident weight budget in GiB (library default when absent)
     #[arg(long, global = true)]
     weight_budget_gb: Option<usize>,
@@ -107,6 +110,7 @@ fn header(cli: &Cli, gpu: &GpuContext) -> Value {
         "shader_f16": gpu.shader_f16_supported(),
         "weights_requested": cli.weights,
         "old_gemm_kernel": cli.old_gemm,
+        "old_attention_kernel": cli.old_attention,
         "weight_budget_gb": cli.weight_budget_gb,
         "weights_used": format!("{:?}", gpu.weight_storage()),
         "build_profile": if cfg!(debug_assertions) { "debug" } else { "release" },
@@ -310,6 +314,7 @@ fn main() -> Result<()> {
     let gpu = Arc::new(GpuContext::init().context("GPU adapter init failed")?);
     gpu.set_weight_storage(parse_storage(&cli.weights)?);
     gpu.set_register_blocked_gemm(!cli.old_gemm);
+    gpu.set_tiled_attention(!cli.old_attention);
     if let Some(gb) = cli.weight_budget_gb {
         gpu.set_weight_budget(gb << 30);
     }
