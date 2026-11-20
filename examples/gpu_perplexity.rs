@@ -17,6 +17,7 @@ use anyhow::{bail, Context, Result};
 use clap::Parser;
 use serde_json::{json, Value};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sysinfo::System;
@@ -73,7 +74,7 @@ fn cpu_samples(sys: &mut System, n: usize) -> Vec<f32> {
 
 /// Waits until every sample is below the threshold. Returns the samples that passed, or
 /// the last samples taken when the wait ran out.
-fn wait_quiet(sys: &mut System, args: &Args) -> (bool, Vec<f32>, f64) {
+fn wait_quiet(sys: &mut System, args: &Args, wait_minutes: u64) -> (bool, Vec<f32>, f64) {
     let started = Instant::now();
     loop {
         let samples = cpu_samples(sys, 5);
@@ -83,15 +84,59 @@ fn wait_quiet(sys: &mut System, args: &Args) -> (bool, Vec<f32>, f64) {
             started.elapsed().as_secs_f64(),
             args.max_cpu
         );
-        if quiet || started.elapsed() >= Duration::from_secs(args.wait_minutes * 60) {
+        if quiet || started.elapsed() >= Duration::from_secs(wait_minutes * 60) {
             return (quiet, samples, started.elapsed().as_secs_f64());
         }
         std::thread::sleep(Duration::from_secs(20));
     }
 }
 
-fn run_pass(model: &dyn CausalLm, tokens: &[u32], config: &PerplexityConfig) -> Result<Value> {
-    let report: PerplexityReport = evaluate_perplexity(model, tokens, config, |_, _, _| {})?;
+/// Seconds since start of the last progress tick, read by the watchdog thread.
+static LAST_TICK: AtomicU64 = AtomicU64::new(0);
+static IN_PASS: AtomicBool = AtomicBool::new(false);
+
+fn now_secs(start: &Instant) -> u64 {
+    start.elapsed().as_secs()
+}
+
+/// Stops the process with a message when a pass shows no progress for `limit_secs`.
+fn spawn_watchdog(start: Instant, limit_secs: u64) {
+    std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_secs(5));
+        if IN_PASS.load(Ordering::Relaxed)
+            && now_secs(&start).saturating_sub(LAST_TICK.load(Ordering::Relaxed)) > limit_secs
+        {
+            eprintln!("WATCHDOG: no progress for {limit_secs} s during a pass; stopping");
+            std::process::exit(3);
+        }
+    });
+}
+
+fn run_pass(
+    model: &dyn CausalLm,
+    tokens: &[u32],
+    config: &PerplexityConfig,
+    label: &str,
+    start: &Instant,
+) -> Result<Value> {
+    let began = Instant::now();
+    LAST_TICK.store(now_secs(start), Ordering::Relaxed);
+    IN_PASS.store(true, Ordering::Relaxed);
+    let mut last_print = 0u64;
+    let report = evaluate_perplexity(model, tokens, config, |done, total, running| {
+        LAST_TICK.store(now_secs(start), Ordering::Relaxed);
+        let elapsed = began.elapsed().as_secs_f64();
+        if done == total || elapsed as u64 >= last_print + 15 {
+            last_print = elapsed as u64;
+            let eta = elapsed / done as f64 * (total - done) as f64;
+            println!(
+                    "[{label}] {done}/{total} windows {:.0}% elapsed {elapsed:.0}s ETA {eta:.0}s running PPL {running:.3}",
+                    100.0 * done as f64 / total as f64
+                );
+        }
+    });
+    IN_PASS.store(false, Ordering::Relaxed);
+    let report: PerplexityReport = report?;
     Ok(json!({
         "elapsed_secs": report.elapsed_secs,
         "perplexity": report.perplexity,
@@ -146,7 +191,9 @@ fn main() -> Result<()> {
         context_len: args.context,
         max_tokens: Some(args.context * 2),
     };
-    run_pass(&*gpu_model, &tokens, &warm)?;
+    let start = Instant::now();
+    spawn_watchdog(start, 180);
+    run_pass(&*gpu_model, &tokens, &warm, "gpu warm-up", &start)?;
 
     let mut sys = System::new().context("system info unavailable")?;
     let mut seed = std::time::SystemTime::now()
@@ -157,7 +204,15 @@ fn main() -> Result<()> {
     let (mut cpu_secs, mut gpu_secs) = (Vec::new(), Vec::new());
     let mut pairs = Vec::new();
     for repeat in 0..args.runs {
-        let (quiet, samples, waited) = wait_quiet(&mut sys, &args);
+        let (quiet, samples, waited) = wait_quiet(
+            &mut sys,
+            &args,
+            if repeat == 0 {
+                args.wait_minutes
+            } else {
+                args.wait_minutes.min(3)
+            },
+        );
         seed = seed
             .wrapping_mul(6364136223846793005)
             .wrapping_add(1442695040888963407);
@@ -174,7 +229,13 @@ fn main() -> Result<()> {
             } else {
                 &*cpu_model
             };
-            let result = run_pass(model, &tokens, &eval)?;
+            let result = run_pass(
+                model,
+                &tokens,
+                &eval,
+                &format!("repeat {repeat} {device}"),
+                &start,
+            )?;
             println!("repeat {repeat} {device}: {result}");
             results.insert(device, result);
         }
