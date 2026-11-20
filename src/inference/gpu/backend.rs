@@ -296,6 +296,7 @@ pub struct GpuContext {
     pub(super) decoder: DecoderKernels,
     pub(super) timestamps: Option<TimestampProbe>,
     pub(super) kernel_timing: AtomicBool,
+    wait_timeout_ms: std::sync::atomic::AtomicU64,
     scratch: Mutex<Scratch>,
     weight_cache: Mutex<WeightCache>,
     pub(super) counters: StatCounters,
@@ -439,6 +440,7 @@ impl GpuContext {
             decoder,
             timestamps,
             kernel_timing: AtomicBool::new(false),
+            wait_timeout_ms: std::sync::atomic::AtomicU64::new(120_000),
             scratch,
             weight_cache: Mutex::new(WeightCache::default()),
             counters: StatCounters::default(),
@@ -502,6 +504,29 @@ impl GpuContext {
     }
 
     /// Turns per-submit kernel timing on or off (off by default; adds one tiny read-back per submit).
+    /// Longest the host waits for the device before a pass fails with an error (default 120 s).
+    pub fn set_wait_timeout(&self, timeout: std::time::Duration) {
+        self.wait_timeout_ms
+            .store(timeout.as_millis() as u64, Ordering::Relaxed);
+    }
+
+    /// Blocks until submitted work completes, or fails with a message after the wait timeout
+    /// so a lost device or stuck queue is an error, never a silent freeze.
+    pub(super) fn wait_for_device(&self) -> Result<(), ThmeError> {
+        let ms = self.wait_timeout_ms.load(Ordering::Relaxed);
+        self.device
+            .poll(wgpu::PollType::Wait {
+                submission_index: None,
+                timeout: Some(std::time::Duration::from_millis(ms)),
+            })
+            .map(|_| ())
+            .map_err(|e| {
+                ThmeError::DataTransferFailed(format!(
+                    "GPU wait failed after at most {ms} ms (timed out or device lost): {e}"
+                ))
+            })
+    }
+
     pub fn set_kernel_timing(&self, on: bool) {
         self.kernel_timing.store(on, Ordering::Relaxed);
     }
@@ -569,12 +594,7 @@ impl GpuContext {
         slice.map_async(wgpu::MapMode::Read, move |res| {
             let _ = tx.send(res);
         });
-        self.device
-            .poll(wgpu::PollType::Wait {
-                submission_index: None,
-                timeout: None,
-            })
-            .map_err(|e| ThmeError::DataTransferFailed(format!("GPU poll failed: {e}")))?;
+        self.wait_for_device()?;
         rx.recv()
             .map_err(|e| ThmeError::DataTransferFailed(format!("GPU channel recv failed: {e}")))?
             .map_err(|e| ThmeError::DataTransferFailed(format!("GPU buffer map failed: {e}")))?;
@@ -741,12 +761,7 @@ impl GpuContext {
         slice.map_async(wgpu::MapMode::Read, move |res| {
             let _ = tx.send(res);
         });
-        self.device
-            .poll(wgpu::PollType::Wait {
-                submission_index: None,
-                timeout: None,
-            })
-            .map_err(|e| ThmeError::DataTransferFailed(format!("GPU poll failed: {e}")))?;
+        self.wait_for_device()?;
         rx.recv()
             .map_err(|e| ThmeError::DataTransferFailed(format!("GPU channel recv failed: {e}")))?
             .map_err(|e| ThmeError::DataTransferFailed(format!("GPU buffer map failed: {e}")))?;
@@ -845,8 +860,27 @@ pub trait GpuBackend: Send + Sync {
         Ok(None)
     }
 
+    /// Output head plus negative log-likelihood on the device for already normalized rows:
+    /// returns one score per row but the last (`targets[r]` is row `r`'s next token) and reads
+    /// back only those scores. `Ok(None)` means unsupported; use the per-op path.
+    fn score_head_nll(
+        &self,
+        _normed: &[f32],
+        _head: &[f32],
+        _d: usize,
+        _vocab: usize,
+        _targets: &[u32],
+    ) -> Result<Option<Vec<f32>>, ThmeError> {
+        Ok(None)
+    }
+
     fn is_format_supported(&self, dtype: QuantDtype) -> bool;
     fn device_name(&self) -> &str;
+
+    /// Adapter details for measured reports (name, graphics API, driver).
+    fn adapter_json(&self) -> serde_json::Value {
+        serde_json::json!({ "name": self.device_name() })
+    }
 }
 
 impl GpuBackend for GpuContext {
@@ -932,6 +966,17 @@ impl GpuBackend for GpuContext {
         GpuContext::forward_decoder(self, plan, embedded)
     }
 
+    fn score_head_nll(
+        &self,
+        normed: &[f32],
+        head: &[f32],
+        d: usize,
+        vocab: usize,
+        targets: &[u32],
+    ) -> Result<Option<Vec<f32>>, ThmeError> {
+        GpuContext::score_head_nll(self, normed, head, d, vocab, targets)
+    }
+
     fn is_format_supported(&self, dtype: QuantDtype) -> bool {
         matches!(
             dtype,
@@ -941,6 +986,17 @@ impl GpuBackend for GpuContext {
 
     fn device_name(&self) -> &str {
         &self.adapter_info.name
+    }
+
+    fn adapter_json(&self) -> serde_json::Value {
+        let info = &self.adapter_info;
+        serde_json::json!({
+            "name": info.name,
+            "backend": format!("{:?}", info.backend),
+            "device_type": format!("{:?}", info.device_type),
+            "driver": info.driver,
+            "driver_info": info.driver_info,
+        })
     }
 }
 
