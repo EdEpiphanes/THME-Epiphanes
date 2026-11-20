@@ -71,6 +71,11 @@ path = "examples/depth_probe.rs"
 name = "decode_speed"
 path = "examples/decode_speed.rs"
 
+[[example]]
+name = "token_frequency"
+path = "examples/token_frequency.rs"
+test = true
+
 [dependencies]
 clap = { workspace = true }
 serde = { workspace = true }
