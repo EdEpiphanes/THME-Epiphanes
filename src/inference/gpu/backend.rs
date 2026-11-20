@@ -429,7 +429,7 @@ impl GpuContext {
         let decoder = DecoderKernels::new(&device);
         let timestamps = timestamp_support.then(|| TimestampProbe::new(&device, &queue));
 
-        Ok(Self {
+        let ctx = Self {
             device,
             queue,
             pipelines,
@@ -442,7 +442,40 @@ impl GpuContext {
             scratch,
             weight_cache: Mutex::new(WeightCache::default()),
             counters: StatCounters::default(),
-        })
+        };
+        ctx.self_test()?;
+        Ok(ctx)
+    }
+
+    /// Known-answer check on tile-edge shapes. Some adapters (for example the virtualised GPU of
+    /// a CI runner) run the kernels but return wrong numbers; such an adapter must not be used.
+    fn self_test(&self) -> Result<(), ThmeError> {
+        for (rows, in_dim, out_dim) in [(1usize, 70usize, 100usize), (17, 70, 100)] {
+            let x: Vec<f32> = (0..rows * in_dim)
+                .map(|i| ((i * 7 % 13) as f32 - 6.0) / 8.0)
+                .collect();
+            let w: Vec<f32> = (0..out_dim * in_dim)
+                .map(|i| ((i * 5 % 11) as f32 - 5.0) / 8.0)
+                .collect();
+            let weights =
+                QuantizedTensor::new_f32("gpu_self_test", vec![out_dim, in_dim], w.clone())?;
+            let got = self.compute_linear(&x, &weights, in_dim, out_dim)?;
+            for r in 0..rows {
+                for o in 0..out_dim {
+                    let want: f32 = (0..in_dim)
+                        .map(|j| x[r * in_dim + j] * w[o * in_dim + j])
+                        .sum();
+                    let have = got.get(r * out_dim + o).copied().unwrap_or(f32::NAN);
+                    if have.is_nan() || (have - want).abs() > 1e-3 * want.abs().max(1.0) {
+                        return Err(ThmeError::GpuInitFailed(format!(
+                            "adapter '{}' ({:?}) failed the known-answer self-test (rows={rows}: {have} instead of {want}); not using it",
+                            self.adapter_info.name, self.adapter_info.backend
+                        )));
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Snapshot of the cumulative host-side counters.
