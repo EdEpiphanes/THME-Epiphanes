@@ -265,13 +265,13 @@ user-facing path.
 | :--- | :--- | :--- |
 | v0.2.0.1 | Reference CPU forward pass: LLaMA family and GPT-NeoX (`src/inference/`) | **Done**: measured on SmolLM-135M and Pythia-14M |
 | v0.2.0.2 | WikiText-2 tokenization with provenance and hashes (`scripts/prepare_eval_tokens.py`) | **Done** |
-| v0.2.0.3 | Measured quality gate: source vs exported GGUF vs recipe (`examples/production_verification.rs`) | Implemented, re-measure pending (THME-3044) |
-| v0.2.0.4 | Dossier and charts generated only from reports (`scripts/generate_dossier.py`, `scripts/generate_charts.py`) | **Done** (reports removed 19 November 2026, to be re-measured) |
-| v0.2.0.5 | Measured experiments: precision sweep with random-placement control, depth probe | Implemented, re-measure pending (THME-3044) |
-| v0.2.0.6 | Cross-check the forward pass against the Hugging Face reference (logit agreement on fixed prompts) | Open; paused while no new model runs are being made |
+| v0.2.0.3 | Measured quality gate: source vs exported GGUF vs recipe (`examples/production_verification.rs`) | **Done**: re-measured on both models after the FP16 fix (20 November 2026, `verification_report.json`) |
+| v0.2.0.4 | Dossier and charts generated only from reports (`scripts/generate_dossier.py`, `scripts/generate_charts.py`) | **Done**: reports removed 19 November 2026 and regenerated 20 November 2026 |
+| v0.2.0.5 | Measured experiments: precision sweep with random-placement control, depth probe | **Done**: precision sweep and depth probe re-measured on both models (20 November 2026) |
+| v0.2.0.6 | Cross-check the forward pass against the Hugging Face reference (logit agreement on fixed prompts) | **Done**: largest logit difference 1.9e-4 (Pythia-14M) and 2.1e-5 (SmolLM-135M) against the fp32 reference, tolerance 0.005 (`docs/research/hf-cross-check-*.json`) |
 | v0.2.0.7 | Retire the analytic proxy from `thme validate`, the MCP quality tool and the co-surgery loop; route them through the measured gate | **Done**: `thme validate --report` gates measured reports; `thme co-surgery MODEL --tokens` scores candidates with the forward pass (`QualityEvaluator`, `MeasuredEvaluator`); supplied-value and proxy paths are labelled, including the Studio Co-Surgery tab |
 | v0.2.0.8 | Real Studio screenshots (`scripts/capture_studio.ps1`); fix missing-glyph labels and overlapping text in the Layer Tweaker dataflow row; show measured reports in the Studio | **Done** except showing measured reports in the Studio (moved to v0.2.1.9) |
-| v0.2.0.9 | Release engineering: LTO binaries, Minisign/GPG signing, SHA-256 manifest, clean-machine test, manual and man page | Implemented in v0.1.x workflows; to be re-verified at tag time |
+| v0.2.0.9 | Release engineering: LTO binaries, Minisign/GPG signing, SHA-256 manifest, clean-machine test, manual and man page | Implemented in v0.1.x workflows and hardened on 20 November 2026 (THME-3049); the release and verify steps have not run on GitHub yet; to be re-verified at tag time |
 
 ## v0.2.1 — Recipe and BYOA lab
 
@@ -311,7 +311,7 @@ SmolLM-135M, measured from the written file.
 | v0.2.2.1 | Per-tensor formats in the GGUF writer, so the recipe and the artifact are the same thing. **Done**: `thme export --recipe` writes each tensor in its assigned format (FP16, Q8_0, Q4_0, Q4_K, Q5_K, Q6_K, TQ1_0; FP32 and 1-D tensors as stored); a test re-imports the file and reproduces `thme evaluate`'s perplexity, with bit-identical weights. Norm epsilon and RoPE base now travel through GGUF metadata instead of fixed defaults |
 | v0.2.2.2 | Q4_K, Q5_K and Q6_K encoders with round-trip tests against the decoders. **Done**: GGML-layout codecs (`src/exporter/kquant.rs`) checked against hand-built blocks; the forward pass reads K-quant tensors; `q4_k`, `q5_k`, `q6_k` usable in recipes, `thme evaluate` and `thme search --formats` |
 | v0.2.2.3 | Calibration activations captured from the forward pass. **Done**: the probe records per-input-channel mean \|x\|, rms and max \|x\| for every linear tensor; `thme calibrate` merges them over calibration windows and saves them keyed by tensor name (`inference::calibration`) |
-| v0.2.2.4 | Activation-aware scaling (AWQ-style). Implemented: `thme.awq_q4_0` and `thme.awq_q4_k` BYOA rules (`inference::awq`) choose a per-channel scale exponent by activation-weighted error, using `thme evaluate --calibration`; tested on synthetic weights and the synthetic model. Measurement on a real model against plain Q4_0 is pending (no model runs) |
+| v0.2.2.4 | Activation-aware scaling (AWQ-style). **Done**: measured on Pythia-14M and SmolLM-135M with controls (20 November 2026). Implemented: `thme.awq_q4_0` and `thme.awq_q4_k` BYOA rules (`inference::awq`) choose a per-channel scale exponent by activation-weighted error, using `thme evaluate --calibration`; tested on synthetic weights and the synthetic model. Measurement on a real model against plain Q4_0 is pending (no model runs) |
 | v0.2.2.5 | Second-order rounding (GPTQ-style) | Implemented: Q4_0 and Q8_0 rounding follows the reference algorithm; tested on synthetic matrices, not measured on a real model |
 | v0.2.2.6 | Randomized Hadamard rotation of weight inputs (QuaRot-style), measured with and without |
 | v0.2.2.7 | SmoothQuant-style scale migration for activation outliers. **Done**: `inference::smoothing` folds per-channel scales (from calibration max \|x\|) into the preceding RMSNorm or LayerNorm and the linears that read it, for LLaMA and GPT-NeoX; tests confirm unchanged outputs before quantization. Its effect after quantization is not measured |
@@ -345,8 +345,8 @@ hardware for the source and for a passing heterogeneous candidate.
 | # | Item |
 | :--- | :--- |
 | v0.2.4.1 | Incremental decoding with a KV cache in the reference runtime. **Done** (THME-3070): paired speedups 4x to 12x on the two small models, cache bytes match the estimate |
-| v0.2.4.2 | KV-cache bytes measured across a context-length sweep. **Partly done**: measured at 23, 71 and 263 tokens; the full sweep to 2,048 is open |
-| v0.2.4.3 | Prefill and decode throughput measured on CPU. **Partly done** on CPU and GPU (`decode_speed.json`, `gpu_profile.json`, `gpu_perplexity.json`) |
+| v0.2.4.2 | KV-cache bytes measured across a context-length sweep. **In progress**: measured at 23, 71 and 263 tokens; the full sweep to 2,048 is open |
+| v0.2.4.3 | Prefill and decode throughput measured on CPU. **In progress**: measured on CPU and GPU (`decode_speed.json`, `gpu_profile.json`, `gpu_perplexity.json`) |
 | v0.2.4.4 | Quantized kernels that compute directly on Q8_0 and Q4 blocks |
 | v0.2.4.5 | Peak resident memory measured per run |
 | v0.2.4.6 | KV-cache quantization, measured against long-context quality |

@@ -136,6 +136,22 @@ closes it.
 - **Problem**: No speed, memory or KV-cache figure is measured yet.
 - **Done means**: Broken into tickets per ROADMAP.md v0.2.4 when v0.2.3 closes.
 
+### [THME-3079] Token-frequency count for Pythia-14M (weights-only)
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: experiment · **Status**: in review
+- **Problem**: Pythia-14M stores about 92 percent of its parameters in the two embedding matrices, and the output head is about 85 percent of the bytes read per decoded token. Which rows matter depends on how often tokens occur, and nothing counts that yet.
+- **Progress** (20 November 2026): `examples/token_frequency.rs` counts the 2,419,837 WikiText-2 train tokens (Pythia tokenizer, no model pass) and writes `docs/benchmarks/pythia-14m/data/token_frequency.json`, pinned by the token-file, corpus and tokenizer hashes. Measured: the top 1,024 / 4,096 / 8,192 rows cover 66.2% / 82.6% / 90.7% of train tokens; the same train rows cover 65.4% / 81.2% / 89.2% of the 287,159 test tokens (rows ranked on the test split itself would cover 69.3% / 87.0% / 94.5%). 17,145 of 50,304 rows never occur in train; 848 test tokens (0.3%) fall in them. Unit test on a tiny synthetic array passes.
+- **Not done**: citation from THME-3081 and the banded-row experiments of THME-3080.
+- **Done means**: A command or example counts token frequencies over the WikiText-2 train split with the model's own tokenizer (no model forward pass), writes a hash-pinned frequency table, and reports the share of tokens covered by the top 1,024, 4,096 and 8,192 rows; the result is committed as a report and cited by THME-3080 and THME-3081.
+
+### [THME-3080] Per-row precision bands for the embedding and output matrices (Pythia-14M)
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: experiment · **Status**: in progress
+- **Problem**: The linear layers are about 8 percent of Pythia-14M, so uniform quantisation of them barely changes its size; the embedding rows are the lever. Rare tokens may tolerate fewer bits than frequent ones.
+- **Progress** (20 November 2026): first question measured (rule written in the report before the first run; `docs/benchmarks/pythia-14m/data/embedding_vs_linear.json`, GPU, RTX 4060 Ti, full test split, default gate). At Q8_0 the perplexity rise over the 114.286 baseline is +0.083 for embeddings and head alone (passes), +0.666 for the linear layers alone (fails the 0.45 margin), +0.744 for both (fails); by the rule the linear layers are the cause. At Q4_0 the rises are +12.4, +78.7 and +102.1, all failing. The written GGUF is 16.07 MB (embeddings Q8_0), 27.04 MB (linears Q8_0), 14.96 MB (both) at Q8_0, and 9.63, 26.45 and 7.93 MB at Q4_0. The reproduction check missed: both-at-Q8_0 gives +0.744, the committed uniform Q8_0 report says +0.834 (limit 0.02); CPU gives the same +0.744, so the device is not the cause. Untested guess: the committed path also quantises norms and biases.
+- **Not done**: frequency-banded rows with shuffled-band controls, the uniform-lower-bit comparison at equal bytes, the `.epiph` byte counts, the 0.83 gap explained, SmolLM-135M.
+- **Done means**: Measured on Pythia-14M with the existing quality gate and a pre-registered rule written in the report before the run: bytes of the written `.epiph` and perplexity on the WikiText-2 test split for uniform Q8_0, uniform lower-bit, and frequency-banded rows (bands from THME-3079), each with a shuffled-band control; also reports whether the Q8_0 gate failure on Pythia comes from the embeddings or the linear layers. A positive result is the condition for the per-row-band codec of THME-3078.
+
 ### [THME-3072] GPU path faster than CPU on the small models
 
 - **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p1 · **Area**: gpu · **Type**: perf · **Status**: in review
@@ -201,6 +217,24 @@ closes it.
 - **Milestone**: v0.2.6 · **Roadmap**: none · **Priority**: p2 · **Area**: format · **Type**: feature · **Status**: triage
 - **Problem**: Each tensor today has one storage format. The memory work needs layouts inside a tensor (for example embedding rows split into precision bands by token frequency, factorised or codebook tensors, row-sparse blocks). The format should accept new layouts without breaking readers, and stay readable by tools that do not know them.
 - **Done means**: A design and a spec section (`docs/formats/epiph-v1.md`, a minor version): a tensor entry carries an `encoding` description (codec id, parameters, optional row bands with a band map) from an open registry; each codec is marked critical (a reader that does not know it refuses with an exact message and the way to convert) or optional (a reader may skip it when a canonical copy is present); every non-canonical encoding can be written together with, or converted to, a canonical block-format copy; the manifest lists the features used so a reader can tell before reading tensors; unknown optional manifest fields and attachment kinds are ignored; tests for old reader and new file, new reader and old file, unknown critical codec, band map round trip, and the golden-hash portability test extended to the new encodings. The first codec (per-row-band precision) is added only if experiment A1 of the unified concept note shows a measured gain in bytes at an acceptable perplexity change on Pythia-14M.
+
+### [THME-3081] Frequent-row draft pass for the output head (Pythia-14M)
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: experiment · **Status**: ready
+- **Problem**: Decode reads the whole output head for every token. If the greedy token is almost always among the most frequent rows, a draft over those rows plus an exact verification step could cut the bytes read without changing the output.
+- **Done means**: One pass measures how often the greedy token lies in the top 1,024, 4,096 and 8,192 frequent rows (rows from THME-3079) over the test split; a decision rule fixed in the report before the run says whether to build the verified draft; if built, the output must be identical to normal greedy decoding and tokens per second are measured paired against it.
+
+### [THME-3082] KV cache in int8 and int4 per group, counted in the placement budget
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: experiment · **Status**: ready
+- **Problem**: The KV cache is now real (THME-3070): 12.6 MB at 2,048 context for Pythia-14M, more for larger models. Lower-precision KV could cut it, mainly for models at SmolLM size and above.
+- **Done means**: KV stored in int8 and int4 per group behind the existing cache type; cache bytes, perplexity at 1k and 4k context and decode tokens per second measured against the f32 cache on Pythia-14M, with SmolLM-135M as the late confirmation; the placement budget (THME-3016) counts the real KV bytes.
+
+### [THME-3083] Layer-removal check on the small models
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: experiment · **Status**: ready
+- **Problem**: Published work reports that some layers can be removed from larger models with little loss; small models may be more fragile.
+- **Done means**: Block influence per layer computed for Pythia-14M (and SmolLM-135M late), perplexity measured against the number of removed blocks on the same token hash with a random-removal control; the rule and the stop threshold are written before the run.
 
 ## Engine, format, security and quality tracks (v0.2.5 to v0.2.9)
 
