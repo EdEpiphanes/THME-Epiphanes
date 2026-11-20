@@ -1,5 +1,7 @@
 # Multi-vendor GPU compute backends for LLM inference
 
+> Naming (owner, 20 November 2026): the GPU and CPU backends described here are called **Compute Bridge**; the run planner is `thme pathfinder`; detection stays `thme doctor`. Every performance number below is reported by other projects, not measured by THME, unless it cites a committed THME report.
+
 Status: research note, 2026-11-20. Question: how should THME build a fast, portable GPU backend with
 vendor detection and driver checks (NVIDIA, AMD, Intel, Apple Silicon, integrated GPUs)?
 
