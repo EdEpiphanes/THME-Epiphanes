@@ -828,6 +828,11 @@ pub trait GpuBackend: Send + Sync {
 
     fn is_format_supported(&self, dtype: QuantDtype) -> bool;
     fn device_name(&self) -> &str;
+
+    /// Adapter details for measured reports (name, graphics API, driver).
+    fn adapter_json(&self) -> serde_json::Value {
+        serde_json::json!({ "name": self.device_name() })
+    }
 }
 
 impl GpuBackend for GpuContext {
@@ -933,6 +938,17 @@ impl GpuBackend for GpuContext {
 
     fn device_name(&self) -> &str {
         &self.adapter_info.name
+    }
+
+    fn adapter_json(&self) -> serde_json::Value {
+        let info = &self.adapter_info;
+        serde_json::json!({
+            "name": info.name,
+            "backend": format!("{:?}", info.backend),
+            "device_type": format!("{:?}", info.device_type),
+            "driver": info.driver,
+            "driver_info": info.driver_info,
+        })
     }
 }
 

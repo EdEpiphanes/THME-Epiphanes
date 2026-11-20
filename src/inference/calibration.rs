@@ -38,6 +38,9 @@ pub struct CalibrationFile {
     pub context_len: usize,
     /// Token positions the statistics cover (windows x context).
     pub tokens: usize,
+    /// Device the statistics were collected on (`cpu`, or the GPU adapter), when recorded.
+    #[serde(default)]
+    pub device: Option<serde_json::Value>,
     pub tensors: Vec<TensorCalibration>,
 }
 
@@ -133,6 +136,7 @@ pub fn collect_calibration(
         model_name: ir.name.clone(),
         context_len,
         tokens: covered,
+        device: None,
         tensors,
     })
 }
