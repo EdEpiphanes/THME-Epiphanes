@@ -10,8 +10,8 @@ use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use super::backend::{
-    bump, check_finite, storage_buffer, storage_entry, GemvParams, GpuContext, ShaderKind,
-    GEMM_TILE, GEMV_MAX_ROWS, MAX_GROUPS, PARAM_STRIDE,
+    bump, check_finite, storage_buffer, storage_entry, GemvParams, GpuContext, MAX_GROUPS,
+    PARAM_STRIDE,
 };
 use super::error::ThmeError;
 use wgpu::util::DeviceExt;
@@ -108,15 +108,79 @@ impl DecoderKernels {
 }
 
 /// Records dispatches into one pass, giving each its own 256-byte parameter block.
-struct Recorder<'a, 'p> {
+struct Recorder<'a> {
     ctx: &'a GpuContext,
-    pass: wgpu::ComputePass<'p>,
+    encoder: &'a mut wgpu::CommandEncoder,
+    /// The open compute pass; in profile mode every dispatch gets its own, timed pass.
+    pass: Option<wgpu::ComputePass<'static>>,
+    /// Single-pass begin/end timestamps (whole-stack timing), unused in profile mode.
+    whole_pass: Option<&'a super::backend::TimestampProbe>,
+    profile: Option<OpProfile>,
     params: &'a wgpu::Buffer,
     param_bytes: Vec<u8>,
     dispatches: u64,
 }
 
-impl<'a> Recorder<'a, '_> {
+/// Per-dispatch timestamp slots and the label of each.
+pub(super) struct OpProfile {
+    pub(super) queries: wgpu::QuerySet,
+    pub(super) labels: Vec<String>,
+}
+
+/// Most dispatches one profiled submission can time (two timestamps each, 4096 per set).
+const MAX_PROFILED_DISPATCHES: usize = 2048;
+
+impl<'a> Recorder<'a> {
+    /// The pass the next dispatch goes into, labelled for the profile.
+    fn pass_for(&mut self, label: String) -> Result<&mut wgpu::ComputePass<'static>, ThmeError> {
+        let timed = match self.profile.as_mut() {
+            Some(prof) => {
+                let slot = prof.labels.len();
+                if slot >= MAX_PROFILED_DISPATCHES {
+                    return Err(ThmeError::ExecutionFailed(
+                        "too many dispatches for one profiled submission".into(),
+                    ));
+                }
+                prof.labels.push(label);
+                Some(slot as u32)
+            }
+            None => None,
+        };
+        if timed.is_some() || self.pass.is_none() {
+            self.pass = None; // end the open pass before the encoder begins another
+            let writes = match (timed, self.profile.as_ref(), self.whole_pass) {
+                (Some(slot), Some(prof), _) => Some(wgpu::ComputePassTimestampWrites {
+                    query_set: &prof.queries,
+                    beginning_of_pass_write_index: Some(2 * slot),
+                    end_of_pass_write_index: Some(2 * slot + 1),
+                }),
+                (None, _, Some(p)) => Some(wgpu::ComputePassTimestampWrites {
+                    query_set: &p.queries,
+                    beginning_of_pass_write_index: Some(0),
+                    end_of_pass_write_index: Some(1),
+                }),
+                _ => None,
+            };
+            let pass = self
+                .encoder
+                .begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: Some("decoder_pass"),
+                    timestamp_writes: writes,
+                })
+                .forget_lifetime();
+            return Ok(self.pass.insert(pass));
+        }
+        self.pass
+            .as_mut()
+            .ok_or_else(|| ThmeError::ExecutionFailed("no open compute pass".into()))
+    }
+
+    /// Ends the open pass and returns the parameter bytes, dispatch count and profile.
+    fn finish(mut self) -> (Vec<u8>, u64, Option<OpProfile>) {
+        self.pass = None;
+        (self.param_bytes, self.dispatches, self.profile)
+    }
+
     fn params_binding(&mut self, words: &[u8]) -> wgpu::BindingResource<'a> {
         let offset = self.param_bytes.len();
         self.param_bytes.extend_from_slice(words);
@@ -148,15 +212,8 @@ impl<'a> Recorder<'a, '_> {
             out_offset: 0,
             _pad: [0; 3],
         };
-        let use_gemm = rows > GEMV_MAX_ROWS;
-        let pipeline = if use_gemm {
-            &self.ctx.gemm_f32
-        } else {
-            self.ctx.pipelines.get(&ShaderKind::F32).ok_or_else(|| {
-                ThmeError::ExecutionFailed("Compute pipeline for F32 not found".into())
-            })?
-        };
         let ctx = self.ctx;
+        let (pipeline, groups, kernel) = ctx.dense_dispatch(rows, in_dim, out_dim, 0)?;
         let binding = self.params_binding(bytemuck::bytes_of(&params));
         let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("decoder_linear"),
@@ -184,19 +241,11 @@ impl<'a> Recorder<'a, '_> {
                 },
             ],
         });
-        self.pass.set_pipeline(pipeline);
-        self.pass.set_bind_group(0, &bind_group, &[]);
-        let o = out_dim as u32;
-        if use_gemm {
-            self.pass.dispatch_workgroups(
-                o.div_ceil(GEMM_TILE),
-                (rows as u32).div_ceil(GEMM_TILE),
-                1,
-            );
-        } else {
-            self.pass
-                .dispatch_workgroups(o.min(MAX_GROUPS), o.div_ceil(MAX_GROUPS), rows as u32);
-        }
+        let label = format!("linear {kernel} {rows}x{in_dim}x{out_dim}");
+        let pass = self.pass_for(label)?;
+        pass.set_pipeline(pipeline);
+        pass.set_bind_group(0, &bind_group, &[]);
+        pass.dispatch_workgroups(groups[0], groups[1], groups[2]);
         self.dispatches += 1;
         Ok(())
     }
@@ -204,12 +253,13 @@ impl<'a> Recorder<'a, '_> {
     /// One elementwise or reduction kernel from `decoder_ops.wgsl`.
     fn op(
         &mut self,
+        name: &str,
         pipeline: &wgpu::ComputePipeline,
         words: [u32; 8],
         bufs: [&wgpu::Buffer; 4],
         groups: (u32, u32, u32),
         layout: &wgpu::BindGroupLayout,
-    ) {
+    ) -> Result<(), ThmeError> {
         let ctx = self.ctx;
         let binding = self.params_binding(bytemuck::bytes_of(&words));
         let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -238,10 +288,12 @@ impl<'a> Recorder<'a, '_> {
                 },
             ],
         });
-        self.pass.set_pipeline(pipeline);
-        self.pass.set_bind_group(0, &bind_group, &[]);
-        self.pass.dispatch_workgroups(groups.0, groups.1, groups.2);
+        let pass = self.pass_for(name.to_string())?;
+        pass.set_pipeline(pipeline);
+        pass.set_bind_group(0, &bind_group, &[]);
+        pass.dispatch_workgroups(groups.0, groups.1, groups.2);
         self.dispatches += 1;
+        Ok(())
     }
 }
 
@@ -323,13 +375,12 @@ impl GpuContext {
             label: Some("head_nll_encoder"),
         });
         let (param_bytes, dispatches) = {
-            let pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("head_nll_pass"),
-                timestamp_writes: None,
-            });
             let mut rec = Recorder {
                 ctx: self,
-                pass,
+                encoder: &mut encoder,
+                pass: None,
+                whole_pass: None,
+                profile: None,
                 params: &params,
                 param_bytes: Vec::with_capacity(slots * PARAM_STRIDE),
                 dispatches: 0,
@@ -339,15 +390,17 @@ impl GpuContext {
                 let rows = chunk_rows.min(scored - first);
                 rec.linear(&x, first, &head_buf, &logits, rows, d, vocab)?;
                 rec.op(
+                    "nll",
                     &self.decoder.nll,
                     words(&[rows as u32, vocab as u32, first as u32, 0]),
                     [&logits, &target_buf, &dummy, &scores],
                     (rows as u32, 1, 1),
                     &self.decoder.layout,
-                );
+                )?;
                 first += rows;
             }
-            (rec.param_bytes, rec.dispatches)
+            let (bytes, dispatches, _) = rec.finish();
+            (bytes, dispatches)
         };
         let bytes = (t * 4) as u64;
         encoder.copy_buffer_to_buffer(&scores, 0, &staging, 0, bytes);
@@ -503,21 +556,24 @@ impl GpuContext {
             .timestamps
             .as_ref()
             .filter(|_| self.kernel_timing.load(Ordering::Relaxed));
+        let op_profile = probe.is_some() && self.op_profile.load(Ordering::Relaxed);
         let mut encoder = dev.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("decoder_encoder"),
         });
-        let (param_bytes, dispatches) = {
-            let pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("decoder_pass"),
-                timestamp_writes: probe.map(|p| wgpu::ComputePassTimestampWrites {
-                    query_set: &p.queries,
-                    beginning_of_pass_write_index: Some(0),
-                    end_of_pass_write_index: Some(1),
-                }),
-            });
+        let (param_bytes, dispatches, profile) = {
             let mut rec = Recorder {
                 ctx: self,
-                pass,
+                encoder: &mut encoder,
+                pass: None,
+                whole_pass: if op_profile { None } else { probe },
+                profile: op_profile.then(|| OpProfile {
+                    queries: dev.create_query_set(&wgpu::QuerySetDescriptor {
+                        label: Some("op_profile"),
+                        ty: wgpu::QueryType::Timestamp,
+                        count: 2 * MAX_PROFILED_DISPATCHES as u32,
+                    }),
+                    labels: Vec::new(),
+                }),
                 params: &params,
                 param_bytes: Vec::with_capacity(slots * PARAM_STRIDE),
                 dispatches: 0,
@@ -530,107 +586,137 @@ impl GpuContext {
             for res in &resident {
                 let [attn_norm, wq, wk, wv, wo, mlp_norm, wg, wu, wd] = res;
                 rec.op(
+                    "rms_norm",
                     &kx.rms_norm,
                     words(&[t as u32, d as u32, eps, 0]),
                     [&x_a, attn_norm, &dummy, &normed],
                     (t as u32, 1, 1),
                     lay,
-                );
+                )?;
                 rec.linear(&normed, 0, wq, &q, t, d, d)?;
                 rec.linear(&normed, 0, wk, &k, t, d, kv_dim)?;
                 rec.linear(&normed, 0, wv, &v, t, d, kv_dim)?;
                 rec.op(
+                    "rope",
                     &kx.rope,
                     words(&[t as u32, d as u32, hd as u32, half as u32]),
                     [&cos, &sin, &dummy, &q],
                     grid(t * (d / hd) * half),
                     lay,
-                );
+                )?;
                 rec.op(
+                    "rope",
                     &kx.rope,
                     words(&[t as u32, kv_dim as u32, hd as u32, half as u32]),
                     [&cos, &sin, &dummy, &k],
                     grid(t * kv_heads * half),
                     lay,
-                );
+                )?;
                 rec.op(
+                    "attention",
                     &kx.attention,
                     words(&[t as u32, heads as u32, kv_heads as u32, hd as u32, scale]),
                     [&q, &k, &v, &mixed],
                     (heads as u32, t as u32, 1),
                     lay,
-                );
+                )?;
                 rec.linear(&mixed, 0, wo, &tmp, t, d, d)?;
                 rec.op(
+                    "add",
                     &kx.add,
                     words(&[td as u32]),
                     [&x_a, &tmp, &dummy, &x_b],
                     grid(td),
                     lay,
-                );
+                )?;
                 rec.op(
+                    "rms_norm",
                     &kx.rms_norm,
                     words(&[t as u32, d as u32, eps, 0]),
                     [&x_b, mlp_norm, &dummy, &normed],
                     (t as u32, 1, 1),
                     lay,
-                );
+                )?;
                 rec.linear(&normed, 0, wg, &gate, t, d, plan.inter)?;
                 rec.linear(&normed, 0, wu, &up, t, d, plan.inter)?;
                 rec.op(
+                    "swiglu",
                     &kx.swiglu,
                     words(&[tint as u32]),
                     [&gate, &up, &dummy, &hidden],
                     grid(tint),
                     lay,
-                );
+                )?;
                 rec.linear(&hidden, 0, wd, &tmp, t, plan.inter, d)?;
                 rec.op(
+                    "add",
                     &kx.add,
                     words(&[td as u32]),
                     [&x_b, &tmp, &dummy, &x_a],
                     grid(td),
                     lay,
-                );
+                )?;
             }
             if nll_mode {
                 rec.op(
+                    "rms_norm",
                     &kx.rms_norm,
                     words(&[t as u32, d as u32, eps, 0]),
                     [&x_a, &final_norm, &dummy, &normed],
                     (t as u32, 1, 1),
                     lay,
-                );
+                )?;
                 let mut first = 0;
                 while first < scored {
                     let rows = chunk_rows.min(scored - first);
                     rec.linear(&normed, first, &head, &logits, rows, d, plan.vocab)?;
                     rec.op(
+                        "nll",
                         &kx.nll,
                         words(&[rows as u32, plan.vocab as u32, first as u32, 0]),
                         [&logits, &target_buf, &dummy, &scores],
                         (rows as u32, 1, 1),
                         lay,
-                    );
+                    )?;
                     first += rows;
                 }
             } else {
                 // Final norm of the last position only, then the output head.
                 rec.op(
+                    "rms_norm",
                     &kx.rms_norm,
                     words(&[1, d as u32, eps, ((t - 1) * d) as u32]),
                     [&x_a, &final_norm, &dummy, &last],
                     (1, 1, 1),
                     lay,
-                );
+                )?;
                 rec.linear(&last, 0, &head, &logits, 1, d, plan.vocab)?;
             }
-            (rec.param_bytes, rec.dispatches)
+            rec.finish()
         };
         let logit_bytes = (out_len * 4) as u64;
         let result = if nll_mode { &scores } else { &logits };
         encoder.copy_buffer_to_buffer(result, 0, &logits_staging, 0, logit_bytes);
-        if let Some(p) = probe {
+        let op_readback = profile.as_ref().map(|prof| {
+            let n = prof.labels.len() as u32 * 2;
+            let bytes = u64::from(n) * 8;
+            let resolve = storage_buffer(
+                dev,
+                "op_profile_resolve",
+                bytes as usize,
+                wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
+            );
+            let staging = storage_buffer(
+                dev,
+                "op_profile_staging",
+                bytes as usize,
+                wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            );
+            encoder.resolve_query_set(&prof.queries, 0..n, &resolve, 0);
+            encoder.copy_buffer_to_buffer(&resolve, 0, &staging, 0, bytes);
+            staging
+        });
+        if let (Some(p), false) = (probe, op_profile) {
             encoder.resolve_query_set(&p.queries, 0..2, &p.resolve, 0);
             encoder.copy_buffer_to_buffer(&p.resolve, 0, &p.staging, 0, 16);
         }
@@ -660,8 +746,11 @@ impl GpuContext {
             .map_err(|e| ThmeError::DataTransferFailed(format!("GPU channel recv failed: {e}")))?
             .map_err(|e| ThmeError::DataTransferFailed(format!("GPU buffer map failed: {e}")))?;
         bump(&self.counters.wait_ns, t_wait);
-        if let Some(p) = probe {
+        if let (Some(p), false) = (probe, op_profile) {
             self.read_kernel_time(p)?;
+        }
+        if let (Some(prof), Some(staging), Some(p)) = (&profile, &op_readback, probe) {
+            self.read_op_profile(p, prof, staging)?;
         }
 
         let t_read = Instant::now();

@@ -507,3 +507,70 @@ fn a_device_wait_that_cannot_finish_is_an_error_not_a_freeze() {
     gpu.score_head_nll(&normed, &head, d, vocab, &tokens[1..])
         .expect("recovers once the wait is long enough");
 }
+
+#[test]
+fn op_profile_lists_every_decoder_kernel_with_device_time() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    if !gpu.timestamp_query_supported() {
+        eprintln!("SKIP: adapter has no timestamp queries");
+        return;
+    }
+    let gpu = Arc::new(gpu);
+    let (mut model, _) = synthetic_demo(3);
+    model.set_gpu(Some(gpu.clone()));
+    let tokens: Vec<u32> = (0..16).map(|i| (i * 41 % 256) as u32).collect();
+    gpu.set_op_profile(true);
+    let before = gpu.stats();
+    model.forward_logits(&tokens).expect("gpu logits");
+    gpu.set_op_profile(false);
+    let samples = gpu.take_op_profile();
+    let dispatches = gpu.stats().dispatches - before.dispatches;
+    assert_eq!(samples.len() as u64, dispatches, "one sample per dispatch");
+    for kernel in ["rms_norm", "rope", "attention", "swiglu", "add", "linear"] {
+        assert!(
+            samples.iter().any(|s| s.label.starts_with(kernel)),
+            "no sample for {kernel}"
+        );
+    }
+    assert!(samples.iter().any(|s| s.ns > 0), "all zero device times");
+    assert!(gpu.take_op_profile().is_empty(), "take drains the samples");
+}
+
+#[test]
+fn large_vec4_friendly_shapes_use_the_register_blocked_gemm_and_match_cpu() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    assert_eq!(gpu.gemm_kernel_name(1024, 2048, 2048, 0), "gemm128");
+    assert_eq!(gpu.gemm_kernel_name(4, 2048, 2048, 0), "gemv");
+    assert_eq!(
+        gpu.gemm_kernel_name(1024, 70, 100, 0),
+        "gemm64",
+        "in_dim not a multiple of 4"
+    );
+    assert_eq!(
+        gpu.gemm_kernel_name(1024, 64, 100, 2),
+        "gemm64",
+        "unaligned output offset"
+    );
+    let mut seed = 21u64;
+    // Edges of the 128 x 128 tile and of the 16-deep k step.
+    for (rows, in_dim, out_dim) in [
+        (9, 16, 8),
+        (127, 48, 132),
+        (129, 64, 124),
+        (130, 576, 200),
+        (257, 20, 260),
+    ] {
+        assert_eq!(gpu.gemm_kernel_name(rows, in_dim, out_dim, 0), "gemm128");
+        let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+        let w = pseudo_random(&mut seed, out_dim * in_dim, 0.5);
+        let got = gpu
+            .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+            .expect("gpu batched linear");
+        assert_close(
+            &linear(&x, &w, in_dim, out_dim),
+            &got[0],
+            1e-4,
+            &format!("rows={rows} in={in_dim} out={out_dim}"),
+        );
+    }
+}

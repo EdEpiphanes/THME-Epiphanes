@@ -115,6 +115,25 @@ pub(super) struct StatCounters {
     pub(super) kernel_ns: AtomicU64,
 }
 
+/// How dense weights are stored on the device. Activations and accumulation stay f32.
+#[allow(non_camel_case_types)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum WeightStorage {
+    #[default]
+    F32,
+    F16,
+    Q8_0,
+    Q4_0,
+}
+
+/// Device time of one dispatch from a profiled decoder pass.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct OpSample {
+    /// Kernel name; linears carry their kernel and `rows x in x out` shape.
+    pub label: String,
+    pub ns: u64,
+}
+
 pub(super) fn bump(counter: &AtomicU64, since: Instant) {
     counter.fetch_add(since.elapsed().as_nanos() as u64, Ordering::Relaxed);
 }
@@ -137,6 +156,10 @@ pub(super) const PARAM_STRIDE: usize = 256;
 pub(super) const MAX_GROUPS: u32 = 65_535;
 /// Output rows and columns handled by one tiled matrix-matrix workgroup.
 pub(super) const GEMM_TILE: u32 = 64;
+/// Output rows and columns handled by one register-blocked (vec4) workgroup.
+pub(super) const GEMM_V4_TILE: u32 = 128;
+/// Shared memory the register-blocked kernel needs: two slices of 16 x 33 vec4.
+const GEMM_V4_SHARED_BYTES: u32 = 2 * 528 * 16;
 /// Row counts at or below this use the matrix-vector kernel per row: a 64-row tile mostly
 /// computes padding, and small grids leave the device idle.
 pub(super) const GEMV_MAX_ROWS: usize = 8;
@@ -284,6 +307,8 @@ struct LinearOp<'a> {
     kind: ShaderKind,
     weights: &'a wgpu::Buffer,
     out_dim: usize,
+    /// Offset, in floats, of this op's block in the shared output buffer.
+    out_offset: usize,
 }
 
 pub struct GpuContext {
@@ -293,9 +318,16 @@ pub struct GpuContext {
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub adapter_info: wgpu::AdapterInfo,
     pub(super) gemm_f32: wgpu::ComputePipeline,
+    /// Register-blocked kernel; `None` when the device's workgroup memory is too small.
+    pub(super) gemm_v4: Option<wgpu::ComputePipeline>,
     pub(super) decoder: DecoderKernels,
     pub(super) timestamps: Option<TimestampProbe>,
     pub(super) kernel_timing: AtomicBool,
+    shader_f16: bool,
+    use_gemm_v4: AtomicBool,
+    pub(super) op_profile: AtomicBool,
+    weight_storage: std::sync::atomic::AtomicU8,
+    op_samples: Mutex<Vec<OpSample>>,
     wait_timeout_ms: std::sync::atomic::AtomicU64,
     scratch: Mutex<Scratch>,
     weight_cache: Mutex<WeightCache>,
@@ -426,6 +458,8 @@ impl GpuContext {
             ),
         ]);
         let gemm_f32 = build("F32_gemm", include_str!("shaders/gemm_f32.wgsl"));
+        let gemm_v4 = (device.limits().max_compute_workgroup_storage_size >= GEMM_V4_SHARED_BYTES)
+            .then(|| build("F32_gemm_v4", include_str!("shaders/gemm_f32_v4.wgsl")));
         let scratch = Mutex::new(Scratch::new(&device));
         let decoder = DecoderKernels::new(&device);
         let timestamps = timestamp_support.then(|| TimestampProbe::new(&device, &queue));
@@ -437,9 +471,15 @@ impl GpuContext {
             bind_group_layout,
             adapter_info,
             gemm_f32,
+            gemm_v4,
             decoder,
             timestamps,
             kernel_timing: AtomicBool::new(false),
+            shader_f16: false,
+            use_gemm_v4: AtomicBool::new(true),
+            op_profile: AtomicBool::new(false),
+            weight_storage: std::sync::atomic::AtomicU8::new(0),
+            op_samples: Mutex::new(Vec::new()),
             wait_timeout_ms: std::sync::atomic::AtomicU64::new(120_000),
             scratch,
             weight_cache: Mutex::new(WeightCache::default()),
@@ -525,6 +565,142 @@ impl GpuContext {
                     "GPU wait failed after at most {ms} ms (timed out or device lost): {e}"
                 ))
             })
+    }
+
+    /// Which dense f32 kernel runs a linear of this shape: `gemv` (few rows), `gemm128`
+    /// (register-blocked, needs in_dim, out_dim and the output offset in multiples of 4) or
+    /// `gemm64` (any shape).
+    pub fn gemm_kernel_name(
+        &self,
+        rows: usize,
+        in_dim: usize,
+        out_dim: usize,
+        out_offset: usize,
+    ) -> &'static str {
+        if rows <= GEMV_MAX_ROWS {
+            "gemv"
+        } else if self.gemm_v4.is_some()
+            && self.use_gemm_v4.load(Ordering::Relaxed)
+            && in_dim.is_multiple_of(4)
+            && out_dim.is_multiple_of(4)
+            && out_offset.is_multiple_of(4)
+        {
+            "gemm128"
+        } else {
+            "gemm64"
+        }
+    }
+
+    /// Pipeline, workgroup grid and kernel name for a dense f32 linear.
+    pub(super) fn dense_dispatch(
+        &self,
+        rows: usize,
+        in_dim: usize,
+        out_dim: usize,
+        out_offset: usize,
+    ) -> Result<(&wgpu::ComputePipeline, [u32; 3], &'static str), ThmeError> {
+        let (r, o) = (rows as u32, out_dim as u32);
+        match (
+            self.gemm_kernel_name(rows, in_dim, out_dim, out_offset),
+            &self.gemm_v4,
+        ) {
+            ("gemm128", Some(v4)) => Ok((
+                v4,
+                [o.div_ceil(GEMM_V4_TILE), r.div_ceil(GEMM_V4_TILE), 1],
+                "gemm128",
+            )),
+            ("gemm64", _) => Ok((
+                &self.gemm_f32,
+                [o.div_ceil(GEMM_TILE), r.div_ceil(GEMM_TILE), 1],
+                "gemm64",
+            )),
+            _ => {
+                let gemv = self.pipelines.get(&ShaderKind::F32).ok_or_else(|| {
+                    ThmeError::ExecutionFailed("Compute pipeline for F32 not found".into())
+                })?;
+                Ok((gemv, [o.min(MAX_GROUPS), o.div_ceil(MAX_GROUPS), r], "gemv"))
+            }
+        }
+    }
+
+    /// Turns the register-blocked kernel off (or back on) so a paired before/after run can use
+    /// the 64 x 64 kernel in the same binary.
+    pub fn set_register_blocked_gemm(&self, on: bool) {
+        self.use_gemm_v4.store(on, Ordering::Relaxed);
+    }
+
+    /// Chooses how weights are stored from now on (buffers already resident keep their format
+    /// until the cache is cleared). A format the adapter cannot run falls back to f32.
+    pub fn set_weight_storage(&self, storage: WeightStorage) {
+        self.clear_weight_cache();
+        self.weight_storage.store(storage as u8, Ordering::Relaxed);
+    }
+
+    /// The weight storage in effect.
+    pub fn weight_storage(&self) -> WeightStorage {
+        match self.weight_storage.load(Ordering::Relaxed) {
+            1 => WeightStorage::F16,
+            2 => WeightStorage::Q8_0,
+            3 => WeightStorage::Q4_0,
+            _ => WeightStorage::F32,
+        }
+    }
+
+    /// True when the adapter reports the `shader-f16` feature.
+    pub fn shader_f16_supported(&self) -> bool {
+        self.shader_f16
+    }
+
+    /// Times every dispatch of the device-resident decoder on its own (needs timestamp queries;
+    /// adds one read-back per submit and ends the single-pass fusion, so total time grows).
+    pub fn set_op_profile(&self, on: bool) {
+        self.kernel_timing.store(on, Ordering::Relaxed);
+        self.op_profile.store(on, Ordering::Relaxed);
+    }
+
+    /// Drains the per-dispatch samples recorded since the last call.
+    pub fn take_op_profile(&self) -> Vec<OpSample> {
+        self.op_samples
+            .lock()
+            .map(|mut v| std::mem::take(&mut *v))
+            .unwrap_or_default()
+    }
+
+    /// Reads the per-dispatch timestamp pairs of the submission that just finished.
+    pub(super) fn read_op_profile(
+        &self,
+        p: &TimestampProbe,
+        prof: &super::decoder::OpProfile,
+        staging: &wgpu::Buffer,
+    ) -> Result<(), ThmeError> {
+        let slice = staging.slice(..);
+        let (tx, rx) = std::sync::mpsc::channel();
+        slice.map_async(wgpu::MapMode::Read, move |res| {
+            let _ = tx.send(res);
+        });
+        self.wait_for_device()?;
+        rx.recv()
+            .map_err(|e| ThmeError::DataTransferFailed(format!("GPU channel recv failed: {e}")))?
+            .map_err(|e| ThmeError::DataTransferFailed(format!("GPU buffer map failed: {e}")))?;
+        let samples: Vec<OpSample> = {
+            let data = slice
+                .get_mapped_range()
+                .map_err(|e| ThmeError::DataTransferFailed(format!("GPU map range failed: {e}")))?;
+            let t: &[u64] = bytemuck::cast_slice(&data);
+            prof.labels
+                .iter()
+                .zip(t.chunks_exact(2))
+                .map(|(label, pair)| OpSample {
+                    label: label.clone(),
+                    ns: (pair[1].saturating_sub(pair[0]) as f64 * f64::from(p.period_ns)) as u64,
+                })
+                .collect()
+        };
+        staging.unmap();
+        if let Ok(mut all) = self.op_samples.lock() {
+            all.extend(samples);
+        }
+        Ok(())
     }
 
     pub fn set_kernel_timing(&self, on: bool) {
@@ -681,16 +857,22 @@ impl GpuContext {
                 }),
             });
             for (i, op) in ops.iter().enumerate() {
-                let use_gemm = op.kind == ShaderKind::F32 && rows > GEMV_MAX_ROWS;
-                let pipeline = if use_gemm {
-                    &self.gemm_f32
+                let (pipeline, groups) = if op.kind == ShaderKind::F32 {
+                    let (p, g, _) = self.dense_dispatch(rows, in_dim, op.out_dim, op.out_offset)?;
+                    (p, g)
                 } else {
-                    self.pipelines.get(&op.kind).ok_or_else(|| {
+                    let p = self.pipelines.get(&op.kind).ok_or_else(|| {
                         ThmeError::ExecutionFailed(format!(
                             "Compute pipeline for {:?} not found",
                             op.kind
                         ))
-                    })?
+                    })?;
+                    let out = op.out_dim as u32;
+                    // Output rows spread over x then y; token rows ride on z.
+                    (
+                        p,
+                        [out.min(MAX_GROUPS), out.div_ceil(MAX_GROUPS), rows as u32],
+                    )
                 };
                 let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("linear_bind_group"),
@@ -722,21 +904,7 @@ impl GpuContext {
                 });
                 pass.set_pipeline(pipeline);
                 pass.set_bind_group(0, &bind_group, &[]);
-                let out = op.out_dim as u32;
-                if use_gemm {
-                    pass.dispatch_workgroups(
-                        out.div_ceil(GEMM_TILE),
-                        (rows as u32).div_ceil(GEMM_TILE),
-                        1,
-                    );
-                } else {
-                    // Output rows spread over x then y; token rows ride on z.
-                    pass.dispatch_workgroups(
-                        out.min(MAX_GROUPS),
-                        out.div_ceil(MAX_GROUPS),
-                        rows as u32,
-                    );
-                }
+                pass.dispatch_workgroups(groups[0], groups[1], groups[2]);
             }
         }
         encoder.copy_buffer_to_buffer(&scratch.output, 0, &scratch.staging, 0, out_bytes as u64);
@@ -910,6 +1078,7 @@ impl GpuBackend for GpuContext {
             kind,
             weights: buffer,
             out_dim,
+            out_offset: 0,
         };
         let mut out = self.run_ops(x, rows, in_dim, &[op])?;
         let y = out.pop().unwrap_or_default();
@@ -942,13 +1111,20 @@ impl GpuBackend for GpuContext {
             .iter()
             .map(|(w, _)| self.resident_slice(w))
             .collect::<Result<Vec<_>, _>>()?;
+        let rows = x.len() / in_dim;
+        let mut out_offset = 0usize;
         let linear_ops: Vec<LinearOp<'_>> = buffers
             .iter()
             .zip(ops)
-            .map(|(buffer, (_, out_dim))| LinearOp {
-                kind: ShaderKind::F32,
-                weights: buffer,
-                out_dim: *out_dim,
+            .map(|(buffer, (_, out_dim))| {
+                let op = LinearOp {
+                    kind: ShaderKind::F32,
+                    weights: buffer,
+                    out_dim: *out_dim,
+                    out_offset,
+                };
+                out_offset += rows * out_dim;
+                op
             })
             .collect();
         let results = self.run_ops(x, x.len() / in_dim, in_dim, &linear_ops)?;
