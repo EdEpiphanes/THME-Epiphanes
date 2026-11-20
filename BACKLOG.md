@@ -501,7 +501,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p1 · **Area**: cli · **Type**: feature · **Status**: triage
 - **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
 - **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
-- **Done means**: `thme plan-run --model X` prints the plan for a header, with basis labels, using only `predicted`; golden-file test for a mock model (`examples/generate_mock_model.rs`).
+- **Done means**: `thme pathfinder --model X` prints the plan for a header, with basis labels, using only `predicted`; golden-file test for a mock model (`examples/generate_mock_model.rs`).
 
 ### [THME-3058] Shrink loop
 
