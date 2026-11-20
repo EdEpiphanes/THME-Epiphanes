@@ -5,6 +5,7 @@ pub mod backend;
 pub mod decoder;
 pub mod dense;
 pub mod error;
+pub mod features;
 pub mod tensor;
 
 pub use backend::{
