@@ -169,6 +169,12 @@ closes it.
 - **Problem**: `scripts/run_awq_calibration.py` starts a new `thme` process for each of the 34 or so arms per model, so every arm re-reads and re-decodes the weights and repeats the unquantized baseline pass. The Python driver itself is not the slow part; the repeated work is. The driver also hard-codes a CPU hardware string in the provenance.
 - **Done means**: A Rust `thme` subcommand (or example) runs all arms of a pre-registered protocol in one process: model loaded once, baseline and calibration statistics shared, device chosen by `--device` and recorded with adapter and driver, resumable, prints `[done/total pct, elapsed, ETA]`; produces the same JSON as the Python driver (compare on Pythia-14M); the dataset download and tokenisation may stay in Python until a Rust equivalent exists.
 
+### [THME-3075] Run metrics and progress for every long command, in Rust
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p1 · **Area**: bench · **Type**: feature · **Status**: ready
+- **Problem**: Long runs (`evaluate`, `calibrate`, `search`, the examples, the benchmark runner of THME-3074) print little while they work and record few facts about the run, so nobody can see how far along a run is, how fast it goes or what hardware produced a number. Each script invents its own counters.
+- **Done means**: One small Rust module used by every long command: (1) progress events `done/total`, percent, elapsed, ETA from measured pace, items per second (tokens per second for model passes); (2) a human line on stderr and, with `--progress json`, one JSON line per event that Studio and the live window can read; (3) a `run` block in every report: start and end time, wall time and time per phase, device, adapter and driver, threads, sampled CPU and GPU load, peak memory and VRAM, cache hits (for example the cached baseline pass), seed, thme version and git commit, exit status; (4) the block has a schema under `docs/schemas/` and the dossier generator reads it instead of hard-coded strings; (5) unit tests with an injected clock; (6) the Python collector's progress line becomes a thin reader of the JSON events until THME-3074 replaces it.
+
 ## Engine, format, security and quality tracks (v0.2.5 to v0.2.9)
 
 > From the research dossier v3.1 (`docs/research/`) and the owner's direction of 13 November 2026.
