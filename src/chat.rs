@@ -70,6 +70,10 @@ pub fn generate(
     let prompt_tokens = ids.len();
     let eos = eos_token(request.dir).and_then(|token| tokenizer.token_id(&token));
     let mut token_ids = Vec::new();
+    // With a KV cache the prompt is prefilled once and each reply token is one step. Without one
+    // (no cached path for this architecture) every step reruns the whole sequence.
+    let mut cache = model.new_cache();
+    let mut fed = 0;
     let started = Instant::now();
     let finish = loop {
         if cancel.load(Ordering::Relaxed) {
@@ -78,7 +82,14 @@ pub fn generate(
         if token_ids.len() >= request.max_new_tokens {
             break Finish::MaxTokens;
         }
-        let logits = model.forward_logits(&ids)?;
+        let logits = match cache.as_mut() {
+            Some(cache) => {
+                let logits = model.forward_extend(cache, &ids[fed..])?;
+                fed = ids.len();
+                logits
+            }
+            None => model.forward_logits(&ids)?,
+        };
         let next = u32::try_from(argmax(&logits).context("The model returned no logits")?)?;
         if Some(next) == eos {
             break Finish::Eos;
@@ -368,5 +379,31 @@ mod tests {
             }
             Folder::Template => panic!("missing config must not count as template"),
         }
+    }
+
+    #[test]
+    fn cached_reply_is_the_whole_sequence_greedy_decode() {
+        // The reply loop now prefills once and steps the KV cache; the old whole-sequence
+        // greedy loop is the reference it must reproduce token for token.
+        let (_root, dir) = mock_folder(None);
+        let messages = [msg("user", "hello world")];
+        let (model, tok) = load(&dir);
+        let reply = generate(
+            model.as_ref(),
+            &tok,
+            &request(&dir, &messages, 8),
+            &AtomicBool::new(false),
+            &mut |_| {},
+        )
+        .unwrap();
+        let mut ids = tok.encode(&reply.prompt, false).unwrap();
+        let mut expected = Vec::new();
+        for _ in 0..8 {
+            let logits = model.forward_logits(&ids).unwrap();
+            let next = u32::try_from(argmax(&logits).unwrap()).unwrap();
+            ids.push(next);
+            expected.push(next);
+        }
+        assert_eq!(reply.token_ids, expected);
     }
 }

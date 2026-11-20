@@ -13,6 +13,7 @@ use super::gpu::{
     dispatch_linear_array, dispatch_linear_slice, dispatch_score_head_slice, DecoderPlan,
     GpuBackend, LayerWeights,
 };
+use super::kv::{KvCache, KvLayer};
 use super::probe::{
     dead_fraction, rms, update_ratio, ForwardTrace, InputChannelStats, LayerTrace, TensorActivity,
 };
@@ -386,19 +387,77 @@ impl LlamaModel {
         let mut normed = vec![0.0f32; t_len * d];
 
         for &index in &schedule {
-            self.apply_layer(&self.layers[index], &mut x, &mut normed, &rope, None);
+            self.apply_layer(&self.layers[index], &mut x, &mut normed, &rope, None, None);
         }
 
         rms_norm(&x, &self.final_norm, self.config.rms_norm_eps, &mut normed);
         let last_normed = &normed[(t_len - 1) * d..t_len * d];
+        Ok(self.head_logits(last_normed))
+    }
+
+    /// Width of one cached key or value row: KV heads times head dimension.
+    fn kv_dim(&self) -> usize {
+        self.config.hidden_size / self.config.num_heads * self.config.num_kv_heads
+    }
+
+    /// An empty KV cache sized for this model's layers and key/value width.
+    pub fn new_cache(&self) -> KvCache {
+        KvCache::new(self.layers.len(), self.kv_dim())
+    }
+
+    /// Appends `tokens` after the positions already in `cache`, computing only the new rows,
+    /// and returns the unnormalized logits of the last appended position. Starting from an
+    /// empty cache with the whole sequence, this equals `forward_logits`.
+    pub fn forward_extend(&self, cache: &mut KvCache, tokens: &[u32]) -> Result<Vec<f32>> {
+        let t_len = tokens.len();
+        if t_len == 0 {
+            bail!("forward_extend needs at least one token");
+        }
+        if let Some(bad) = tokens.iter().find(|&&t| t as usize >= self.vocab_size) {
+            bail!(
+                "Token id {bad} is outside the model vocabulary of {}",
+                self.vocab_size
+            );
+        }
+        if cache.num_layers() != self.layers.len() || cache.kv_dim() != self.kv_dim() {
+            bail!("KV cache shape does not match this model");
+        }
+
+        let d = self.config.hidden_size;
+        let head_dim = d / self.config.num_heads;
+        let offset = cache.len();
+        let mut x = vec![0.0f32; t_len * d];
+        for (row, &token) in x.chunks_exact_mut(d).zip(tokens) {
+            let start = token as usize * d;
+            row.copy_from_slice(&self.embed[start..start + d]);
+        }
+        // shortcut: rotary table rebuilt per call (O(cached positions) trig), fine at these sizes; keep it in the cache if decode profiles show it.
+        let rope = RopeTable::new(offset + t_len, head_dim, head_dim, self.config.rope_theta);
+        let mut normed = vec![0.0f32; t_len * d];
+        for (index, layer) in self.layers.iter().enumerate() {
+            let layer_cache = cache.layer_mut(index)?;
+            self.apply_layer(layer, &mut x, &mut normed, &rope, None, Some(layer_cache));
+        }
+
+        rms_norm(
+            &x[(t_len - 1) * d..],
+            &self.final_norm,
+            self.config.rms_norm_eps,
+            &mut normed[..d],
+        );
+        Ok(self.head_logits(&normed[..d]))
+    }
+
+    /// Applies the output head to one normalized state.
+    fn head_logits(&self, last_normed: &[f32]) -> Vec<f32> {
         let head = self.lm_head.as_deref().unwrap_or(&self.embed);
-        Ok(dispatch_linear_slice(
+        dispatch_linear_slice(
             self.gpu_backend.as_deref(),
             last_normed,
             head,
-            d,
+            self.config.hidden_size,
             self.vocab_size,
-        ))
+        )
     }
 
     /// Whole-stack run on the device, or `None` to use the per-operation path.
@@ -508,12 +567,15 @@ impl LlamaModel {
                         &mut normed,
                         &rope,
                         Some(&mut layer_trace),
+                        None,
                     );
                     layer_trace.resid_rms_out = rms(&x);
                     layer_trace.update_ratio = update_ratio(&before, &x);
                     trace.layers.push(layer_trace);
                 }
-                None => self.apply_layer(&self.layers[index], &mut x, &mut normed, &rope, None),
+                None => {
+                    self.apply_layer(&self.layers[index], &mut x, &mut normed, &rope, None, None)
+                }
             }
             if exits.contains(&(step + 1)) {
                 out.push(self.read_out(step + 1, &x, &mut normed, tokens));
@@ -522,6 +584,8 @@ impl LlamaModel {
         out
     }
 
+    /// One transformer layer over the rows of `x`. With `kv`, the rows are new positions
+    /// after the cached ones: their keys and values are appended and attention reads the cache.
     fn apply_layer(
         &self,
         layer: &LlamaLayer,
@@ -529,6 +593,7 @@ impl LlamaModel {
         normed: &mut [f32],
         rope: &RopeTable,
         mut trace: Option<&mut LayerTrace>,
+        mut kv: Option<&mut KvLayer>,
     ) {
         let cfg = &self.config;
         let d = cfg.hidden_size;
@@ -558,15 +623,24 @@ impl LlamaModel {
         record("q", normed, d, &q, d);
         record("k", normed, d, &k, kv_dim);
         record("v", normed, d, &v, kv_dim);
-        rope.apply(&mut q);
-        rope.apply(&mut k);
+        let pos_offset = kv.as_deref().map_or(0, KvLayer::len);
+        rope.apply_rows(&mut q, d, pos_offset);
+        rope.apply_rows(&mut k, kv_dim, pos_offset);
+        if let Some(cache) = kv.as_deref_mut() {
+            cache.append(&k, &v);
+        }
+        let (keys, values) = match kv.as_deref() {
+            Some(cache) => (cache.keys(), cache.values()),
+            None => (&k[..], &v[..]),
+        };
         let mixed = attention(&AttentionInputs {
             q: &q,
-            k: &k,
-            v: &v,
+            k: keys,
+            v: values,
             num_heads: cfg.num_heads,
             num_kv_heads: cfg.num_kv_heads,
             head_dim,
+            pos_offset,
         });
         let attn_out = dispatch_linear_slice(gpu, &mixed, &layer.o, d, d);
         record("o", &mixed, d, &attn_out, d);
@@ -999,10 +1073,19 @@ impl RopeTable {
             return;
         }
         let positions = self.cos.len() / half;
-        let row_len = x.len() / positions;
+        self.apply_rows(x, x.len() / positions, 0);
+    }
+
+    /// Rotates `x`, whose rows are `row_len` wide and start at absolute position `first`.
+    pub(crate) fn apply_rows(&self, x: &mut [f32], row_len: usize, first: usize) {
+        let half = self.rotary_dims / 2;
+        if half == 0 {
+            return;
+        }
         for (t, row) in x.chunks_exact_mut(row_len).enumerate() {
-            let cos = &self.cos[t * half..(t + 1) * half];
-            let sin = &self.sin[t * half..(t + 1) * half];
+            let p = first + t;
+            let cos = &self.cos[p * half..(p + 1) * half];
+            let sin = &self.sin[p * half..(p + 1) * half];
             for head in row.chunks_exact_mut(self.head_dim) {
                 let (first, second) = head[..self.rotary_dims].split_at_mut(half);
                 for (((a, b), c), s) in first.iter_mut().zip(second.iter_mut()).zip(cos).zip(sin) {
@@ -1016,12 +1099,15 @@ impl RopeTable {
 }
 
 pub(crate) struct AttentionInputs<'a> {
+    /// Query rows for the positions being computed; row `r` is absolute position `pos_offset + r`.
     pub(crate) q: &'a [f32],
+    /// Keys and values for every position `0..pos_offset + rows`, from the cache when decoding.
     pub(crate) k: &'a [f32],
     pub(crate) v: &'a [f32],
     pub(crate) num_heads: usize,
     pub(crate) num_kv_heads: usize,
     pub(crate) head_dim: usize,
+    pub(crate) pos_offset: usize,
 }
 
 /// Causal grouped-query attention; returns the per-position concatenation of head outputs.
@@ -1075,10 +1161,11 @@ fn attention_rows(
     let mut scores: Vec<f32> = Vec::new();
 
     for (r, out_row) in out.chunks_exact_mut(d).enumerate() {
-        let t = first + r;
+        let row = first + r;
+        let t = inputs.pos_offset + row;
         for h in 0..inputs.num_heads {
             let kv_offset = (h / group) * hd;
-            let qh = &inputs.q[t * d + h * hd..t * d + (h + 1) * hd];
+            let qh = &inputs.q[row * d + h * hd..row * d + (h + 1) * hd];
             scores.clear();
             let mut max = f32::NEG_INFINITY;
             for s in 0..=t {
@@ -1325,5 +1412,33 @@ pub(crate) mod tests {
         let model = tiny_model(0.1);
         assert!(model.forward_nll(&[1]).is_err());
         assert!(model.forward_nll(&[1, 40]).is_err());
+    }
+
+    #[test]
+    fn incremental_logits_match_full_forward_at_every_position() {
+        // Grouped-query attention (4 heads over 2 KV heads), one token at a time after a prefill.
+        let model = tiny_model(0.6);
+        let tokens: Vec<u32> = vec![3, 17, 8, 25, 1, 30, 12, 9, 22, 5, 14, 2];
+        for prefill in [1, 3] {
+            let gap =
+                crate::inference::kv::tests::max_incremental_gap(&model, &tokens, prefill).unwrap();
+            assert!(
+                gap < crate::inference::kv::tests::INCREMENTAL_TOLERANCE,
+                "gap {gap}"
+            );
+        }
+        // Long enough that a prefill spreads over threads with eight or more rows each, which
+        // is where the blocked matmul (not the single-row dot) runs in the full-sequence pass.
+        let (synthetic, _) = super::synthetic_demo(5);
+        let tokens: Vec<u32> = (0..96).map(|i| (i * 37 % 256) as u32).collect();
+        for prefill in [4, 40] {
+            let gap =
+                crate::inference::kv::tests::max_incremental_gap(&synthetic, &tokens, prefill)
+                    .unwrap();
+            assert!(
+                gap < crate::inference::kv::tests::INCREMENTAL_TOLERANCE,
+                "gap {gap}"
+            );
+        }
     }
 }
