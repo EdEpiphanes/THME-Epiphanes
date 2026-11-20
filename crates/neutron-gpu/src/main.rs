@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 use clap::{Parser, Subcommand};
-use neutron_gpu::mdev::MdevManager;
 use neutron_gpu::pci::PciScanner;
 use neutron_gpu::recipes::all_recipes;
 
@@ -8,8 +7,8 @@ use neutron_gpu::recipes::all_recipes;
 #[command(
     name = "neutron-gpu",
     version,
-    about = "Read-only PCI accelerator discovery and vGPU metadata",
-    long_about = "A low-level systems tool for read-only PCI/vGPU discovery and safe metadata: PCI device and accelerator inspection, vGPU mediated-device profile management, and QEMU / KVM launch argument generation."
+    about = "Read-only PCI accelerator discovery and hardware recipe lookup",
+    long_about = "Read-only PCI accelerator discovery and display metadata: PCI device and accelerator inspection, and the hardware recipe table."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -36,40 +35,6 @@ enum Commands {
         json: bool,
     },
 
-    /// Manage VFIO mediated devices (mdev) and list vGPU profiles
-    Mdev {
-        /// Target PCI DBDF address (e.g. 0000:01:00.0)
-        #[arg(default_value = "0000:01:00.0")]
-        dbdf: String,
-
-        /// Output profiles as formatted JSON
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Generate QEMU / KVM launch arguments and libvirt XML for vGPU mediated devices
-    Qemu {
-        /// Mediated device instance UUID (e.g. 12345678-1234-1234-1234-123456789abc)
-        #[arg(long, default_value = "00000000-0000-0000-0000-000000000001")]
-        uuid: String,
-
-        /// VM RAM allocation
-        #[arg(long, default_value = "16G")]
-        memory: String,
-
-        /// Number of virtual CPU cores
-        #[arg(long, default_value_t = 8)]
-        cpus: u32,
-
-        /// Guest OS disk image path (qcow2/raw)
-        #[arg(long)]
-        disk: Option<String>,
-
-        /// Emit libvirt domain XML hostdev block instead of CLI flags
-        #[arg(long)]
-        xml: bool,
-    },
-
     /// Profile accelerator topology, unified memory, and precision support (APUs, NPUs, TPUs, Apple Silicon)
     Profile {
         /// Filter by accelerator target DBDF or keyword (e.g. apple, npu, tpu, amd, nvidia)
@@ -88,7 +53,11 @@ fn main() {
         Commands::Scan { json } => {
             let devices = PciScanner::scan();
             if json {
-                println!("{}", serde_json::to_string_pretty(&devices).unwrap());
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&devices)
+                        .unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}"))
+                );
             } else {
                 println!("=== Neutron-GPU: Hardware Accelerator & Topology Discovery ===");
                 println!(
@@ -135,65 +104,28 @@ fn main() {
             };
 
             if json {
-                println!("{}", serde_json::to_string_pretty(&filtered).unwrap());
-            } else {
-                println!("=== Neutron-GPU: Hardware Recipes & Register Maps ===");
                 println!(
-                    "{:<10} {:<14} {:<36} {:<12} {:<12}",
-                    "Device ID", "Family", "Model", "PLM Offset", "ROP Gadget"
+                    "{}",
+                    serde_json::to_string_pretty(&filtered)
+                        .unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}"))
                 );
-                println!("{}", "-".repeat(88));
+            } else {
+                println!("=== Neutron-GPU: Hardware Recipes ===");
+                println!(
+                    "{:<10} {:<14} {:<36} {:<8}",
+                    "Device ID", "Family", "Model", "Chip ID"
+                );
+                println!("{}", "-".repeat(72));
                 for r in &filtered {
                     println!(
-                        "0x{:04x}     {:<14} {:<36} 0x{:08x}   0x{:08x}",
+                        "0x{:04x}     {:<14} {:<36} 0x{:04x}",
                         r.device_id,
                         r.family.name(),
                         r.name,
-                        r.plm_feat_offset,
-                        r.rop_gadget
+                        r.chip_id
                     );
                 }
                 println!("\nTotal registered hardware recipes: {}", filtered.len());
-            }
-        }
-
-        Commands::Mdev { dbdf, json } => {
-            let profiles = MdevManager::list_profiles(&dbdf);
-            if json {
-                println!("{}", serde_json::to_string_pretty(&profiles).unwrap());
-            } else {
-                println!(
-                    "=== Neutron-GPU: VFIO Mediated Device Profiles for {} ===",
-                    dbdf
-                );
-                for p in &profiles {
-                    println!("[Profile] {}", p.name);
-                    println!("  Type ID             : {}", p.type_id);
-                    println!("  Device API          : {}", p.device_api);
-                    println!("  Available Instances : {}", p.available_instances);
-                    println!("  Description         : {}", p.description);
-                    println!();
-                }
-            }
-        }
-
-        Commands::Qemu {
-            uuid,
-            memory,
-            cpus,
-            disk,
-            xml,
-        } => {
-            if xml {
-                println!("{}", MdevManager::generate_libvirt_xml(&uuid));
-            } else {
-                println!("=== Neutron-GPU: QEMU / KVM Hypervisor Launcher Script ===");
-                println!("#!/usr/bin/env bash\nset -euo pipefail\n");
-                println!("# 1. Attach vGPU mediated device through VFIO hostdev");
-                println!(
-                    "{}",
-                    MdevManager::generate_qemu_cmd(&uuid, &memory, cpus, disk.as_deref())
-                );
             }
         }
 
@@ -215,7 +147,11 @@ fn main() {
             };
 
             if json {
-                println!("{}", serde_json::to_string_pretty(&filtered).unwrap());
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&filtered)
+                        .unwrap_or_else(|e| format!("{{\"error\": \"{e}\"}}"))
+                );
             } else {
                 println!("=== Neutron-GPU: Deep Accelerator & Precision Architecture Profile ===");
                 for dev in &filtered {
