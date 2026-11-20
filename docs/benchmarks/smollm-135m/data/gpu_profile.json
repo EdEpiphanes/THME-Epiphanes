@@ -1,0 +1,192 @@
+{
+  "adapter_init_ms": 484.3906,
+  "build_profile": "release",
+  "device": {
+    "backend": "Vulkan",
+    "device_type": "DiscreteGpu",
+    "driver": "NVIDIA",
+    "driver_info": "616.92",
+    "name": "NVIDIA GeForce RTX 4060 Ti",
+    "timestamp_query_used": true
+  },
+  "git_commit": "6431fb8",
+  "git_dirty": false,
+  "label": "smollm-135m",
+  "machine_load_note": "after change; another job (AWQ evaluation, CPU) loading the machine; total CPU percent sampled just before the run (3 samples): 82\r 78\r 69\r ",
+  "method": "CPU and GPU forward_logits interleaved per shape after one warm-up pass each; wall clock; synthetic token ids (timing only). Breakdown fields except kernel_ms are host-side waits; kernel_ms is device time of the linear-layer compute passes from timestamp queries (0 when unsupported), and its per-submit read-back adds a little host time to GPU runs.",
+  "phases": [
+    {
+      "cpu_ms": {
+        "max": 841.3486,
+        "median": 551.7093,
+        "min": 503.7832,
+        "samples": [
+          516.7128,
+          756.5209,
+          503.7832,
+          521.3733,
+          736.6184,
+          522.3081,
+          510.1799,
+          812.6782,
+          555.8698,
+          551.7093,
+          841.3486
+        ]
+      },
+      "gpu_first_run_breakdown": {
+        "dispatches": 452,
+        "encode_ms": 4.7047,
+        "input_write_ms": 0.2116,
+        "kernel_ms": 28.938304,
+        "readback_ms": 0.0728,
+        "submit_ms": 0.62,
+        "submits": 1,
+        "wait_ms": 62.5296,
+        "weight_upload_ms": 224.412,
+        "weight_uploads": 272
+      },
+      "gpu_first_run_ms": 293.4479,
+      "gpu_median_breakdown": {
+        "dispatches": 452,
+        "encode_ms": 2.8243,
+        "input_write_ms": 0.152,
+        "kernel_ms": 97.244064,
+        "readback_ms": 0.0228,
+        "submit_ms": 0.2228,
+        "submits": 1,
+        "wait_ms": 98.1798,
+        "weight_upload_ms": 0.0,
+        "weight_uploads": 0
+      },
+      "gpu_ms": {
+        "max": 132.379,
+        "median": 102.2891,
+        "min": 32.498,
+        "samples": [
+          32.498,
+          110.4714,
+          105.8372,
+          94.4073,
+          44.996,
+          43.0003,
+          81.3533,
+          132.379,
+          107.2172,
+          117.8129,
+          102.2891
+        ]
+      },
+      "gpu_run_non_linear_host_ms": {
+        "max": 1.0195000000000078,
+        "median": 0.6857000000000113,
+        "min": 0.5782999999999987,
+        "samples": [
+          0.7338999999999984,
+          0.6422000000000025,
+          0.9337999999999909,
+          1.0195000000000078,
+          0.6499000000000024,
+          0.6773000000000025,
+          0.5782999999999987,
+          0.6723999999999819,
+          0.6857000000000113,
+          0.8079000000000036,
+          0.7137000000000029
+        ]
+      },
+      "max_abs_logit_cpu": 7.483811378479004,
+      "max_abs_logit_diff_gpu_vs_cpu": 0.00001621246337890625,
+      "name": "prefill_128",
+      "tokens": 128
+    },
+    {
+      "cpu_ms": {
+        "max": 379.0206,
+        "median": 120.8021,
+        "min": 101.6033,
+        "samples": [
+          106.3094,
+          101.6033,
+          127.0073,
+          131.1621,
+          119.4914,
+          145.5862,
+          110.3669,
+          120.8021,
+          125.9936,
+          116.5414,
+          379.0206
+        ]
+      },
+      "gpu_first_run_breakdown": {
+        "dispatches": 452,
+        "encode_ms": 1.8082,
+        "input_write_ms": 0.0457,
+        "kernel_ms": 36.243904,
+        "readback_ms": 0.0186,
+        "submit_ms": 0.1615,
+        "submits": 1,
+        "wait_ms": 36.9624,
+        "weight_upload_ms": 0.0,
+        "weight_uploads": 0
+      },
+      "gpu_first_run_ms": 39.3582,
+      "gpu_median_breakdown": {
+        "dispatches": 452,
+        "encode_ms": 2.3993,
+        "input_write_ms": 0.0237,
+        "kernel_ms": 4.000928,
+        "readback_ms": 0.0214,
+        "submit_ms": 0.2069,
+        "submits": 1,
+        "wait_ms": 4.5671,
+        "weight_upload_ms": 0.0,
+        "weight_uploads": 0
+      },
+      "gpu_ms": {
+        "max": 9.6308,
+        "median": 7.7216,
+        "min": 6.8298,
+        "samples": [
+          6.9758,
+          6.8298,
+          9.6308,
+          8.7052,
+          7.512,
+          7.4283,
+          8.251,
+          7.3604,
+          7.9232,
+          7.7216,
+          8.0917
+        ]
+      },
+      "gpu_run_non_linear_host_ms": {
+        "max": 0.5641999999999996,
+        "median": 0.40549999999999997,
+        "min": 0.3689999999999998,
+        "samples": [
+          0.4015999999999993,
+          0.41189999999999927,
+          0.398200000000001,
+          0.40549999999999997,
+          0.4139999999999997,
+          0.3689999999999998,
+          0.45059999999999967,
+          0.3894000000000002,
+          0.4036999999999997,
+          0.44399999999999995,
+          0.5641999999999996
+        ]
+      },
+      "max_abs_logit_cpu": 18.4867000579834,
+      "max_abs_logit_diff_gpu_vs_cpu": 0.000012636184692382812,
+      "name": "short_pass_2",
+      "tokens": 2
+    }
+  ],
+  "runs": 11,
+  "schema": 1,
+  "threads": 12
+}

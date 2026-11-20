@@ -131,6 +131,15 @@ closes it.
 - **Problem**: No speed, memory or KV-cache figure is measured yet.
 - **Done means**: Broken into tickets per ROADMAP.md v0.2.4 when v0.2.3 closes.
 
+### [THME-3072] GPU path faster than CPU on the small models
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p1 · **Area**: gpu · **Type**: perf · **Status**: in review
+- **Related**: THME-3016 (placement plan, no runtime reads it yet), THME-3038 (Studio device selector, GPU labelled experimental), THME-3061 (GPU probe and CPU-wins rule), THME-3045/3046 (GPU unlock, unrelated to compute).
+- **Problem**: The GPU path ran one matrix-vector product per prompt row with a submit and a wait each (26,881 submits per 128-token pass on SmolLM-135M), re-uploaded every weight tensor on every pass (211 uploads, 774 ms), and ran only the linear layers on the device. Measured before: 7,680 ms (GPU) vs 372 ms (CPU) for 128 tokens (`docs/benchmarks/smollm-135m/data/gpu_profile_before.json`).
+- **Progress** (20 November 2026): batched tiled matrix-matrix kernel (one dispatch for all rows), linears sharing one command buffer with one read-back, slice weights resident on the device, explicit adapter choice over Vulkan, Metal and DX12, and a device-resident LLaMA-style decoder (norms, RoPE, causal attention, SwiGLU, residuals, head) in a single submit. Measured after (RTX 4060 Ti, Vulkan, release build, 11 interleaved pairs, CPU job loading the machine at 60 to 90 percent, so CPU timings are biased against the CPU): SmolLM-135M 128-token pass GPU 102 ms vs CPU 552 ms, 2-token pass 7.7 vs 120.8 ms; Pythia-14M 128-token pass 17.7 vs 36.6 ms, 2-token pass 9.6 vs 14.7 ms (GPU faster in 9 of 11 pairs). Report: `docs/benchmarks/*/data/gpu_profile.json`; GPU vs CPU logits within 5e-3 (worst observed 3.7e-3 on Pythia-14M, 1.6e-5 on SmolLM-135M).
+- **Not done**: Pythia-14M (GPT-NeoX) still uses the per-operation GPU path (25 submits per pass) because the device-resident decoder covers LLaMA-style layers only; `forward_nll`, scheduled, traced and exit-readout passes use the per-operation path; the "decode" figure is a 2-token pass, not an incremental decode step (no KV cache on the device, owned by the incremental-decoding work); contexts above 2048 tokens fall back; f16 and subgroup kernels not tried; attention kernel is simple (about 97 ms of the 102 ms SmolLM prefill is device time, GEMM about 1 to 2 TFLOPS); the CPU comparison is not clean while the other job runs; Metal and DX12 were not run (no such hardware or run here).
+- **Done means**: GPU beats CPU on paired, interleaved runs for both small models at 128-token prefill and decode steps on a quiet machine; parity tests green; a committed report with device, build and method.
+
 ## Engine, format, security and quality tracks (v0.2.5 to v0.2.9)
 
 > From the research dossier v3.1 (`docs/research/`) and the owner's direction of 13 November 2026.
@@ -371,7 +380,7 @@ closes it.
 
 - **Milestone**: v0.3.0 · **Roadmap**: v0.3.0.4 · **Priority**: p3 · **Area**: gui · **Type**: feature · **Status**: ready
 - **Progress** (19 November 2026): the Studio has a Chat tab. `src/chat.rs` renders the model's own chat template, encodes, and decodes greedily on a background thread with Cancel, a max-new-tokens slider and a status line (tokens, seconds, tokens per second, labelled Measured on this machine). A banner says replies come from the slow CPU reference forward pass, and that the mock model's text is meaningless. 9 tests on the mock model with a fixture tokenizer. Not done: the live window was never opened, so layout and look are unchecked by eye; there is no KV cache, so long replies are slow; chat needs a model loaded from a file (the synthetic demo model has no folder). No real model was used.
-- **Progress** (20 November 2026): device selector added (CPU default, GPU and CPU + GPU marked experimental with a tooltip). The loaded-model cache is keyed by device, so a change reloads. GPU is currently slower: 4.3 s vs 1.1 s for a 128-token pass on SmolLM-135M (RTX 4060 Ti). Not done: resolved GPU device name in the reply stats; CPU + GPU not measured; no live window check.
+- **Progress** (20 November 2026): device selector added (CPU default, GPU and CPU + GPU marked experimental with a tooltip). The loaded-model cache is keyed by device, so a change reloads. GPU was slower when this was written: 4.3 s vs 1.1 s for a 128-token pass on SmolLM-135M (RTX 4060 Ti); see THME-3072 for the fix and the new paired numbers. Not done: resolved GPU device name in the reply stats; CPU + GPU not measured; no live window check.
 - **Problem**: Users cannot talk to or test a loaded model inside the Studio.
 - **Done means**: A tab that sends a prompt through the reference forward pass and shows the reply, labelled with the measured speed. Depends on THME-3037.
 
