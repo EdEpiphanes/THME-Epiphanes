@@ -1,0 +1,136 @@
+{
+  "adapters": [
+    {
+      "backend": "Vulkan",
+      "build_profile": "release",
+      "cooperative_matrix_shapes": [
+        {
+          "ab": "f16",
+          "cr": "f16",
+          "k": 16,
+          "m": 16,
+          "n": 16,
+          "saturating": false
+        },
+        {
+          "ab": "f16",
+          "cr": "f16",
+          "k": 16,
+          "m": 16,
+          "n": 8,
+          "saturating": false
+        },
+        {
+          "ab": "f16",
+          "cr": "f16",
+          "k": 8,
+          "m": 16,
+          "n": 8,
+          "saturating": false
+        },
+        {
+          "ab": "f16",
+          "cr": "f32",
+          "k": 16,
+          "m": 16,
+          "n": 16,
+          "saturating": false
+        },
+        {
+          "ab": "f16",
+          "cr": "f32",
+          "k": 16,
+          "m": 16,
+          "n": 8,
+          "saturating": false
+        },
+        {
+          "ab": "f16",
+          "cr": "f32",
+          "k": 8,
+          "m": 16,
+          "n": 8,
+          "saturating": false
+        }
+      ],
+      "device": "NVIDIA GeForce RTX 4060 Ti",
+      "device_type": "DiscreteGpu",
+      "driver": "NVIDIA 616.92",
+      "features": {
+        "EXPERIMENTAL_COOPERATIVE_MATRIX": {
+          "checks": [
+            {
+              "ab": "f16",
+              "cr": "f16",
+              "kernel_check_passed": true,
+              "m": 16
+            },
+            {
+              "ab": "f16",
+              "cr": "f32",
+              "kernel_check_passed": true,
+              "m": 16
+            }
+          ],
+          "present": true
+        },
+        "SHADER_F16": {
+          "check": {
+            "kernel_check_passed": true
+          },
+          "present": true
+        },
+        "SUBGROUP": {
+          "check": {
+            "kernel_check_passed": true,
+            "observed_subgroup_size": 32.0
+          },
+          "present": true
+        },
+        "packed_4x8_integer_dot_product": {
+          "kernel_check_passed": true,
+          "present": true
+        }
+      },
+      "limits": {
+        "max_buffer_size": 1099511627776,
+        "max_compute_invocations_per_workgroup": 1024,
+        "max_compute_workgroup_storage_size": 49152,
+        "subgroup_max_size": 32,
+        "subgroup_min_size": 32
+      },
+      "wgpu": "30.0"
+    },
+    {
+      "backend": "Dx12",
+      "build_profile": "release",
+      "cooperative_matrix_shapes": [],
+      "device": "NVIDIA GeForce RTX 4060 Ti",
+      "device_type": "DiscreteGpu",
+      "driver": "32.0.16.1692",
+      "features": {
+        "EXPERIMENTAL_COOPERATIVE_MATRIX": {
+          "present": false
+        },
+        "SHADER_F16": {
+          "present": false
+        },
+        "SUBGROUP": {
+          "present": false
+        },
+        "packed_4x8_integer_dot_product": {
+          "kernel_check_passed": true,
+          "present": true
+        }
+      },
+      "limits": {
+        "max_buffer_size": 2147483647,
+        "max_compute_invocations_per_workgroup": 1024,
+        "max_compute_workgroup_storage_size": 32768,
+        "subgroup_max_size": 32,
+        "subgroup_min_size": 32
+      },
+      "wgpu": "30.0"
+    }
+  ]
+}
