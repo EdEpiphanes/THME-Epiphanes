@@ -25,6 +25,7 @@ import json
 import os
 import platform
 import subprocess
+import time
 import sys
 
 CONTROL_A_SEEDS = [1, 2, 3, 4, 5]
@@ -184,7 +185,9 @@ def drive(args):
 
     def evaluate(label, recipe_file, calibration=None, algorithms=None):
         report = path(f"report-{label}.json")
-        if not os.path.exists(report):
+        cached = os.path.exists(report)
+        if not cached:
+            print(f"running {model} {label} ...", flush=True)
             cmd = [args.thme, "evaluate", args.model_dir, "--recipe", recipe_file, "--tokens", files["test"][0],
                    "--report", report]
             if calibration:
@@ -195,7 +198,22 @@ def drive(args):
             if not os.path.exists(report):
                 raise SystemExit(f"error: evaluate {label} wrote no report (see {path(f'evaluate-{label}.log')})")
         with open(report, encoding="utf-8") as f:
-            return extract_run(json.load(f))
+            result = extract_run(json.load(f))
+        tick(label, cached)
+        return result
+
+    per_format = 1 + sum(len(arm["seeds"]) for arm in protocol["arms"] if "seeds" in arm)
+    total = per_format * len(protocol["formats"])
+    progress = {"done": 0, "fresh": 0, "t0": time.time()}
+
+    def tick(label, cached):
+        progress["done"] += 1
+        progress["fresh"] += 0 if cached else 1
+        elapsed = time.time() - progress["t0"]
+        # ETA from the runs actually executed this session; cached runs cost nothing.
+        eta = elapsed / progress["fresh"] * (total - progress["done"]) if progress["fresh"] else 0
+        print(f"[{progress['done']}/{total} {100 * progress['done'] // total}%] {model} {label} "
+              f"elapsed {elapsed / 60:.1f} min, ETA {eta / 60:.1f} min", flush=True)
 
     runs = {}
     for fmt in protocol["formats"]:
