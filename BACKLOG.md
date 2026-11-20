@@ -74,9 +74,13 @@ closes it.
 
 ### [THME-2204] Activation-aware scaling (AWQ-style)
 
-- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.4 · **Priority**: p1 · **Area**: byoa · **Type**: feature · **Status**: ready
+- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.4 · **Priority**: p1 · **Area**: byoa · **Type**: feature · **Status**: in progress (measurement PENDING)
 - **Problem**: Round-to-nearest 4-bit fails the gate on Pythia-14M (Δ +31 to +74).
-- **Progress**: Implemented and tested (`thme.awq_q4_0`, `thme.awq_q4_k`, `--calibration`). 20 November 2026: the owner allowed runs on Pythia-14M and SmolLM-135M only; the comparison is not run yet. Open design points: calibration tokens must come from a split outside the evaluation text (the prepared corpus has only the test split), and the random control for a BYOA rule needs a definition.
+- **Progress**: Implemented and tested (`thme.awq_q4_0`, `thme.awq_q4_k`, `--calibration`). 20 November 2026: control A (`ScaleSource::PermutedScales`; rule JSON without the field keeps real scales) and train-split calibration windows (`scripts/prepare_eval_tokens.py --split train --calibration-windows 16 --window-len 2048 --seed S`, S in 1234, 1, 2, 3, 4; control B1 adds `--shuffle`, control B2 `--random-ids --vocab-size V`) are implemented and tested offline. Calibration, control and test token files are prepared and hashed; provenance is in `docs/benchmarks/*/data/awq_calibration.json`. Scoring corpus unchanged: the test split reproduces the existing verification reports' hashes.
+- **Pre-registered** (20 November 2026, before any measured run): AWQ beats round-to-nearest only if RTN perplexity minus the mean AWQ perplexity over the five seeds exceeds 2 x pooled SD (pooled SD from the sample variances of AWQ, control A and control B1, n = 5 each) and every seed's AWQ perplexity is below RTN. Gate: mean dPPL vs unquantized at most 0.45. A null or negative result is reported as such.
+- **Measured, Pythia-14M** (20 November 2026, `scripts/run_awq_calibration.py`, WikiText-2 test, reference CPU forward pass, pre-registered rule applied unchanged; numbers in `docs/benchmarks/pythia-14m/data/awq_calibration.json` and the dossier). Q4_0: ceiling 114.2862, RTN 193.0028, AWQ mean 170.7025 (SD 2.75), control A 194.6773, control B1 172.8148, B2 193.3853. AWQ beats RTN (gap 22.30 > 2 x pooled SD 10.26, all seeds below RTN) and beats control A, but does NOT beat control B1 (gap 2.11). Q4_K: RTN 168.2951, AWQ 161.2814 (SD 3.70), control A 167.4629, control B1 158.0235, B2 173.4992. AWQ beats RTN (gap 7.01 > 6.05, all seeds) and control A, does NOT beat control B1 (B1 is lower by 3.26). Neither format passes the 0.45 gate (Delta +56.4 and +47.0 PPL vs the unquantized model). Reading: the scale vector carries real information (permuting it removes the gain), but a shuffled-token calibration does as well as ordered train text, so per-channel statistics, not text order, drive the gain. Caveats: one tiny model; Q4_K blocks on Pythia-14M cross rows (128-wide rows, 256-value blocks); per-tensor alpha is not reported by the CLI.
+- **Fixed on the way**: `thme calibrate` keyed GPT-NeoX statistics to the bias tensors, so AWQ could not run on Pythia; fixed in `src/inference/calibration.rs` with a test.
+- **PENDING**: SmolLM-135M (not run: one full-test-split forward pass took about 10 minutes on this CPU and `thme evaluate` repeats the unquantized baseline pass in every run, so about 20 minutes per run and 34 runs, roughly 11 hours; caching the baseline would roughly halve it; needs an owner decision on running time), the C4 out-of-domain arm (not downloaded), the 8k / 32k / 131k size check, and a per-run alpha report.
 - **Done means**: A BYOA rule using captured activations; measured against plain Q4_0 on the same split with random controls.
 
 ### [THME-2205] Second-order rounding (GPTQ-style)
@@ -131,6 +135,15 @@ closes it.
 - **Problem**: No speed, memory or KV-cache figure is measured yet.
 - **Done means**: Broken into tickets per ROADMAP.md v0.2.4 when v0.2.3 closes.
 
+### [THME-3072] GPU path faster than CPU on the small models
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p1 · **Area**: gpu · **Type**: perf · **Status**: in review
+- **Related**: THME-3016 (placement plan, no runtime reads it yet), THME-3038 (Studio device selector, GPU labelled experimental), THME-3061 (GPU probe and CPU-wins rule), THME-3045/3046 (GPU unlock, unrelated to compute).
+- **Problem**: The GPU path ran one matrix-vector product per prompt row with a submit and a wait each (26,881 submits per 128-token pass on SmolLM-135M), re-uploaded every weight tensor on every pass (211 uploads, 774 ms), and ran only the linear layers on the device. Measured before: 7,680 ms (GPU) vs 372 ms (CPU) for 128 tokens (`docs/benchmarks/smollm-135m/data/gpu_profile_before.json`).
+- **Progress** (20 November 2026): batched tiled matrix-matrix kernel (one dispatch for all rows), linears sharing one command buffer with one read-back, slice weights resident on the device, explicit adapter choice over Vulkan, Metal and DX12, and a device-resident LLaMA-style decoder (norms, RoPE, causal attention, SwiGLU, residuals, head) in a single submit. Measured after (RTX 4060 Ti, Vulkan, release build, 11 interleaved pairs, CPU job loading the machine at 60 to 90 percent, so CPU timings are biased against the CPU): SmolLM-135M 128-token pass GPU 102 ms vs CPU 552 ms, 2-token pass 7.7 vs 120.8 ms; Pythia-14M 128-token pass 17.7 vs 36.6 ms, 2-token pass 9.6 vs 14.7 ms (GPU faster in 9 of 11 pairs). Report: `docs/benchmarks/*/data/gpu_profile.json`; GPU vs CPU logits within 5e-3 (worst observed 3.7e-3 on Pythia-14M, 1.6e-5 on SmolLM-135M).
+- **Not done**: Pythia-14M (GPT-NeoX) still uses the per-operation GPU path (25 submits per pass) because the device-resident decoder covers LLaMA-style layers only; `forward_nll`, scheduled, traced and exit-readout passes use the per-operation path; the "decode" figure is a 2-token pass, not an incremental decode step (no KV cache on the device, owned by the incremental-decoding work); contexts above 2048 tokens fall back; f16 and subgroup kernels not tried; attention kernel is simple (about 97 ms of the 102 ms SmolLM prefill is device time, GEMM about 1 to 2 TFLOPS); the CPU comparison is not clean while the other job runs; Metal and DX12 were not run (no such hardware or run here).
+- **Done means**: GPU beats CPU on paired, interleaved runs for both small models at 128-token prefill and decode steps on a quiet machine; parity tests green; a committed report with device, build and method.
+
 ### [THME-3070] Incremental decoding with a KV cache
 
 - **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.1 · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: done
@@ -150,6 +163,18 @@ closes it.
 - **Problem**: Dependencies and licence headers are checked, but nothing records who or what wrote each part of the code (the owner, an AI tool and when, a third-party source) or which datasets and models a report used. The owner wants every part of what is written and released to have clear rights.
 - **Done means**: A ledger file in the repository lists each area (directory or file group) with its origin, licence and date; CI fails when a new top-level area has no entry; agents are told in AGENTS.md to add code only from the repository itself or from sources the licence audit approved; the contributor agreement and counsel review are tracked privately.
 >
+### [THME-3074] Benchmark runner in Rust: one process, model loaded once, progress
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: bench · **Type**: perf · **Status**: ready
+- **Problem**: `scripts/run_awq_calibration.py` starts a new `thme` process for each of the 34 or so arms per model, so every arm re-reads and re-decodes the weights and repeats the unquantized baseline pass. The Python driver itself is not the slow part; the repeated work is. The driver also hard-codes a CPU hardware string in the provenance.
+- **Done means**: A Rust `thme` subcommand (or example) runs all arms of a pre-registered protocol in one process: model loaded once, baseline and calibration statistics shared, device chosen by `--device` and recorded with adapter and driver, resumable, prints `[done/total pct, elapsed, ETA]`; produces the same JSON as the Python driver (compare on Pythia-14M); the dataset download and tokenisation may stay in Python until a Rust equivalent exists.
+
+### [THME-3075] Run metrics and progress for every long command, in Rust
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p1 · **Area**: bench · **Type**: feature · **Status**: ready
+- **Problem**: Long runs (`evaluate`, `calibrate`, `search`, the examples, the benchmark runner of THME-3074) print little while they work and record few facts about the run, so nobody can see how far along a run is, how fast it goes or what hardware produced a number. Each script invents its own counters.
+- **Done means**: One small Rust module used by every long command: (1) progress events `done/total`, percent, elapsed, ETA from measured pace, items per second (tokens per second for model passes); (2) a human line on stderr and, with `--progress json`, one JSON line per event that Studio and the live window can read; (3) a `run` block in every report: start and end time, wall time and time per phase, device, adapter and driver, threads, sampled CPU and GPU load, peak memory and VRAM, cache hits (for example the cached baseline pass), seed, thme version and git commit, exit status; (4) the block has a schema under `docs/schemas/` and the dossier generator reads it instead of hard-coded strings; (5) unit tests with an injected clock; (6) the Python collector's progress line becomes a thin reader of the JSON events until THME-3074 replaces it.
+
 ## Engine, format, security and quality tracks (v0.2.5 to v0.2.9)
 
 > From the research dossier v3.1 (`docs/research/`) and the owner's direction of 13 November 2026.
@@ -390,7 +415,7 @@ closes it.
 
 - **Milestone**: v0.3.0 · **Roadmap**: v0.3.0.4 · **Priority**: p3 · **Area**: gui · **Type**: feature · **Status**: ready
 - **Progress** (19 November 2026): the Studio has a Chat tab. `src/chat.rs` renders the model's own chat template, encodes, and decodes greedily on a background thread with Cancel, a max-new-tokens slider and a status line (tokens, seconds, tokens per second, labelled Measured on this machine). A banner says replies come from the slow CPU reference forward pass, and that the mock model's text is meaningless. 9 tests on the mock model with a fixture tokenizer. Not done: the live window was never opened, so layout and look are unchecked by eye; there is no KV cache, so long replies are slow; chat needs a model loaded from a file (the synthetic demo model has no folder). No real model was used.
-- **Progress** (20 November 2026): device selector added (CPU default, GPU and CPU + GPU marked experimental with a tooltip). The loaded-model cache is keyed by device, so a change reloads. GPU is currently slower: 4.3 s vs 1.1 s for a 128-token pass on SmolLM-135M (RTX 4060 Ti). Not done: resolved GPU device name in the reply stats; CPU + GPU not measured; no live window check.
+- **Progress** (20 November 2026): device selector added (CPU default, GPU and CPU + GPU marked experimental with a tooltip). The loaded-model cache is keyed by device, so a change reloads. GPU was slower when this was written: 4.3 s vs 1.1 s for a 128-token pass on SmolLM-135M (RTX 4060 Ti); see THME-3072 for the fix and the new paired numbers. Not done: resolved GPU device name in the reply stats; CPU + GPU not measured; no live window check.
 - **Problem**: Users cannot talk to or test a loaded model inside the Studio.
 - **Done means**: A tab that sends a prompt through the reference forward pass and shows the reply, labelled with the measured speed. Depends on THME-3037.
 

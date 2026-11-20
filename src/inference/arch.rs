@@ -219,7 +219,13 @@ impl ArchConfig {
                 }
                 Box::new(m)
             }
-            Self::NeoX(config) => Box::new(NeoxModel::load(model, config.clone(), precision)?),
+            Self::NeoX(config) => {
+                let mut m = NeoxModel::load(model, config.clone(), precision)?;
+                if let Some(backend) = gpu {
+                    m.set_gpu(Some(backend));
+                }
+                Box::new(m)
+            }
             Self::Gemma(config) => {
                 let mut m = GemmaModel::load(model, config.clone(), precision)?;
                 if let Some(backend) = gpu {

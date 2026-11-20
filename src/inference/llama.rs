@@ -9,7 +9,10 @@ use anyhow::{bail, Context, Result};
 use std::path::Path;
 use std::sync::Arc;
 
-use super::gpu::{dispatch_linear_slice, dispatch_score_head_slice, GpuBackend};
+use super::gpu::{
+    dispatch_linear_array, dispatch_linear_slice, dispatch_score_head_slice, DecoderPlan,
+    GpuBackend, LayerWeights,
+};
 use super::kv::{KvCache, KvLayer};
 use super::probe::{
     dead_fraction, rms, update_ratio, ForwardTrace, InputChannelStats, LayerTrace, TensorActivity,
@@ -378,6 +381,9 @@ impl LlamaModel {
             row.copy_from_slice(&self.embed[start..start + d]);
         }
         let rope = RopeTable::new(t_len, head_dim, head_dim, self.config.rope_theta);
+        if let Some(logits) = self.device_logits(&schedule, &x, &rope) {
+            return Ok(logits);
+        }
         let mut normed = vec![0.0f32; t_len * d];
 
         for &index in &schedule {
@@ -452,6 +458,50 @@ impl LlamaModel {
             self.config.hidden_size,
             self.vocab_size,
         )
+    }
+
+    /// Whole-stack run on the device, or `None` to use the per-operation path.
+    fn device_logits(&self, schedule: &[usize], x: &[f32], rope: &RopeTable) -> Option<Vec<f32>> {
+        let gpu = self.gpu_backend.as_deref()?;
+        let cfg = &self.config;
+        let layers = schedule
+            .iter()
+            .map(|&i| {
+                let l = &self.layers[i];
+                LayerWeights {
+                    attn_norm: &l.attn_norm,
+                    q: &l.q,
+                    k: &l.k,
+                    v: &l.v,
+                    o: &l.o,
+                    mlp_norm: &l.mlp_norm,
+                    gate: &l.gate,
+                    up: &l.up,
+                    down: &l.down,
+                }
+            })
+            .collect();
+        let plan = DecoderPlan {
+            layers,
+            final_norm: &self.final_norm,
+            head: self.lm_head.as_deref().unwrap_or(&self.embed),
+            hidden: cfg.hidden_size,
+            heads: cfg.num_heads,
+            kv_heads: cfg.num_kv_heads,
+            head_dim: cfg.hidden_size / cfg.num_heads,
+            inter: self.intermediate_size,
+            vocab: self.vocab_size,
+            eps: cfg.rms_norm_eps,
+            rope_cos: rope.cos(),
+            rope_sin: rope.sin(),
+        };
+        match gpu.forward_decoder(&plan, x) {
+            Ok(logits) => logits,
+            Err(err) => {
+                eprintln!("Notice: GPU decoder fallback to per-operation path: {err}");
+                None
+            }
+        }
     }
 
     fn validate(&self, tokens: &[u32], schedule: &[usize], exits: &[usize]) -> Result<()> {
@@ -560,9 +610,16 @@ impl LlamaModel {
 
         let gpu = self.gpu_backend.as_deref();
         rms_norm(x, &layer.attn_norm, cfg.rms_norm_eps, normed);
-        let mut q = dispatch_linear_slice(gpu, normed, &layer.q, d, d);
-        let mut k = dispatch_linear_slice(gpu, normed, &layer.k, d, kv_dim);
-        let v = dispatch_linear_slice(gpu, normed, &layer.v, d, kv_dim);
+        let [mut q, mut k, v] = dispatch_linear_array(
+            gpu,
+            normed,
+            [
+                (&layer.q[..], d),
+                (&layer.k[..], kv_dim),
+                (&layer.v[..], kv_dim),
+            ],
+            d,
+        );
         record("q", normed, d, &q, d);
         record("k", normed, d, &k, kv_dim);
         record("v", normed, d, &v, kv_dim);
@@ -590,8 +647,12 @@ impl LlamaModel {
         add_in_place(x, &attn_out);
 
         rms_norm(x, &layer.mlp_norm, cfg.rms_norm_eps, normed);
-        let mut hidden = dispatch_linear_slice(gpu, normed, &layer.gate, d, inter);
-        let up = dispatch_linear_slice(gpu, normed, &layer.up, d, inter);
+        let [mut hidden, up] = dispatch_linear_array(
+            gpu,
+            normed,
+            [(&layer.gate[..], inter), (&layer.up[..], inter)],
+            d,
+        );
         record("gate", normed, d, &hidden, inter);
         record("up", normed, d, &up, inter);
         for (g, u) in hidden.iter_mut().zip(&up) {
@@ -995,6 +1056,14 @@ impl RopeTable {
             head_dim,
             rotary_dims,
         }
+    }
+
+    pub(crate) fn cos(&self) -> &[f32] {
+        &self.cos
+    }
+
+    pub(crate) fn sin(&self) -> &[f32] {
+        &self.sin
     }
 
     /// Rotates every head of every position in place; `x` rows are whole positions.

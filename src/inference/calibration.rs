@@ -78,6 +78,14 @@ fn role_of(short: &str) -> Option<TensorRole> {
     })
 }
 
+/// The weight matrix of a layer's linear role. Biases share the role (GPT-NeoX) and are
+/// vectors, so only tensors with at least two dimensions match.
+fn linear_tensor(ir: &ModelIR, layer: usize, role: TensorRole) -> Option<&crate::ir::TensorIR> {
+    ir.tensors
+        .iter()
+        .find(|t| t.layer_index == Some(layer) && t.role == role && t.shape.len() >= 2)
+}
+
 /// Runs `model` over non-overlapping windows of `context_len` tokens (at most `max_tokens`)
 /// and returns the merged input statistics of every linear tensor, named after `ir`.
 pub fn collect_calibration(
@@ -112,10 +120,7 @@ pub fn collect_calibration(
     let mut tensors = Vec::with_capacity(merged.len());
     for ((layer, short), stats) in merged {
         let role = role_of(short).with_context(|| format!("Unknown probe tensor '{short}'"))?;
-        let tensor = ir
-            .tensors
-            .iter()
-            .find(|t| t.layer_index == Some(layer) && t.role == role)
+        let tensor = linear_tensor(ir, layer, role)
             .with_context(|| format!("No tensor for layer {layer} role {short} in the model"))?;
         tensors.push(TensorCalibration {
             name: tensor.name.clone(),
@@ -142,6 +147,28 @@ mod tests {
     use super::*;
     use crate::inference::{read_token_file, ArchConfig, WeightPrecision};
     use crate::parser::ModelImporter;
+
+    /// A bias listed before its weight (GPT-NeoX) must not receive the statistics.
+    #[test]
+    fn statistics_go_to_the_weight_matrix_not_its_bias() {
+        let mut ir = ModelIR::default();
+        for (name, shape) in [
+            ("gpt_neox.layers.0.attention.query_key_value.bias", vec![12]),
+            (
+                "gpt_neox.layers.0.attention.query_key_value.weight",
+                vec![12, 4],
+            ),
+        ] {
+            ir.tensors.push(crate::ir::TensorIR::new(
+                name.into(),
+                shape,
+                "F32".into(),
+                0,
+            ));
+        }
+        let t = linear_tensor(&ir, 0, TensorRole::AttentionQkv).unwrap();
+        assert!(t.name.ends_with("query_key_value.weight"));
+    }
 
     #[test]
     fn channel_statistics_match_hand_computation_and_merge() {

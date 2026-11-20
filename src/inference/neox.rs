@@ -8,11 +8,13 @@
 
 use anyhow::{bail, Context, Result};
 use std::path::Path;
+use std::sync::Arc;
 
+use super::gpu::{dispatch_linear_slice, dispatch_score_head_slice, GpuBackend};
 use super::kv::{KvCache, KvLayer};
 use super::llama::{
-    add_in_place, attention, find_tensor, linear, load_tensor, score_head, AttentionInputs,
-    DepthExit, RopeTable, WeightPrecision,
+    add_in_place, attention, find_tensor, linear, load_tensor, AttentionInputs, DepthExit,
+    RopeTable, WeightPrecision,
 };
 use super::probe::{
     dead_fraction, rms, update_ratio, ForwardTrace, InputChannelStats, LayerTrace, TensorActivity,
@@ -121,6 +123,7 @@ pub struct NeoxModel {
     pub(crate) final_b: Vec<f32>,
     /// `None` when the output head is tied to the input embedding.
     pub(crate) head: Option<Vec<f32>>,
+    pub(crate) gpu_backend: Option<Arc<dyn GpuBackend>>,
 }
 
 impl NeoxModel {
@@ -198,7 +201,18 @@ impl NeoxModel {
             final_w,
             final_b,
             head,
+            gpu_backend: None,
         })
+    }
+
+    /// Runs the linear layers and the output head on `backend`.
+    pub fn with_gpu(mut self, backend: Arc<dyn GpuBackend>) -> Self {
+        self.gpu_backend = Some(backend);
+        self
+    }
+
+    pub fn set_gpu(&mut self, backend: Option<Arc<dyn GpuBackend>>) {
+        self.gpu_backend = backend;
     }
 
     pub fn vocab_size(&self) -> usize {
@@ -276,7 +290,13 @@ impl NeoxModel {
         );
         let last_normed = &normed[(t_len - 1) * d..t_len * d];
         let head = self.head.as_deref().unwrap_or(&self.embed);
-        Ok(linear(last_normed, head, d, self.vocab_size))
+        Ok(dispatch_linear_slice(
+            self.gpu_backend.as_deref(),
+            last_normed,
+            head,
+            d,
+            self.vocab_size,
+        ))
     }
 
     /// An empty KV cache sized for this model's layers (no grouped-query attention here).
@@ -431,6 +451,7 @@ impl NeoxModel {
         let hd = d / heads;
         let inter = self.intermediate_size;
         let t_len = x.len() / d;
+        let gpu = self.gpu_backend.as_deref();
 
         let mut normed = vec![0.0f32; x.len()];
         layer_norm(
@@ -440,7 +461,7 @@ impl NeoxModel {
             cfg.layer_norm_eps,
             &mut normed,
         );
-        let mut qkv = linear(&normed, &layer.qkv_w, d, 3 * d);
+        let mut qkv = dispatch_linear_slice(gpu, &normed, &layer.qkv_w, d, 3 * d);
         add_bias(&mut qkv, &layer.qkv_b);
         if let Some(t) = trace.as_deref_mut() {
             t.tensors.push(TensorActivity::measure("qkv", &qkv, 3 * d));
@@ -479,7 +500,7 @@ impl NeoxModel {
             head_dim: hd,
             pos_offset,
         });
-        let mut attn_out = linear(&mixed, &layer.o_w, d, d);
+        let mut attn_out = dispatch_linear_slice(gpu, &mixed, &layer.o_w, d, d);
         add_bias(&mut attn_out, &layer.o_b);
         if let Some(t) = trace.as_deref_mut() {
             t.tensors.push(TensorActivity::measure("o", &attn_out, d));
@@ -505,7 +526,7 @@ impl NeoxModel {
                 &mut normed,
             );
         }
-        let mut hidden = linear(&normed, &layer.up_w, d, inter);
+        let mut hidden = dispatch_linear_slice(gpu, &normed, &layer.up_w, d, inter);
         add_bias(&mut hidden, &layer.up_b);
         if let Some(t) = trace.as_deref_mut() {
             t.tensors
@@ -515,7 +536,7 @@ impl NeoxModel {
         for h in hidden.iter_mut() {
             *h = gelu(*h);
         }
-        let mut mlp_out = linear(&hidden, &layer.down_w, inter, d);
+        let mut mlp_out = dispatch_linear_slice(gpu, &hidden, &layer.down_w, inter, d);
         add_bias(&mut mlp_out, &layer.down_b);
         if let Some(t) = trace {
             t.tensors.push(TensorActivity::measure("down", &mlp_out, d));
@@ -537,7 +558,15 @@ impl NeoxModel {
             &mut normed,
         );
         let head = self.head.as_deref().unwrap_or(&self.embed);
-        score_head(head, d, self.vocab_size, &normed, tokens, layers_applied)
+        dispatch_score_head_slice(
+            self.gpu_backend.as_deref(),
+            head,
+            d,
+            self.vocab_size,
+            &normed,
+            tokens,
+            layers_applied,
+        )
     }
 }
 
@@ -628,6 +657,7 @@ pub(crate) mod tests {
             final_w: vec![1.0; d],
             final_b: vec![0.0; d],
             head: Some(rand(vocab * d)),
+            gpu_backend: None,
         }
     }
 
