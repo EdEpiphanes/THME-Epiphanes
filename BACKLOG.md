@@ -248,6 +248,12 @@ closes it.
 - **Problem**: Published work reports that some layers can be removed from larger models with little loss; small models may be more fragile.
 - **Done means**: Block influence per layer computed for Pythia-14M (and SmolLM-135M late), perplexity measured against the number of removed blocks on the same token hash with a random-removal control; the rule and the stop threshold are written before the run.
 
+### [THME-3090] Automatic weight budget for the GPU path (default is 7x slower than it should be)
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p1 · **Area**: gpu · **Type**: bug · **Status**: ready
+- **Problem**: The GPU path keeps weights resident only up to a budget that defaults to 4 GiB. A model larger than the budget is flushed and re-uploaded for every window. Measured on SmolLM2-1.7B (6.9 GB in f32), RTX 4060 Ti, full test split, same build: 1,016 s with the default budget and 145 s with a 12 GiB budget (same perplexity, 9.1091), so a user who runs the engine with defaults loses a factor of seven. wgpu does not report VRAM, so the right default is unknown.
+- **Done means**: The budget is chosen automatically (adapter limits, a probe allocation with an out-of-memory fallback, or `thme pathfinder`) and never smaller than needed when memory allows; a model that does not fit falls back to f16 or a quantized device format before it falls back to re-uploading; the report states the budget used; a test with a fake backend covers the fallback order.
+
 ## Engine, format, security and quality tracks (v0.2.5 to v0.2.9)
 
 > From the research dossier v3.1 (`docs/research/`) and the owner's direction of 13 November 2026.
