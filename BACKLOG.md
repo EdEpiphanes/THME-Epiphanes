@@ -183,6 +183,12 @@ closes it.
 - **Not done**: a device-resident GPT-NeoX decoder (Pythia gain is modest), device KV cache, f16 and subgroup kernels, Metal and DX12 timings.
 - **Done means**: Perplexity over the full test split on GPU matches CPU within 1e-4 nats per window and is faster on both small models; the report records the device.
 
+### [THME-3076] VS Code sidebar shows fixed example text as if it were live data
+
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p2 · **Area**: security · **Type**: bug · **Status**: ready
+- **Problem**: The extension's sidebar trees show static example text (a model name such as "thme-hybrid-12l" and a throughput such as "620 tok/sec") that THME never measured, which breaks the rule that no unmeasured number is presented as a result (found by the THME-3048 fix).
+- **Done means**: Each sidebar value is read from the CLI's own output for the selected model, or the tree says "no model selected" or is labelled as an example; a test lists every string the tree can show and checks none is a made-up number.
+
 ## Engine, format, security and quality tracks (v0.2.5 to v0.2.9)
 
 > From the research dossier v3.1 (`docs/research/`) and the owner's direction of 13 November 2026.
@@ -478,6 +484,7 @@ closes it.
 ### [THME-3048] VS Code extension: no shell injection, honest commands
 
 - **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: security · **Type**: bug · **Status**: ready
+- **Progress** (20 November 2026): done on branch `fix/vscode-and-mcp-docs`. Commands run with `shell: false` and raw argument arrays (`editors/vscode/src/thme.ts`); numbers and paths validated; `validate` asks for measured perplexities and reports the CLI's exit status; surgery and the other commands pass the arguments the CLI really takes (they were wrong before: `inspect --model`, `plan --tolerance`, `tweak` without `--model`); the MCP terminal starts the binary without a shell string; manifest has `capabilities.untrustedWorkspaces.supported: false`. `npm test` in `editors/vscode` runs 5 tests (quote-and-ampersand path, validation, no-shell). Not done: the extension was not run inside VS Code; the sidebar trees still show static example text.
 - **Problem**: `editors/vscode/src/extension.ts` runs commands through `spawn(..., { shell: true })` and pastes Copilot tool input into quoted arguments, so a prompt-injected tool call can run shell commands (audit H3). `validateQuality` runs the gate on hard-coded perplexities and reports PASSED, and the surgery message claims a rollback checkpoint it does not check (M5). The binary is resolved from the workspace before PATH, and the manifest does not declare untrusted-workspace support (L5).
 - **Done means**: `shell: false` with raw argument arrays, numeric inputs validated, `modelPath` checked to be an existing file, a unit test with a quote-and-ampersand path; validate asks for real inputs or is labelled a demo and reports the CLI's own verdict; surgery states only what it checked; the manifest declares `capabilities.untrustedWorkspaces: { supported: false }`.
 
@@ -518,6 +525,7 @@ closes it.
 ### [THME-3054] Document the MCP trust model and the memory-map limit
 
 - **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p3 · **Area**: security · **Type**: chore · **Status**: ready
+- **Progress** (20 November 2026): trust model documented in `tutorials/mcp_copilot_setup.md`, memory-map limit in `SECURITY.md`, example configs point at `target/release/thme`. Allowed roots are documented as planned, not implemented (every tool reads its own path argument, so the check needs a shared helper and tests). Status stays ready for that part.
 - **Problem**: Any connected MCP client can make the server open and parse any readable path (read-only and scan-gated, no writes or process spawning found), and the configs start it through `cargo run`, which runs build scripts (L3). The parsers use `unsafe Mmap::map` on user files, so truncation by another process while in use can crash the process (L11).
 - **Done means**: The MCP trust model is documented with optional allowed roots; configs point at a built binary; SECURITY.md states the memory-map limit.
 ### [THME-3067] precision_sweep: random_matched seeds 2 and 3 gave identical perplexity on Pythia-14M

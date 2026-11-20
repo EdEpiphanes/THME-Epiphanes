@@ -202,6 +202,16 @@ Copilot invokes `thme_copilot_validate` and reports:
 
 ---
 
+## MCP trust model
+
+`thme mcp` speaks JSON-RPC on stdin and stdout and trusts whoever is on the other end. Treat every connected client, and every prompt that client reads, as able to call every tool.
+
+- Any connected client can make the server open and parse any file the user account can read: the tools take a `model_path` (or `tokens_path`) and the server does not restrict it to a folder.
+- The tools only read. No write tool and no process spawning were found in the audit of 19 November 2026 (L3); model files go through the scanner before they are parsed. This is a code reading, not a sandbox: nothing enforces it.
+- Start the server from a built binary (`target/release/thme`), never through `cargo run`, which compiles and runs build scripts from the working tree on every start.
+- Connect it only to clients and workspaces you trust. The VS Code extension declares `untrustedWorkspaces: false` for the same reason.
+- **Allowed roots (planned, not implemented):** an optional list of folders outside which the server would refuse a path. Until it exists the server accepts any readable path; tracked in THME-3054.
+
 ## Step 6: Integrating with Claude Desktop and Cursor
 
 ### Claude Desktop Configuration
