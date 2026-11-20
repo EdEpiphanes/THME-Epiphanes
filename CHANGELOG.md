@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - v0.2.0 Measured Core
 
 ### Added
+- **AWQ on SmolLM-135M measured on the GPU (THME-2204)**: pre-registered rule applied unchanged; AWQ beats round-to-nearest in Q4_0 (22.04 against 23.70) and Q4_K (21.64 against 24.62) and beats the permuted-scale control, but not the shuffled-calibration control, and the 0.45 quality gate still fails; the report records the GPU and driver.
 - **GPU perplexity and device in reports (THME-3073)**: full-split perplexity on the GPU matches the CPU within 1e-4 nats per window; measured on the RTX 4060 Ti, SmolLM-135M 98.1 s against 504.7 s on the CPU (5.14x), Pythia-14M 31.7 s against 51.1 s (1.53x); `thme evaluate` and `thme calibrate` take `--device`, reports record the adapter and driver, the unquantized baseline pass is cached, and every GPU wait times out into an error.
 - **Release pipeline hardening (THME-3049)**: archives ship `LICENSES/` and `LICENSING.md`; all workflow actions are pinned by commit SHA; workflows default to read-only tokens and only `publish` can write; the signing key reaches the signing step only, a missing key stops the release, and signatures are verified against `minisign.pub` before upload.
 - **Hygiene sweep (THME-3052)**: `.claude/` and `.mcp.json` are ignored, the CI path guard also rejects Windows user-folder, macOS `/Users/` and `AppData` paths and tracked agent state, and `deny.toml` drops licences no dependency uses.
