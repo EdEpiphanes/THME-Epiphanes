@@ -340,8 +340,12 @@ pub struct GpuContext {
     shader_f16: bool,
     /// The device was created with cooperative matrices and the kernel passed its check.
     coop_ready: AtomicBool,
+    /// Cooperative matrices for every weight storage (opt-in: f16 inputs round the result).
     use_coop: AtomicBool,
+    /// Cooperative matrices for f16 weight storage, whose values are f16 already (default).
+    coop_f16_default: AtomicBool,
     use_coop_direct: AtomicBool,
+    use_coop_attention: AtomicBool,
     /// f16 copy of the activations for the in-place cooperative kernel, grown on demand.
     x16: Mutex<Option<wgpu::Buffer>>,
     use_gemm_v4: AtomicBool,
@@ -439,7 +443,8 @@ impl GpuContext {
             wgpu::Features::empty()
         };
         if coop_wanted {
-            features |= wgpu::Features::SHADER_F16 | wgpu::Features::EXPERIMENTAL_COOPERATIVE_MATRIX;
+            features |=
+                wgpu::Features::SHADER_F16 | wgpu::Features::EXPERIMENTAL_COOPERATIVE_MATRIX;
         }
         // SAFETY: the experimental token is only given when cooperative matrices are requested;
         // the kernel is checked against a CPU result before it is ever used (`coop_probe`).
@@ -537,7 +542,9 @@ impl GpuContext {
             shader_f16: coop_wanted,
             coop_ready: AtomicBool::new(false),
             use_coop: AtomicBool::new(false),
+            coop_f16_default: AtomicBool::new(true),
             use_coop_direct: AtomicBool::new(true),
+            use_coop_attention: AtomicBool::new(true),
             x16: Mutex::new(None),
             use_gemm_v4: AtomicBool::new(true),
             use_tiled_attention: AtomicBool::new(true),
@@ -588,6 +595,48 @@ impl GpuContext {
             });
         self.use_coop.store(false, Ordering::Relaxed);
         self.coop_ready.store(ok, Ordering::Relaxed);
+        if !ok {
+            return;
+        }
+        // The in-place f16 kernel and the attention kernel compile and run here too, or stay off.
+        let stored = self.weight_storage();
+        self.set_weight_storage(WeightStorage::F16);
+        self.use_coop.store(true, Ordering::Relaxed);
+        let (rows, in_dim, out_dim) = (150usize, 96usize, 144usize);
+        let x: Vec<f32> = (0..rows * in_dim)
+            .map(|i| ((i * 7 % 13) as f32 - 6.0) / 8.0)
+            .collect();
+        let w: Vec<f32> = (0..out_dim * in_dim)
+            .map(|i| ((i * 5 % 11) as f32 - 5.0) / 8.0)
+            .collect();
+        let direct_ok =
+            QuantizedTensor::new_f32("coop_probe_f16", vec![out_dim, in_dim], w.clone())
+                .and_then(|t| self.compute_linear(&x, &t, in_dim, out_dim))
+                .is_ok_and(|got| {
+                    (0..rows).all(|r| {
+                        (0..out_dim).all(|o| {
+                            let want: f32 = (0..in_dim)
+                                .map(|j| x[r * in_dim + j] * w[o * in_dim + j])
+                                .sum();
+                            let have = got.get(r * out_dim + o).copied().unwrap_or(f32::NAN);
+                            (have - want).abs() <= 2e-2 * want.abs().max(1.0)
+                        })
+                    })
+                });
+        self.use_coop.store(false, Ordering::Relaxed);
+        self.set_weight_storage(stored);
+        self.use_coop_direct.store(direct_ok, Ordering::Relaxed);
+        let scope = self.device.push_error_scope(wgpu::ErrorFilter::Validation);
+        let attention = self.decoder.coop_attention_pipeline(&self.device);
+        let compiled = pollster::block_on(scope.pop()).is_none() && attention.is_ok();
+        self.use_coop_attention.store(compiled, Ordering::Relaxed);
+    }
+
+    /// Whether cooperative matrices run for tensors stored as `storage`.
+    fn coop_active(&self, storage: WeightStorage) -> bool {
+        self.coop_matrix_ready()
+            && (self.use_coop.load(Ordering::Relaxed)
+                || (storage == WeightStorage::F16 && self.coop_f16_default.load(Ordering::Relaxed)))
     }
 
     /// Cooperative-matrix kernels are usable on this adapter.
@@ -659,15 +708,23 @@ impl GpuContext {
         Ok(buffer)
     }
 
+    /// Lets head size 64 use the cooperative-matrix attention when the matmul does (on by default).
+    pub fn set_coop_attention(&self, on: bool) {
+        self.use_coop_attention.store(on, Ordering::Relaxed);
+    }
+
     /// Lets f16 weights use the kernel that reads them in place (on by default).
     pub fn set_coop_direct_f16(&self, on: bool) {
         self.use_coop_direct.store(on, Ordering::Relaxed);
     }
 
-    /// Turns the cooperative-matrix matmul on or off (ignored when not ready).
+    /// Turns the cooperative-matrix matmul on for every weight storage, or off for all of them
+    /// including f16 (ignored when not ready). Without a call, f16 weights use it and the other
+    /// storages keep the exact f32 kernels.
     pub fn set_coop_matrix(&self, on: bool) {
         self.use_coop
             .store(on && self.coop_matrix_ready(), Ordering::Relaxed);
+        self.coop_f16_default.store(on, Ordering::Relaxed);
     }
 
     /// Known-answer check on tile-edge shapes. Some adapters (for example the virtualised GPU of
@@ -783,7 +840,7 @@ impl GpuContext {
     ) -> Result<(wgpu::ComputePipeline, [u32; 3], &'static str), ThmeError> {
         let (r, o) = (rows as u32, out_dim as u32);
         if rows > GEMV_MAX_ROWS
-            && self.use_coop.load(Ordering::Relaxed)
+            && self.coop_active(storage)
             && storage.fits(in_dim, out_dim)
             && in_dim.is_multiple_of(4)
             && out_dim.is_multiple_of(4)
@@ -910,9 +967,14 @@ impl GpuContext {
     }
 
     /// Which attention kernel runs for this head size: `tiled` (online softmax, head size a
-    /// multiple of 4 and at most 128) or `reference` (one workgroup per query and head).
+    /// multiple of 4 and at most 128), `coop` (cooperative matrices, head size 64) or `reference` (one workgroup per query and head).
     pub fn attention_kernel_name(&self, head_dim: usize) -> &'static str {
-        if self.use_tiled_attention.load(Ordering::Relaxed)
+        if head_dim == 64
+            && self.coop_active(self.weight_storage())
+            && self.use_coop_attention.load(Ordering::Relaxed)
+        {
+            "coop"
+        } else if self.use_tiled_attention.load(Ordering::Relaxed)
             && super::decoder::tiled_attention_supports(head_dim)
         {
             "tiled"

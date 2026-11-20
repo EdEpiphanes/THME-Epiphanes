@@ -89,7 +89,10 @@ pub fn run_kernel(
     rx.recv()
         .map_err(|e| e.to_string())?
         .map_err(|e| e.to_string())?;
-    let data = read.slice(..).get_mapped_range().map_err(|e| e.to_string())?;
+    let data = read
+        .slice(..)
+        .get_mapped_range()
+        .map_err(|e| e.to_string())?;
     let v = data
         .chunks_exact(4)
         .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
@@ -338,9 +341,8 @@ pub fn coop_f16_usable(report: &Value) -> bool {
     report["features"]["EXPERIMENTAL_COOPERATIVE_MATRIX"]["checks"]
         .as_array()
         .is_some_and(|c| {
-            c.iter().any(|v| {
-                v["ab"] == "f16" && v["cr"] == "f32" && v["kernel_check_passed"] == true
-            })
+            c.iter()
+                .any(|v| v["ab"] == "f16" && v["cr"] == "f32" && v["kernel_check_passed"] == true)
         })
 }
 

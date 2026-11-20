@@ -855,11 +855,19 @@ fn cooperative_matrix_matmul_matches_cpu_within_f16_rounding_across_tile_edges()
             .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
             .expect("coop batched linear");
         // f16 inputs: about 1e-3 relative per product, so the sums stay within 5e-3 absolute.
-        assert_close(&cpu, &got[0], 5e-3, &format!("rows={rows} in={in_dim} out={out_dim}"));
+        assert_close(
+            &cpu,
+            &got[0],
+            5e-3,
+            &format!("rows={rows} in={in_dim} out={out_dim}"),
+        );
         ran_f16_arithmetic |= exact[0].iter().zip(&got[0]).any(|(a, b)| a != b);
     }
     gpu.set_coop_matrix(false);
-    assert!(ran_f16_arithmetic, "outputs identical to f32: the coop kernel did not run");
+    assert!(
+        ran_f16_arithmetic,
+        "outputs identical to f32: the coop kernel did not run"
+    );
 }
 
 #[test]
@@ -893,4 +901,45 @@ fn cooperative_matrix_matmul_reads_f16_weights_in_place_and_matches_cpu() {
             &format!("f16 rows={rows} in={in_dim} out={out_dim}"),
         );
     }
+}
+
+#[test]
+fn cooperative_attention_matches_the_tiled_kernel_across_blocks_and_ragged_ends() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    if !gpu.coop_matrix_ready() {
+        eprintln!("SKIP: no usable cooperative-matrix path on this adapter");
+        return;
+    }
+    gpu.set_coop_matrix(true);
+    // Grouped-query, several 64-query blocks, a ragged last block, a block shorter than a tile.
+    for shape in [
+        (4, 2, 64, 150),
+        (2, 2, 64, 1000),
+        (3, 1, 64, 65),
+        (2, 2, 64, 17),
+    ] {
+        gpu.set_coop_attention(false);
+        assert_eq!(gpu.attention_kernel_name(64), "tiled");
+        let tiled = random_plan_logits(&gpu, 5, shape);
+        gpu.set_coop_attention(true);
+        assert_eq!(gpu.attention_kernel_name(64), "coop");
+        let coop = random_plan_logits(&gpu, 5, shape);
+        let worst = tiled
+            .iter()
+            .zip(&coop)
+            .map(|(a, b)| (a - b).abs() / a.abs().max(1.0))
+            .fold(0.0f32, f32::max);
+        assert!(worst < 5e-3, "{shape:?}: worst relative diff {worst}");
+        assert!(
+            worst > 0.0,
+            "{shape:?}: identical output, the kernel did not run"
+        );
+    }
+    assert_eq!(
+        gpu.attention_kernel_name(128),
+        "tiled",
+        "other head sizes fall back"
+    );
+    gpu.set_coop_matrix(false);
+    assert_eq!(gpu.attention_kernel_name(64), "tiled");
 }
