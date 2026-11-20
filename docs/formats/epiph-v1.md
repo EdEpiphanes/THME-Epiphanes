@@ -1,4 +1,4 @@
-# The Epiphanes model format (`.epiph`), version 1.2
+# The Epiphanes model format (`.epiph`), version 1.3
 
 **Status:** draft, open specification. The reference reader and writer are `src/epiph/` in this
 repository (AGPL-3.0-only). Anyone may implement this specification.
@@ -29,7 +29,7 @@ All integers are little-endian.
 | ---: | ---: | :--- | :--- |
 | 0 | 8 | magic | `89 45 50 49 50 48 0D 0A` (`\x89EPIPH\r\n`) |
 | 8 | 2 | major version | `1` |
-| 10 | 2 | minor version | `2` |
+| 10 | 2 | minor version | `3` |
 | 12 | 4 | flags | `0` (all bits reserved; a reader refuses a file with any bit set) |
 | 16 | 8 | manifest length `M` | bytes of UTF-8 JSON |
 | 24 | 8 | data offset `D` | multiple of 64, at least `32 + M` |
@@ -42,16 +42,19 @@ truncation to 7 bits are detected, as in PNG.
 
 A reader refuses: a wrong magic; a major version above the one it implements; any flag bit set;
 a manifest that is not valid UTF-8 JSON; a payload that overlaps another or runs past the end of
-the file; a data offset that is not a multiple of 64.
+the file; a data offset that is not a multiple of 64; a tensor `encoding` it does not know (1.3).
 
 ## 3. Manifest
 
 ```json
 {
   "format": "epiph",
-  "version": "1.2",
+  "version": "1.3",
   "model": { "...": "the model description (section 3.1)" },
-  "tensors": [ { "name": "...", "offset": 0, "length": 4096, "sha256": "..." } ],
+  "tensors": [
+    { "name": "blk.0.attn_q.weight", "offset": 0, "length": 1024, "sha256": "...", "encoding": "deflate", "decoded_length": 4096, "decoded_sha256": "..." },
+    { "name": "blk.0.attn_k.weight", "offset": 1024, "length": 4096, "sha256": "..." }
+  ],
   "attachments": [ { "kind": "calibration", "encoding": "json", "offset": 4096, "length": 900, "sha256": "..." } ],
   "recipe": null,
   "quality": [],
@@ -77,6 +80,25 @@ data type: `F32`, `F16`, `BF16`, or a GGML block type name (`Q8_0`, `Q4_0`, `Q4_
 `Q6_K`, `TQ1_0`), laid out exactly as in GGUF. A packed recipe candidate stores each tensor in its
 selected format; the tensor's metadata then records its type before packing under
 `epiph.source_dtype`.
+
+**Payload encoding (1.3).** A tensor entry may carry `encoding`, one of:
+
+- `identity` (the default; the field is then omitted): the payload is stored as-is.
+- `deflate`: the payload is stored as a raw DEFLATE stream (RFC 1951; no zlib or gzip wrapper).
+  Such an entry also carries `decoded_length`, the length of the decoded payload, and
+  `decoded_sha256`, its SHA-256 digest.
+
+For every entry, `length` and `sha256` describe the stored bytes. For a `deflate` entry,
+`decoded_length` must equal the tensor's `byte_size` (section 3.1), and the decoded bytes must
+match `decoded_sha256`. A writer stores a payload compressed only when the stream is smaller
+than the payload, so incompressible data stays `identity`. Stored payloads keep the 64-byte
+alignment of section 2.
+
+A reader refuses a `deflate` entry whose `decoded_length` exceeds 1032 times its `length` (the
+largest expansion DEFLATE can give) or exceeds 16 GiB. A stream that is truncated, that decodes
+to other than `decoded_length` bytes, or that is followed by extra bytes is an error. A reader
+decodes a compressed payload only when it is needed, into memory bounded by `decoded_length`;
+`identity` payloads are still read in place.
 
 ### 3.3 `attachments`
 
@@ -116,8 +138,10 @@ should put each tensor; it says nothing about measured speed.
 ## 4. Verifying a file
 
 A file is valid when the header and manifest pass the checks in section 2, every payload's
-SHA-256 matches its manifest entry, and each tensor payload's length matches its shape and
-stored data type. `thme epiph verify FILE.epiph` performs these checks.
+SHA-256 matches its manifest entry, every `deflate` payload decodes to its `decoded_length` with
+a matching `decoded_sha256` (section 3.2), and each tensor payload's length matches its shape and
+stored data type. `thme epiph verify FILE.epiph` performs these checks and names the tensor when
+one fails.
 
 ## 5. Converting
 
@@ -147,9 +171,6 @@ implement this section still read the weights; they lose only the signature.
 
 Each lands as a minor version with tests before it is used:
 
-- **Compression.** A per-payload `encoding` field (`raw` by default) for lossless compression
-  of payloads, decompressed while streaming to memory. Needs a pure-Rust codec dependency,
-  proposed before it is added.
 - Optional larger payload alignment (4096 bytes) for page-aligned transfers.
 
 ## 8. Versioning
@@ -157,5 +178,14 @@ Each lands as a minor version with tests before it is used:
 A minor version adds optional manifest fields or attachment kinds; older readers still read the
 file. A major version may change the layout; readers refuse majors they do not implement.
 
+| Version | Adds |
+| :--- | :--- |
+| 1.0 | Layout, manifest, tensors, attachments, signature trailer |
+| 1.1 | `name` on attachments; `gguf-metadata` and `hf-file` kinds |
+| 1.2 | `placement` section |
+| 1.3 | Per-tensor `encoding` (`identity` or `deflate`), with `decoded_length` and `decoded_sha256` for `deflate` |
+
 Changes: 1.1 added `name` on attachments and the `gguf-metadata` and `hf-file` kinds. 1.2 adds
-`placement`.
+`placement`. 1.3 adds the per-tensor `encoding` for lossless compression of tensor payloads.
+Shortcut: a 1.2 or older reader ignores `encoding` and is not tested to refuse a compressed file;
+it must not be given one. Only 1.3 readers are expected to decode `deflate` payloads.

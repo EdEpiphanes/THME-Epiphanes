@@ -9,7 +9,7 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs::File;
-use std::io::{BufWriter, Seek, SeekFrom, Write};
+use std::io::{BufWriter, Write};
 use std::path::Path;
 
 use crate::exporter::streaming_writer::StreamingChunkWriter;
@@ -164,14 +164,12 @@ impl SafeTensorsWriter {
 
         for (tensor, source) in self.tensors.iter().zip(&self.tensor_sources) {
             if let Some(source) = source {
-                let mut source_file = File::open(&source.path)
-                    .map_err(|_| anyhow::anyhow!("Failed to open SafeTensors source payload"))?;
-                source_file
-                    .seek(SeekFrom::Start(source.byte_offset))
-                    .map_err(|_| anyhow::anyhow!("Failed to seek to SafeTensors source payload"))?;
+                let mut payload = crate::inference::open_payload(source).map_err(|e| {
+                    anyhow::anyhow!("Failed to open SafeTensors source payload: {e:#}")
+                })?;
                 let mut chunk_writer = StreamingChunkWriter::new(&mut file);
                 total_written +=
-                    usize::try_from(chunk_writer.write_reader(&mut source_file, source.byte_len)?)?;
+                    usize::try_from(chunk_writer.write_reader(&mut payload, source.byte_len)?)?;
             } else {
                 file.write_all(&tensor.data)?;
                 total_written += tensor.data.len();

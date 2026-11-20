@@ -459,27 +459,32 @@ fn a_plan_that_disagrees_with_the_tensors_fails_verify() {
 }
 
 #[test]
-fn format_version_is_1_2_and_1_1_files_still_verify() {
+fn format_version_is_1_3_and_older_files_still_verify() {
     let dir = tempfile::tempdir().unwrap();
     let ir = imported(dir.path());
     let out = dir.path().join("plain.epiph");
     pack_placed(&ir, &out, None);
     let bytes = std::fs::read(&out).unwrap();
-    assert_eq!(u16::from_le_bytes([bytes[10], bytes[11]]), 2);
-    assert_eq!(read(&out).unwrap().1.version, "1.2");
+    assert_eq!(u16::from_le_bytes([bytes[10], bytes[11]]), 3);
+    assert_eq!(read(&out).unwrap().1.version, "1.3");
 
-    // The same file as a 1.1 writer would have left it: minor 1, manifest "1.1".
+    // The same file as a 1.2 writer would have left it: minor 2, manifest "1.2". Identity
+    // payloads never carry the 1.3 fields, so nothing else differs.
     let mut old = bytes.clone();
-    old[10] = 1;
-    let needle = br#""version":"1.2""#;
+    old[10] = 2;
+    let needle = br#""version":"1.3""#;
     let at = old.windows(needle.len()).position(|w| w == needle).unwrap();
-    old[at + needle.len() - 2] = b'1';
+    old[at + needle.len() - 2] = b'2';
     let old_path = dir.path().join("old.epiph");
     std::fs::write(&old_path, &old).unwrap();
-    let (_, manifest) = read(&old_path).unwrap();
-    assert_eq!(manifest.version, "1.1");
+    let (back, manifest) = read(&old_path).unwrap();
+    assert_eq!(manifest.version, "1.2");
     assert!(manifest.placement.is_none());
+    assert!(manifest.tensors.iter().all(|t| t.decoded_length.is_none()));
     assert!(verify(&old_path).is_ok());
+    for (a, b) in ir.tensors.iter().zip(&back.tensors) {
+        assert_eq!(read_tensor_bytes(a).unwrap(), read_tensor_bytes(b).unwrap());
+    }
 }
 
 #[test]
@@ -499,4 +504,377 @@ fn signed_file_with_a_plan_verifies() {
         sign::SignatureStatus::Valid { .. }
     ));
     assert!(verify(&out).unwrap().placement.is_some());
+}
+
+// ---- THME-3015: lossless payload compression (`encoding` deflate) ----
+
+const RAMP_LEN: usize = 4096;
+
+/// Compressible F32 payload: a short repeating pattern.
+fn ramp_bytes() -> Vec<u8> {
+    (0..RAMP_LEN / 4)
+        .flat_map(|i| ((i % 7) as f32).to_le_bytes())
+        .collect()
+}
+
+/// Incompressible F32 payload from a fixed xorshift stream. Every word is kept finite (an
+/// all-ones exponent is NaN or infinity), so the Q8_0 conversion accepts it.
+fn noise_bytes() -> Vec<u8> {
+    let mut x: u64 = 0x9E37_79B9_7F4A_7C15;
+    let mut out: Vec<u8> = (0..RAMP_LEN)
+        .map(|_| {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            (x >> 24) as u8
+        })
+        .collect();
+    for word in out.as_chunks_mut::<4>().0 {
+        if word[3] & 0x7F == 0x7F && word[2] & 0x80 != 0 {
+            word[3] &= 0xBF;
+        }
+    }
+    out
+}
+
+/// The synthetic checkpoint's description with its tensors replaced by F32 payloads stored in
+/// files under `dir`.
+fn model_with(dir: &Path, payloads: &[(&str, Vec<u8>)]) -> ModelIR {
+    let mut ir = imported(dir);
+    ir.tensors = payloads
+        .iter()
+        .map(|(name, bytes)| {
+            let path = dir.join(format!("{name}.raw"));
+            std::fs::write(&path, bytes).unwrap();
+            let mut tensor = crate::ir::TensorIR::new(
+                (*name).to_string(),
+                vec![bytes.len() / 4],
+                "F32".into(),
+                bytes.len(),
+            );
+            tensor.source = Some(TensorSource {
+                path,
+                byte_offset: 0,
+                byte_len: bytes.len() as u64,
+                encoding: crate::ir::tensor::SourceEncoding::Identity,
+            });
+            tensor
+        })
+        .collect();
+    ir
+}
+
+fn options(compress: Option<Encoding>) -> PackOptions {
+    PackOptions {
+        compress,
+        created_unix: Some(0),
+        ..PackOptions::default()
+    }
+}
+
+/// Writes a one-tensor file by hand: `manifest` as given, then `stored` as the only payload.
+fn forge(path: &Path, manifest: &Manifest, stored: &[u8]) {
+    let json = serde_json::to_vec(manifest).unwrap();
+    let data = align(HEADER_LEN + json.len() as u64);
+    let mut bytes = MAGIC.to_vec();
+    bytes.extend(MAJOR.to_le_bytes());
+    bytes.extend(MINOR.to_le_bytes());
+    bytes.extend(0u32.to_le_bytes());
+    bytes.extend((json.len() as u64).to_le_bytes());
+    bytes.extend(data.to_le_bytes());
+    bytes.extend(&json);
+    bytes.resize(data as usize, 0);
+    bytes.extend(stored);
+    std::fs::write(path, bytes).unwrap();
+}
+
+/// Forges `out` from the one-tensor file `base`: its tensor is declared DEFLATE with `stored`
+/// as payload, the given decoded length and decoded digest.
+fn forge_deflate(
+    base: &Path,
+    out: &Path,
+    stored: &[u8],
+    decoded_length: u64,
+    decoded_sha256: String,
+) {
+    let (_, mut manifest) = read(base).unwrap();
+    let entry = &mut manifest.tensors[0];
+    entry.encoding = Encoding::Deflate;
+    entry.length = stored.len() as u64;
+    entry.sha256 = compute_sha256(stored);
+    entry.decoded_length = Some(decoded_length);
+    entry.decoded_sha256 = Some(decoded_sha256);
+    forge(out, &manifest, stored);
+}
+
+#[test]
+fn deflate_round_trip_is_bit_identical() {
+    let dir = tempfile::tempdir().unwrap();
+    let ir = model_with(
+        dir.path(),
+        &[
+            ("ramp.weight", ramp_bytes()),
+            ("noise.weight", noise_bytes()),
+        ],
+    );
+    let plain = dir.path().join("plain.epiph");
+    let small = dir.path().join("small.epiph");
+    write(&ir, &options(None), &plain).unwrap();
+    let summary = write(&ir, &options(Some(Encoding::Deflate)), &small).unwrap();
+
+    let (back, manifest) = read(&small).unwrap();
+    assert_eq!(manifest.tensors[0].encoding, Encoding::Deflate);
+    assert_eq!(manifest.tensors[1].encoding, Encoding::Identity);
+    assert_eq!(manifest.tensors[0].decoded_length, Some(RAMP_LEN as u64));
+    for (original, stored) in ir.tensors.iter().zip(&back.tensors) {
+        assert_eq!(
+            read_tensor_bytes(stored).unwrap(),
+            read_tensor_bytes(original).unwrap(),
+            "{}",
+            original.name
+        );
+    }
+    assert_eq!(read_tensor_bytes(&back.tensors[0]).unwrap(), ramp_bytes());
+    assert!(verify(&small).is_ok());
+    assert!(std::fs::metadata(&small).unwrap().len() < std::fs::metadata(&plain).unwrap().len());
+    assert_eq!(summary.compressed_tensors, 1);
+}
+
+#[test]
+fn incompressible_payloads_stay_identity() {
+    let dir = tempfile::tempdir().unwrap();
+    let ir = model_with(dir.path(), &[("noise.weight", noise_bytes())]);
+    let out = dir.path().join("noise.epiph");
+    let summary = write(&ir, &options(Some(Encoding::Deflate)), &out).unwrap();
+    let (back, manifest) = read(&out).unwrap();
+    assert_eq!(manifest.tensors[0].encoding, Encoding::Identity);
+    assert_eq!(manifest.tensors[0].decoded_length, None);
+    assert_eq!(manifest.tensors[0].length, RAMP_LEN as u64);
+    assert_eq!(summary.compressed_tensors, 0);
+    assert_eq!(summary.tensor_stored_bytes, summary.tensor_decoded_bytes);
+    assert_eq!(read_tensor_bytes(&back.tensors[0]).unwrap(), noise_bytes());
+}
+
+#[test]
+fn pack_summary_reports_stored_decoded_and_ratio() {
+    let dir = tempfile::tempdir().unwrap();
+    let ir = model_with(
+        dir.path(),
+        &[
+            ("ramp.weight", ramp_bytes()),
+            ("noise.weight", noise_bytes()),
+        ],
+    );
+    let out = dir.path().join("ratio.epiph");
+    let summary = write(&ir, &options(Some(Encoding::Deflate)), &out).unwrap();
+    assert_eq!(summary.compressed_tensors, 1);
+    assert_eq!(summary.tensor_decoded_bytes, (RAMP_LEN * 2) as u64);
+    assert!(summary.tensor_stored_bytes < summary.tensor_decoded_bytes);
+    assert!(summary.ratio() > 1.0);
+    let plain = write(&ir, &options(None), &dir.path().join("p.epiph")).unwrap();
+    assert_eq!(plain.ratio(), 1.0);
+}
+
+#[test]
+fn inflate_refuses_more_or_less_than_declared() {
+    let zeros = vec![0u8; 1 << 20];
+    let stream = deflate_payload(&zeros).unwrap();
+    assert_eq!(inflate_payload(&stream, 1 << 20).unwrap(), zeros);
+    let too_small = format!("{:#}", inflate_payload(&stream, 1024).unwrap_err());
+    assert!(too_small.contains("declared 1024"), "{too_small}");
+    assert!(inflate_payload(&stream, (1 << 20) + 1).is_err());
+    assert!(inflate_payload(&stream[..stream.len() - 4], 1 << 20).is_err());
+    let mut padded = stream.clone();
+    padded.extend_from_slice(b"junk");
+    let trailing = format!("{:#}", inflate_payload(&padded, 1 << 20).unwrap_err());
+    assert!(trailing.contains("trailing"), "{trailing}");
+}
+
+#[test]
+fn a_decompression_bomb_is_refused_at_its_declared_length() {
+    let dir = tempfile::tempdir().unwrap();
+    let ir = model_with(dir.path(), &[("solo.weight", ramp_bytes())]);
+    let base = dir.path().join("base.epiph");
+    write(&ir, &options(None), &base).unwrap();
+    // About 1 KiB stored, expanding to 1 MiB, under the declared length of the tensor (4096).
+    let bomb = deflate_payload(&vec![0u8; 1 << 20]).unwrap();
+    assert!(bomb.len() < RAMP_LEN);
+    let out = dir.path().join("bomb.epiph");
+    forge_deflate(
+        &base,
+        &out,
+        &bomb,
+        RAMP_LEN as u64,
+        compute_sha256(&vec![0u8; RAMP_LEN]),
+    );
+    let err = format!("{:#}", verify(&out).unwrap_err());
+    assert!(err.contains("solo.weight"), "{err}");
+    assert!(err.contains("declared"), "{err}");
+    let (back, _) = read(&out).unwrap();
+    assert!(read_tensor_bytes(&back.tensors[0]).is_err());
+    let report = crate::scan::scan(&out).unwrap();
+    assert_ne!(report.verdict(), "no findings");
+}
+
+#[test]
+fn absurd_declared_lengths_are_refused_before_any_allocation() {
+    let dir = tempfile::tempdir().unwrap();
+    let ir = model_with(dir.path(), &[("solo.weight", ramp_bytes())]);
+    let base = dir.path().join("base.epiph");
+    write(&ir, &options(None), &base).unwrap();
+    let stored = deflate_payload(&ramp_bytes()).unwrap();
+    for (name, declared) in [
+        ("max", u64::MAX),
+        ("cap", 1 << 33),
+        ("ratio", stored.len() as u64 * 1032 + 1),
+    ] {
+        let out = dir.path().join(format!("{name}.epiph"));
+        forge_deflate(
+            &base,
+            &out,
+            &stored,
+            declared,
+            compute_sha256(&ramp_bytes()),
+        );
+        let err = format!("{:#}", verify(&out).unwrap_err());
+        assert!(err.contains("solo.weight"), "{name}: {err}");
+    }
+}
+
+#[test]
+fn truncated_and_padded_streams_are_clear_errors() {
+    let dir = tempfile::tempdir().unwrap();
+    let ir = model_with(dir.path(), &[("solo.weight", ramp_bytes())]);
+    let base = dir.path().join("base.epiph");
+    write(&ir, &options(None), &base).unwrap();
+    let honest = deflate_payload(&ramp_bytes()).unwrap();
+    let digest = compute_sha256(&ramp_bytes());
+
+    let truncated = dir.path().join("truncated.epiph");
+    let cut = &honest[..honest.len() - 4];
+    forge_deflate(&base, &truncated, cut, RAMP_LEN as u64, digest.clone());
+    let err = format!("{:#}", verify(&truncated).unwrap_err());
+    assert!(err.contains("solo.weight"), "{err}");
+
+    let mut padded_stream = honest.clone();
+    padded_stream.extend_from_slice(b"junk");
+    let padded = dir.path().join("padded.epiph");
+    forge_deflate(&base, &padded, &padded_stream, RAMP_LEN as u64, digest);
+    let err = format!("{:#}", verify(&padded).unwrap_err());
+    assert!(
+        err.contains("trailing") && err.contains("solo.weight"),
+        "{err}"
+    );
+}
+
+#[test]
+fn digest_mismatches_name_the_tensor() {
+    let dir = tempfile::tempdir().unwrap();
+    let ir = model_with(
+        dir.path(),
+        &[
+            ("ramp.weight", ramp_bytes()),
+            ("noise.weight", noise_bytes()),
+        ],
+    );
+    let out = dir.path().join("digests.epiph");
+    write(&ir, &options(Some(Encoding::Deflate)), &out).unwrap();
+    // A flipped byte in the stored (compressed) ramp payload fails its stored digest.
+    let mut bytes = std::fs::read(&out).unwrap();
+    let data = u64::from_le_bytes(bytes[24..32].try_into().unwrap()) as usize;
+    bytes[data] ^= 0xFF;
+    let bad = dir.path().join("flipped.epiph");
+    std::fs::write(&bad, &bytes).unwrap();
+    let err = format!("{:#}", verify(&bad).unwrap_err());
+    assert!(err.contains("ramp.weight"), "{err}");
+
+    // An honest stored payload whose decoded digest is wrong fails the decoded check, by name.
+    let base = dir.path().join("base.epiph");
+    write(
+        &model_with(dir.path(), &[("solo.weight", ramp_bytes())]),
+        &options(None),
+        &base,
+    )
+    .unwrap();
+    let honest = deflate_payload(&ramp_bytes()).unwrap();
+    let wrong = dir.path().join("wrong.epiph");
+    forge_deflate(
+        &base,
+        &wrong,
+        &honest,
+        RAMP_LEN as u64,
+        compute_sha256(&noise_bytes()),
+    );
+    let err = format!("{:#}", verify(&wrong).unwrap_err());
+    assert!(
+        err.contains("solo.weight") && err.contains("SHA-256"),
+        "{err}"
+    );
+}
+
+#[test]
+fn signed_file_with_compressed_payloads_verifies() {
+    let dir = tempfile::tempdir().unwrap();
+    let ir = model_with(
+        dir.path(),
+        &[
+            ("ramp.weight", ramp_bytes()),
+            ("noise.weight", noise_bytes()),
+        ],
+    );
+    let out = dir.path().join("signed.epiph");
+    write(&ir, &options(Some(Encoding::Deflate)), &out).unwrap();
+    let (_, manifest) = read(&out).unwrap();
+    assert_eq!(manifest.tensors[0].encoding, Encoding::Deflate);
+    let pair = minisign::KeyPair::generate_unencrypted_keypair().unwrap();
+    sign::sign(&out, &pair.sk, Some(&pair.pk)).unwrap();
+    assert!(matches!(
+        sign::check(&out, Some(&pair.pk)).unwrap(),
+        sign::SignatureStatus::Valid { .. }
+    ));
+    assert!(verify(&out).is_ok());
+}
+
+#[test]
+fn compressed_file_converts_to_the_same_gguf_bytes() {
+    use crate::exporter::ExportQuantType;
+    let dir = tempfile::tempdir().unwrap();
+    // Two compressible tensors with small finite values: Q8_0 needs scales that fit in FP16.
+    let steps: Vec<u8> = (0..RAMP_LEN / 4)
+        .flat_map(|i| (((i * 3) % 11) as f32 * 0.5).to_le_bytes())
+        .collect();
+    let ir = model_with(
+        dir.path(),
+        &[("ramp.weight", ramp_bytes()), ("steps.weight", steps)],
+    );
+    let plain = dir.path().join("plain.epiph");
+    let small = dir.path().join("small.epiph");
+    write(&ir, &options(None), &plain).unwrap();
+    write(&ir, &options(Some(Encoding::Deflate)), &small).unwrap();
+    let (back_plain, _) = read(&plain).unwrap();
+    let (back_small, small_manifest) = read(&small).unwrap();
+    assert!(small_manifest
+        .tensors
+        .iter()
+        .all(|t| t.encoding == Encoding::Deflate));
+    let export = |m: &ModelIR, name: &str, quant: ExportQuantType| {
+        let path = dir.path().join(name);
+        let config = crate::exporter::ExportConfig {
+            format: crate::exporter::ExportFormat::GGUFv3,
+            quant_type: quant,
+            output_path: path.clone(),
+            compute_checksum: false,
+        };
+        crate::exporter::ModelExporter::export(m, &config).unwrap();
+        std::fs::read(path).unwrap()
+    };
+    for (quant, label) in [
+        (ExportQuantType::PerTensor, "per-tensor"),
+        (ExportQuantType::Q8_0, "q8_0"),
+    ] {
+        let from_plain = export(&back_plain, &format!("plain-{label}.gguf"), quant);
+        let from_small = export(&back_small, &format!("small-{label}.gguf"), quant);
+        assert!(!from_plain.is_empty());
+        assert_eq!(from_small, from_plain, "{label}");
+    }
 }

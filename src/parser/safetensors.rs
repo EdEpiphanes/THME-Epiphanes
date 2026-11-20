@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 
-use crate::ir::tensor::TensorSource;
+use crate::ir::tensor::{SourceEncoding, TensorSource};
 use crate::ir::TensorIR;
 
 pub struct SafetensorsScanner;
@@ -146,6 +146,7 @@ impl SafetensorsScanner {
                     .context("SafeTensors source offset exceeds u64")?,
                 byte_len: u64::try_from(source_end - source_offset)
                     .context("SafeTensors source length exceeds u64")?,
+                encoding: SourceEncoding::Identity,
             });
             tensor_ir.weight_profile = Some(crate::profiling::WeightAnalyzer::profile_tensor(
                 view.data(),

@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hessian-proxy test values were wrong; recomputed by hand.
 
 ### Removed
+- **`.epiph` compression**: format 1.3 adds an optional per-tensor `deflate` encoding (`thme epiph pack --compress deflate`), only used when it shrinks the payload; digests cover both the stored and decoded bytes. Older files load unchanged.
 - neutron-gpu no longer includes the GPU-unlock engine (ported from a GPL-2.0-only upstream project, which cannot be combined with AGPL-3.0-only); only PCI/vGPU discovery and display metadata remain.
 - `agent-hub/` and 18 unrelated `neutron-*` crates are no longer part of this repository.
 - Committed benchmark reports, charts and the benchmark dossier (`docs/benchmarks/`, `docs/benchmark_dossier.md`, `docs/benchmark_dossier.csv`) were removed because they were measured before the FP16 rounding fix (THME-3023). The scripts and the CI pipeline stay; results will be re-measured and published with their method.

@@ -89,6 +89,7 @@ fn test_gui_loads_epiph_container() {
         quantize: false,
         allow_partial: false,
         placement: None,
+        compress: None,
     };
     pack(&args).expect("pack mock to epiph");
 

@@ -232,7 +232,8 @@ closes it.
 
 ### [THME-3015] `.epiph`: lossless payload compression
 
-- **Milestone**: v0.2.6 · **Roadmap**: v0.2.6.6 · **Priority**: p2 · **Area**: exporter · **Type**: feature · **Status**: triage
+- **Milestone**: v0.2.6 · **Roadmap**: v0.2.6.6 · **Priority**: p2 · **Area**: exporter · **Type**: feature · **Status**: done
+- **Progress** (19 November 2026): `.epiph` format 1.3 adds a per-payload encoding (`identity` or `deflate`, flate2's pure-Rust backend). `thme epiph pack --compress deflate` only compresses a payload when it actually shrinks; `verify` checks both the stored and decoded digests, and decompression is bounded by the declared length so a corrupt or hostile file cannot expand past it (a decompression-bomb test is included). 1.2 files load unchanged. 13 tests on synthetic tensors. Not measured on a real model; readers older than 1.2 refusing deflate is stated in the spec but not tested here.
 - **Problem**: Owner asks for a compressed variant. Quantization already shrinks weights; lossless coding on top needs a pure-Rust codec dependency.
 - **Done means**: Dependency proposed and approved (licence, binary size); per-payload `encoding` field; compression ratio and decode speed reported as measured on the synthetic checkpoint only.
 
