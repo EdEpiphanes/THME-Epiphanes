@@ -106,6 +106,8 @@ def extract_run(report):
         "gate_accepted": report["evaluation"]["gate_passed"],
         "thme_version": report.get("thme_version"),
         "logical_cpus": report.get("host", {}).get("logical_cpus"),
+        "device": report.get("host", {}).get("device"),
+        "backend": report.get("host", {}).get("backend"),
     }
 
 
@@ -148,6 +150,16 @@ def merge(protocol, results, provenance):
     return out
 
 
+def device_text(device):
+    """The device a run really used, as the report states it (adapter and driver for a GPU)."""
+    if not device:
+        return "not reported"
+    adapter = device.get("adapter") or {}
+    name = adapter.get("name")
+    detail = f" ({name}, {adapter.get('backend')}, driver {adapter.get('driver_info')})" if name else ""
+    return f"{device.get('used')}{detail}"
+
+
 def run(cmd, log):
     with open(log, "w", encoding="utf-8") as f:
         # A failed quality gate exits non-zero but still writes the report; the caller checks for it.
@@ -178,7 +190,8 @@ def drive(args):
         out = path(f"calibration-{key}.json")
         if not os.path.exists(out):
             code = run([args.thme, "calibrate", args.model_dir, "--tokens", files[key][0], "--context", context,
-                        "--max-tokens", max_tokens, "--out", out], path(f"calibrate-{key}.log"))
+                        "--max-tokens", max_tokens, "--out", out, "--device", args.device],
+                       path(f"calibrate-{key}.log"))
             if code != 0 or not os.path.exists(out):
                 raise SystemExit(f"error: calibrate {key} failed (see {path(f'calibrate-{key}.log')})")
         return out
@@ -189,7 +202,7 @@ def drive(args):
         if not cached:
             print(f"running {model} {label} ...", flush=True)
             cmd = [args.thme, "evaluate", args.model_dir, "--recipe", recipe_file, "--tokens", files["test"][0],
-                   "--report", report]
+                   "--report", report, "--device", args.device]
             if calibration:
                 cmd += ["--calibration", calibration]
             if algorithms:
@@ -255,7 +268,7 @@ def drive(args):
         "git_commit": subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip() or None,
         "threads": first["logical_cpus"],
         "hardware": f"{platform.system()} {platform.machine()}, {platform.processor()}; "
-                    "THME reference CPU forward pass (f32)",
+                    f"{first.get('backend')}; device {device_text(first.get('device'))}",
         "note": "Recorded by scripts/run_awq_calibration.py. Alpha is chosen per tensor inside the CLI and is not reported.",
     }
     merged = merge(protocol, build_results(protocol, runs), provenance)
@@ -273,6 +286,8 @@ def main():
     p.add_argument("--work-dir", required=True, help="Scratch directory for recipes, statistics and reports (resumable)")
     p.add_argument("--json", required=True, help="awq_calibration.json to fill")
     p.add_argument("--thme", default="target/release/thme")
+    p.add_argument("--device", choices=["auto", "gpu", "cpu"], default="cpu",
+                   help="device for every thme call; the report records what was really used")
     sys.exit(drive(p.parse_args()))
 
 

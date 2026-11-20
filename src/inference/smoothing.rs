@@ -178,9 +178,7 @@ impl NeoxModel {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::inference::{
-        collect_calibration, read_token_file, ArchConfig, CausalLm, WeightPrecision,
-    };
+    use crate::inference::{collect_calibration, read_token_file, ArchConfig, WeightPrecision};
     use crate::parser::ModelImporter;
 
     fn close(a: &[f32], b: &[f32], tol: f32) -> bool {

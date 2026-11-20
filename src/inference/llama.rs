@@ -322,6 +322,13 @@ impl LlamaModel {
     /// of each token given the tokens before it. Entry `i` scores `tokens[i + 1]`.
     pub fn forward_nll(&self, tokens: &[u32]) -> Result<Vec<f32>> {
         let schedule: Vec<usize> = (0..self.layers.len()).collect();
+        if self.gpu_backend.is_some() {
+            self.validate(tokens, &schedule, &[schedule.len()])?;
+            let (x, rope) = self.embed_rows(tokens);
+            if let Some(nll) = self.device_run(&schedule, &x, &rope, Some(&tokens[1..])) {
+                return Ok(nll);
+            }
+        }
         let mut exits = self.forward_scheduled(tokens, &schedule, &[schedule.len()])?;
         match exits.pop() {
             Some(exit) => Ok(exit.nll),
@@ -374,14 +381,8 @@ impl LlamaModel {
         self.validate(tokens, &schedule, &[schedule.len()])?;
 
         let d = self.config.hidden_size;
-        let head_dim = d / self.config.num_heads;
-        let mut x = vec![0.0f32; t_len * d];
-        for (row, &token) in x.chunks_exact_mut(d).zip(tokens) {
-            let start = token as usize * d;
-            row.copy_from_slice(&self.embed[start..start + d]);
-        }
-        let rope = RopeTable::new(t_len, head_dim, head_dim, self.config.rope_theta);
-        if let Some(logits) = self.device_logits(&schedule, &x, &rope) {
+        let (mut x, rope) = self.embed_rows(tokens);
+        if let Some(logits) = self.device_run(&schedule, &x, &rope, None) {
             return Ok(logits);
         }
         let mut normed = vec![0.0f32; t_len * d];
@@ -460,8 +461,28 @@ impl LlamaModel {
         )
     }
 
-    /// Whole-stack run on the device, or `None` to use the per-operation path.
-    fn device_logits(&self, schedule: &[usize], x: &[f32], rope: &RopeTable) -> Option<Vec<f32>> {
+    /// Embedded rows and the rotary table for `tokens`.
+    fn embed_rows(&self, tokens: &[u32]) -> (Vec<f32>, RopeTable) {
+        let d = self.config.hidden_size;
+        let head_dim = d / self.config.num_heads;
+        let mut x = vec![0.0f32; tokens.len() * d];
+        for (row, &token) in x.chunks_exact_mut(d).zip(tokens) {
+            let start = token as usize * d;
+            row.copy_from_slice(&self.embed[start..start + d]);
+        }
+        let rope = RopeTable::new(tokens.len(), head_dim, head_dim, self.config.rope_theta);
+        (x, rope)
+    }
+
+    /// Whole-stack run on the device, or `None` to use the per-operation path. With `targets`
+    /// it returns each position's negative log-likelihood, else the last position's logits.
+    fn device_run(
+        &self,
+        schedule: &[usize],
+        x: &[f32],
+        rope: &RopeTable,
+        targets: Option<&[u32]>,
+    ) -> Option<Vec<f32>> {
         let gpu = self.gpu_backend.as_deref()?;
         let cfg = &self.config;
         let layers = schedule
@@ -494,6 +515,7 @@ impl LlamaModel {
             eps: cfg.rms_norm_eps,
             rope_cos: rope.cos(),
             rope_sin: rope.sin(),
+            targets,
         };
         match gpu.forward_decoder(&plan, x) {
             Ok(logits) => logits,

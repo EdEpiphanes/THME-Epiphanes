@@ -1,0 +1,149 @@
+{
+  "build_profile": "release",
+  "context_len": 1024,
+  "corpus_tokens": 287159,
+  "cpu_secs": {
+    "max": 52.3861776,
+    "median": 51.1469193,
+    "min": 48.5133474,
+    "samples": [
+      52.3861776,
+      51.1469193,
+      48.5133474
+    ]
+  },
+  "device": {
+    "backend": "Vulkan",
+    "device_type": "DiscreteGpu",
+    "driver": "NVIDIA",
+    "driver_info": "616.92",
+    "name": "NVIDIA GeForce RTX 4060 Ti"
+  },
+  "git_commit": "49b91c2",
+  "git_dirty": false,
+  "gpu_secs": {
+    "max": 33.6409143,
+    "median": 31.6821755,
+    "min": 30.8713933,
+    "samples": [
+      30.8713933,
+      33.6409143,
+      31.6821755
+    ]
+  },
+  "label": "pythia-14m",
+  "machine_load_note": "Pairs 0 and 1 started while another python job and VS Code kept total CPU at about 16 to 46 percent, above the 15 percent quiet threshold; pair 2 started quiet (CPU samples 9 to 14 percent). Per-pair samples and flags are in the pairs list. The speedup is similar in all three pairs.",
+  "method": "One untimed GPU warm-up (2 windows), then per repeat one full CPU pass and one full GPU pass over the whole token file in a random order, wall clock, after a quiet-machine check (5 one-second samples of total CPU, all below the threshold, else the wait limit is recorded). Perplexity is the same measured pass on both devices.",
+  "pairs": [
+    {
+      "cpu": {
+        "cross_entropy_nats": 4.738705902066962,
+        "elapsed_secs": 52.3861776,
+        "perplexity": 114.28620839585075,
+        "scored_tokens": 286878,
+        "windows": 281
+      },
+      "cpu_percent_samples_before": [
+        46.0754508972168,
+        30.388206481933594,
+        38.05278015136719,
+        25.346885681152344,
+        31.988632202148438
+      ],
+      "gpu": {
+        "cross_entropy_nats": 4.738704061048425,
+        "elapsed_secs": 30.8713933,
+        "perplexity": 114.28599799301628,
+        "scored_tokens": 286878,
+        "windows": 281
+      },
+      "order": [
+        "cpu",
+        "gpu"
+      ],
+      "perplexity_diff_gpu_minus_cpu": -0.00021040283446893682,
+      "quiet_before": false,
+      "repeat": 0,
+      "waited_secs": 605.314226
+    },
+    {
+      "cpu": {
+        "cross_entropy_nats": 4.738705902066962,
+        "elapsed_secs": 51.1469193,
+        "perplexity": 114.28620839585075,
+        "scored_tokens": 286878,
+        "windows": 281
+      },
+      "cpu_percent_samples_before": [
+        15.873039245605469,
+        16.952903747558594,
+        15.350395202636719,
+        16.30896759033203,
+        17.058258056640625
+      ],
+      "gpu": {
+        "cross_entropy_nats": 4.738704061048425,
+        "elapsed_secs": 33.6409143,
+        "perplexity": 114.28599799301628,
+        "scored_tokens": 286878,
+        "windows": 281
+      },
+      "order": [
+        "cpu",
+        "gpu"
+      ],
+      "perplexity_diff_gpu_minus_cpu": -0.00021040283446893682,
+      "quiet_before": false,
+      "repeat": 1,
+      "waited_secs": 180.0265012
+    },
+    {
+      "cpu": {
+        "cross_entropy_nats": 4.738705902066962,
+        "elapsed_secs": 48.5133474,
+        "perplexity": 114.28620839585075,
+        "scored_tokens": 286878,
+        "windows": 281
+      },
+      "cpu_percent_samples_before": [
+        9.392654418945312,
+        10.104423522949219,
+        14.346710205078125,
+        10.686729431152344,
+        12.798744201660156
+      ],
+      "gpu": {
+        "cross_entropy_nats": 4.738704061048425,
+        "elapsed_secs": 31.6821755,
+        "perplexity": 114.28599799301628,
+        "scored_tokens": 286878,
+        "windows": 281
+      },
+      "order": [
+        "cpu",
+        "gpu"
+      ],
+      "perplexity_diff_gpu_minus_cpu": -0.00021040283446893682,
+      "quiet_before": true,
+      "repeat": 2,
+      "waited_secs": 5.0033111
+    }
+  ],
+  "perplexity_cpu": 114.28620839585075,
+  "perplexity_diff_gpu_minus_cpu": -0.00021040283446893682,
+  "perplexity_gpu": 114.28599799301628,
+  "quiet_threshold_cpu_percent": 15.0,
+  "runs": 3,
+  "schema": 1,
+  "speedup_cpu_over_gpu": {
+    "max": 1.696916530165161,
+    "median": 1.5312505102435279,
+    "min": 1.5203783953041967,
+    "samples": [
+      1.696916530165161,
+      1.5203783953041967,
+      1.5312505102435279
+    ]
+  },
+  "threads": 12
+}
