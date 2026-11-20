@@ -173,6 +173,13 @@ closes it.
 - **Compute Bridge notes**: the per-dispatch profile (`set_op_profile`) and the paired old/new flags (`--old-gemm`, `--old-attention`) are the tools to compare any new backend against; all kernels are original WGSL from the public WebGPU specification and the tiling ideas in `docs/research/gpu-backends.md`, no code from other engines. The weight budget is a setting because wgpu does not report VRAM: a future run planner (`thme pathfinder`) should set it from the adapter and from `nvidia-smi` style probes, and pick the storage format from the free memory.
 - **Done means**: Paired before and after per step on SmolLM2-1.7B, SmolLM-135M and Pythia-14M with device, driver, build, method and load note in a committed report; parity tests green; a full-split time on a quiet machine (the committed one was taken under load, repeat when quiet).
 
+### [THME-3085] Reference comparison against llama.cpp on this machine
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p1 · **Area**: gpu · **Type**: perf · **Status**: ready
+- **Problem**: The only outside numbers we have (community scoreboards: about 3,400 prompt tokens per second for a 7B model at Q4_0 on an RTX 4060 Ti with CUDA; reported, mixed builds) are not measured on our hardware, so the gap to mature engines is unknown.
+- **Progress** (20 November 2026): measured on this machine with llama.cpp b12584 (CUDA 12.4 and Vulkan builds, official release, digests verified; reference report and compatibility findings on branch `feat/llama-cpp-reference`, pull request pending): prompt processing at 1,024 tokens 11,348 to 14,348 tokens per second and generation 74 (F16), 131 (Q8_0), 221 to 225 (Q4_0) for SmolLM2-1.7B; THME at that time 2,090 to 2,170 tokens per second for the full pass, after THME-3087 about 7,000 on a 16,384-token slice with f16 weights (different measurement shapes: see the report).
+- **Done means**: llama.cpp (MIT, prebuilt binaries downloaded into a separate folder, never bundled) run through its own benchmark tool on the same SmolLM2-1.7B file in its CUDA and Vulkan builds: prompt processing and token generation tokens per second, build number, flags, driver and load recorded in a committed report; our passes compared to those rows with the same token counts; the result sets the real target for THME-3086 to 3089.
+
 ### [THME-3086] GPU feature audit: what the adapter really exposes, with checked kernels
 
 - **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p1 · **Area**: gpu · **Type**: feature · **Status**: in review
@@ -275,6 +282,12 @@ closes it.
 - **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: experiment · **Status**: ready
 - **Problem**: Published work reports that some layers can be removed from larger models with little loss; small models may be more fragile.
 - **Done means**: Block influence per layer computed for Pythia-14M (and SmolLM-135M late), perplexity measured against the number of removed blocks on the same token hash with a random-removal control; the rule and the stop threshold are written before the run.
+
+### [THME-3089] Device decoder with KV cache and fused quantized matrix-vector for decode
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p1 · **Area**: gpu · **Type**: perf · **Status**: ready
+- **Problem**: Decode (one token at a time) is limited by memory bandwidth, not arithmetic: about 288 GB/s on this card, so a 1.7B model at Q4_0 (1.1 GB) has a ceiling of about 260 tokens per second. We have no device KV cache and a per-operation GPT-NeoX path, so decode on the GPU is unmeasured and likely far below that ceiling.
+- **Done means**: Device-resident decode for LLaMA-family and GPT-NeoX models with a device KV cache and fused quantized matrix-vector kernels, one submit per token; tokens per second measured against the bandwidth ceiling (target at least 80 percent of it for Q4_0 and Q8_0) and against llama.cpp from THME-3085; Pythia-14M first.
 
 ### [THME-3090] Automatic weight budget for the GPU path (default is 7x slower than it should be)
 
