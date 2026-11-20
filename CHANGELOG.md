@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - v0.2.0 Measured Core
 
 ### Added
+- **MCP `thme_auto_decide` fixed**: it now recognises GPT-NeoX tensor names (Pythia) and never answers for a loaded model with made-up numbers; with no model it says ILLUSTRATIVE EXAMPLE. Found by running the real-model tests on Pythia-14M and SmolLM-135M.
 - Real-model tests use the two small open-weights models, Pythia-14M and SmolLM-135M (`THME_TEST_MODELS_DIR`, `THME_REAL_MODEL_TESTS=1`), and print a SKIP reason when they do not run; the MedGemma-only tests are gone.
 - Fixed: `production_verification` refuses a checkpoint whose family or shape differs from `--target`, and names WikiText-2 only when the token file matches its provenance sidecar (otherwise the heading says "not WikiText-2").
 - Fixed: the MCP server no longer falls back to a MedGemma file under `%LOCALAPPDATA%` (THME-3051); it loads a model from `THME_MODEL` or an explicit argument only.
