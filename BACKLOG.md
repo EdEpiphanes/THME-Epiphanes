@@ -137,6 +137,12 @@ closes it.
 - **Problem**: Nobody has looked at the Studio window since the eframe 0.37 upgrade: tabs, the Chat tab with its device selector, the Welcome panel and labels are untested by eye, and the Live 3D capture crop no longer fits the new layout (THME-2002).
 - **Done means**: The owner opens each tab and records what is wrong; layout fixes land; all Studio screenshots and recordings are recaptured from the real window.
 
+### [THME-3071] Provenance ledger: record where every part of the code and data came from
+
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: legal · **Type**: chore · **Status**: ready
+- **Problem**: Dependencies and licence headers are checked, but nothing records who or what wrote each part of the code (the owner, an AI tool and when, a third-party source) or which datasets and models a report used. The owner wants every part of what is written and released to have clear rights.
+- **Done means**: A ledger file in the repository lists each area (directory or file group) with its origin, licence and date; CI fails when a new top-level area has no entry; agents are told in AGENTS.md to add code only from the repository itself or from sources the licence audit approved; the contributor agreement and counsel review are tracked privately.
+
 ## Engine, format, security and quality tracks (v0.2.5 to v0.2.9)
 
 > From the research dossier v3.1 (`docs/research/`) and the owner's direction of 13 November 2026.
