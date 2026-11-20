@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - v0.2.0 Measured Core
 
 ### Added
+- **GPU parity plan (THME-3085 to 3089)**: measure llama.cpp on this machine, audit wgpu features per adapter, cooperative-matrix and int8 dot-product matmul behind capability checks, device decoder with KV cache for decode.
 - **Embedding vs linear Q8_0 failure and token frequencies, Pythia-14M (THME-3079, THME-3080)**: `examples/token_frequency.rs` and `scripts/embedding_vs_linear.py` with six recipes under `docs/benchmarks/pythia-14m/recipes/`; reports `token_frequency.json` and `embedding_vs_linear.json` (rule pre-registered; Q8_0 rise +0.083 embeddings and head, +0.666 linear layers, +0.744 both on the RTX 4060 Ti). `SetPrecision` with an explicit role now reaches tensors that have no layer index (embeddings, output head). The reproduction of the committed +0.834 missed, see the report.
 - **AWQ on SmolLM-135M measured on the GPU (THME-2204)**: pre-registered rule applied unchanged; AWQ beats round-to-nearest in Q4_0 (22.04 against 23.70) and Q4_K (21.64 against 24.62) and beats the permuted-scale control, but not the shuffled-calibration control, and the 0.45 quality gate still fails; the report records the GPU and driver.
 - **Memory and speed experiments planned (THME-3079 to 3083)**: token-frequency count, per-row precision bands, frequent-row draft pass, int8 and int4 KV per group, layer-removal check; each on Pythia-14M first with a pre-registered rule.

@@ -236,6 +236,36 @@ closes it.
 - **Problem**: Published work reports that some layers can be removed from larger models with little loss; small models may be more fragile.
 - **Done means**: Block influence per layer computed for Pythia-14M (and SmolLM-135M late), perplexity measured against the number of removed blocks on the same token hash with a random-removal control; the rule and the stop threshold are written before the run.
 
+### [THME-3085] Reference comparison against llama.cpp on this machine
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p1 · **Area**: gpu · **Type**: perf · **Status**: ready
+- **Problem**: The only outside numbers we have (community scoreboards: about 3,400 prompt tokens per second for a 7B model at Q4_0 on an RTX 4060 Ti with CUDA; reported, mixed builds) are not measured on our hardware, so the gap to mature engines is unknown.
+- **Done means**: llama.cpp (MIT, prebuilt binaries downloaded into a separate folder, never bundled) run through its own benchmark tool on the same SmolLM2-1.7B file in its CUDA and Vulkan builds: prompt processing and token generation tokens per second, build number, flags, driver and load recorded in a committed report; our passes compared to those rows with the same token counts; the result sets the real target for THME-3086 to 3089.
+
+### [THME-3086] Which GPU features does wgpu really expose on this adapter
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p1 · **Area**: gpu · **Type**: perf · **Status**: ready
+- **Problem**: Tensor-core-class matmul (cooperative matrix), int8 dot products, subgroups and f16 may or may not be available on a given adapter and driver; wgpu documents Vulkan cooperative-matrix support as possibly limited.
+- **Done means**: A report (and the `thme doctor` GPU section) lists for each adapter whether SHADER_F16, SUBGROUP, EXPERIMENTAL_COOPERATIVE_MATRIX (and the matrix shapes and types the driver offers), and the packed 4x8 integer dot product work, tested by tiny kernels that run and check results; recorded for the RTX 4060 Ti first.
+
+### [THME-3087] Cooperative-matrix (tensor-core) matmul behind a capability check
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p1 · **Area**: gpu · **Type**: perf · **Status**: ready
+- **Problem**: Our matmul reaches about 9.5 TFLOPS, 43 percent of the card's f32 peak of about 22; an engine at 80 to 90 percent of a CUDA engine needs about 33 to 38 TFLOPS of effective work for prompt passes, which only tensor cores or int8 dot products can give.
+- **Done means**: A GEMM kernel using wgpu cooperative matrices (f16 inputs, f32 accumulation), selected only when THME-3086 shows the adapter supports it, with the existing f32 kernel as the fallback; parity against the f32 path within a stated tolerance; TFLOPS per shape and the SmolLM2-1.7B full-split time measured and compared with THME-3085.
+
+### [THME-3088] Int8 dot-product quantized matmul (Q8_0 and Q4 weights with int8 activations)
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p1 · **Area**: gpu · **Type**: perf · **Status**: ready
+- **Problem**: Quantized weights dequantize to floats inside our kernels today; engines use integer dot products (four multiplies per instruction, about 4x the f32 rate, 88 TOPS on this card) on quantized activations, which is the portable route to tensor-core-class speed on NVIDIA, AMD and Intel.
+- **Done means**: A kernel using packed int8 dot products with per-block activation quantization (our own design, from the documented maths) for Q8_0 and Q4_0 weights, measured for TOPS and for perplexity change against the f32 path on SmolLM2-1.7B; selected by the capability check; fallback when unsupported.
+
+### [THME-3089] Device decoder with KV cache and fused quantized matrix-vector for decode
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p1 · **Area**: gpu · **Type**: perf · **Status**: ready
+- **Problem**: Decode (one token at a time) is limited by memory bandwidth, not arithmetic: about 288 GB/s on this card, so a 1.7B model at Q4_0 (1.1 GB) has a ceiling of about 260 tokens per second. We have no device KV cache and a per-operation GPT-NeoX path, so decode on the GPU is unmeasured and likely far below that ceiling.
+- **Done means**: Device-resident decode for LLaMA-family and GPT-NeoX models with a device KV cache and fused quantized matrix-vector kernels, one submit per token; tokens per second measured against the bandwidth ceiling (target at least 80 percent of it for Q4_0 and Q8_0) and against llama.cpp from THME-3085; Pythia-14M first.
+
 ## Engine, format, security and quality tracks (v0.2.5 to v0.2.9)
 
 > From the research dossier v3.1 (`docs/research/`) and the owner's direction of 13 November 2026.
