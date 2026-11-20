@@ -1,0 +1,394 @@
+{
+  "architecture": "LLaMA",
+  "evaluation": {
+    "context_len": 1024,
+    "corpus": {
+      "corpus": "WikiText-2 (raw) test split",
+      "corpus_bytes": 1290590,
+      "corpus_member": "wikitext-2-raw/wiki.test.raw",
+      "corpus_sha256": "173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08",
+      "corpus_source": "https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip",
+      "special_tokens_added": false,
+      "token_count": 303415,
+      "token_file_sha256": "18e663b61dd00f49796c8a6ae498b7dbe009cac4a2eaf3c67fa7d81baf47d945",
+      "tokenizer_repo": "HuggingFaceTB/SmolLM-135M",
+      "tokenizer_sha256": "9ca9acddb6525a194ec8ac7a87f24fbba7232a9a15ffa1af0c1224fcd888e47c",
+      "tokenizer_source": "local file"
+    },
+    "gate": {
+      "criteria": [
+        {
+          "lower_is_better": true,
+          "max_abs": 0.45,
+          "max_rel": null,
+          "metric": "perplexity"
+        }
+      ],
+      "hash": "4311fb024c9fe1fec6e2fa622ce0caaca5b67a03a7d305be2b11ab3b97fbc34c",
+      "id": "thme-perplexity@v1",
+      "name": "thme-perplexity",
+      "version": 1
+    },
+    "gate_passed": true,
+    "gate_verdict": {
+      "accepted": true,
+      "gate": "thme-perplexity@v1",
+      "gate_hash": "4311fb024c9fe1fec6e2fa622ce0caaca5b67a03a7d305be2b11ab3b97fbc34c",
+      "outcomes": [
+        {
+          "baseline": 16.327636695940942,
+          "candidate": 16.30970870497725,
+          "degradation": -0.017927990963691798,
+          "metric": "perplexity",
+          "relative_degradation": -0.001098015058612169,
+          "status": "pass"
+        }
+      ]
+    },
+    "max_ppl_delta": 0.45,
+    "max_tokens": 16384,
+    "measured": true,
+    "variants": [
+      {
+        "accepted": null,
+        "corpus_tokens_used": 16384,
+        "cross_entropy_nats": 2.7928591748889167,
+        "delta_ppl": null,
+        "description": "Source weights exactly as stored on disk",
+        "elapsed_secs": 24.8065694,
+        "id": "baseline",
+        "perplexity": 16.327636695940942,
+        "scored_tokens": 16368,
+        "tokens_per_sec": 659.8252154931185,
+        "windows": 16
+      },
+      {
+        "accepted": true,
+        "corpus_tokens_used": 16384,
+        "cross_entropy_nats": 2.791760556570137,
+        "delta_ppl": -0.017927990963691798,
+        "description": "Searched assignment: 50% of linear storage",
+        "elapsed_secs": 24.0024347,
+        "id": "searched",
+        "perplexity": 16.30970870497725,
+        "scored_tokens": 16368,
+        "tokens_per_sec": 681.9308209595921,
+        "windows": 16
+      },
+      {
+        "accepted": true,
+        "corpus_tokens_used": 16384,
+        "cross_entropy_nats": 2.7932701985778423,
+        "delta_ppl": 0.006712424854516286,
+        "description": "Same formats as the search, placed at random over same-sized groups (seed 1)",
+        "elapsed_secs": 24.7199461,
+        "id": "random_matched_seed1",
+        "perplexity": 16.33434912079546,
+        "scored_tokens": 16368,
+        "tokens_per_sec": 662.1373660681242,
+        "windows": 16
+      },
+      {
+        "accepted": true,
+        "corpus_tokens_used": 16384,
+        "cross_entropy_nats": 2.7924142633846984,
+        "delta_ppl": -0.0072627376451492864,
+        "description": "Same formats as the search, placed at random over same-sized groups (seed 2)",
+        "elapsed_secs": 24.5066956,
+        "id": "random_matched_seed2",
+        "perplexity": 16.320373958295793,
+        "scored_tokens": 16368,
+        "tokens_per_sec": 667.8991026436057,
+        "windows": 16
+      },
+      {
+        "accepted": true,
+        "corpus_tokens_used": 16384,
+        "cross_entropy_nats": 2.791770386834242,
+        "delta_ppl": -0.017767661431605575,
+        "description": "Same formats as the search, placed at random over same-sized groups (seed 3)",
+        "elapsed_secs": 25.0846285,
+        "id": "random_matched_seed3",
+        "perplexity": 16.309869034509337,
+        "scored_tokens": 16368,
+        "tokens_per_sec": 652.5111583773305,
+        "windows": 16
+      },
+      {
+        "accepted": true,
+        "corpus_tokens_used": 16384,
+        "cross_entropy_nats": 2.792462259590767,
+        "delta_ppl": -0.006479402815131152,
+        "description": "Same formats as the search, placed at random over same-sized groups (seed 4)",
+        "elapsed_secs": 24.7945398,
+        "id": "random_matched_seed4",
+        "perplexity": 16.32115729312581,
+        "scored_tokens": 16368,
+        "tokens_per_sec": 660.1453437744386,
+        "windows": 16
+      },
+      {
+        "accepted": true,
+        "corpus_tokens_used": 16384,
+        "cross_entropy_nats": 2.7922896905964665,
+        "delta_ppl": -0.009295685506504725,
+        "description": "Same formats as the search, placed at random over same-sized groups (seed 5)",
+        "elapsed_secs": 25.1033583,
+        "id": "random_matched_seed5",
+        "perplexity": 16.318341010434438,
+        "scored_tokens": 16368,
+        "tokens_per_sec": 652.0243150096774,
+        "windows": 16
+      }
+    ]
+  },
+  "export": {
+    "artifact_bytes": 330168448,
+    "container": "GGUF v3, per-tensor formats",
+    "file": null,
+    "measured": true,
+    "note": "Size of the written file, including block scales, metadata and alignment.",
+    "sha256": null
+  },
+  "generated_unix_secs": 1795155176,
+  "host": {
+    "arch": "x86_64",
+    "backend": "THME reference CPU forward pass (f32, multithreaded)",
+    "logical_cpus": 12,
+    "os": "windows"
+  },
+  "model_name": "SmolLM-135M",
+  "recipe": {
+    "estimated_bytes": 325723392,
+    "estimated_bytes_note": "Computed from nominal bits per weight; export.artifact_bytes is the size of the written GGUF.",
+    "format_counts": {},
+    "name": "searched-SmolLM-135M"
+  },
+  "search": {
+    "achieved_fraction": 0.5,
+    "budget_fraction": 0.5,
+    "budget_met": true,
+    "calibration_tokens": 8192,
+    "dp_grid": null,
+    "formats": [
+      "Q8_0",
+      "Q4_0"
+    ],
+    "granularity": "layer",
+    "measured_delta_calibration": -0.013802941326968465,
+    "moves_reverted": 0,
+    "pareto": [
+      {
+        "achieved_fraction": 0.9,
+        "budget": 0.9,
+        "budget_met": true,
+        "control_deltas": [
+          0.009385735973488352,
+          -0.0004796492987821921,
+          -0.0038196548576152622,
+          -0.013192059391947453,
+          0.0004220462179951312
+        ],
+        "validation_delta": -0.002822390150747367
+      },
+      {
+        "achieved_fraction": 0.7,
+        "budget": 0.7,
+        "budget_met": true,
+        "control_deltas": [
+          0.01281203125805419,
+          0.0058451379435418005,
+          -0.011615606702012116,
+          -0.009345274543605342,
+          -0.0035897708478458412
+        ],
+        "validation_delta": -0.00944247998078751
+      },
+      {
+        "achieved_fraction": 0.5,
+        "budget": 0.5,
+        "budget_met": true,
+        "control_deltas": [
+          0.006712424854516286,
+          -0.0072627376451492864,
+          -0.017767661431605575,
+          -0.006479402815131152,
+          -0.009295685506504725
+        ],
+        "validation_delta": -0.017927990963691798
+      },
+      {
+        "achieved_fraction": 0.3,
+        "budget": 0.3,
+        "budget_met": true,
+        "control_deltas": [
+          -0.012203203444933308,
+          -0.016678344126809463,
+          -0.008190011421298493,
+          -0.005807137987567046,
+          -0.0031660104875292916
+        ],
+        "validation_delta": -0.0038725606763989617
+      }
+    ],
+    "plan": [
+      {
+        "format": "stored",
+        "group": "layer 0",
+        "params": 3538944
+      },
+      {
+        "format": "Q8_0",
+        "group": "layer 1",
+        "params": 3538944
+      },
+      {
+        "format": "Q8_0",
+        "group": "layer 2",
+        "params": 3538944
+      },
+      {
+        "format": "Q8_0",
+        "group": "layer 3",
+        "params": 3538944
+      },
+      {
+        "format": "Q8_0",
+        "group": "layer 4",
+        "params": 3538944
+      },
+      {
+        "format": "Q8_0",
+        "group": "layer 5",
+        "params": 3538944
+      },
+      {
+        "format": "Q8_0",
+        "group": "layer 6",
+        "params": 3538944
+      },
+      {
+        "format": "Q8_0",
+        "group": "layer 7",
+        "params": 3538944
+      },
+      {
+        "format": "stored",
+        "group": "layer 8",
+        "params": 3538944
+      },
+      {
+        "format": "Q8_0",
+        "group": "layer 9",
+        "params": 3538944
+      },
+      {
+        "format": "Q8_0",
+        "group": "layer 10",
+        "params": 3538944
+      },
+      {
+        "format": "Q8_0",
+        "group": "layer 11",
+        "params": 3538944
+      },
+      {
+        "format": "Q8_0",
+        "group": "layer 12",
+        "params": 3538944
+      },
+      {
+        "format": "stored",
+        "group": "layer 13",
+        "params": 3538944
+      },
+      {
+        "format": "Q8_0",
+        "group": "layer 14",
+        "params": 3538944
+      },
+      {
+        "format": "stored",
+        "group": "layer 15",
+        "params": 3538944
+      },
+      {
+        "format": "Q8_0",
+        "group": "layer 16",
+        "params": 3538944
+      },
+      {
+        "format": "stored",
+        "group": "layer 17",
+        "params": 3538944
+      },
+      {
+        "format": "stored",
+        "group": "layer 18",
+        "params": 3538944
+      },
+      {
+        "format": "Q8_0",
+        "group": "layer 19",
+        "params": 3538944
+      },
+      {
+        "format": "Q8_0",
+        "group": "layer 20",
+        "params": 3538944
+      },
+      {
+        "format": "Q8_0",
+        "group": "layer 21",
+        "params": 3538944
+      },
+      {
+        "format": "Q8_0",
+        "group": "layer 22",
+        "params": 3538944
+      },
+      {
+        "format": "Q8_0",
+        "group": "layer 23",
+        "params": 3538944
+      },
+      {
+        "format": "Q8_0",
+        "group": "layer 24",
+        "params": 3538944
+      },
+      {
+        "format": "stored",
+        "group": "layer 25",
+        "params": 3538944
+      },
+      {
+        "format": "Q8_0",
+        "group": "layer 26",
+        "params": 3538944
+      },
+      {
+        "format": "stored",
+        "group": "layer 27",
+        "params": 3538944
+      },
+      {
+        "format": "stored",
+        "group": "layer 28",
+        "params": 3538944
+      },
+      {
+        "format": "stored",
+        "group": "layer 29",
+        "params": 3538944
+      }
+    ],
+    "predicted_delta_calibration": -0.013255135793965422,
+    "solver": "greedy",
+    "test": null,
+    "validation_tokens": 16384
+  },
+  "source_payload_bytes": 538060032,
+  "thme_version": "0.1.9",
+  "tool": "thme search"
+}

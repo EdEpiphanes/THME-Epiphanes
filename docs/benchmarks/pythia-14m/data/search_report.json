@@ -1,0 +1,273 @@
+{
+  "architecture": "GPT-NeoX",
+  "evaluation": {
+    "context_len": 1024,
+    "corpus": {
+      "corpus": "WikiText-2 (raw) test split",
+      "corpus_bytes": 1290590,
+      "corpus_member": "wikitext-2-raw/wiki.test.raw",
+      "corpus_sha256": "173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08",
+      "corpus_source": "https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip",
+      "special_tokens_added": false,
+      "token_count": 287159,
+      "token_file_sha256": "973595d9c7c580360a39eedde7297ec050f362a521940f7527eca4a00ea85278",
+      "tokenizer_repo": "EleutherAI/pythia-14m",
+      "tokenizer_sha256": "870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+      "tokenizer_source": "local file"
+    },
+    "gate": {
+      "criteria": [
+        {
+          "lower_is_better": true,
+          "max_abs": 0.45,
+          "max_rel": null,
+          "metric": "perplexity"
+        }
+      ],
+      "hash": "4311fb024c9fe1fec6e2fa622ce0caaca5b67a03a7d305be2b11ab3b97fbc34c",
+      "id": "thme-perplexity@v1",
+      "name": "thme-perplexity",
+      "version": 1
+    },
+    "gate_passed": true,
+    "gate_verdict": {
+      "accepted": true,
+      "gate": "thme-perplexity@v1",
+      "gate_hash": "4311fb024c9fe1fec6e2fa622ce0caaca5b67a03a7d305be2b11ab3b97fbc34c",
+      "outcomes": [
+        {
+          "baseline": 110.02956528443208,
+          "candidate": 110.33280735295952,
+          "degradation": 0.30324206852743885,
+          "metric": "perplexity",
+          "relative_degradation": 0.0027560053313265623,
+          "status": "pass"
+        }
+      ]
+    },
+    "max_ppl_delta": 0.45,
+    "max_tokens": 16384,
+    "measured": true,
+    "variants": [
+      {
+        "accepted": null,
+        "corpus_tokens_used": 16384,
+        "cross_entropy_nats": 4.7007491049918215,
+        "delta_ppl": null,
+        "description": "Source weights exactly as stored on disk",
+        "elapsed_secs": 2.5461660999999998,
+        "id": "baseline",
+        "perplexity": 110.02956528443208,
+        "scored_tokens": 16368,
+        "tokens_per_sec": 6428.488699146533,
+        "windows": 16
+      },
+      {
+        "accepted": true,
+        "corpus_tokens_used": 16384,
+        "cross_entropy_nats": 4.70350131950387,
+        "delta_ppl": 0.30324206852743885,
+        "description": "Searched assignment: 58% of linear storage",
+        "elapsed_secs": 2.6179819,
+        "id": "searched",
+        "perplexity": 110.33280735295952,
+        "scored_tokens": 16368,
+        "tokens_per_sec": 6252.144065625511,
+        "windows": 16
+      },
+      {
+        "accepted": true,
+        "corpus_tokens_used": 16384,
+        "cross_entropy_nats": 4.704800116054887,
+        "delta_ppl": 0.44663503717094954,
+        "description": "Same formats as the search, placed at random over same-sized groups (seed 1)",
+        "elapsed_secs": 2.7601865,
+        "id": "random_matched_seed1",
+        "perplexity": 110.47620032160303,
+        "scored_tokens": 16368,
+        "tokens_per_sec": 5930.034075595979,
+        "windows": 16
+      },
+      {
+        "accepted": true,
+        "corpus_tokens_used": 16384,
+        "cross_entropy_nats": 4.703650155710578,
+        "delta_ppl": 0.31966480716810963,
+        "description": "Same formats as the search, placed at random over same-sized groups (seed 2)",
+        "elapsed_secs": 2.8612203000000003,
+        "id": "random_matched_seed2",
+        "perplexity": 110.34923009160019,
+        "scored_tokens": 16368,
+        "tokens_per_sec": 5720.636051687456,
+        "windows": 16
+      },
+      {
+        "accepted": true,
+        "corpus_tokens_used": 16384,
+        "cross_entropy_nats": 4.704820487659835,
+        "delta_ppl": 0.44888563760413547,
+        "description": "Same formats as the search, placed at random over same-sized groups (seed 3)",
+        "elapsed_secs": 2.6909686,
+        "id": "random_matched_seed3",
+        "perplexity": 110.47845092203622,
+        "scored_tokens": 16368,
+        "tokens_per_sec": 6082.568187529204,
+        "windows": 16
+      },
+      {
+        "accepted": false,
+        "corpus_tokens_used": 16384,
+        "cross_entropy_nats": 4.705301702355497,
+        "delta_ppl": 0.5020622854078027,
+        "description": "Same formats as the search, placed at random over same-sized groups (seed 4)",
+        "elapsed_secs": 2.4870295000000002,
+        "id": "random_matched_seed4",
+        "perplexity": 110.53162756983988,
+        "scored_tokens": 16368,
+        "tokens_per_sec": 6581.345335871568,
+        "windows": 16
+      },
+      {
+        "accepted": true,
+        "corpus_tokens_used": 16384,
+        "cross_entropy_nats": 4.703650155710578,
+        "delta_ppl": 0.31966480716810963,
+        "description": "Same formats as the search, placed at random over same-sized groups (seed 5)",
+        "elapsed_secs": 2.5178723,
+        "id": "random_matched_seed5",
+        "perplexity": 110.34923009160019,
+        "scored_tokens": 16368,
+        "tokens_per_sec": 6500.7268239934165,
+        "windows": 16
+      }
+    ]
+  },
+  "export": {
+    "artifact_bytes": 27220256,
+    "container": "GGUF v3, per-tensor formats",
+    "file": null,
+    "measured": true,
+    "note": "Size of the written file, including block scales, metadata and alignment.",
+    "sha256": null
+  },
+  "generated_unix_secs": 1795151737,
+  "host": {
+    "arch": "x86_64",
+    "backend": "THME reference CPU forward pass (f32, multithreaded)",
+    "logical_cpus": 12,
+    "os": "windows"
+  },
+  "model_name": "pythia-14m",
+  "recipe": {
+    "estimated_bytes": 27152384,
+    "estimated_bytes_note": "Computed from nominal bits per weight; export.artifact_bytes is the size of the written GGUF.",
+    "format_counts": {},
+    "name": "searched-pythia-14m"
+  },
+  "search": {
+    "achieved_fraction": 0.5833333333333334,
+    "budget_fraction": 0.5,
+    "budget_met": false,
+    "calibration_tokens": 8192,
+    "dp_grid": null,
+    "formats": [
+      "Q8_0",
+      "Q4_0"
+    ],
+    "granularity": "layer",
+    "measured_delta_calibration": 0.3944708905112009,
+    "moves_reverted": 1,
+    "pareto": [
+      {
+        "achieved_fraction": 0.8333333333333334,
+        "budget": 0.9,
+        "budget_met": true,
+        "control_deltas": [
+          0.13746469858662635,
+          0.10190096161815632,
+          0.15633284165303962,
+          0.17581459721203885
+        ],
+        "validation_delta": -0.0033229892461577037
+      },
+      {
+        "achieved_fraction": 0.6666666666666666,
+        "budget": 0.7,
+        "budget_met": true,
+        "control_deltas": [
+          0.4172637368401695,
+          0.15325939386197263,
+          0.27565577555783705,
+          0.3753814290352864,
+          0.19165498532268543
+        ],
+        "validation_delta": 0.1765640359966909
+      },
+      {
+        "achieved_fraction": 0.5833333333333334,
+        "budget": 0.5,
+        "budget_met": false,
+        "control_deltas": [
+          0.44663503717094954,
+          0.31966480716810963,
+          0.44888563760413547,
+          0.5020622854078027,
+          0.31966480716810963
+        ],
+        "validation_delta": 0.30324206852743885
+      },
+      {
+        "achieved_fraction": 0.5833333333333334,
+        "budget": 0.3,
+        "budget_met": false,
+        "control_deltas": [
+          0.44663503717094954,
+          0.31966480716810963,
+          0.44888563760413547,
+          0.5020622854078027,
+          0.31966480716810963
+        ],
+        "validation_delta": 0.30324206852743885
+      }
+    ],
+    "plan": [
+      {
+        "format": "Q8_0",
+        "group": "layer 0",
+        "params": 196608
+      },
+      {
+        "format": "Q8_0",
+        "group": "layer 1",
+        "params": 196608
+      },
+      {
+        "format": "Q8_0",
+        "group": "layer 2",
+        "params": 196608
+      },
+      {
+        "format": "stored",
+        "group": "layer 3",
+        "params": 196608
+      },
+      {
+        "format": "Q8_0",
+        "group": "layer 4",
+        "params": 196608
+      },
+      {
+        "format": "Q8_0",
+        "group": "layer 5",
+        "params": 196608
+      }
+    ],
+    "predicted_delta_calibration": 0.7302872806436937,
+    "solver": "greedy",
+    "test": null,
+    "validation_tokens": 16384
+  },
+  "source_payload_bytes": 28135424,
+  "thme_version": "0.1.9",
+  "tool": "thme search"
+}
