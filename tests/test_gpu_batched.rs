@@ -486,3 +486,24 @@ fn fused_head_nll_matches_cpu_across_chunks() {
         assert!((c - g).abs() < 1e-3, "nll {c} vs {g}");
     }
 }
+
+#[test]
+fn a_device_wait_that_cannot_finish_is_an_error_not_a_freeze() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut seed = 91u64;
+    let (t, d, vocab) = (700usize, 24usize, 100_000usize);
+    let normed = pseudo_random(&mut seed, t * d, 1.0);
+    let head = pseudo_random(&mut seed, vocab * d, 0.5);
+    let tokens: Vec<u32> = (0..t).map(|i| (i * 7919 % vocab) as u32).collect();
+    // Warm the weight cache so only the pass itself is left to time out.
+    gpu.score_head_nll(&normed, &head, d, vocab, &tokens[1..])
+        .expect("warm");
+    gpu.set_wait_timeout(std::time::Duration::ZERO);
+    let err = gpu
+        .score_head_nll(&normed, &head, d, vocab, &tokens[1..])
+        .expect_err("a zero wait cannot complete a 700 x 100000 head pass");
+    assert!(err.to_string().contains("GPU wait failed"), "{err}");
+    gpu.set_wait_timeout(std::time::Duration::from_secs(120));
+    gpu.score_head_nll(&normed, &head, d, vocab, &tokens[1..])
+        .expect("recovers once the wait is long enough");
+}
