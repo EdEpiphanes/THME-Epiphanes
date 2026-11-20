@@ -460,13 +460,13 @@ closes it.
 - **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p3 · **Area**: security · **Type**: chore · **Status**: ready
 - **Problem**: Any connected MCP client can make the server open and parse any readable path (read-only and scan-gated, no writes or process spawning found), and the configs start it through `cargo run`, which runs build scripts (L3). The parsers use `unsafe Mmap::map` on user files, so truncation by another process while in use can crash the process (L11).
 - **Done means**: The MCP trust model is documented with optional allowed roots; configs point at a built binary; SECURITY.md states the memory-map limit.
-### [THME-3055] precision_sweep: random_matched seeds 2 and 3 gave identical perplexity on Pythia-14M
+### [THME-3067] precision_sweep: random_matched seeds 2 and 3 gave identical perplexity on Pythia-14M
 
 - **Milestone**: v0.2.0 · **Roadmap**: v0.2.0.9 · **Priority**: p2 · **Area**: research · **Type**: bug · **Status**: triage
 - **Problem**: On Pythia-14M, `examples/precision_sweep` `random_matched_seed2` and `random_matched_seed3` printed the same perplexity. The likely cause is that the pool of same-shape tensors is too small, so shuffling by seed picks the same placement (unverified; not reproduced in this ticket).
 - **Done means**: Either the seeds are shown to yield different placements (log the chosen tensor indices per seed in the report) and the perplexity differs, or the sweep refuses to report random controls that repeat a placement. Checked on Pythia-14M with a short token file.
 
-### [THME-3056] llama.cpp compatibility test needs a configured runtime
+### [THME-3068] llama.cpp compatibility test needs a configured runtime
 
 - **Milestone**: v0.2.9 · **Roadmap**: v0.2.9.6 · **Priority**: p2 · **Area**: ci · **Type**: chore · **Status**: triage
 - **Problem**: `tests/test_exporter_compatibility.rs` (`exported_gguf_runs_in_configured_llama_cpp_and_ollama`) returns early unless `THME_LLAMA_CPP`, `THME_OLLAMA` and a model source are set. The `test` job in `.github/workflows/ci.yml` runs it with `THME_REQUIRE_RUNTIME_COMPAT=1` only when the repository variables `THME_COMPAT_MODEL`, `THME_LLAMA_CPP` and `THME_OLLAMA` are all set; otherwise the step is skipped and the run passes without loading the file in any runtime. Whether those variables are set on the repository was not checked here (unverified).
