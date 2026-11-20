@@ -95,7 +95,7 @@ flowchart LR
 | :--- | :--- | :--- | :--- |
 | Formats and calibration | **GPTQ-style rounding** (THME-2205): second-order rounding with a full-Hessian calibration step | Implemented for Q4_0 and Q8_0, tested on synthetic matrices; real-model measurement pending, K-quants not supported | Calibration |
 | Formats and calibration | **llama.cpp compatibility check** (THME-2208) on synthetic exported files; the runtime check runs only when a tool is configured | Not started | Exporter |
-| Security | **Scanner coverage** (THME-3022, v0.2.7.2): legacy HDF5 `.h5` Keras files | Partly done: `.h5` is flagged, not inspected | Scanner v1 |
+| Security | **Scanner coverage** (THME-3022, v0.2.7.2): legacy HDF5 `.h5` Keras files | Done in part: `.h5` is searched for Lambda and custom layers; compressed or fragmented attributes can be missed | Scanner v1 |
 | Quality and evidence | **Benchmark runner, native and bridged modes** (v0.2.8.3): produce outputs with THME's forward pass or an external tool; resume and cache | Blocked | Model runs paused |
 | Plug and play workspace | **v0.3.0** (THME-3037 to 3042): discover, doctor and tokenizer are done, tested on fixtures; Studio chat, Hub download, bridges, first-run guide, notebook bridge and installs are open | Partly done | Reference forward pass |
 
