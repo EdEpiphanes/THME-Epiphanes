@@ -37,6 +37,10 @@ All agents and contributors must uphold these rules without exception:
    - Return structured `Result<T, E>` types with actionable diagnostic contexts.
    - Enforced by the compiler: `src/lib.rs` and every binary deny `clippy::unwrap_used`, `expect_used`, `panic`, `unreachable`, `unimplemented` and `todo` outside tests, so `cargo clippy -- -D warnings` fails on any new one.
 
+
+5. **Clean-Room Learning**:
+   - Learn from other projects through public documentation, specifications, papers and black-box measurements; do not read, copy or translate their source or shader code (see [docs/clean-room.md](docs/clean-room.md)).
+   - Any code taken from outside the repository needs the reference audit, a third-party register entry and the owner's approval first.
 ---
 
 ## 3. Code Standards & CI Requirements
