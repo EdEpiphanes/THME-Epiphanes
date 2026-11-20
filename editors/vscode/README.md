@@ -56,18 +56,20 @@ Then in VS Code:
 THME runs as a standalone MCP server conforming to the 2024-11-05 standard.
 
 Add to your `.vscode/mcp.json` or Cursor/Claude MCP configuration:
+Build once with `cargo build --release --bin thme`, then point the config at the binary (do not start the server through `cargo run`: it runs build scripts every time):
+
 ```json
 {
   "servers": {
     "thme-mcp": {
-      "command": "cargo",
-      "args": ["run", "--bin", "thme", "--", "mcp"],
+      "command": "${workspaceFolder}/target/release/thme",
+      "args": ["mcp"],
       "env": {}
     }
   }
 }
 ```
-Or with pre-compiled binary:
+Or with an installed binary:
 ```json
 {
   "servers": {
