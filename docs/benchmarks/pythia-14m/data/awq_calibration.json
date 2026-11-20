@@ -1,8 +1,8 @@
 {
   "report": "awq_calibration",
   "report_version": 1,
-  "status": "pending",
-  "status_note": "Protocol, inputs and decision rule are fixed. No perplexity has been measured for this comparison; every result is pending.",
+  "status": "measured",
+  "status_note": "Every arm was measured on the full WikiText-2 test split by the reference CPU forward pass. The decision rule was applied as pre-registered.",
   "model_name": "pythia-14m",
   "model_repo": "EleutherAI/pythia-14m",
   "model_config": {
@@ -464,104 +464,382 @@
   "results": {
     "Q4_0": {
       "ceiling": {
-        "status": "pending"
+        "status": "measured",
+        "perplexity": 114.28620839585075,
+        "benchmark_id": "wikitext2-raw",
+        "benchmark_version": "1",
+        "split": "test"
       },
       "rtn": {
-        "status": "pending"
+        "status": "measured",
+        "perplexity": 193.00280711915582,
+        "benchmark_id": "wikitext2-raw",
+        "benchmark_version": "1",
+        "split": "test"
       },
       "awq": {
-        "status": "pending",
+        "status": "measured",
+        "benchmark_id": "wikitext2-raw",
+        "benchmark_version": "1",
+        "split": "test",
         "seeds": [
           1234,
           1,
           2,
           3,
           4
+        ],
+        "runs": [
+          {
+            "seed": 1234,
+            "perplexity": 172.72876575620236,
+            "alpha": null,
+            "delta_ppl": 58.442557360351614,
+            "gate_accepted": false
+          },
+          {
+            "seed": 1,
+            "perplexity": 168.00413748950712,
+            "alpha": null,
+            "delta_ppl": 53.717929093656366,
+            "gate_accepted": false
+          },
+          {
+            "seed": 2,
+            "perplexity": 173.571877513255,
+            "alpha": null,
+            "delta_ppl": 59.285669117404254,
+            "gate_accepted": false
+          },
+          {
+            "seed": 3,
+            "perplexity": 171.64176998309856,
+            "alpha": null,
+            "delta_ppl": 57.355561587247806,
+            "gate_accepted": false
+          },
+          {
+            "seed": 4,
+            "perplexity": 167.5658710929535,
+            "alpha": null,
+            "delta_ppl": 53.27966269710275,
+            "gate_accepted": false
+          }
         ]
       },
       "control_a": {
-        "status": "pending",
+        "status": "measured",
+        "benchmark_id": "wikitext2-raw",
+        "benchmark_version": "1",
+        "split": "test",
         "seeds": [
           1,
           2,
           3,
           4,
           5
+        ],
+        "runs": [
+          {
+            "seed": 1,
+            "perplexity": 191.24273926669647,
+            "alpha": null,
+            "delta_ppl": 76.95653087084573,
+            "gate_accepted": false
+          },
+          {
+            "seed": 2,
+            "perplexity": 192.31582882060505,
+            "alpha": null,
+            "delta_ppl": 78.0296204247543,
+            "gate_accepted": false
+          },
+          {
+            "seed": 3,
+            "perplexity": 186.73031472424933,
+            "alpha": null,
+            "delta_ppl": 72.44410632839858,
+            "gate_accepted": false
+          },
+          {
+            "seed": 4,
+            "perplexity": 202.50587850198934,
+            "alpha": null,
+            "delta_ppl": 88.2196701061386,
+            "gate_accepted": false
+          },
+          {
+            "seed": 5,
+            "perplexity": 200.59178813433212,
+            "alpha": null,
+            "delta_ppl": 86.30557973848137,
+            "gate_accepted": false
+          }
         ]
       },
       "control_b1": {
-        "status": "pending",
+        "status": "measured",
+        "benchmark_id": "wikitext2-raw",
+        "benchmark_version": "1",
+        "split": "test",
         "seeds": [
           1234,
           1,
           2,
           3,
           4
+        ],
+        "runs": [
+          {
+            "seed": 1234,
+            "perplexity": 176.0354586246293,
+            "alpha": null,
+            "delta_ppl": 61.749250228778564,
+            "gate_accepted": false
+          },
+          {
+            "seed": 1,
+            "perplexity": 170.00835272011287,
+            "alpha": null,
+            "delta_ppl": 55.72214432426212,
+            "gate_accepted": false
+          },
+          {
+            "seed": 2,
+            "perplexity": 179.5281093221278,
+            "alpha": null,
+            "delta_ppl": 65.24190092627704,
+            "gate_accepted": false
+          },
+          {
+            "seed": 3,
+            "perplexity": 172.4324427303286,
+            "alpha": null,
+            "delta_ppl": 58.14623433447785,
+            "gate_accepted": false
+          },
+          {
+            "seed": 4,
+            "perplexity": 166.06961295927962,
+            "alpha": null,
+            "delta_ppl": 51.783404563428874,
+            "gate_accepted": false
+          }
         ]
       },
       "control_b2": {
-        "status": "pending",
+        "status": "measured",
+        "benchmark_id": "wikitext2-raw",
+        "benchmark_version": "1",
+        "split": "test",
         "seeds": [
           1234
+        ],
+        "runs": [
+          {
+            "seed": 1234,
+            "perplexity": 193.38530078116364,
+            "alpha": null,
+            "delta_ppl": 79.09909238531289,
+            "gate_accepted": false
+          }
         ]
       }
     },
     "Q4_K": {
       "ceiling": {
-        "status": "pending"
+        "status": "measured",
+        "perplexity": 114.28620839585075,
+        "benchmark_id": "wikitext2-raw",
+        "benchmark_version": "1",
+        "split": "test"
       },
       "rtn": {
-        "status": "pending"
+        "status": "measured",
+        "perplexity": 168.29505677562258,
+        "benchmark_id": "wikitext2-raw",
+        "benchmark_version": "1",
+        "split": "test"
       },
       "awq": {
-        "status": "pending",
+        "status": "measured",
+        "benchmark_id": "wikitext2-raw",
+        "benchmark_version": "1",
+        "split": "test",
         "seeds": [
           1234,
           1,
           2,
           3,
           4
+        ],
+        "runs": [
+          {
+            "seed": 1234,
+            "perplexity": 166.85063711236538,
+            "alpha": null,
+            "delta_ppl": 52.56442871651463,
+            "gate_accepted": false
+          },
+          {
+            "seed": 1,
+            "perplexity": 162.87813505781105,
+            "alpha": null,
+            "delta_ppl": 48.5919266619603,
+            "gate_accepted": false
+          },
+          {
+            "seed": 2,
+            "perplexity": 158.1648153032218,
+            "alpha": null,
+            "delta_ppl": 43.87860690737104,
+            "gate_accepted": false
+          },
+          {
+            "seed": 3,
+            "perplexity": 157.96771427379153,
+            "alpha": null,
+            "delta_ppl": 43.68150587794078,
+            "gate_accepted": false
+          },
+          {
+            "seed": 4,
+            "perplexity": 160.54550462534507,
+            "alpha": null,
+            "delta_ppl": 46.259296229494325,
+            "gate_accepted": false
+          }
         ]
       },
       "control_a": {
-        "status": "pending",
+        "status": "measured",
+        "benchmark_id": "wikitext2-raw",
+        "benchmark_version": "1",
+        "split": "test",
         "seeds": [
           1,
           2,
           3,
           4,
           5
+        ],
+        "runs": [
+          {
+            "seed": 1,
+            "perplexity": 167.8830173263912,
+            "alpha": null,
+            "delta_ppl": 53.59680893054046,
+            "gate_accepted": false
+          },
+          {
+            "seed": 2,
+            "perplexity": 165.0078186476167,
+            "alpha": null,
+            "delta_ppl": 50.72161025176594,
+            "gate_accepted": false
+          },
+          {
+            "seed": 3,
+            "perplexity": 165.38558818140095,
+            "alpha": null,
+            "delta_ppl": 51.0993797855502,
+            "gate_accepted": false
+          },
+          {
+            "seed": 4,
+            "perplexity": 170.59480526056154,
+            "alpha": null,
+            "delta_ppl": 56.30859686471079,
+            "gate_accepted": false
+          },
+          {
+            "seed": 5,
+            "perplexity": 168.4432572024451,
+            "alpha": null,
+            "delta_ppl": 54.15704880659435,
+            "gate_accepted": false
+          }
         ]
       },
       "control_b1": {
-        "status": "pending",
+        "status": "measured",
+        "benchmark_id": "wikitext2-raw",
+        "benchmark_version": "1",
+        "split": "test",
         "seeds": [
           1234,
           1,
           2,
           3,
           4
+        ],
+        "runs": [
+          {
+            "seed": 1234,
+            "perplexity": 155.2277901696374,
+            "alpha": null,
+            "delta_ppl": 40.94158177378664,
+            "gate_accepted": false
+          },
+          {
+            "seed": 1,
+            "perplexity": 159.32370012948428,
+            "alpha": null,
+            "delta_ppl": 45.03749173363353,
+            "gate_accepted": false
+          },
+          {
+            "seed": 2,
+            "perplexity": 162.38227501590174,
+            "alpha": null,
+            "delta_ppl": 48.09606662005099,
+            "gate_accepted": false
+          },
+          {
+            "seed": 3,
+            "perplexity": 157.28077372102928,
+            "alpha": null,
+            "delta_ppl": 42.99456532517853,
+            "gate_accepted": false
+          },
+          {
+            "seed": 4,
+            "perplexity": 155.90298616746043,
+            "alpha": null,
+            "delta_ppl": 41.61677777160968,
+            "gate_accepted": false
+          }
         ]
       },
       "control_b2": {
-        "status": "pending",
+        "status": "measured",
+        "benchmark_id": "wikitext2-raw",
+        "benchmark_version": "1",
+        "split": "test",
         "seeds": [
           1234
+        ],
+        "runs": [
+          {
+            "seed": 1234,
+            "perplexity": 173.49918998935973,
+            "alpha": null,
+            "delta_ppl": 59.212981593508985,
+            "gate_accepted": false
+          }
         ]
       }
     }
   },
   "pending": [
-    "Measured perplexity for every arm (no run has been made).",
     "Out-of-domain calibration arm (C4): not downloaded.",
-    "Size check at 8,192 / 32,768 / 131,072 calibration tokens: runtime not yet assessed.",
-    "A collector that turns thme evaluate outputs into the results block does not exist yet."
+    "Size check at 8,192 / 32,768 / 131,072 calibration tokens: runtime not yet assessed."
   ],
   "provenance": {
-    "thme_version": null,
-    "git_commit": null,
-    "threads": null,
-    "hardware": null,
-    "note": "Recorded by the run that fills the results."
+    "thme_version": "0.1.9",
+    "git_commit": "d07a7f992f2668fc621c2c2d3a0a9d3a9e6aa88d",
+    "threads": 12,
+    "hardware": "Windows AMD64, Intel64 Family 6 Model 151 Stepping 2, GenuineIntel; THME reference CPU forward pass (f32)",
+    "note": "Recorded by scripts/run_awq_calibration.py. Alpha is chosen per tensor inside the CLI and is not reported. The binary was built from this commit's sources."
   }
 }

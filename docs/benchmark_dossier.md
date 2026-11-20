@@ -276,24 +276,45 @@ Model: pythia-14m (EleutherAI/pythia-14m). Formats Q4_0, Q4_K. Scored on WikiTex
 
 Arms: ceiling (unquantized); round-to-nearest without scaling (floor); AWQ-style scaling; control A (each layer's real per-channel scales permuted across input channels); control B1 (the same train tokens with their order shuffled); control B2 (uniform random token ids, a stress arm and not a baseline). Every result carries its benchmark id and version.
 
-**Status: PENDING.** Protocol, inputs and decision rule are fixed. No perplexity has been measured for this comparison; every result is pending.
+**Q4_0**
 
-Pre-registered decision rule, fixed before any measured run and applied unchanged to whatever is measured:
+| Arm | n | Mean PPL | Sample SD | Min | Max | Δ vs RTN | Δ vs ceiling |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Ceiling (unquantized) | 1 | 114.2862 | n/a | 114.2862 | 114.2862 | -78.7166 | +0.0000 |
+| Round-to-nearest (floor) | 1 | 193.0028 | n/a | 193.0028 | 193.0028 | +0.0000 | +78.7166 |
+| AWQ-style, 5 calibration seeds | 5 | 170.7025 | 2.7541 | 167.5659 | 173.5719 | -22.3003 | +56.4163 |
+| Control A, 5 permutation seeds | 5 | 194.6773 | 6.6482 | 186.7303 | 202.5059 | +1.6745 | +80.3911 |
+| Control B1, 5 shuffle seeds | 5 | 172.8148 | 5.2192 | 166.0696 | 179.5281 | -20.1880 | +58.5286 |
+| Control B2 (stress arm, not a baseline) | 1 | 193.3853 | n/a | 193.3853 | 193.3853 | +0.3825 | +79.0991 |
 
-- AWQ beats round-to-nearest (RTN) only if RTN perplexity minus the mean AWQ perplexity over the five calibration seeds is greater than 2 x the pooled SD, AND every calibration seed gives an AWQ perplexity below RTN.
-- Pooled SD = sqrt(mean of the sample variances of three seeded arms: AWQ (5 seeds), control A (5 permutation seeds) and control B1 (5 seeds)). Each arm has n = 5, so the mean of the variances is the pooled variance. RTN and the ceiling are deterministic and add no variance.
-- Sample SD uses n - 1. Mean, SD, min and max are over the five seeds of each arm.
-- Control A and control B1 are beaten by AWQ only by the same test: mean gap greater than 2 x pooled SD AND AWQ below the control on every seed position (seed i of AWQ paired with seed i of the control).
-- Gate (repo default): a format passes if mean AWQ perplexity minus the ceiling is at most 0.45. Per-seed deltas are reported too.
-- Control B2 (uniform random ids) is a stress arm: one seed, reported, not used in any verdict above.
-- A null or negative result is a valid result and is reported as one. Alpha grid, seeds, window count and length, offsets policy, pooling and threshold are fixed here and are not changed after any measured result is seen.
+Alpha (grid 0.0 to 1.0) is chosen per tensor inside the CLI and is not reported per run.
 
-Still pending:
+AWQ beats round-to-nearest: yes. Gap RTN minus AWQ mean +22.3003 against 2 x pooled SD 10.2648 (pooled SD 5.1324); every seed below RTN: yes.
 
-- Measured perplexity for every arm (no run has been made).
-- Out-of-domain calibration arm (C4): not downloaded.
-- Size check at 8,192 / 32,768 / 131,072 calibration tokens: runtime not yet assessed.
-- A collector that turns thme evaluate outputs into the results block does not exist yet.
+Control A: AWQ beats it (mean gap +23.9748). Control B1: not beaten (mean gap +2.1123).
+
+Gate (mean dPPL vs unquantized at most 0.45): fail at +56.4163.
+
+**Q4_K**
+
+| Arm | n | Mean PPL | Sample SD | Min | Max | Δ vs RTN | Δ vs ceiling |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Ceiling (unquantized) | 1 | 114.2862 | n/a | 114.2862 | 114.2862 | -54.0088 | +0.0000 |
+| Round-to-nearest (floor) | 1 | 168.2951 | n/a | 168.2951 | 168.2951 | +0.0000 | +54.0088 |
+| AWQ-style, 5 calibration seeds | 5 | 161.2814 | 3.7014 | 157.9677 | 166.8506 | -7.0137 | +46.9952 |
+| Control A, 5 permutation seeds | 5 | 167.4629 | 2.3070 | 165.0078 | 170.5948 | -0.8322 | +53.1767 |
+| Control B1, 5 shuffle seeds | 5 | 158.0235 | 2.8963 | 155.2278 | 162.3823 | -10.2716 | +43.7373 |
+| Control B2 (stress arm, not a baseline) | 1 | 173.4992 | n/a | 173.4992 | 173.4992 | +5.2041 | +59.2130 |
+
+Alpha (grid 0.0 to 1.0) is chosen per tensor inside the CLI and is not reported per run.
+
+AWQ beats round-to-nearest: yes. Gap RTN minus AWQ mean +7.0137 against 2 x pooled SD 6.0455 (pooled SD 3.0227); every seed below RTN: yes.
+
+Control A: AWQ beats it (mean gap +6.1815). Control B1: not beaten (mean gap -3.2579).
+
+Gate (mean dPPL vs unquantized at most 0.45): fail at +46.9952.
+
+Null and negative results stand as reported. Each arm is measured on the same scoring split as the quantization gate above.
 
 ## 9. Activation-Aware Scaling (AWQ-style): SmolLM-135M
 
