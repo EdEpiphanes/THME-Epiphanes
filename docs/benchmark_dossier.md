@@ -270,7 +270,57 @@ Model: pythia-14m (6 layers), first 16,384 corpus tokens, 16,368 scored. Stored 
 | Layer 3 skipped | 5 | 22,407.933 | +22,288.529 |
 | Layers 1..5 skipped | 2 | 105,008.841 | +104,889.438 |
 
-## 8. Sizes
+## 8. Activation-Aware Scaling (AWQ-style): pythia-14m
+
+Model: pythia-14m (EleutherAI/pythia-14m). Formats Q4_0, Q4_K. Scored on WikiText-2 test (287,159 tokens, context 1024). Calibration statistics come from WikiText-2 train: 16 windows of 2048 tokens (32,768 tokens) per calibration seed 1234, 1, 2, 3, 4. Calibration never reads the scoring split.
+
+Arms: ceiling (unquantized); round-to-nearest without scaling (floor); AWQ-style scaling; control A (each layer's real per-channel scales permuted across input channels); control B1 (the same train tokens with their order shuffled); control B2 (uniform random token ids, a stress arm and not a baseline). Every result carries its benchmark id and version.
+
+**Status: PENDING.** Protocol, inputs and decision rule are fixed. No perplexity has been measured for this comparison; every result is pending.
+
+Pre-registered decision rule, fixed before any measured run and applied unchanged to whatever is measured:
+
+- AWQ beats round-to-nearest (RTN) only if RTN perplexity minus the mean AWQ perplexity over the five calibration seeds is greater than 2 x the pooled SD, AND every calibration seed gives an AWQ perplexity below RTN.
+- Pooled SD = sqrt(mean of the sample variances of three seeded arms: AWQ (5 seeds), control A (5 permutation seeds) and control B1 (5 seeds)). Each arm has n = 5, so the mean of the variances is the pooled variance. RTN and the ceiling are deterministic and add no variance.
+- Sample SD uses n - 1. Mean, SD, min and max are over the five seeds of each arm.
+- Control A and control B1 are beaten by AWQ only by the same test: mean gap greater than 2 x pooled SD AND AWQ below the control on every seed position (seed i of AWQ paired with seed i of the control).
+- Gate (repo default): a format passes if mean AWQ perplexity minus the ceiling is at most 0.45. Per-seed deltas are reported too.
+- Control B2 (uniform random ids) is a stress arm: one seed, reported, not used in any verdict above.
+- A null or negative result is a valid result and is reported as one. Alpha grid, seeds, window count and length, offsets policy, pooling and threshold are fixed here and are not changed after any measured result is seen.
+
+Still pending:
+
+- Measured perplexity for every arm (no run has been made).
+- Out-of-domain calibration arm (C4): not downloaded.
+- Size check at 8,192 / 32,768 / 131,072 calibration tokens: runtime not yet assessed.
+- A collector that turns thme evaluate outputs into the results block does not exist yet.
+
+## 9. Activation-Aware Scaling (AWQ-style): SmolLM-135M
+
+Model: SmolLM-135M (HuggingFaceTB/SmolLM-135M). Formats Q4_0, Q4_K. Scored on WikiText-2 test (303,415 tokens, context 1024). Calibration statistics come from WikiText-2 train: 16 windows of 2048 tokens (32,768 tokens) per calibration seed 1234, 1, 2, 3, 4. Calibration never reads the scoring split.
+
+Arms: ceiling (unquantized); round-to-nearest without scaling (floor); AWQ-style scaling; control A (each layer's real per-channel scales permuted across input channels); control B1 (the same train tokens with their order shuffled); control B2 (uniform random token ids, a stress arm and not a baseline). Every result carries its benchmark id and version.
+
+**Status: PENDING.** Protocol, inputs and decision rule are fixed. No perplexity has been measured for this comparison; every result is pending.
+
+Pre-registered decision rule, fixed before any measured run and applied unchanged to whatever is measured:
+
+- AWQ beats round-to-nearest (RTN) only if RTN perplexity minus the mean AWQ perplexity over the five calibration seeds is greater than 2 x the pooled SD, AND every calibration seed gives an AWQ perplexity below RTN.
+- Pooled SD = sqrt(mean of the sample variances of three seeded arms: AWQ (5 seeds), control A (5 permutation seeds) and control B1 (5 seeds)). Each arm has n = 5, so the mean of the variances is the pooled variance. RTN and the ceiling are deterministic and add no variance.
+- Sample SD uses n - 1. Mean, SD, min and max are over the five seeds of each arm.
+- Control A and control B1 are beaten by AWQ only by the same test: mean gap greater than 2 x pooled SD AND AWQ below the control on every seed position (seed i of AWQ paired with seed i of the control).
+- Gate (repo default): a format passes if mean AWQ perplexity minus the ceiling is at most 0.45. Per-seed deltas are reported too.
+- Control B2 (uniform random ids) is a stress arm: one seed, reported, not used in any verdict above.
+- A null or negative result is a valid result and is reported as one. Alpha grid, seeds, window count and length, offsets policy, pooling and threshold are fixed here and are not changed after any measured result is seen.
+
+Still pending:
+
+- Measured perplexity for every arm (no run has been made).
+- Out-of-domain calibration arm (C4): not downloaded.
+- Size check at 8,192 / 32,768 / 131,072 calibration tokens: runtime not yet assessed.
+- A collector that turns thme evaluate outputs into the results block does not exist yet.
+
+## 10. Sizes
 
 ### SmolLM-135M
 
@@ -288,7 +338,7 @@ Model: pythia-14m (6 layers), first 16,384 corpus tokens, 16,368 scored. Stored 
 | Exported GGUF v3, Q8_0 (uniform, all tensors) | 14.3 MiB | measured (file size, sha256 `efcb930e51569a20…`) |
 | Recipe `Production-Pareto-pythia-14m` (68 × FP16, 8 × Ternary (1.58b)) | 26.4 MiB | **estimate** from nominal bits per weight; no artifact of this size is written |
 
-## 9. Method
+## 11. Method
 
 - Forward pass: THME reference CPU implementation (`src/inference/`), dense f32 arithmetic,
   RMSNorm, rotary position embeddings, grouped-query causal attention, SwiGLU MLP, tied output head.
@@ -306,7 +356,7 @@ Model: pythia-14m (6 layers), first 16,384 corpus tokens, 16,368 scored. Stored 
   (Q8_0: GGML 32-value blocks; Ternary: GGML TQ1_0 256-value blocks with MSE-optimal scale)
   with no retraining or calibration.
 
-## 10. Provenance
+## 12. Provenance
 
 ### SmolLM-135M
 
@@ -330,7 +380,7 @@ Model: pythia-14m (6 layers), first 16,384 corpus tokens, 16,368 scored. Stored 
 - Tokenizer: EleutherAI/pythia-14m, sha256 `870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2`
 - Token file: 287,159 tokens, sha256 `973595d9c7c580360a39eedde7297ec050f362a521940f7527eca4a00ea85278`
 
-## 11. Not Measured
+## 13. Not Measured
 
 The following have no measurements and are deliberately absent from this dossier:
 
@@ -339,11 +389,12 @@ The following have no measurements and are deliberately absent from this dossier
 - Models other than those listed in section 1.
 - Any effect of retraining, distillation, or calibration on the quantized variants.
 
-## 12. Reproduce
+## 14. Reproduce
 
 ```bash
 pip install tokenizers
 python scripts/prepare_eval_tokens.py
+python scripts/prepare_eval_tokens.py --split train --calibration-windows 16 --window-len 2048 --seed 1234
 cargo run --release --example production_verification -- \
     --model-path models/SmolLM-135M \
     --tokens target/eval/wikitext2_test.SmolLM-135M.u32
