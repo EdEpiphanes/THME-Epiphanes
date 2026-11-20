@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "Read-only PCI/vGPU accelerator discovery and vGPU metadata"
+description = "Read-only PCI accelerator discovery and hardware recipe lookup for display"
 
 [[bin]]
 name = "neutron-gpu"
@@ -14,8 +14,4 @@ path = "src/main.rs"
 clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-wgpu = { workspace = true, optional = true }
 
-[features]
-default = []
-wgpu = ["dep:wgpu"]
