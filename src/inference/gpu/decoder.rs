@@ -262,6 +262,30 @@ impl<'a> Recorder<'a> {
         let ctx = self.ctx;
         let (pipeline, groups, kernel) = ctx.dense_dispatch(w.storage, rows, in_dim, out_dim, 0)?;
         let binding = self.params_binding(bytemuck::bytes_of(&params));
+        let x_binding = wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+            buffer: x,
+            offset: (x_row0 * in_dim * 4) as u64,
+            size: None,
+        });
+        let xh = if kernel == super::backend::COOP_DIRECT_KERNEL {
+            let pass = self.pass_for(format!("convert_x_f16 {rows}x{in_dim}"))?;
+            let xh = ctx.coop_convert_x(
+                pass,
+                binding.clone(),
+                x_binding.clone(),
+                w.buffer.as_entire_binding(),
+                rows,
+                in_dim,
+            )?;
+            self.dispatches += 1;
+            Some(xh)
+        } else {
+            None
+        };
+        let x_resource = match &xh {
+            Some(b) => b.as_entire_binding(),
+            None => x_binding,
+        };
         let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("decoder_linear"),
             layout: &ctx.bind_group_layout,
@@ -272,11 +296,7 @@ impl<'a> Recorder<'a> {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                        buffer: x,
-                        offset: (x_row0 * in_dim * 4) as u64,
-                        size: None,
-                    }),
+                    resource: x_resource,
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
