@@ -21,7 +21,7 @@ All agents and contributors must uphold these rules without exception:
 1. **Clean Git Hygiene**:
    - Never commit or print absolute paths from developer machines or personal usernames in code, configurations, logs, or documentation.
    - Use relative workspace paths or forward-slash Unix-style paths.
-   - Keep `.cargo/config.toml` path remapping active to avoid embedding developer machine paths in release binaries.
+   - Keep path remapping active to avoid embedding developer machine paths in release binaries: `.cargo/config.toml` strips symbols, and the release workflow passes `--remap-path-prefix` for the cargo home, rustup home and workspace through `RUSTFLAGS` (a committed config cannot name machine prefixes). Machine-local build limits stay in the global `~/.cargo/config.toml`.
 
 2. **No Unverified Empirical Claims**:
    - Never present simulated numbers or synthetic benchmarks as measured hardware results.

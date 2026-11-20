@@ -114,7 +114,7 @@ panic = "abort"
 strip = "symbols"
 
 # The SVG rasterizer and GIF encoder (report::animate) are built for size, not speed, so the CLI
-# stays under its 10 MiB limit; THME's own engine code keeps opt-level 3.
+# stays under its 16 MiB limit; THME's own engine code keeps opt-level 3.
 [profile.release.package.resvg]
 opt-level = "s"
 [profile.release.package.usvg]
