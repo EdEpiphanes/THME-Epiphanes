@@ -28,19 +28,27 @@ pub struct ProfileArgs {
     /// Optional output file to write JSON profile
     #[arg(short, long)]
     pub output: Option<PathBuf>,
+
+    /// Print the JSON profile to stdout instead of the tables
+    #[arg(long)]
+    pub json: bool,
 }
 
 pub fn execute(args: ProfileArgs) -> Result<()> {
-    println!(
-        "Profiling manifold sensitivity & memory for: {:?}",
-        args.path
-    );
+    if !args.json {
+        println!(
+            "Profiling manifold sensitivity & memory for: {:?}",
+            args.path
+        );
+    }
     let mut model_ir = ModelImporter::import(&args.path)?;
 
     // 1. Calculate layer sensitivity
     SensitivityProfiler::profile_model(&mut model_ir);
     let layer_reports = SensitivityProfiler::summarize_layers(&model_ir);
-    ReportPrinter::print_layer_sensitivity(&layer_reports);
+    if !args.json {
+        ReportPrinter::print_layer_sensitivity(&layer_reports);
+    }
 
     // 2. Parse context lengths and estimate KV cache
     let ctx_lens: Vec<usize> = args
@@ -56,17 +64,25 @@ pub fn execute(args: ProfileArgs) -> Result<()> {
         model_ir.head_dim,
         &ctx_lens,
     );
-    ReportPrinter::print_kv_cache(&kv_projections);
+    if !args.json {
+        ReportPrinter::print_kv_cache(&kv_projections);
+    }
+
+    let profile_data = serde_json::json!({
+        "model": model_ir.name,
+        "layers": layer_reports,
+        "kv_cache": kv_projections,
+    });
+    if args.json {
+        println!("{}", serde_json::to_string_pretty(&profile_data)?);
+    }
 
     if let Some(out_path) = args.output {
-        let profile_data = serde_json::json!({
-            "model": model_ir.name,
-            "layers": layer_reports,
-            "kv_cache": kv_projections,
-        });
         let file = std::fs::File::create(&out_path)?;
         serde_json::to_writer_pretty(file, &profile_data)?;
-        println!("\nProfile successfully saved to: {:?}", out_path);
+        if !args.json {
+            println!("\nProfile successfully saved to: {:?}", out_path);
+        }
     }
 
     Ok(())

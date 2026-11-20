@@ -11,10 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Hugging Face cross-check measured (THME-2001)**: THME logits match the fp32 reference within 1.9e-4 (Pythia-14M) and 2.1e-5 (SmolLM-135M) on CPU and GPU; `scripts/cross_check_hf.py` gains `--device` and pins the reference to fp32.
+- **First-pass audit tickets** (19 November 2026): THME-3047 to 3054 record the findings of a read-only audit (publication from a clean export, VS Code extension shell injection, release pipeline hardening, removal of agent notes and personal settings, a hard-coded model fallback, hygiene, a subprocess timeout, MCP trust model).
 - **Real-model tests are opt-in**: tests that open a real model file need `THME_REAL_MODEL_TESTS=1`.
 - **`thme download`**: fetch a model from the Hugging Face hub (config, tokenizer, safetensors or GGUF), licence printed first, checksum verified, pickle files skipped unless named, import scan after. Tested with a fake fetcher only.
 - **Studio Chat tab**: talk to a loaded model through the reference CPU forward pass; template, tokenizer, background generation with Cancel, measured speed line. Tested on the mock model; not yet seen in a running window.
 - **Tokenizer and chat templates**: `thme tokenize` and `thme chat-template` (Hugging Face `tokenizers` and `minijinja`, both Apache-2.0, pure Rust). Tested on fixtures only.
+- **Studio Welcome panel**: when no model is loaded the Studio shows the doctor summary and the models found on the machine, with Open buttons that run the safety scan first. State machine tested; the window itself was not opened.
 - **Scanner: legacy Keras `.h5`**: `thme scan` now looks for the Keras model config inside `.h5` files and flags `Lambda` layers (High) and unknown custom layers (Medium). Bounded and partial by design; a clean result is not a safety claim.
 - **`thme doctor`**: says what works on this machine (OS, memory, disk, GPU adapter, models found) and what to try next; read-only, `--json` available.
 - **`thme discover`**: lists the models already on the machine (Hugging Face cache, Ollama, LM Studio, llama.cpp, any folder). Read-only; tested on fake folder layouts.
@@ -26,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Demo and Simulated labels**: the speculative acceptance rate is labelled Simulated and the hard-coded demo constants Demo, in the Studio, `thme speculate` and the MCP tool text; numbers unchanged. "Demo" is now in CONTEXT.md.
 - **Studio provenance labels (`src/gui/provenance.rs`)**: twelve heuristic values, including five stats-ribbon boxes, are labelled Estimate or Simulated, with a test that fails when a label is lost; audit verdicts in `docs/research/studio-heuristics.md`.
 - **Gemma / MedGemma Reference Forward Pass (`src/inference/gemma.rs`)**: Reference causal forward pass for the Gemma3/MedGemma architecture (not yet compared with the Hugging Face reference; the real-model test is skipped unless a model file is present): embedding scaling by `sqrt(hidden_size)` (approx 50.5964), Grouped Query Attention (8 Q heads, 4 KV heads, head_dim 256), per-head QK-RMSNorm, dual residual layernorms (post-attention and post-FFW), GeGLU feedforward activation (`gelu_approx`), and tied embedding readout.
+- **Notebook bridge and install guides**: `thme profile --json`, `docs/notebooks.md`, `examples/notebooks/quickstart.ipynb` (checked in CI by `scripts/check_notebook.py`) and `docs/getting-started.md`; the install steps are untested on a clean machine.
 - **GGUF Layer Indexing & Role Classification (`src/ir/tensor.rs`)**: Robust `blk.{i}` layer indexing and GGUF tensor role classification for attention, feedforward, normalization, and embeddings.
 - **K-Quant & IQ-Quant Weight Profiling (`src/profiling/weight_stats.rs`)**: Real statistical profiling for `Q4_K`, `Q5_K`, `Q6_K`, and `IQ4_XS` quantized tensors.
 - **CodeGPT MCP Service Real Binding (`src/cli/mcp.rs`)**: Connected `thme_auto_decide` and `thme_apply_surgery` to active model IR, fixed `thme_validate_quality` format string bug, and added end-to-end integration test suite in `tests/test_mcp.rs`.
