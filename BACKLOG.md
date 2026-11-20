@@ -74,9 +74,11 @@ closes it.
 
 ### [THME-2204] Activation-aware scaling (AWQ-style)
 
-- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.4 · **Priority**: p1 · **Area**: byoa · **Type**: feature · **Status**: ready
+- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.4 · **Priority**: p1 · **Area**: byoa · **Type**: feature · **Status**: in progress (measurement PENDING)
 - **Problem**: Round-to-nearest 4-bit fails the gate on Pythia-14M (Δ +31 to +74).
-- **Progress**: Implemented and tested (`thme.awq_q4_0`, `thme.awq_q4_k`, `--calibration`). 20 November 2026: the owner allowed runs on Pythia-14M and SmolLM-135M only; the comparison is not run yet. Open design points: calibration tokens must come from a split outside the evaluation text (the prepared corpus has only the test split), and the random control for a BYOA rule needs a definition.
+- **Progress**: Implemented and tested (`thme.awq_q4_0`, `thme.awq_q4_k`, `--calibration`). 20 November 2026: control A (`ScaleSource::PermutedScales`; rule JSON without the field keeps real scales) and train-split calibration windows (`scripts/prepare_eval_tokens.py --split train --calibration-windows 16 --window-len 2048 --seed S`, S in 1234, 1, 2, 3, 4; control B1 adds `--shuffle`, control B2 `--random-ids --vocab-size V`) are implemented and tested offline. Calibration, control and test token files are prepared and hashed; provenance is in `docs/benchmarks/*/data/awq_calibration.json`. Scoring corpus unchanged: the test split reproduces the existing verification reports' hashes.
+- **Pre-registered** (20 November 2026, before any measured run): AWQ beats round-to-nearest only if RTN perplexity minus the mean AWQ perplexity over the five seeds exceeds 2 x pooled SD (pooled SD from the sample variances of AWQ, control A and control B1, n = 5 each) and every seed's AWQ perplexity is below RTN. Gate: mean dPPL vs unquantized at most 0.45. A null or negative result is reported as such.
+- **PENDING**: no perplexity run has been made for this comparison. The owner's allowance for Pythia-14M and SmolLM-135M is recorded above; the runs still need an explicit go-ahead in the session that runs them. Also PENDING: the C4 out-of-domain arm (not downloaded), the 8k / 32k / 131k size check, and a collector that turns `thme evaluate` output into the report.
 - **Done means**: A BYOA rule using captured activations; measured against plain Q4_0 on the same split with random controls.
 
 ### [THME-2205] Second-order rounding (GPTQ-style)
