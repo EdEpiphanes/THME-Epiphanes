@@ -1,0 +1,127 @@
+{
+  "build_profile": "release",
+  "coop_flag": "off",
+  "coop_matrix_ready": true,
+  "device": {
+    "backend": "Vulkan",
+    "device_type": "DiscreteGpu",
+    "driver": "NVIDIA",
+    "driver_info": "616.92",
+    "name": "NVIDIA GeForce RTX 4060 Ti"
+  },
+  "device_ms_by_kind": {
+    "add": 2.438912,
+    "attention tiled": 58.472,
+    "linear (matmul)": 367.767648,
+    "nll": 1.853024,
+    "rms_norm": 1.867616,
+    "rope": 2.442688,
+    "swiglu": 9.29568
+  },
+  "device_ms_sum": 444.137568,
+  "dispatches": 369,
+  "git_commit": "a8e5a93",
+  "git_dirty": true,
+  "host_ms": {
+    "encode": 10.8467,
+    "input_write": 0.8158,
+    "readback": 0.001,
+    "submit": 0.3149,
+    "wait": 447.4671,
+    "weight_upload": 0.0
+  },
+  "int8_dot": false,
+  "kernels": [
+    {
+      "dispatches": 48,
+      "label": "linear gemm128 1024x2048x8192",
+      "ms": 173.172896,
+      "share_of_device_time": 0.38990823672002456,
+      "tflops": 9.52381971867006
+    },
+    {
+      "dispatches": 24,
+      "label": "linear gemm128 1024x8192x2048",
+      "ms": 84.77584,
+      "share_of_device_time": 0.19087743552466158,
+      "tflops": 9.727225596726614
+    },
+    {
+      "dispatches": 96,
+      "label": "linear gemm128 1024x2048x2048",
+      "ms": 84.016288,
+      "share_of_device_time": 0.18916726269820977,
+      "tflops": 9.815164897930268
+    },
+    {
+      "dispatches": 24,
+      "label": "attention tiled",
+      "ms": 58.472,
+      "share_of_device_time": 0.1316529026429937,
+      "tflops": 0.0
+    },
+    {
+      "dispatches": 3,
+      "label": "linear gemm128 320x2048x49152",
+      "ms": 23.089184,
+      "share_of_device_time": 0.05198655926354782,
+      "tflops": 8.370738797871764
+    },
+    {
+      "dispatches": 24,
+      "label": "swiglu",
+      "ms": 9.29568,
+      "share_of_device_time": 0.02092973139349473,
+      "tflops": 0.0
+    },
+    {
+      "dispatches": 1,
+      "label": "linear gemm128 63x2048x49152",
+      "ms": 2.71344,
+      "share_of_device_time": 0.006109458409967247,
+      "tflops": 4.674352591544313
+    },
+    {
+      "dispatches": 48,
+      "label": "rope",
+      "ms": 2.442688,
+      "share_of_device_time": 0.005499845489314698,
+      "tflops": 0.0
+    },
+    {
+      "dispatches": 48,
+      "label": "add",
+      "ms": 2.438912,
+      "share_of_device_time": 0.005491343619011306,
+      "tflops": 0.0
+    },
+    {
+      "dispatches": 49,
+      "label": "rms_norm",
+      "ms": 1.867616,
+      "share_of_device_time": 0.004205039462007411,
+      "tflops": 0.0
+    },
+    {
+      "dispatches": 4,
+      "label": "nll",
+      "ms": 1.853024,
+      "share_of_device_time": 0.004172184776767184,
+      "tflops": 0.0
+    }
+  ],
+  "label": "smollm2-1.7b",
+  "machine_load_note": "measured on a shared workstation, no other GPU job from this session, a watchdog and a live window running; CPU load sampled before the run",
+  "method": "One untimed warm-up window (weight upload), then one window with every dispatch in its own compute pass with timestamp queries; wall_ms includes the per-dispatch pass overhead, so it exceeds an unprofiled window.",
+  "old_attention_kernel": false,
+  "old_gemm_kernel": false,
+  "perplexity": 6.09629060647889,
+  "shader_f16": true,
+  "submits": 1,
+  "wall_ms": 465.924,
+  "weight_budget_gb": null,
+  "weight_uploads_during_window": 0,
+  "weights_requested": "f16",
+  "weights_used": "F16",
+  "window_tokens": 1024
+}

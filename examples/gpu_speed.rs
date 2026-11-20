@@ -52,6 +52,9 @@ struct Cli {
     /// --no-coop the library default applies (on for f16 weights when the adapter has it)
     #[arg(long, global = true)]
     coop: bool,
+    /// Q8_0 and Q4_0 weights on packed 4 x 8-bit integer dot products
+    #[arg(long, global = true)]
+    int8_dot: bool,
     /// Never use cooperative matrices (paired baseline)
     #[arg(long, global = true)]
     no_coop: bool,
@@ -123,6 +126,7 @@ fn header(cli: &Cli, gpu: &GpuContext) -> Value {
         "shader_f16": gpu.shader_f16_supported(),
         "weights_requested": cli.weights,
         "coop_matrix_ready": gpu.coop_matrix_ready(),
+        "int8_dot": cli.int8_dot,
         "coop_flag": if cli.no_coop { "off" } else if cli.coop { "all storages" } else { "library default" },
         "old_gemm_kernel": cli.old_gemm,
         "old_attention_kernel": cli.old_attention,
@@ -335,6 +339,7 @@ fn main() -> Result<()> {
         gpu.set_coop_matrix(true);
     }
     gpu.set_coop_direct_f16(!cli.no_coop_direct);
+    gpu.set_int8_dot(cli.int8_dot);
     gpu.set_coop_attention(!cli.no_coop_attention);
     gpu.set_tiled_attention(!cli.old_attention);
     if let Some(gb) = cli.weight_budget_gb {

@@ -303,9 +303,10 @@ impl<'a> Recorder<'a> {
             offset: (x_row0 * in_dim * 4) as u64,
             size: None,
         });
-        let xh = if kernel == super::backend::COOP_DIRECT_KERNEL {
-            let pass = self.pass_for(format!("convert_x_f16 {rows}x{in_dim}"))?;
-            let xh = ctx.coop_convert_x(
+        let xh = if let Some(copy) = super::backend::ActivationCopy::for_kernel(kernel) {
+            let pass = self.pass_for(format!("convert_activations {rows}x{in_dim}"))?;
+            let xh = ctx.convert_activations(
+                copy,
                 pass,
                 binding.clone(),
                 x_binding.clone(),

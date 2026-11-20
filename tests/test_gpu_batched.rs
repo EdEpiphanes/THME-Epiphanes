@@ -943,3 +943,45 @@ fn cooperative_attention_matches_the_tiled_kernel_across_blocks_and_ragged_ends(
     gpu.set_coop_matrix(false);
     assert_eq!(gpu.attention_kernel_name(64), "tiled");
 }
+
+#[test]
+fn int8_dot_matmul_matches_the_float_kernel_up_to_activation_rounding() {
+    use thme::inference::gpu::WeightStorage;
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut seed = 47u64;
+    // Row counts and out_dim off the 128 tile, in_dim a few 32-value blocks.
+    for storage in [WeightStorage::Q8_0, WeightStorage::Q4_0] {
+        gpu.set_weight_storage(storage);
+        for (rows, in_dim, out_dim) in [
+            (9, 32, 4),
+            (129, 96, 132),
+            (130, 576, 200),
+            (257, 1024, 260),
+        ] {
+            let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+            let w = pseudo_random(&mut seed, out_dim * in_dim, 0.5);
+            gpu.set_int8_dot(false);
+            let exact = gpu
+                .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+                .expect("float kernel")
+                .remove(0);
+            gpu.set_int8_dot(true);
+            let got = gpu
+                .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+                .expect("int8 kernel")
+                .remove(0);
+            let rms = |v: &[f32]| (v.iter().map(|a| a * a).sum::<f32>() / v.len() as f32).sqrt();
+            let diff: Vec<f32> = exact.iter().zip(&got).map(|(a, b)| a - b).collect();
+            let rel = rms(&diff) / rms(&exact);
+            assert!(
+                rel < 0.02,
+                "{storage:?} rows={rows} in={in_dim} out={out_dim}: rms diff {rel}"
+            );
+            assert!(
+                rel > 0.0,
+                "{storage:?} {rows}x{in_dim}x{out_dim}: identical, int8 kernel did not run"
+            );
+        }
+    }
+    gpu.set_int8_dot(false);
+}

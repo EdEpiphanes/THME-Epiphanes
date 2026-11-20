@@ -33,3 +33,18 @@ integer accumulate with `dot4I8Packed`, scale to f32. Go if all hold:
 
 Profile again after the best route, fix the largest remaining cost, stop at 9,000 tokens per second
 on the slice or when a step gives under 5 percent.
+
+## Results (20 November 2026)
+
+Reports: `data/gpu_coop_gemm_*.json`, `data/gpu_coop_slice_*.json`, `data/gpu_coop_profile_*.json`.
+RTX 4060 Ti, Vulkan, driver 616.92, release build, GPU only, two runs per slice arm, shared machine.
+
+- **B (cooperative matrices): go.** Isolated 28.0, 35.7, 26.1, 40.0, 27.8 TFLOPS on the five shapes
+  (rule: at least 25 on large shapes); slice 7,000 to 7,020 tokens per second with f16 weights
+  (rule: 6,000); perplexity 8.37286 against 8.37288 (rule: within 0.01 nats).
+- **C (int8 dot product): no-go.** Isolated 10.1 to 12.9 TOPS-equivalent (rule: 20); slice 3,028
+  (Q8_0) and 3,045 (Q4_0) tokens per second (rule: 6,000); perplexity +0.0017 and +0.0020 nats.
+- **D:** the next cost after the matmul was attention (58 ms of a 1,024-token window); a cooperative
+  attention for head size 64 took it to 13 ms. The slice stands at about 7,000 tokens per second,
+  below the 9,000 stop line; the largest remaining costs are the matmul itself (99 ms) and the
+  repeated activation conversions plus SwiGLU (about 17 ms together).
