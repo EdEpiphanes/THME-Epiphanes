@@ -22,13 +22,23 @@ struct GemvParams {
 //WEIGHTS_PRELUDE
 @group(0) @binding(3) var<storage, read_write> output_y: array<vec4<f32>>;
 
-const BK: u32 = 32u;
-// 32 values per row plus 8 of padding: 80 bytes, a multiple of 16, against bank conflicts.
-const LD: u32 = 40u;
+const BK: u32 = 64u;
+// 64 values per row plus 8 of padding: 144 bytes, a multiple of 16, against bank conflicts.
+const LD: u32 = 72u;
 
-var<workgroup> xs: array<f16, 5120>;
-var<workgroup> ws: array<f16, 5120>;
+var<workgroup> xs: array<f16, 9216>;
+var<workgroup> ws: array<f16, 9216>;
 var<workgroup> scratch: array<f32, 2048>;
+
+fn load_x(row: u32, k4: u32, in4: u32, rows: u32) -> vec4<f32> {
+    if (k4 < in4 && row < rows) { return input_x[row * in4 + k4]; }
+    return vec4<f32>(0.0);
+}
+
+fn load_wt(row: u32, k4: u32, in4: u32, out_dim: u32) -> vec4<f32> {
+    if (k4 < in4 && row < out_dim) { return load_w(row * in4 + k4); }
+    return vec4<f32>(0.0);
+}
 
 @compute @workgroup_size(256, 1, 1)
 fn main(
@@ -52,20 +62,22 @@ fn main(
     var acc30 = coop_mat16x16<f32,C>();
     var acc31 = coop_mat16x16<f32,C>();
 
-    for (var k0 = 0u; k0 < in4; k0 += 8u) {
-        // 128 rows x 8 vec4 = 1024 vec4 per operand, four per thread.
-        for (var j = 0u; j < 4u; j++) {
+    // 128 rows x 16 vec4 = 2048 vec4 per operand, eight per thread. The next k slice is read
+    // from global memory into registers while the current one is multiplied.
+    var xr: array<vec4<f32>, 8>;
+    var wr: array<vec4<f32>, 8>;
+    for (var j = 0u; j < 8u; j++) {
+        let idx = tid + j * 256u;
+        xr[j] = load_x(t0 + (idx >> 4u), idx & 15u, in4, params.rows);
+        wr[j] = load_wt(o0 + (idx >> 4u), idx & 15u, in4, params.out_dim);
+    }
+
+    for (var k0 = 0u; k0 < in4; k0 += 16u) {
+        for (var j = 0u; j < 8u; j++) {
             let idx = tid + j * 256u;
-            let r = idx >> 3u;
-            let kq = idx & 7u;
-            let k4 = k0 + kq;
-            var xv = vec4<f32>(0.0);
-            var wv = vec4<f32>(0.0);
-            if (k4 < in4) {
-                if (t0 + r < params.rows) { xv = input_x[(t0 + r) * in4 + k4]; }
-                if (o0 + r < params.out_dim) { wv = load_w((o0 + r) * in4 + k4); }
-            }
-            let at = r * LD + kq * 4u;
+            let at = (idx >> 4u) * LD + (idx & 15u) * 4u;
+            let xv = xr[j];
+            let wv = wr[j];
             xs[at] = f16(xv.x);
             xs[at + 1u] = f16(xv.y);
             xs[at + 2u] = f16(xv.z);
@@ -76,6 +88,12 @@ fn main(
             ws[at + 3u] = f16(wv.w);
         }
         workgroupBarrier();
+        for (var j = 0u; j < 8u; j++) {
+            let idx = tid + j * 256u;
+            xr[j] = load_x(t0 + (idx >> 4u), k0 + 16u + (idx & 15u), in4, params.rows);
+            wr[j] = load_wt(o0 + (idx >> 4u), k0 + 16u + (idx & 15u), in4, params.out_dim);
+        }
+
 
         for (var ks = 0u; ks < BK; ks += 16u) {
             let a0 = coopLoadT<coop_mat16x16<f16,A>>(&xs[(wm) * LD + ks], LD);
@@ -96,7 +114,7 @@ fn main(
         workgroupBarrier();
     }
 
-    // Each subgroup writes its sixteen fragments one at a time through its own 16 x 16 scratch.
+    // Each subgroup writes its eight fragments one at a time through its own 16 x 16 scratch.
     let out4 = params.out_dim / 4u;
     let base = sg * 256u;
     for (var f = 0u; f < 8u; f++) {

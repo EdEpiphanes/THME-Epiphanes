@@ -162,6 +162,12 @@ pub(super) fn pack_for_device(storage: WeightStorage, w: &[f32]) -> Result<Vec<u
 pub(super) enum DenseKernel {
     Gemm,
     Gemv,
+    /// Cooperative matrices, any weight storage, weights converted in workgroup memory.
+    Coop,
+    /// Cooperative matrices, f16 weights read in place.
+    CoopF16,
+    /// f32 activations to padded f16 for `CoopF16`.
+    ConvertX,
 }
 
 /// WGSL declaration of the weights binding and `load_w(i)`: the four consecutive weights
@@ -212,6 +218,9 @@ pub(super) fn kernel_source(kernel: DenseKernel, storage: WeightStorage) -> Stri
     let template = match kernel {
         DenseKernel::Gemm => include_str!("shaders/gemm_v4.wgsl"),
         DenseKernel::Gemv => include_str!("shaders/gemv_v4.wgsl"),
+        DenseKernel::Coop => include_str!("shaders/gemm_coop.wgsl"),
+        DenseKernel::CoopF16 => include_str!("shaders/gemm_coop_f16w.wgsl"),
+        DenseKernel::ConvertX => include_str!("shaders/x_to_f16.wgsl"),
     };
     // Shader files may carry CRLF line endings on Windows checkouts.
     template

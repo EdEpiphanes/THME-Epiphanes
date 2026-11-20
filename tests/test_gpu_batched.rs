@@ -825,3 +825,72 @@ fn quantized_storage_cuts_resident_weight_bytes() {
     assert_eq!(WeightStorage::Q8_0.device_bytes(n), n / 32 * 36);
     assert_eq!(WeightStorage::Q4_0.device_bytes(n), n / 32 * 20);
 }
+
+#[test]
+fn cooperative_matrix_matmul_matches_cpu_within_f16_rounding_across_tile_edges() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    if !gpu.coop_matrix_ready() {
+        eprintln!("SKIP: no usable cooperative-matrix path on this adapter");
+        return;
+    }
+    let mut seed = 41u64;
+    let mut ran_f16_arithmetic = false;
+    for (rows, in_dim, out_dim) in [
+        (9, 16, 8),
+        (127, 48, 132),
+        (129, 64, 124),
+        (130, 576, 200),
+        (257, 20, 260),
+        (200, 1024, 128),
+    ] {
+        let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+        let w = pseudo_random(&mut seed, out_dim * in_dim, 0.5);
+        let cpu = linear(&x, &w, in_dim, out_dim);
+        gpu.set_coop_matrix(false);
+        let exact = gpu
+            .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+            .expect("f32 batched linear");
+        gpu.set_coop_matrix(true);
+        let got = gpu
+            .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+            .expect("coop batched linear");
+        // f16 inputs: about 1e-3 relative per product, so the sums stay within 5e-3 absolute.
+        assert_close(&cpu, &got[0], 5e-3, &format!("rows={rows} in={in_dim} out={out_dim}"));
+        ran_f16_arithmetic |= exact[0].iter().zip(&got[0]).any(|(a, b)| a != b);
+    }
+    gpu.set_coop_matrix(false);
+    assert!(ran_f16_arithmetic, "outputs identical to f32: the coop kernel did not run");
+}
+
+#[test]
+fn cooperative_matrix_matmul_reads_f16_weights_in_place_and_matches_cpu() {
+    use thme::inference::gpu::WeightStorage;
+    let Some(gpu) = gpu_or_skip() else { return };
+    if !gpu.coop_matrix_ready() {
+        eprintln!("SKIP: no usable cooperative-matrix path on this adapter");
+        return;
+    }
+    gpu.set_weight_storage(WeightStorage::F16);
+    gpu.set_coop_matrix(true);
+    let mut seed = 43u64;
+    // Row counts and out_dim off the 128 tile; in_dim off the 64-deep slice.
+    for (rows, in_dim, out_dim) in [
+        (9, 16, 16),
+        (129, 64, 112),
+        (130, 576, 208),
+        (200, 1024, 128),
+        (257, 80, 272),
+    ] {
+        let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+        let w = pseudo_random(&mut seed, out_dim * in_dim, 0.5);
+        let got = gpu
+            .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+            .expect("coop f16 linear");
+        assert_close(
+            &linear(&x, &w, in_dim, out_dim),
+            &got[0],
+            5e-3,
+            &format!("f16 rows={rows} in={in_dim} out={out_dim}"),
+        );
+    }
+}
