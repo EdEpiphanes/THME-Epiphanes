@@ -193,6 +193,8 @@ def search_section(report, heading):
         spread = (f"{min(controls):+.3f} / {sum(controls) / len(controls):+.3f} / {max(controls):+.3f}"
                   if controls else "none distinct")
         verdict = "PASSED" if p["validation_delta"] <= ev["max_ppl_delta"] else "FAILED"
+        if p["achieved_fraction"] > p["budget"] + 1e-9:
+            verdict += " (BUDGET NOT MET)"
         lines.append(
             f"| {100 * p['budget']:.0f}% | {100 * p['achieved_fraction']:.1f}% | {p['validation_delta']:+.4f} | "
             f"{spread} | {verdict} |"

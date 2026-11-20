@@ -119,11 +119,20 @@ Planned, not built yet: bridges to notebooks, Ollama and llama.cpp (THME-3042 in
 
 ## Measurements
 
-The earlier measured results are being re-run with the corrected code, after the FP16 rounding
-fix (THME-3023). The reports from before that fix were stale, so they have been removed from the
-repository. Results will be published here with the full method and the committed report behind
-each number. To see how a result is produced, read the [benchmark registry](docs/benchmark-registry.md)
-and the [quality gate](docs/quality-gate.md).
+Measured on 20 November 2026 with the corrected code (after the FP16 rounding fix, THME-3023), on
+the full WikiText-2 test split, CPU, quality gate at a perplexity rise of 0.45 or less. Every number
+below comes from a committed report under `docs/benchmarks/`; the full tables, charts and method are
+in [docs/benchmark_dossier.md](docs/benchmark_dossier.md).
+
+| Model | Source perplexity | Uniform Q8_0 export | Searched 50% recipe |
+| :--- | :--- | :--- | :--- |
+| Pythia-14M | 114.29 | +0.83, fails the gate | budget not met (58.3% reached), +0.30 |
+| SmolLM-135M | 19.80 | +0.03, passes the gate | 50.0% reached, -0.02 (within noise) |
+
+Read these with care: the SmolLM-135M search differences are about 0.02 perplexity, which is noise
+and has no confidence interval yet; the Pythia-14M Q8_0 result has not been cross-checked with a
+reference quantizer. To see how a result is produced, read the
+[benchmark registry](docs/benchmark-registry.md) and the [quality gate](docs/quality-gate.md).
 
 ## What is real today
 

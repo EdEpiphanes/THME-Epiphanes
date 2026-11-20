@@ -168,8 +168,8 @@ On calibration, the sum of per-group costs predicted Δ +0.7303; the whole candi
 | ---: | ---: | ---: | :--- | :--- |
 | 90% | 83.3% | -0.0033 | +0.102 / +0.143 / +0.176 | PASSED |
 | 70% | 66.7% | +0.1766 | +0.153 / +0.283 / +0.417 | PASSED |
-| 50% | 58.3% | +0.3032 | +0.320 / +0.407 / +0.502 | PASSED |
-| 30% | 58.3% | +0.3032 | +0.320 / +0.407 / +0.502 | PASSED |
+| 50% | 58.3% | +0.3032 | +0.320 / +0.407 / +0.502 | PASSED (BUDGET NOT MET) |
+| 30% | 58.3% | +0.3032 | +0.320 / +0.407 / +0.502 | PASSED (BUDGET NOT MET) |
 
 Sizes are nominal (bits per weight of the linear tensors), not measured artifact sizes.
 
