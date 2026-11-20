@@ -7,7 +7,7 @@ use thme::exporter::{
     ExportConfig, ExportFormat, ExportQuantType, ModelExporter, StreamingChunkWriter,
     STREAM_CHUNK_SIZE,
 };
-use thme::ir::tensor::TensorSource;
+use thme::ir::tensor::{SourceEncoding, TensorSource};
 use thme::ir::{ModelArchitecture, ModelIR};
 use thme::parser::gguf::{GgmlType, GgufParser};
 use thme::parser::SafetensorsScanner;
@@ -210,6 +210,7 @@ fn source_backed_safetensors_rejects_invalid_dtype_shape_ranges() {
             path: missing_source.clone(),
             byte_offset: 0,
             byte_len: 7,
+            encoding: SourceEncoding::Identity,
         },
     );
     let output = dir.path().join("wrong-length.safetensors");
@@ -227,6 +228,7 @@ fn source_backed_safetensors_rejects_invalid_dtype_shape_ranges() {
             path: missing_source.clone(),
             byte_offset: 0,
             byte_len: 8,
+            encoding: SourceEncoding::Identity,
         },
     );
     let output = dir.path().join("overflow-shape.safetensors");
@@ -246,6 +248,7 @@ fn source_backed_safetensors_rejects_invalid_dtype_shape_ranges() {
             path: missing_source,
             byte_offset: 0,
             byte_len: 34,
+            encoding: SourceEncoding::Identity,
         },
     );
     let output = dir.path().join("unsupported-dtype.safetensors");

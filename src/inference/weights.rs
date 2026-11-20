@@ -9,6 +9,7 @@ use crate::exporter::conversion::{
     encode_q4_0_block, encode_q8_block, encode_tq1_block, f32_to_f16,
 };
 use crate::exporter::kquant::{self, QK_K};
+use crate::ir::tensor::{SourceEncoding, TensorSource};
 use crate::ir::{TensorFormat, TensorIR};
 use crate::parser::gguf::GgufBlockDecoder;
 use crate::profiling::{bf16_to_f32, f16_to_f32};
@@ -27,7 +28,8 @@ pub fn read_tensor_f32(tensor: &TensorIR) -> Result<Vec<f32>> {
         .with_context(|| format!("Failed to decode tensor '{}'", tensor.name))
 }
 
-/// Reads a tensor's raw payload bytes exactly as stored in its source file.
+/// Reads a tensor's payload bytes from its source file: the raw bytes as stored, or, for a
+/// compressed payload, the decoded bytes.
 pub fn read_tensor_bytes(tensor: &TensorIR) -> Result<Vec<u8>> {
     let source = tensor.source.as_ref().with_context(|| {
         format!(
@@ -35,15 +37,45 @@ pub fn read_tensor_bytes(tensor: &TensorIR) -> Result<Vec<u8>> {
             tensor.name
         )
     })?;
-    let len = usize::try_from(source.byte_len)
-        .with_context(|| format!("Tensor '{}' payload length exceeds usize", tensor.name))?;
+    let what = format!("tensor '{}'", tensor.name);
+    match source.encoding {
+        SourceEncoding::Identity => read_stored(source, source.byte_len, &what),
+        SourceEncoding::Deflate { stored_len } => {
+            let stored = read_stored(source, stored_len, &what)?;
+            crate::epiph::inflate_payload(&stored, source.byte_len)
+                .with_context(|| format!("Payload of {what} does not decode"))
+        }
+    }
+}
+
+/// A reader over a payload's decoded bytes: exactly `byte_len` of them. An identity payload is
+/// streamed from the file; a compressed one is decoded into memory, bounded by its declared length.
+pub fn open_payload(source: &TensorSource) -> Result<Box<dyn Read>> {
+    match source.encoding {
+        SourceEncoding::Identity => {
+            let mut file = File::open(&source.path).context("Failed to open payload file")?;
+            file.seek(SeekFrom::Start(source.byte_offset))
+                .context("Failed to seek to payload")?;
+            Ok(Box::new(file.take(source.byte_len)))
+        }
+        SourceEncoding::Deflate { stored_len } => {
+            let stored = read_stored(source, stored_len, "payload")?;
+            let decoded = crate::epiph::inflate_payload(&stored, source.byte_len)?;
+            Ok(Box::new(std::io::Cursor::new(decoded)))
+        }
+    }
+}
+
+/// Reads `len` stored bytes at the source's offset.
+fn read_stored(source: &TensorSource, len: u64, what: &str) -> Result<Vec<u8>> {
+    let len = usize::try_from(len).with_context(|| format!("{what} length exceeds usize"))?;
     let mut file = File::open(&source.path)
-        .with_context(|| format!("Failed to open payload file for tensor '{}'", tensor.name))?;
+        .with_context(|| format!("Failed to open payload file for {what}"))?;
     file.seek(SeekFrom::Start(source.byte_offset))
-        .with_context(|| format!("Failed to seek to payload of tensor '{}'", tensor.name))?;
+        .with_context(|| format!("Failed to seek to payload of {what}"))?;
     let mut bytes = vec![0u8; len];
     file.read_exact(&mut bytes)
-        .with_context(|| format!("Payload of tensor '{}' is truncated", tensor.name))?;
+        .with_context(|| format!("Payload of {what} is truncated"))?;
     Ok(bytes)
 }
 
