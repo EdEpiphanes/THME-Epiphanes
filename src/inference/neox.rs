@@ -9,6 +9,7 @@
 use anyhow::{bail, Context, Result};
 use std::path::Path;
 
+use super::kv::{KvCache, KvLayer};
 use super::llama::{
     add_in_place, attention, find_tensor, linear, load_tensor, score_head, AttentionInputs,
     DepthExit, RopeTable, WeightPrecision,
@@ -262,7 +263,7 @@ impl NeoxModel {
         );
 
         for &index in &schedule {
-            self.apply_layer(&self.layers[index], &mut x, &rope, None);
+            self.apply_layer(&self.layers[index], &mut x, &rope, None, None);
         }
 
         let mut normed = vec![0.0f32; x.len()];
@@ -276,6 +277,61 @@ impl NeoxModel {
         let last_normed = &normed[(t_len - 1) * d..t_len * d];
         let head = self.head.as_deref().unwrap_or(&self.embed);
         Ok(linear(last_normed, head, d, self.vocab_size))
+    }
+
+    /// An empty KV cache sized for this model's layers (no grouped-query attention here).
+    pub fn new_cache(&self) -> KvCache {
+        KvCache::new(self.layers.len(), self.config.hidden_size)
+    }
+
+    /// Appends `tokens` after the positions already in `cache`, computing only the new rows,
+    /// and returns the unnormalized logits of the last appended position. Starting from an
+    /// empty cache with the whole sequence, this equals `forward_logits`.
+    pub fn forward_extend(&self, cache: &mut KvCache, tokens: &[u32]) -> Result<Vec<f32>> {
+        let t_len = tokens.len();
+        if t_len == 0 {
+            bail!("forward_extend needs at least one token");
+        }
+        if let Some(bad) = tokens.iter().find(|&&t| t as usize >= self.vocab_size) {
+            bail!(
+                "Token id {bad} is outside the model vocabulary of {}",
+                self.vocab_size
+            );
+        }
+        let d = self.config.hidden_size;
+        if cache.num_layers() != self.layers.len() || cache.kv_dim() != d {
+            bail!("KV cache shape does not match this model");
+        }
+
+        let head_dim = d / self.config.num_heads;
+        let offset = cache.len();
+        let mut x = vec![0.0f32; t_len * d];
+        for (row, &token) in x.chunks_exact_mut(d).zip(tokens) {
+            let start = token as usize * d;
+            row.copy_from_slice(&self.embed[start..start + d]);
+        }
+        // shortcut: rotary table rebuilt per call (O(cached positions) trig), fine at these sizes; keep it in the cache if decode profiles show it.
+        let rope = RopeTable::new(
+            offset + t_len,
+            head_dim,
+            self.config.rotary_dims(),
+            self.config.rope_theta,
+        );
+        for (index, layer) in self.layers.iter().enumerate() {
+            let layer_cache = cache.layer_mut(index)?;
+            self.apply_layer(layer, &mut x, &rope, None, Some(layer_cache));
+        }
+
+        let mut normed = vec![0.0f32; d];
+        layer_norm(
+            &x[(t_len - 1) * d..],
+            &self.final_w,
+            &self.final_b,
+            self.config.layer_norm_eps,
+            &mut normed,
+        );
+        let head = self.head.as_deref().unwrap_or(&self.embed);
+        Ok(linear(&normed, head, d, self.vocab_size))
     }
 
     fn validate(&self, tokens: &[u32], schedule: &[usize], exits: &[usize]) -> Result<()> {
@@ -339,12 +395,18 @@ impl NeoxModel {
                         resid_rms_in: rms(&before),
                         ..Default::default()
                     };
-                    self.apply_layer(&self.layers[index], &mut x, &rope, Some(&mut layer_trace));
+                    self.apply_layer(
+                        &self.layers[index],
+                        &mut x,
+                        &rope,
+                        Some(&mut layer_trace),
+                        None,
+                    );
                     layer_trace.resid_rms_out = rms(&x);
                     layer_trace.update_ratio = update_ratio(&before, &x);
                     trace.layers.push(layer_trace);
                 }
-                None => self.apply_layer(&self.layers[index], &mut x, &rope, None),
+                None => self.apply_layer(&self.layers[index], &mut x, &rope, None, None),
             }
             if exits.contains(&(step + 1)) {
                 out.push(self.read_out(step + 1, &x, tokens));
@@ -353,12 +415,15 @@ impl NeoxModel {
         out
     }
 
+    /// One transformer layer over the rows of `x`. With `kv`, the rows are new positions
+    /// after the cached ones: their keys and values are appended and attention reads the cache.
     fn apply_layer(
         &self,
         layer: &NeoxLayer,
         x: &mut [f32],
         rope: &RopeTable,
         mut trace: Option<&mut LayerTrace>,
+        mut kv: Option<&mut KvLayer>,
     ) {
         let cfg = &self.config;
         let d = cfg.hidden_size;
@@ -395,15 +460,24 @@ impl NeoxModel {
                 v[dst..dst + hd].copy_from_slice(&qkv[src + 2 * hd..src + 3 * hd]);
             }
         }
-        rope.apply(&mut q);
-        rope.apply(&mut k);
+        let pos_offset = kv.as_deref().map_or(0, KvLayer::len);
+        rope.apply_rows(&mut q, d, pos_offset);
+        rope.apply_rows(&mut k, d, pos_offset);
+        if let Some(cache) = kv.as_deref_mut() {
+            cache.append(&k, &v);
+        }
+        let (keys, values) = match kv.as_deref() {
+            Some(cache) => (cache.keys(), cache.values()),
+            None => (&k[..], &v[..]),
+        };
         let mixed = attention(&AttentionInputs {
             q: &q,
-            k: &k,
-            v: &v,
+            k: keys,
+            v: values,
             num_heads: heads,
             num_kv_heads: heads,
             head_dim: hd,
+            pos_offset,
         });
         let mut attn_out = linear(&mixed, &layer.o_w, d, d);
         add_bias(&mut attn_out, &layer.o_b);
@@ -617,5 +691,23 @@ pub(crate) mod tests {
             .forward_scheduled(&tokens, &[0, 1], &[2])
             .unwrap();
         assert_ne!(a[0].nll, b[0].nll);
+    }
+
+    #[test]
+    fn incremental_logits_match_full_forward_at_every_position() {
+        for parallel_residual in [true, false] {
+            let mut model = tiny(0.6);
+            model.config.parallel_residual = parallel_residual;
+            let tokens: Vec<u32> = vec![3, 17, 8, 20, 1, 9, 12, 5, 22, 7];
+            for prefill in [1, 4] {
+                let gap =
+                    crate::inference::kv::tests::max_incremental_gap(&model, &tokens, prefill)
+                        .unwrap();
+                assert!(
+                    gap < crate::inference::kv::tests::INCREMENTAL_TOLERANCE,
+                    "parallel={parallel_residual} prefill={prefill} gap {gap}"
+                );
+            }
+        }
     }
 }

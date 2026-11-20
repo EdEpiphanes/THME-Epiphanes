@@ -131,6 +131,13 @@ closes it.
 - **Problem**: No speed, memory or KV-cache figure is measured yet.
 - **Done means**: Broken into tickets per ROADMAP.md v0.2.4 when v0.2.3 closes.
 
+### [THME-3070] Incremental decoding with a KV cache
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.1 · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: done
+- **Progress** (20 November 2026): `KvCache` and `forward_extend` for LLaMA and GPT-NeoX behind `CausalLm`; the Studio chat reply loop prefills once and steps the cache (Gemma keeps the whole-sequence loop). Incremental logits equal full-sequence logits at every position: 0 on Pythia-14M and SmolLM-135M (24 tokens, real models, `THME_REAL_MODEL_TESTS=1`) and at most 7.6e-6 on a 96-token synthetic LLaMA (tolerance 1e-4). KV bytes equal `KvCacheEstimator` exactly. Measured paired old-vs-cached decode speed is in `docs/benchmarks/<model>/data/decode_speed.json` (shared machine; see the folder README). Not done: GPU path not measured; threads and matmul kernels unchanged (separate tickets).
+- **Problem**: `chat::generate` calls `forward_logits` on the whole growing sequence for every new token, so each token costs a full pass over all tokens so far. Research note `docs/research/token-speed-budget-devices.md` (section 4) ranks this as the largest single loss for decode.
+- **Done means**: A KV cache for the LLaMA and GPT-NeoX reference models behind `CausalLm` (`forward_logits` unchanged for the perplexity path). Incremental logits equal full-sequence logits at every position within a stated tolerance on a synthetic model, and on Pythia-14M and SmolLM-135M behind `THME_REAL_MODEL_TESTS=1`. Studio chat and the reply loop use prefill then one-token steps. `examples/decode_speed.rs` gives paired, interleaved old-vs-new decode tokens/s with spread, committed under `docs/benchmarks/<model>/data/decode_speed.json` with machine facts; KV bytes vs context checked against `src/profiling/kv_cache.rs`. Threads and matmul kernels are not changed here.
+
 ### [THME-3069] Visual check of every Studio tab, then recapture screenshots
 
 - **Milestone**: v0.4 · **Roadmap**: none · **Priority**: p2 · **Area**: gui · **Type**: chore · **Status**: ready
@@ -142,7 +149,7 @@ closes it.
 - **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: legal · **Type**: chore · **Status**: ready
 - **Problem**: Dependencies and licence headers are checked, but nothing records who or what wrote each part of the code (the owner, an AI tool and when, a third-party source) or which datasets and models a report used. The owner wants every part of what is written and released to have clear rights.
 - **Done means**: A ledger file in the repository lists each area (directory or file group) with its origin, licence and date; CI fails when a new top-level area has no entry; agents are told in AGENTS.md to add code only from the repository itself or from sources the licence audit approved; the contributor agreement and counsel review are tracked privately.
-
+>
 ## Engine, format, security and quality tracks (v0.2.5 to v0.2.9)
 
 > From the research dossier v3.1 (`docs/research/`) and the owner's direction of 13 November 2026.
