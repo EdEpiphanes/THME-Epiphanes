@@ -276,9 +276,9 @@ closes it.
 
 ### [THME-3022] Scanner: more formats and compressed pickles
 
-- **Milestone**: v0.2.7 · **Roadmap**: v0.2.7.2 · **Priority**: p2 · **Area**: security · **Type**: feature · **Status**: ready
-- **Progress**: deflate pickles, NumPy object arrays, oversize pickles, Keras and ONNX are done and tested; legacy HDF5 `.h5` files are flagged as not inspected.
-- **Problem**: Legacy HDF5 `.h5` Keras files are still not inspected.
+- **Milestone**: v0.2.7 · **Roadmap**: v0.2.7.2 · **Priority**: p2 · **Area**: security · **Type**: feature · **Status**: done
+- **Progress** (19 November 2026): deflate pickles, NumPy object arrays, oversize pickles, Keras and ONNX are done and tested. Legacy HDF5 `.h5` files are now inspected in a bounded way: the Keras `model_config` JSON is searched for in the readable bytes (64 MiB cap) and `Lambda` layers are flagged High, unknown custom layers Medium. 6 tests on fixtures built in the test. Limits: attributes stored compressed, chunked or in fragmented heaps can be missed, so a clean result means no code-executing layer was found in the readable part, never that the file is safe; marshalled-code fields are not flagged.
+- **Problem**: Legacy HDF5 `.h5` Keras files were not inspected.
 - **Done means**: Each format added with fixtures; compressed pickles inspected with a pure-Rust inflate dependency proposed first.
 
 ### [THME-3024] Benchmark registry: task files and result records

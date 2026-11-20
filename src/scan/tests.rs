@@ -789,7 +789,169 @@ fn legacy_hdf5_file_is_one_info_finding() {
         "{}",
         report.findings[0].detail
     );
+    assert!(
+        report.findings[0].detail.contains("model_config"),
+        "{}",
+        report.findings[0].detail
+    );
     assert_eq!(report.verdict(), "no findings");
+}
+
+// Legacy `.h5` Keras files: the architecture is the JSON string in the `model_config` attribute.
+
+/// Bytes shaped like an HDF5 file: signature, padding, the attribute name and its JSON value.
+fn h5_with_config(config: &[u8]) -> Vec<u8> {
+    let mut bytes = b"\x89HDF\r\n\x1a\n".to_vec();
+    bytes.extend_from_slice(&[0u8; 96]);
+    bytes.extend_from_slice(b"model_config\0");
+    bytes.extend_from_slice(config);
+    bytes.extend_from_slice(&[0u8; 96]);
+    bytes
+}
+
+fn write_h5(dir: &Path, name: &str, bytes: &[u8]) -> PathBuf {
+    let path = dir.join(name);
+    std::fs::write(&path, bytes).unwrap();
+    path
+}
+
+const H5_LAMBDA: &[u8] = br#"{"class_name": "Sequential", "config": {"name": "m", "layers": [
+    {"class_name": "Dense", "config": {"name": "dense", "units": 4}},
+    {"class_name": "Lambda", "config": {"name": "scale", "function": "AAAA", "function_type": "lambda"}}
+]}}"#;
+
+#[test]
+fn h5_lambda_layer_is_high() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write_h5(dir.path(), "lambda.h5", &h5_with_config(H5_LAMBDA));
+    let report = scan(&path).unwrap();
+    let finding = report
+        .findings
+        .iter()
+        .find(|f| f.rule == "keras-lambda-layer")
+        .unwrap_or_else(|| panic!("{:?}", report.findings));
+    assert_eq!(finding.severity, Severity::High);
+    assert_eq!(finding.file, "lambda.h5!model_config");
+    assert!(finding.detail.contains("scale"), "{}", finding.detail);
+    assert_eq!(report.verdict(), "dangerous");
+}
+
+#[test]
+fn h5_standard_layers_have_no_code_finding() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = br#"{"class_name": "Sequential", "config": {"name": "m", "layers": [
+        {"class_name": "InputLayer", "config": {"name": "in"}},
+        {"class_name": "Dense", "config": {"name": "d",
+            "kernel_initializer": {"class_name": "GlorotUniform", "config": {"seed": null}},
+            "kernel_regularizer": {"class_name": "L2", "config": {"l2": 0.01}}}},
+        {"class_name": "Dropout", "config": {"name": "drop", "rate": 0.5}}
+    ]}}"#;
+    let path = write_h5(dir.path(), "plain.h5", &h5_with_config(config));
+    let report = scan(&path).unwrap();
+    assert_eq!(report.verdict(), "no findings", "{:?}", report.findings);
+    assert!(
+        report.findings.iter().all(|f| f.severity == Severity::Info),
+        "{:?}",
+        report.findings
+    );
+    // The clean result carries its limits as an Info finding.
+    let partial = report
+        .findings
+        .iter()
+        .find(|f| f.rule == "hdf5-partial")
+        .unwrap_or_else(|| panic!("{:?}", report.findings));
+    assert!(partial.detail.contains("not proof"), "{}", partial.detail);
+}
+
+#[test]
+fn h5_unknown_layer_is_medium_not_high() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = br#"{"class_name": "Sequential", "config": {"layers": [
+        {"class_name": "MyAttention", "config": {"name": "att"}}
+    ]}}"#;
+    let path = write_h5(dir.path(), "custom.h5", &h5_with_config(config));
+    let report = scan(&path).unwrap();
+    let finding = report
+        .findings
+        .iter()
+        .find(|f| f.rule == "keras-custom-object")
+        .unwrap_or_else(|| panic!("{:?}", report.findings));
+    assert_eq!(finding.severity, Severity::Medium);
+    assert!(finding.detail.contains("MyAttention"), "{}", finding.detail);
+    assert!(report.findings.iter().all(|f| f.severity < Severity::High));
+    assert_eq!(report.verdict(), "suspicious");
+}
+
+#[test]
+fn h5_truncated_or_invalid_json_is_not_inspected_and_does_not_panic() {
+    let dir = tempfile::tempdir().unwrap();
+    let cut = &H5_LAMBDA[..H5_LAMBDA.len() / 2];
+    let path = write_h5(dir.path(), "cut.h5", &h5_with_config(cut));
+    let report = scan(&path).unwrap();
+    let finding = report
+        .findings
+        .iter()
+        .find(|f| f.rule == "hdf5-not-inspected")
+        .unwrap_or_else(|| panic!("{:?}", report.findings));
+    assert_eq!(finding.severity, Severity::Medium);
+    assert!(finding.detail.contains("cut off"), "{}", finding.detail);
+    assert!(report
+        .findings
+        .iter()
+        .all(|f| f.rule != "keras-lambda-layer"));
+
+    let broken = br#"{"class_name": "Sequential", "config": nope}"#;
+    let path = write_h5(dir.path(), "broken.h5", &h5_with_config(broken));
+    let report = scan(&path).unwrap();
+    let finding = report
+        .findings
+        .iter()
+        .find(|f| f.rule == "hdf5-not-inspected")
+        .unwrap_or_else(|| panic!("{:?}", report.findings));
+    assert!(finding.detail.contains("not valid"), "{}", finding.detail);
+}
+
+#[test]
+fn h5_file_over_the_cap_is_noted_and_its_first_bytes_are_still_searched() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut bytes = h5_with_config(H5_LAMBDA);
+    bytes.resize(bytes.len() + 1000, 0);
+    let path = write_h5(dir.path(), "big.h5", &bytes);
+    let mut report = ScanReport::default();
+    hdf5::scan_h5(&path, "big.h5", 512, &mut report);
+    assert!(
+        report
+            .findings
+            .iter()
+            .any(|f| f.rule == "hdf5-not-inspected"
+                && f.severity == Severity::Medium
+                && f.detail.contains("512-byte limit")),
+        "{:?}",
+        report.findings
+    );
+    assert!(
+        report
+            .findings
+            .iter()
+            .any(|f| f.rule == "keras-lambda-layer"),
+        "{:?}",
+        report.findings
+    );
+}
+
+#[test]
+fn h5_name_without_hdf5_signature_is_a_medium_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write_h5(dir.path(), "fake.h5", br#"{"class_name": "Sequential"}"#);
+    let report = scan(&path).unwrap();
+    assert_eq!(report.findings.len(), 1, "{:?}", report.findings);
+    assert_eq!(report.findings[0].rule, "hdf5-malformed");
+    assert_eq!(report.findings[0].severity, Severity::Medium);
+    assert!(
+        report.findings[0].detail.contains("signature"),
+        "{}",
+        report.findings[0].detail
+    );
 }
 
 #[test]
