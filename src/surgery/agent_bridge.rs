@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 use serde::{Deserialize, Serialize};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 use crate::surgery::recipe::TweakRecipe;
 
@@ -32,22 +33,17 @@ impl AgentBridge {
     pub fn request_recipe(&self, prompt_text: &str) -> anyhow::Result<TweakRecipe> {
         match &self.config {
             AgentBridgeConfig::Mock { canned_recipe } => Ok(canned_recipe.clone()),
-            AgentBridgeConfig::Subprocess { command, args, .. } => {
-                let mut child = Command::new(command)
-                    .args(args)
-                    .stdin(Stdio::piped())
-                    .stdout(Stdio::piped())
-                    .stderr(Stdio::piped())
-                    .spawn()
-                    .map_err(|e| {
-                        anyhow::anyhow!("Failed to spawn agent command '{}': {}", command, e)
-                    })?;
-
-                if let Some(mut stdin) = child.stdin.take() {
-                    stdin.write_all(prompt_text.as_bytes())?;
-                }
-
-                let output = child.wait_with_output()?;
+            AgentBridgeConfig::Subprocess {
+                command,
+                args,
+                timeout_secs,
+            } => {
+                let output = run_with_deadline(
+                    Command::new(command).args(args),
+                    prompt_text.as_bytes(),
+                    Duration::from_secs(*timeout_secs),
+                )
+                .map_err(|e| anyhow::anyhow!("Agent command '{}': {}", command, e))?;
                 if !output.status.success() {
                     let stderr = String::from_utf8_lossy(&output.stderr);
                     return Err(anyhow::anyhow!(
@@ -94,6 +90,68 @@ impl AgentBridge {
     }
 }
 
+/// Runs `cmd`, feeds it `input` on stdin and collects its output, killing it once `timeout`
+/// passes. Pipes are serviced on threads so a child that never reads or never exits cannot block
+/// past the deadline.
+pub(crate) fn run_with_deadline(
+    cmd: &mut Command,
+    input: &[u8],
+    timeout: Duration,
+) -> anyhow::Result<std::process::Output> {
+    let mut child = cmd
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| anyhow::anyhow!("failed to spawn: {}", e))?;
+
+    let mut stdin = child.stdin.take();
+    let input = input.to_vec();
+    std::thread::spawn(move || {
+        if let Some(pipe) = stdin.as_mut() {
+            let _ = pipe.write_all(&input);
+        }
+    });
+    let mut stdout = child.stdout.take();
+    let out = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(pipe) = stdout.as_mut() {
+            let _ = pipe.read_to_end(&mut buf);
+        }
+        buf
+    });
+    let mut stderr = child.stderr.take();
+    let err = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(pipe) = stderr.as_mut() {
+            let _ = pipe.read_to_end(&mut buf);
+        }
+        buf
+    });
+
+    let deadline = Instant::now() + timeout;
+    let status = loop {
+        if let Some(status) = child.try_wait()? {
+            break status;
+        }
+        if Instant::now() >= deadline {
+            // Reader threads are left to end on their own: a grandchild may still hold the pipes.
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(anyhow::anyhow!(
+                "timed out after {} s and was killed",
+                timeout.as_secs()
+            ));
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    Ok(std::process::Output {
+        status,
+        stdout: out.join().unwrap_or_default(),
+        stderr: err.join().unwrap_or_default(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -134,5 +192,34 @@ mod tests {
         let parsed =
             AgentBridge::extract_and_parse_json(&wrapped_json).expect("parse markdown json");
         assert_eq!(parsed.description, "Agent suggested test recipe");
+    }
+
+    /// Sleeper for the timeout test: ignored in normal runs, started as a child of the test
+    /// binary itself (works the same on Windows, Linux and macOS).
+    #[test]
+    #[ignore = "child process of subprocess_is_killed_at_the_timeout"]
+    fn sleeper_child() {
+        std::thread::sleep(Duration::from_secs(120));
+    }
+
+    #[test]
+    fn subprocess_is_killed_at_the_timeout() {
+        let exe = std::env::current_exe().expect("test binary path");
+        let bridge = AgentBridge::new(AgentBridgeConfig::Subprocess {
+            command: exe.to_string_lossy().into_owned(),
+            args: vec![
+                "surgery::agent_bridge::tests::sleeper_child".into(),
+                "--exact".into(),
+                "--ignored".into(),
+            ],
+            timeout_secs: 1,
+        });
+        let start = Instant::now();
+        let result = bridge.request_recipe("prompt");
+        let err = result
+            .expect_err("sleeping agent must time out")
+            .to_string();
+        assert!(err.contains("timed out"), "{err}");
+        assert!(start.elapsed() < Duration::from_secs(60));
     }
 }

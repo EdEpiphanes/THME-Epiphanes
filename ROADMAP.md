@@ -89,7 +89,7 @@ flowchart LR
 | Metrics library (THME-3027) | `bench::metrics`: answer extraction, exact and normalized match, numeric tolerance, likelihood choice with ties scored as misses, unbiased pass@k; `TaskSpec::score_output` | Tested: dossier Table R3 pass@k values, pass@k against enumeration for n <= 10, hand-computed cases |
 | Sandbox design (THME-3020, design part) | [docs/sandbox.md](docs/sandbox.md): threat model, one fail-closed interface, layers per OS, 13 escape tests, dependency proposal | Design only; nothing built |
 | No-panic rule, GUI split, glossary | Compiler-enforced; Studio tabs as modules; `CONTEXT.md` | Tested |
-| Toolchain 1.100.0 | Pinned compiler bumped to 1.100.0 (`rust-toolchain.toml`); MSRV stays 1.89 | fmt, clippy and tests green on 1.100.0 |
+| Toolchain 1.100.0 | Pinned compiler bumped to 1.100.0 (`rust-toolchain.toml`); MSRV is 1.95 | fmt, clippy and tests green on 1.100.0 |
 | Scanner: deflate pickles and NumPy object arrays (THME-3022, parts 1-2) | `thme scan`: deflate-compressed pickles in zip containers; `.npy`/`.npz` object arrays | Tested: 16 scan tests |
 | Scanner: Keras, ONNX and oversize pickles (THME-3022, parts 3-5) | `thme scan`: Keras Lambda and custom layers in `.keras`; ONNX external-data path traversal and custom domains; the first 256 MiB of an oversize pickle is still judged | Tested: scan fixtures for each rule |
 | ODE steppers (dossier WP6, ROADMAP v0.2.5.6) | `src/engine/ode.rs`: `FixedMethod::Rk4`, the Dormand-Prince 5(4) pair `dopri5_step` with step control and the adaptive `integrate_adaptive` driver; Euler, RK4 and Dormand-Prince steppers are error-order tested on the decay and oscillator equations | Tested: ratios 2 and 16, step control lands on t1; no measured figure |
