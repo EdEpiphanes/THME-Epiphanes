@@ -105,6 +105,8 @@ so it reads what you already have instead of asking you to move files.
 - **Text in, text out.** `thme tokenize` encodes and decodes text with a model's own `tokenizer.json`, and
   `thme chat-template` renders the model's own chat template from a messages file. Tested on fixtures; a
   the Studio's Chat tab builds on them.
+- **A welcome screen.** With no model loaded the Studio shows what `thme doctor` and `thme discover` found, and Open
+  loads a model through the safety scan. Its logic is tested; nobody has looked at the window yet.
 - **Know your machine.** `thme doctor` says what works here (system, memory, disk, GPU adapter, the models
   found) and what to try next. It marks each fact as checked or assumed.
 - **Guides and notebooks.** [Getting started](docs/getting-started.md) has install steps and short guides for analysts, AI engineers and data scientists; [notebooks](docs/notebooks.md) lists the `--json` output of each command.

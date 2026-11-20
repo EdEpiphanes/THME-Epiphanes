@@ -389,6 +389,7 @@ closes it.
 
 - **Milestone**: v0.3.0 · **Roadmap**: v0.3.0.2 · **Priority**: p2 · **Area**: onboarding · **Type**: feature · **Status**: done
 - **Progress** (19 November 2026): `thme doctor [--json]` reports operating system, memory, disk, CPU threads, GPU adapters found through wgpu and the models `thme discover` finds, each marked checked or assumed, then prints a short Next list. 9 tests on a `HostFacts` struct, none depending on this machine. Not done: the Studio first-start summary.
+- **Progress** (19 November 2026, later): the Studio shows the doctor summary and the discover list in a Welcome panel when no model is loaded (`src/gui/app/welcome.rs`); checks run on a background thread, Open runs the safety scan first, at most 10 rows with the total. 12 state-machine tests. The live window was not opened.
 - **Problem**: People come from different backgrounds and tools. They need one command that says what works on their machine and what to do next.
 - **Done means**: `thme doctor` reports operating system, memory, disk, GPU adapter found through wgpu, and the models `thme discover` finds, then prints the next command to try. The Studio shows the same summary on first start. Every line states what was checked and what was only assumed.
 
@@ -411,6 +412,53 @@ closes it.
 - **Problem**: The earlier reports were measured before the FP16 rounding fix and have been removed. Pythia-14M (Apache-2.0, 14,067,712 parameters, 6 layers) is downloaded for local testing and loads in `thme inspect`.
 - **Done means**: Perplexity of the source model, the Q8_0 round trip and a precision sweep are re-run with the fixed code, committed as reports under `docs/benchmarks/` with their method, and charts regenerate from them. Results are published as they come, with the method beside them.
 
+### [THME-3047] Clean public repository from a clean export
+
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: legal · **Type**: chore · **Status**: triage
+- **Problem**: Old public history holds the Windows username and an absolute path (`.claude_handover.md`, commits `a0befc7`, `b31dd81`), an old personal account name, and the GPL-2.0 derived GPU-unlock port (PR #82). A fork would carry all of it. Local refs (`refs/agents/*`, stashes) also hold the removed `agent-hub/` and `neutron-*` crates.
+- **Done means**: A new repository is built from `git archive` of a clean tree with fresh history (not a clone, not a mirror push), after a scripted pre-publish scan (secrets, usernames and absolute paths, `hermes`, `medgemma`, binary extensions, SPDX, third-party register, `cargo deny`) and the full CI on the new repository. `LICENSING.md` no longer cites a commit that will not exist. The owner decides whether to archive or privatise the old repository. First-pass audit, 19 November 2026: H2, M9.
+
+### [THME-3048] VS Code extension: no shell injection, honest commands
+
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: security · **Type**: bug · **Status**: ready
+- **Problem**: `editors/vscode/src/extension.ts` runs commands through `spawn(..., { shell: true })` and pastes Copilot tool input into quoted arguments, so a prompt-injected tool call can run shell commands (audit H3). `validateQuality` runs the gate on hard-coded perplexities and reports PASSED, and the surgery message claims a rollback checkpoint it does not check (M5). The binary is resolved from the workspace before PATH, and the manifest does not declare untrusted-workspace support (L5).
+- **Done means**: `shell: false` with raw argument arrays, numeric inputs validated, `modelPath` checked to be an existing file, a unit test with a quote-and-ampersand path; validate asks for real inputs or is labelled a demo and reports the CLI's own verdict; surgery states only what it checked; the manifest declares `capabilities.untrustedWorkspaces: { supported: false }`.
+
+### [THME-3049] Release pipeline hardening
+
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: ci · **Type**: chore · **Status**: ready
+- **Problem**: Release archives omit the anatomy-kit MIT notice for the compiled `iso.rs` port (M1). Actions are pinned by moving tags (M6). `contents: write` covers every job and `ci.yml` has no `permissions:` block, and `MINISIGN_KEY` is readable by every step of the publish job (M7). Signing is skipped silently when the key is missing although SECURITY.md promises signed archives (M8).
+- **Done means**: Each archive ships `LICENSES/` and `LICENSING.md`; every action is pinned by full commit SHA with a version comment; both workflows default to `contents: read` and only `publish` gets write access, with the key passed only to the signing step; publish fails when the key is missing and a verify step checks signatures against `minisign.pub`.
+
+### [THME-3050] Remove agent notes, personal settings and withdrawn claims from the tree
+
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: legal · **Type**: chore · **Status**: ready
+- **Problem**: Tracked agent working notes and personal editor settings: `.claude_handover.md`, `TASKS.md`, `TEST_READY.md`, `TEST_INFRA.md`, `PROJECT.md`, `.vscode/settings.json` (M2). `docs/research/THME_measured_findings_2026-11.md` publishes perplexity figures whose report was removed (M4). `docs/research/THME_AUTHENTICITY_AUDIT_AND_ROADMAP.md` credits a third-party organisation (L8). README says recipes are measured with no committed report and has a broken sentence (L9).
+- **Done means**: The notes and personal settings are no longer tracked; the findings note is marked withdrawn (pre-THME-3023, to be re-measured) at the top and per table, or removed; the audit note says it was written by an AI agent and is unverified; README statuses match the evidence.
+
+### [THME-3051] Drop the hard-coded model fallback from MCP and tests
+
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: inference · **Type**: bug · **Status**: ready
+- **Problem**: `src/cli/mcp.rs` (six places), `tests/test_mcp.rs`, `tests/test_gpu_acceleration.rs` and `tests/test_medgemma_inference.rs` fall back to `%LOCALAPPDATA%/hermes/models/medgemma-...gguf`, which exposes the local agent setup and silently loads a file from a user-writable place (M3).
+- **Done means**: The MCP server loads a model only from `THME_MODEL` or an explicit argument; tests that need a real model are gated behind `THME_REAL_MODEL_TESTS=1` and never search a fixed location.
+
+### [THME-3052] Repository hygiene sweep
+
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p2 · **Area**: ci · **Type**: chore · **Status**: ready
+- **Problem**: `.gitignore` lacks `.claude/` and `.mcp.json` (M9). `.cargo/config.toml` has no path remapping although AGENTS.md rule 1 says it stays active (L1). The CI path guard misses `C:/Users/`, macOS `/Users/` and `AppData` (L10). AGENTS.md still says CLI <= 10 MB and MSRV 1.89 (L6). `deny.toml` allows licences it never meets (L12). `models/SmolLM-135M/config.json` has no register row and the mascot and logo art have no recorded origin (L7).
+- **Done means**: Each item fixed or recorded; the path guard also rejects agent-note filenames.
+
+### [THME-3053] Enforce the teacher subprocess timeout; delete dead code
+
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: bug · **Status**: ready
+- **Problem**: `timeout_secs` is ignored in `src/surgery/agent_bridge.rs`, `src/cli/co_surgery.rs` and `src/quality/evaluator.rs`, so a teacher subprocess can hang forever; `evaluate_external` has no callers (L4).
+- **Done means**: The timeout is enforced (wait with a deadline, then kill) with a test using a sleeping child; `evaluate_external` is removed.
+
+### [THME-3054] Document the MCP trust model and the memory-map limit
+
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p3 · **Area**: security · **Type**: chore · **Status**: ready
+- **Problem**: Any connected MCP client can make the server open and parse any readable path (read-only and scan-gated, no writes or process spawning found), and the configs start it through `cargo run`, which runs build scripts (L3). The parsers use `unsafe Mmap::map` on user files, so truncation by another process while in use can crash the process (L11).
+- **Done means**: The MCP trust model is documented with optional allowed roots; configs point at a built binary; SECURITY.md states the memory-map limit.
 ### [THME-3045] Remove GPL-2.0 derived GPU-unlock code; plan an original Rust unlock engine
 
 - **Milestone**: v0.2.7 · **Roadmap**: none · **Priority**: p1 · **Area**: legal · **Type**: chore · **Status**: done
