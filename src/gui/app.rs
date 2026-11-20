@@ -1900,6 +1900,7 @@ mod tests {
             path: std::path::PathBuf::from("model.safetensors"),
             byte_offset: 32,
             byte_len: 8,
+            encoding: crate::ir::tensor::SourceEncoding::Identity,
         });
         let model_ir = crate::ir::ModelIR::new(
             "loaded".into(),
