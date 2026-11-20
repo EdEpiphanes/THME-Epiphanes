@@ -2563,7 +2563,6 @@ dependencies = [
  "clap",
  "serde",
  "serde_json",
- "wgpu",
 ]
 
 [[package]]

@@ -457,6 +457,17 @@ closes it.
 - **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p3 · **Area**: security · **Type**: chore · **Status**: ready
 - **Problem**: Any connected MCP client can make the server open and parse any readable path (read-only and scan-gated, no writes or process spawning found), and the configs start it through `cargo run`, which runs build scripts (L3). The parsers use `unsafe Mmap::map` on user files, so truncation by another process while in use can crash the process (L11).
 - **Done means**: The MCP trust model is documented with optional allowed roots; configs point at a built binary; SECURITY.md states the memory-map limit.
+### [THME-3045] Remove GPL-2.0 derived GPU-unlock code; plan an original Rust unlock engine
+
+- **Milestone**: v0.2.7 · **Roadmap**: none · **Priority**: p1 · **Area**: legal · **Type**: chore · **Status**: done
+- **Problem**: `crates/neutron-gpu` was ported from an upstream GPU-unlock project whose kernel module and packaging are GPL-2.0-only (its README says so; the firmware part has its own notice). GPL-2.0-only is incompatible with this repository's AGPL-3.0-only and with the planned commercial licence, and a port is a derivative work that would itself have to be GPL-2.0 with attribution. THME shipped it under AGPL with no attribution, so it is removed. The unlock engine, ROP payload synthesis and register-offset data are gone.
+- **Done means**: `crates/neutron-gpu/src/` contains only PCI/vGPU discovery and a plain hardware recipe table; the unlock engine, ROP synthesis and register-offset data are gone. A future ticket designs an original, tested, Rust-native unlock engine from scratch, not derived from any GPL or otherwise incompatibly licensed source.
+
+### [THME-3046] Original Rust GPU-unlock engine (placeholder)
+
+- **Milestone**: v0.2.7 · **Roadmap**: none · **Priority**: p2 · **Area**: security · **Type**: feature · **Status**: triage
+- **Problem**: Placeholder only. The owner wants THME to write its own GPU-unlock engine in Rust as original work, after the GPL-2.0 derived code is removed (THME-3045); it must be written clean-room: from public vendor documentation, by someone who has not read the GPL source.
+- **Done means**: Not scoped yet; a later ticket defines the design, tests and review.
 
 <!-- backlog:end -->
 
