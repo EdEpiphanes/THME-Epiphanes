@@ -74,6 +74,7 @@ fn delta(after: GpuStats, before: GpuStats) -> GpuStats {
         submit_ns: after.submit_ns - before.submit_ns,
         wait_ns: after.wait_ns - before.wait_ns,
         readback_ns: after.readback_ns - before.readback_ns,
+        kernel_ns: after.kernel_ns - before.kernel_ns,
     }
 }
 
@@ -88,6 +89,7 @@ fn stats_json(s: &GpuStats) -> Value {
         "submit_ms": ms(s.submit_ns.into()),
         "wait_ms": ms(s.wait_ns.into()),
         "readback_ms": ms(s.readback_ns.into()),
+        "kernel_ms": ms(s.kernel_ns.into()),
     })
 }
 
@@ -107,6 +109,7 @@ fn median_stats(all: &[GpuStats]) -> Value {
         submit_ns: med(|s| s.submit_ns),
         wait_ns: med(|s| s.wait_ns),
         readback_ns: med(|s| s.readback_ns),
+        kernel_ns: med(|s| s.kernel_ns),
     })
 }
 
@@ -133,6 +136,7 @@ fn main() -> Result<()> {
     let t_init = Instant::now();
     let gpu = Arc::new(GpuContext::init().context("GPU adapter init failed")?);
     let adapter_init_ms = ms(t_init.elapsed().as_nanos());
+    gpu.set_kernel_timing(true);
     let info = gpu.adapter_info.clone();
 
     let ir = ModelImporter::import(&args.model_path).context("model import failed")?;
@@ -157,6 +161,7 @@ fn main() -> Result<()> {
         let diff = max_abs_diff(&gpu_ref, &cpu_ref);
 
         let (mut cpu_ms, mut gpu_ms, mut per_run) = (Vec::new(), Vec::new(), Vec::new());
+        let mut other_ms: Vec<f64> = Vec::new();
         for _ in 0..args.runs {
             let t = Instant::now();
             cpu_model.forward_logits(&tokens)?;
@@ -166,7 +171,15 @@ fn main() -> Result<()> {
             let t = Instant::now();
             gpu_model.forward_logits(&tokens)?;
             gpu_ms.push(ms(t.elapsed().as_nanos()));
-            per_run.push(delta(gpu.stats(), before));
+            let d = delta(gpu.stats(), before);
+            let host_gpu_ns = d.weight_upload_ns
+                + d.input_write_ns
+                + d.encode_ns
+                + d.submit_ns
+                + d.wait_ns
+                + d.readback_ns;
+            other_ms.push(gpu_ms[gpu_ms.len() - 1] - ms(host_gpu_ns.into()));
+            per_run.push(d);
         }
         phases.push(json!({
             "name": name,
@@ -176,7 +189,9 @@ fn main() -> Result<()> {
             "gpu_first_run_ms": first_ms,
             "gpu_first_run_breakdown": stats_json(&first_stats),
             "gpu_median_breakdown": median_stats(&per_run),
+            "gpu_run_non_linear_host_ms": spread(&other_ms),
             "max_abs_logit_diff_gpu_vs_cpu": diff,
+            "max_abs_logit_cpu": cpu_ref.iter().fold(0.0f32, |m, v| m.max(v.abs())),
         }));
     }
 
@@ -189,7 +204,7 @@ fn main() -> Result<()> {
             "driver_info": info.driver_info,
             "backend": format!("{:?}", info.backend),
             "device_type": format!("{:?}", info.device_type),
-            "timestamp_query_used": false,
+            "timestamp_query_used": gpu.timestamp_query_supported(),
         },
         "build_profile": if cfg!(debug_assertions) { "debug" } else { "release" },
         "threads": std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1),
@@ -198,7 +213,7 @@ fn main() -> Result<()> {
         "machine_load_note": args.load_note,
         "runs": args.runs,
         "adapter_init_ms": adapter_init_ms,
-        "method": "CPU and GPU forward_logits interleaved per shape after one warm-up pass each; wall clock; synthetic token ids (timing only). Breakdown fields are host-side waits, not kernel time; wait_ms bounds kernel time from above.",
+        "method": "CPU and GPU forward_logits interleaved per shape after one warm-up pass each; wall clock; synthetic token ids (timing only). Breakdown fields except kernel_ms are host-side waits; kernel_ms is device time of the linear-layer compute passes from timestamp queries (0 when unsupported), and its per-submit read-back adds a little host time to GPU runs.",
         "phases": phases,
     });
     let text = serde_json::to_string_pretty(&report)?;

@@ -5,7 +5,8 @@ struct GemvParams {
     in_dim: u32,
     out_dim: u32,
     num_blocks_per_row: u32,
-    stride_bytes: u32,
+    rows: u32,
+    out_offset: u32,
 };
 
 @group(0) @binding(0) var<storage, read> params: GemvParams;
@@ -20,7 +21,8 @@ fn main(
     @builtin(workgroup_id) wid: vec3<u32>,
     @builtin(local_invocation_id) lid: vec3<u32>
 ) {
-    let row = wid.x;
+    let row = wid.y * 65535u + wid.x;
+    let tok = wid.z;
     if (row >= params.out_dim) {
         return;
     }
@@ -29,7 +31,7 @@ fn main(
     let row_base = row * params.in_dim;
 
     for (var k = tid; k < params.in_dim; k += 32u) {
-        acc += weights[row_base + k] * input_x[k];
+        acc += weights[row_base + k] * input_x[tok * params.in_dim + k];
     }
 
     sdata[tid] = acc;
@@ -47,6 +49,6 @@ fn main(
     workgroupBarrier();
 
     if (tid == 0u) {
-        output_y[row] = sdata[0];
+        output_y[params.out_offset + tok * params.out_dim + row] = sdata[0];
     }
 }
