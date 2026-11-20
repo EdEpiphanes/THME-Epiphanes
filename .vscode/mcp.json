@@ -1,8 +1,8 @@
 {
   "servers": {
     "thme-mcp": {
-      "command": "cargo",
-      "args": ["run", "--bin", "thme", "--", "mcp"],
+      "command": "${workspaceFolder}/target/release/thme",
+      "args": ["mcp"],
       "env": {}
     }
   }
