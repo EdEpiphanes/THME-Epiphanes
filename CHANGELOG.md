@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - v0.2.0 Measured Core
 
 ### Added
+- **Studio chat device selector**: CPU (default), GPU and CPU + GPU, the GPU options labelled experimental. GPU is currently slower than CPU (4.3 s vs 1.1 s for a 128-token pass on SmolLM-135M, RTX 4060 Ti, 20 November 2026); no speedup is claimed. Tested for the choice-to-device mapping only.
 - **Real-model tests are opt-in**: tests that open a real model file need `THME_REAL_MODEL_TESTS=1`.
 - **`thme download`**: fetch a model from the Hugging Face hub (config, tokenizer, safetensors or GGUF), licence printed first, checksum verified, pickle files skipped unless named, import scan after. Tested with a fake fetcher only.
 - **Studio Chat tab**: talk to a loaded model through the reference CPU forward pass; template, tokenizer, background generation with Cancel, measured speed line. Tested on the mock model; not yet seen in a running window.
