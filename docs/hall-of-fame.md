@@ -50,10 +50,11 @@ HuggingFaceTB, Apache-2.0, LLaMA architecture, 30 layers.
 ## The `.epiph` format
 
 One file that carries a model's tensors, tokenizer and plan, meant to be read the same way on any
-machine. What is true today: the layout is fixed little-endian with no native-endian casts, and the
-tests run on Linux and Windows (x86-64) and macOS (arm64) in CI. A check that the bytes are identical
-across those systems is **pending** (golden-hash test in review). Big-endian hosts and other chips
-are untested, so they are not claimed.
+machine. The layout is fixed little-endian with no native-endian casts. A golden-hash test
+(`tests/test_epiph_portability.rs`) packs a fixed tiny model and asserts the same SHA-256 on every
+host; it passes in CI on Ubuntu (x86-64), Windows (x86-64) and macOS (arm64). Compressed files are
+compared by their decoded contents, because the compressed stream depends on the zlib backend.
+Big-endian hosts, 32-bit systems and other chips are untested, so they are not claimed.
 
 ## How a model gets in
 

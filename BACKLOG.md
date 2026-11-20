@@ -482,6 +482,90 @@ closes it.
 Tickets below are the original sprint ledger. Sprints 1 to 9 are completed or superseded by the
 active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later (see ROADMAP.md).
 
+### [THME-3055] VRAM and adapter facts in `HostFacts`
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p1 · **Area**: doctor · **Type**: feature · **Status**: triage
+- **Problem**: only an adapter name is reported.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: `Fact<u64>` dedicated VRAM total/free per adapter, device type (discrete, integrated, CPU), shared-budget field, physical core count; unit tests with fake data; JSON schema updated; unknown stays `Unknown`.
+
+### [THME-3056] Memory model for a run
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: placement counts weights only.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: pure function from header + context + KV type to weights, KV and scratch bytes; table test against hand-computed LLaMA and GPT-NeoX shapes; no model read.
+
+### [THME-3057] `RunPlan` type and decision order, CPU-only
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p1 · **Area**: cli · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: `thme plan-run --model X` prints the plan for a header, with basis labels, using only `predicted`; golden-file test for a mock model (`examples/generate_mock_model.rs`).
+
+### [THME-3058] Shrink loop
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: property test: for any budget the result fits or errors; context never below the floor except by explicit user value; fixed flags unchanged.
+
+### [THME-3059] Roofline decode estimate per device
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p2 · **Area**: profiling · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: predicted decode tok/s from bandwidth and bytes per token for CPU and GPU, GPU dispatch-overhead term; unit tests; output labelled predicted; no claim in docs.
+
+### [THME-3060] CPU probe
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: threads sweep on synthetic matvec under 1 s; deterministic test using an injected clock; result struct with raw samples.
+
+### [THME-3061] GPU probe and CPU-wins rule
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p1 · **Area**: gpu · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: probe uses the real dispatch pattern, 2 s timeout, returns an error instead of hanging; with a fake backend the plan picks CPU when the GPU is slower; on a real machine, a report under `docs/benchmarks/` records probe vs real tokens/s (pending hardware run; mark pending, no LLM run by agents).
+
+### [THME-3062] Hybrid placement through `epiph::placement`
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: plan feeds budget after KV, scratch and margin; partial offload accepted only when the probe says it beats CPU.
+
+### [THME-3063] Plan cache
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: key and TTL tests, corrupt file ignored, `--no-cache`, `--reprobe`.
+
+### [THME-3064] Wire `DeviceArg::Auto` and Studio selector to the plan
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: Auto no longer means "GPU if init works"; Studio shows the recommended device and reason; test with a stubbed plan.
+
+### [THME-3065] `--verify` predicted vs measured report
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: JSON report with error percentages per field; schema in `docs/schemas/`; becomes the source for any published number.
+
+### [THME-3066] Windows shared-memory guard
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: plan counts dedicated VRAM only; warns when the driver reports shared memory spill; documented in the manual.
+
 ## Sprint 1: Format Correctness & Fuzzing (Milestone v0.1.2) [COMPLETED]
 
 ### [THME-101] Full GGUF v2/v3 Quantization Type Decoder (Done)
