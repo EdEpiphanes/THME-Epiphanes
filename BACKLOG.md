@@ -21,10 +21,10 @@ closes it.
 
 ### [THME-2002] Upgrade egui/eframe to clear RUSTSEC-2026-0194/0195
 
-- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: dependencies · **Type**: chore · **Status**: ready
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: dependencies · **Type**: chore · **Status**: done
 - **Problem**: eframe 0.31 pulls quick-xml 0.30 (two advisories, ignored in deny.toml with this ticket) and several unmaintained transitive crates.
 - **Progress** (19 November 2026): eframe and egui upgraded to 0.37; the two `ignore` entries are gone from deny.toml and `cargo deny check` passes; fmt, clippy and tests are green. Still open: all Studio tabs recaptured and visually checked (a recording on 19 November showed the Live 3D capture crop no longer fits the new layout).
-- **Done means**: eframe upgraded; the two `ignore` entries removed from deny.toml; `cargo deny check` passes; all Studio tabs recaptured and visually checked.
+- **Done means**: eframe upgraded; the two `ignore` entries removed from deny.toml; `cargo deny check` passes. The visual check of every Studio tab moved to THME-3069 (v0.4) on 20 November 2026 by the owner.
 
 ### [THME-2003] Split src/gui/app.rs into tab modules
 
@@ -129,6 +129,12 @@ closes it.
 - **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.1-v0.2.4.9 · **Priority**: p2 · **Area**: inference · **Type**: feature · **Status**: triage
 - **Problem**: No speed, memory or KV-cache figure is measured yet.
 - **Done means**: Broken into tickets per ROADMAP.md v0.2.4 when v0.2.3 closes.
+
+### [THME-3069] Visual check of every Studio tab, then recapture screenshots
+
+- **Milestone**: v0.4 · **Roadmap**: none · **Priority**: p2 · **Area**: gui · **Type**: chore · **Status**: ready
+- **Problem**: Nobody has looked at the Studio window since the eframe 0.37 upgrade: tabs, the Chat tab with its device selector, the Welcome panel and labels are untested by eye, and the Live 3D capture crop no longer fits the new layout (THME-2002).
+- **Done means**: The owner opens each tab and records what is wrong; layout fixes land; all Studio screenshots and recordings are recaptured from the real window.
 
 ## Engine, format, security and quality tracks (v0.2.5 to v0.2.9)
 
