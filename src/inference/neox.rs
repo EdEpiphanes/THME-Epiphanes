@@ -243,7 +243,7 @@ impl NeoxModel {
             self.config.rope_theta,
         );
         for layer in &self.layers {
-            self.apply_layer(layer, &mut x, &rope, None);
+            self.apply_layer(layer, &mut x, &rope, None, None);
         }
         let mut normed = vec![0.0f32; x.len()];
         layer_norm(
