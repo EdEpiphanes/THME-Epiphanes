@@ -248,9 +248,11 @@ in `models/<name>/`. Weights are never committed.
 pip install tokenizers
 python scripts/prepare_eval_tokens.py --repo EleutherAI/pythia-14m
 
-# Quality gate: source vs exported GGUF vs surgery recipe
-cargo run --release --example production_verification -- \
-    --model-path models/Pythia-14M --tokens target/eval/wikitext2_test.pythia-14m.u32
+# Quality gate: source vs exported GGUF vs surgery recipe. production_verification only
+# accepts its --target models (SmolLM-135M here); Pythia-14M is measured with the tools below.
+python scripts/prepare_eval_tokens.py
+cargo run --release --example production_verification -- --target smollm135m \
+    --model-path models/SmolLM-135M --tokens target/eval/wikitext2_test.SmolLM-135M.u32
 
 # Gate the report it wrote
 ./target/release/thme validate --report target/verification_report.json

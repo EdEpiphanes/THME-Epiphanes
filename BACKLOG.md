@@ -444,6 +444,7 @@ closes it.
 ### [THME-3051] Drop the hard-coded model fallback from MCP and tests
 
 - **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: inference · **Type**: bug · **Status**: ready
+- **Progress** (20 November 2026): the MCP server no longer reads a MedGemma path from `%LOCALAPPDATA%` (six places in `src/cli/mcp.rs`; `THME_MODEL` or an explicit argument only). The real-model tests use Pythia-14M and SmolLM-135M from `THME_TEST_MODELS_DIR` behind `THME_REAL_MODEL_TESTS=1` and print a SKIP reason when they do not run; no test reads a model from a user folder. Not done: the gated tests were not run on the real models (no model runs in this change), so they are unverified until someone runs them with the variables set.
 - **Problem**: `src/cli/mcp.rs` (six places), `tests/test_mcp.rs`, `tests/test_gpu_acceleration.rs` and `tests/test_medgemma_inference.rs` fall back to `%LOCALAPPDATA%/hermes/models/medgemma-...gguf`, which exposes the local agent setup and silently loads a file from a user-writable place (M3).
 - **Done means**: The MCP server loads a model only from `THME_MODEL` or an explicit argument; tests that need a real model are gated behind `THME_REAL_MODEL_TESTS=1` and never search a fixed location.
 
@@ -464,6 +465,18 @@ closes it.
 - **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p3 · **Area**: security · **Type**: chore · **Status**: ready
 - **Problem**: Any connected MCP client can make the server open and parse any readable path (read-only and scan-gated, no writes or process spawning found), and the configs start it through `cargo run`, which runs build scripts (L3). The parsers use `unsafe Mmap::map` on user files, so truncation by another process while in use can crash the process (L11).
 - **Done means**: The MCP trust model is documented with optional allowed roots; configs point at a built binary; SECURITY.md states the memory-map limit.
+### [THME-3067] precision_sweep: random_matched seeds 2 and 3 gave identical perplexity on Pythia-14M
+
+- **Milestone**: v0.2.0 · **Roadmap**: v0.2.0.9 · **Priority**: p2 · **Area**: research · **Type**: bug · **Status**: triage
+- **Problem**: On Pythia-14M, `examples/precision_sweep` `random_matched_seed2` and `random_matched_seed3` printed the same perplexity. The likely cause is that the pool of same-shape tensors is too small, so shuffling by seed picks the same placement (unverified; not reproduced in this ticket).
+- **Done means**: Either the seeds are shown to yield different placements (log the chosen tensor indices per seed in the report) and the perplexity differs, or the sweep refuses to report random controls that repeat a placement. Checked on Pythia-14M with a short token file.
+
+### [THME-3068] llama.cpp compatibility test needs a configured runtime
+
+- **Milestone**: v0.2.9 · **Roadmap**: v0.2.9.6 · **Priority**: p2 · **Area**: ci · **Type**: chore · **Status**: triage
+- **Problem**: `tests/test_exporter_compatibility.rs` (`exported_gguf_runs_in_configured_llama_cpp_and_ollama`) returns early unless `THME_LLAMA_CPP`, `THME_OLLAMA` and a model source are set. The `test` job in `.github/workflows/ci.yml` runs it with `THME_REQUIRE_RUNTIME_COMPAT=1` only when the repository variables `THME_COMPAT_MODEL`, `THME_LLAMA_CPP` and `THME_OLLAMA` are all set; otherwise the step is skipped and the run passes without loading the file in any runtime. Whether those variables are set on the repository was not checked here (unverified).
+- **Done means**: A CI job or a documented local run sets `THME_REQUIRE_RUNTIME_COMPAT=1` with a pinned llama.cpp build, and the run output records which runtime loaded the exported GGUF. Until then the README and BACKLOG say the runtime check was not run.
+
 ### [THME-3045] Remove GPL-2.0 derived GPU-unlock code; plan an original Rust unlock engine
 
 - **Milestone**: v0.2.7 · **Roadmap**: none · **Priority**: p1 · **Area**: legal · **Type**: chore · **Status**: done

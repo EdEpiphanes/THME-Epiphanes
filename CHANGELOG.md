@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - v0.2.0 Measured Core
 
 ### Added
+- **MCP `thme_auto_decide` fixed**: it now recognises GPT-NeoX tensor names (Pythia) and never answers for a loaded model with made-up numbers; with no model it says ILLUSTRATIVE EXAMPLE. Found by running the real-model tests on Pythia-14M and SmolLM-135M.
+- Real-model tests use the two small open-weights models, Pythia-14M and SmolLM-135M (`THME_TEST_MODELS_DIR`, `THME_REAL_MODEL_TESTS=1`), and print a SKIP reason when they do not run; the MedGemma-only tests are gone.
+- Fixed: `production_verification` refuses a checkpoint whose family or shape differs from `--target`, and names WikiText-2 only when the token file matches its provenance sidecar (otherwise the heading says "not WikiText-2").
+- Fixed: the MCP server no longer falls back to a MedGemma file under `%LOCALAPPDATA%` (THME-3051); it loads a model from `THME_MODEL` or an explicit argument only.
 - **Re-measured reports (THME-3044, THME-3023)**: Pythia-14M and SmolLM-135M verification, precision sweep and depth probe reports under `docs/benchmarks/*/data/`, measured with the code after the FP16 rounding fix (20 November 2026). Results as measured, including failures: Pythia-14M exported Q8_0 misses the 0.45 gate (Δ +0.834 on the full WikiText-2 test split), its recipe misses it by a wide margin (Δ +504); SmolLM-135M exported Q8_0 passes (Δ +0.034), its recipe fails (Δ +28.9). Dossier and charts regenerated from the reports.
 - **Recipe search reports (THME-2004)**: `thme search` on Pythia-14M and SmolLM-135M with Q8_0 and Q4_0, five random controls, and a Pareto front. Pythia-14M does not reach its 50% budget (58.3%); SmolLM-135M reaches 50%, and its differences from baseline are within about 0.02 PPL.
 - **Run planner tickets and research** (THME-3055 to THME-3066): how other engines auto-tune loading (`docs/research/engine-autotuning.md`) and 12 small tickets for a `thme plan-run`.

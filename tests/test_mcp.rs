@@ -1,30 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 use serde_json::{json, Value};
-use std::path::PathBuf;
 use thme::cli::mcp::process_json_rpc;
 
-fn resolve_target_model() -> Option<PathBuf> {
-    // Tests that open a real model file are opt-in: set THME_REAL_MODEL_TESTS=1 to run them.
-    std::env::var_os("THME_REAL_MODEL_TESTS")?;
-    if let Ok(path_str) = std::env::var("THME_MEDGEMMA_PATH") {
-        let p = PathBuf::from(path_str);
-        if p.exists() {
-            return Some(p);
-        }
-    }
-    if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-        let p = PathBuf::from(local_app_data).join("hermes/models/medgemma-4b-it-UD-Q4_K_XL.gguf");
-        if p.exists() {
-            return Some(p);
-        }
-    }
-    let rel = PathBuf::from("models/medgemma-4b-it-UD-Q4_K_XL.gguf");
-    if rel.exists() {
-        Some(rel)
-    } else {
-        None
-    }
-}
+mod common;
+
+use common::{path_str, real_model_dir, TestModel, PYTHIA_14M, SMOLLM_135M};
 
 #[test]
 fn test_mcp_initialize_and_tools_list() {
@@ -126,6 +106,21 @@ fn test_mcp_validate_quality_format_bug_fix() {
 }
 
 #[test]
+fn test_mcp_auto_decide_without_a_model_is_labelled_illustrative() {
+    let mut model_path = None;
+    let req = json!({
+        "jsonrpc": "2.0",
+        "id": 9,
+        "method": "tools/call",
+        "params": { "name": "thme_auto_decide", "arguments": { "model_path": "no/such/model" } }
+    });
+    let res_str = process_json_rpc(&req.to_string(), &mut model_path).expect("auto decide");
+    let res: Value = serde_json::from_str(&res_str).expect("parse json");
+    let text = res["result"]["content"][0]["text"].as_str().expect("text");
+    assert!(text.contains("ILLUSTRATIVE EXAMPLE"), "{text}");
+}
+
+#[test]
 fn test_mcp_profile_roofline() {
     let mut model_path = None;
     let call_req = json!({
@@ -151,16 +146,16 @@ fn test_mcp_profile_roofline() {
 
 #[test]
 fn test_mcp_real_model_lifecycle() {
-    let target = match resolve_target_model() {
-        Some(p) => p,
-        None => {
-            eprintln!("Target MedGemma model not found on disk; skipping live model MCP test");
-            return;
-        }
-    };
+    for model in [&PYTHIA_14M, &SMOLLM_135M] {
+        let Some(dir) = real_model_dir(model) else {
+            continue;
+        };
+        run_real_model_lifecycle(model, &path_str(&dir));
+    }
+}
 
-    let target_str = target.to_str().expect("valid target str").to_string();
-    let mut model_path = Some(target_str.clone());
+fn run_real_model_lifecycle(model: &TestModel, target_str: &str) {
+    let mut model_path = Some(target_str.to_string());
 
     // 1. Inspect model
     let inspect_req = json!({
@@ -179,9 +174,15 @@ fn test_mcp_real_model_lifecycle() {
     let text = inspect_res["result"]["content"][0]["text"]
         .as_str()
         .expect("text");
-    assert!(text.contains("Gemma-family"));
-    assert!(text.contains("34"));
-    assert!(text.contains("2560"));
+    assert!(
+        text.contains(&format!("- **Layers**: {}", model.num_layers)),
+        "{text}"
+    );
+    assert!(
+        text.contains(&format!("- **Hidden Dimension**: {}", model.hidden_size)),
+        "{text}"
+    );
+    assert!(text.contains("Loaded zero-copy memory-mapped"), "{text}");
 
     // 2. Auto decide on real model tensors
     let decide_req = json!({
@@ -200,9 +201,29 @@ fn test_mcp_real_model_lifecycle() {
     let text = decide_res["result"]["content"][0]["text"]
         .as_str()
         .expect("text");
-    assert!(text.contains("34 layers"));
+    assert!(
+        text.contains(&format!("({} layers", model.num_layers)),
+        "{text}"
+    );
 
     // 3. Apply surgery on real model
+    let recipe = json!({
+        "name": format!("{}_fp16_surgery", model.dir_name),
+        "author": "THME tests",
+        "target_model": model.dir_name,
+        "version": "1.0",
+        "description": "Set precision for layer 0",
+        "operations": [
+            {
+                "type": "SetPrecision",
+                "params": {
+                    "start_layer": 0,
+                    "end_layer": 1,
+                    "format": "FP16"
+                }
+            }
+        ]
+    });
     let surgery_req = json!({
         "jsonrpc": "2.0",
         "id": 7,
@@ -210,23 +231,7 @@ fn test_mcp_real_model_lifecycle() {
         "params": {
             "name": "thme_apply_surgery",
             "arguments": {
-                "recipe_json": r#"{
-                    "name": "medgemma_q4_surgery",
-                    "author": "CodeGPT",
-                    "target_model": "medgemma",
-                    "version": "1.0",
-                    "description": "Set precision for layer 0",
-                    "operations": [
-                        {
-                            "type": "SetPrecision",
-                            "params": {
-                                "start_layer": 0,
-                                "end_layer": 1,
-                                "format": "FP16"
-                            }
-                        }
-                    ]
-                }"#
+                "recipe_json": recipe.to_string()
             }
         }
     });
@@ -235,8 +240,14 @@ fn test_mcp_real_model_lifecycle() {
     let text = surgery_res["result"]["content"][0]["text"]
         .as_str()
         .expect("text");
-    assert!(text.contains("Surgery Recipe Executed Successfully"));
-    assert!(text.contains("34 layers"));
+    assert!(
+        text.contains("Surgery Recipe Executed Successfully"),
+        "{text}"
+    );
+    assert!(
+        text.contains(&format!("{} layers", model.num_layers)),
+        "{text}"
+    );
 }
 
 #[test]
