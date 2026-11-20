@@ -507,3 +507,321 @@ fn a_device_wait_that_cannot_finish_is_an_error_not_a_freeze() {
     gpu.score_head_nll(&normed, &head, d, vocab, &tokens[1..])
         .expect("recovers once the wait is long enough");
 }
+
+#[test]
+fn op_profile_lists_every_decoder_kernel_with_device_time() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    if !gpu.timestamp_query_supported() {
+        eprintln!("SKIP: adapter has no timestamp queries");
+        return;
+    }
+    let gpu = Arc::new(gpu);
+    let (mut model, _) = synthetic_demo(3);
+    model.set_gpu(Some(gpu.clone()));
+    let tokens: Vec<u32> = (0..16).map(|i| (i * 41 % 256) as u32).collect();
+    gpu.set_op_profile(true);
+    let before = gpu.stats();
+    model.forward_logits(&tokens).expect("gpu logits");
+    gpu.set_op_profile(false);
+    let samples = gpu.take_op_profile();
+    let dispatches = gpu.stats().dispatches - before.dispatches;
+    assert_eq!(samples.len() as u64, dispatches, "one sample per dispatch");
+    for kernel in ["rms_norm", "rope", "attention", "swiglu", "add", "linear"] {
+        assert!(
+            samples.iter().any(|s| s.label.starts_with(kernel)),
+            "no sample for {kernel}"
+        );
+    }
+    assert!(samples.iter().any(|s| s.ns > 0), "all zero device times");
+    assert!(gpu.take_op_profile().is_empty(), "take drains the samples");
+}
+
+#[test]
+fn large_vec4_friendly_shapes_use_the_register_blocked_gemm_and_match_cpu() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    assert_eq!(gpu.gemm_kernel_name(1024, 2048, 2048, 0), "gemm128");
+    assert_eq!(gpu.gemm_kernel_name(4, 2048, 2048, 0), "gemv");
+    assert_eq!(
+        gpu.gemm_kernel_name(1024, 70, 100, 0),
+        "gemm64",
+        "in_dim not a multiple of 4"
+    );
+    assert_eq!(
+        gpu.gemm_kernel_name(1024, 64, 100, 2),
+        "gemm64",
+        "unaligned output offset"
+    );
+    let mut seed = 21u64;
+    // Edges of the 128 x 128 tile and of the 16-deep k step.
+    for (rows, in_dim, out_dim) in [
+        (9, 16, 8),
+        (127, 48, 132),
+        (129, 64, 124),
+        (130, 576, 200),
+        (257, 20, 260),
+    ] {
+        assert_eq!(gpu.gemm_kernel_name(rows, in_dim, out_dim, 0), "gemm128");
+        let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+        let w = pseudo_random(&mut seed, out_dim * in_dim, 0.5);
+        let got = gpu
+            .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+            .expect("gpu batched linear");
+        assert_close(
+            &linear(&x, &w, in_dim, out_dim),
+            &got[0],
+            1e-4,
+            &format!("rows={rows} in={in_dim} out={out_dim}"),
+        );
+    }
+}
+
+#[test]
+fn a_weight_budget_above_the_model_keeps_every_weight_resident_across_passes() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut seed = 31u64;
+    let in_dim = 64;
+    let x = pseudo_random(&mut seed, in_dim, 1.0);
+    // Three 64 KiB weights: a 100 KiB budget cannot hold them, a 1 MiB budget can.
+    let ws: Vec<Vec<f32>> = (0..3)
+        .map(|_| pseudo_random(&mut seed, 256 * in_dim, 0.5))
+        .collect();
+    let pass = |gpu: &GpuContext| {
+        for w in &ws {
+            gpu.compute_linear_slices(&x, &[(w, 256)], in_dim)
+                .expect("linear");
+        }
+    };
+    gpu.set_weight_budget(100 << 10);
+    pass(&gpu);
+    let before = gpu.stats().weight_uploads;
+    pass(&gpu);
+    assert!(
+        gpu.stats().weight_uploads - before >= 1,
+        "a small budget flushes and re-uploads"
+    );
+    gpu.set_weight_budget(1 << 20);
+    pass(&gpu);
+    let before = gpu.stats().weight_uploads;
+    pass(&gpu);
+    assert_eq!(
+        gpu.stats().weight_uploads - before,
+        0,
+        "a large budget keeps all three resident"
+    );
+}
+
+/// Runs one random decoder plan on the device and returns its last-position logits.
+fn random_plan_logits(
+    gpu: &GpuContext,
+    seed: u64,
+    (heads, kv_heads, hd, t): (usize, usize, usize, usize),
+) -> Vec<f32> {
+    use thme::inference::gpu::{DecoderPlan, LayerWeights};
+    let mut seed = seed;
+    let (d, kv_dim, inter, vocab) = (heads * hd, kv_heads * hd, 2 * heads * hd, 48);
+    let mut rand = |n: usize, scale: f32| pseudo_random(&mut seed, n, scale);
+    let ones = |n: usize| vec![1.0f32; n];
+    let attn_norm = ones(d);
+    let mlp_norm = ones(d);
+    let final_norm = ones(d);
+    let owned: Vec<[Vec<f32>; 7]> = (0..2)
+        .map(|_| {
+            [
+                rand(d * d, 0.05),
+                rand(kv_dim * d, 0.05),
+                rand(kv_dim * d, 0.05),
+                rand(d * d, 0.05),
+                rand(inter * d, 0.05),
+                rand(inter * d, 0.05),
+                rand(d * inter, 0.05),
+            ]
+        })
+        .collect();
+    let layers = owned
+        .iter()
+        .map(|w| LayerWeights {
+            attn_norm: &attn_norm,
+            q: &w[0],
+            k: &w[1],
+            v: &w[2],
+            o: &w[3],
+            mlp_norm: &mlp_norm,
+            gate: &w[4],
+            up: &w[5],
+            down: &w[6],
+        })
+        .collect();
+    let head = rand(vocab * d, 0.1);
+    let x0 = rand(t * d, 1.0);
+    let half = hd / 2;
+    let angle = |i: usize| (i as f32) * 0.37;
+    let cos: Vec<f32> = (0..t * half).map(|i| angle(i).cos()).collect();
+    let sin: Vec<f32> = (0..t * half).map(|i| angle(i).sin()).collect();
+    let plan = DecoderPlan {
+        layers,
+        final_norm: &final_norm,
+        head: &head,
+        hidden: d,
+        heads,
+        kv_heads,
+        head_dim: hd,
+        inter,
+        vocab,
+        eps: 1e-5,
+        rope_cos: &cos,
+        rope_sin: &sin,
+        targets: None,
+    };
+    gpu.forward_decoder(&plan, &x0)
+        .expect("decoder")
+        .expect("supported shape")
+}
+
+#[test]
+fn tiled_attention_matches_the_reference_kernel_across_blocks_and_head_sizes() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    // (heads, kv_heads, head_dim, positions): grouped-query, several 64-query blocks, a ragged
+    // last block, and a head size that is not 64.
+    for shape in [
+        (4, 2, 64, 150),
+        (2, 2, 128, 130),
+        (3, 1, 32, 65),
+        (2, 2, 64, 1000),
+    ] {
+        gpu.set_tiled_attention(false);
+        let reference = random_plan_logits(&gpu, 5, shape);
+        gpu.set_tiled_attention(true);
+        let tiled = random_plan_logits(&gpu, 5, shape);
+        let worst = reference
+            .iter()
+            .zip(&tiled)
+            .map(|(a, b)| (a - b).abs() / a.abs().max(1.0))
+            .fold(0.0f32, f32::max);
+        assert!(worst < 1e-3, "{shape:?}: worst relative diff {worst}");
+    }
+    gpu.set_tiled_attention(true);
+    assert_eq!(gpu.attention_kernel_name(64), "tiled");
+    assert_eq!(
+        gpu.attention_kernel_name(6),
+        "reference",
+        "head size not a multiple of 4"
+    );
+    assert_eq!(
+        gpu.attention_kernel_name(256),
+        "reference",
+        "head size above 128"
+    );
+}
+
+/// Dequantizes GGML block bytes with the CPU decoders the loader uses.
+fn cpu_decode_blocks(storage: thme::inference::gpu::WeightStorage, blocks: &[u8]) -> Vec<f32> {
+    use thme::inference::gpu::WeightStorage;
+    use thme::parser::gguf::GgufBlockDecoder;
+    let q8 = storage == WeightStorage::Q8_0;
+    let size = if q8 { 34 } else { 18 };
+    blocks
+        .chunks_exact(size)
+        .flat_map(|b| {
+            if q8 {
+                GgufBlockDecoder::unpack_q8_0(b)
+            } else {
+                GgufBlockDecoder::unpack_q4_0(b)
+            }
+            .expect("block")
+        })
+        .collect()
+}
+
+#[test]
+fn quantized_and_f16_weight_storage_match_the_cpu_decoders_for_few_and_many_rows() {
+    use thme::inference::gpu::{quantize_blocks, WeightStorage};
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut seed = 77u64;
+    let (in_dim, out_dim) = (96usize, 136usize);
+    let w = pseudo_random(&mut seed, in_dim * out_dim, 0.7);
+    for storage in [WeightStorage::Q8_0, WeightStorage::Q4_0, WeightStorage::F16] {
+        let reference: Vec<f32> = match storage {
+            WeightStorage::F16 => w
+                .iter()
+                .map(|&v| {
+                    thme::engine::minifloat::f16_to_f32(thme::engine::minifloat::f32_to_f16(v))
+                })
+                .collect(),
+            _ => cpu_decode_blocks(storage, &quantize_blocks(storage, &w).expect("quantize")),
+        };
+        gpu.set_weight_storage(storage);
+        for rows in [1usize, 5, 130] {
+            let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+            let got = gpu
+                .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+                .expect("gpu linear");
+            assert_close(
+                &linear(&x, &reference, in_dim, out_dim),
+                &got[0],
+                2e-4,
+                &format!("{storage:?} rows={rows}"),
+            );
+        }
+    }
+    // A shape the formats cannot hold (in_dim not a multiple of 32) silently stays f32.
+    gpu.set_weight_storage(WeightStorage::Q4_0);
+    let (rows, in_dim, out_dim) = (9usize, 70usize, 100usize);
+    let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+    let w = pseudo_random(&mut seed, out_dim * in_dim, 0.5);
+    let got = gpu
+        .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+        .expect("fallback");
+    assert_close(
+        &linear(&x, &w, in_dim, out_dim),
+        &got[0],
+        1e-4,
+        "f32 fallback",
+    );
+    gpu.set_weight_storage(WeightStorage::F32);
+}
+
+#[test]
+fn quantized_tensors_run_on_the_device_without_expanding_to_f32() {
+    use thme::inference::gpu::{quantize_blocks, WeightStorage};
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut seed = 5u64;
+    let (in_dim, out_dim) = (64usize, 40usize);
+    let w = pseudo_random(&mut seed, in_dim * out_dim, 0.6);
+    for (storage, dtype) in [
+        (WeightStorage::Q8_0, QuantDtype::Q8_0),
+        (WeightStorage::Q4_0, QuantDtype::Q4_0),
+    ] {
+        let blocks = quantize_blocks(storage, &w).expect("quantize");
+        let reference = cpu_decode_blocks(storage, &blocks);
+        let tensor = QuantizedTensor::new_quantized(
+            "quantized_test",
+            vec![out_dim, in_dim],
+            dtype,
+            Arc::from(blocks.into_boxed_slice()),
+        )
+        .expect("tensor");
+        assert!(gpu.is_format_supported(dtype));
+        for rows in [1usize, 33] {
+            let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+            let got = gpu
+                .compute_linear(&x, &tensor, in_dim, out_dim)
+                .expect("gpu linear");
+            assert_close(
+                &linear(&x, &reference, in_dim, out_dim),
+                &got,
+                2e-4,
+                &format!("{dtype:?} rows={rows}"),
+            );
+        }
+    }
+}
+
+#[test]
+fn quantized_storage_cuts_resident_weight_bytes() {
+    use thme::inference::gpu::WeightStorage;
+    let n = 1 << 20;
+    assert_eq!(WeightStorage::F32.device_bytes(n), 4 << 20);
+    assert_eq!(WeightStorage::F16.device_bytes(n), 2 << 20);
+    assert_eq!(WeightStorage::Q8_0.device_bytes(n), n / 32 * 36);
+    assert_eq!(WeightStorage::Q4_0.device_bytes(n), n / 32 * 20);
+}

@@ -1,0 +1,723 @@
+{
+  "schema": 1,
+  "ticket": "THME-3084",
+  "label": "smollm2-1.7b",
+  "device": {
+    "backend": "Vulkan",
+    "device_type": "DiscreteGpu",
+    "driver": "NVIDIA",
+    "driver_info": "616.92",
+    "name": "NVIDIA GeForce RTX 4060 Ti"
+  },
+  "shader_f16_feature_reported": false,
+  "f16_note": "f16 weights are stored packed two per u32 and widened with unpack2x16float, so the shader-f16 feature is not required; the arithmetic stays f32.",
+  "build_note": "Slice, small-model and matmul runs used the release profile with LTO off and 16 codegen units (faster to rebuild while iterating on shaders); the full-split runs and profile_final used the stock release profile. The kernels are the same; the host code is not on the critical path.",
+  "method": "GPU only (no CPU pass is run). Each step: one untimed warm-up window (weight upload, packing), then the timed pass over the first 16,384 tokens of the WikiText-2 test split as 16 non-overlapping 1,024-token windows, wall clock. Steps 0 to 3 are cumulative and run through flags of one binary; steps 4 to 6 are alternatives to step 3.",
+  "parity_statement": "Baseline is the previous code path (64 x 64 matmul, one-workgroup-per-query attention, f32 weights) in the same binary. Tolerance for the f32 paths: cross-entropy within 1e-4 nats of the baseline on the same slice (the NLL_TOL of the parity tests); observed at most 4.1e-8 nats. f16, Q8_0 and Q4_0 report their own difference instead of a tolerance: f16 is lossless here because these checkpoints are stored in bf16 or fp16 (every weight is exactly representable); Q8_0 and Q4_0 change the model and the difference is the quality cost.",
+  "slice_steps": [
+    {
+      "step": "0_baseline",
+      "description": "baseline: 64 x 64 matmul, reference attention, f32 weights, default 4 GiB weight budget (a 6.9 GB model re-uploads every window)",
+      "weights_used": "F32",
+      "old_gemm_kernel": true,
+      "old_attention_kernel": true,
+      "weight_budget_gb": null,
+      "corpus_tokens_used": 16384,
+      "scored_tokens": 16368,
+      "elapsed_secs": 73.0166564,
+      "tokens_per_sec": 224.16802969356453,
+      "ms_per_token": 4.460939418377322,
+      "weight_uploads_during_pass": 3488,
+      "perplexity": 8.372882308168492,
+      "cross_entropy_nats": 2.124998187010822,
+      "git_commit": "f394aa1",
+      "git_dirty": false,
+      "build_profile": "release",
+      "machine_load_note": "other agents active on the machine (CPU 40 to 80 percent during these runs)",
+      "speedup_vs_baseline": 1.0,
+      "cross_entropy_diff_nats_vs_baseline": 0.0,
+      "perplexity_diff_vs_baseline": 0.0
+    },
+    {
+      "step": "1_gemm128",
+      "description": "+ register-blocked 128 x 128 matmul (weights still re-uploaded each window)",
+      "weights_used": "F32",
+      "old_gemm_kernel": false,
+      "old_attention_kernel": true,
+      "weight_budget_gb": null,
+      "corpus_tokens_used": 16384,
+      "scored_tokens": 16368,
+      "elapsed_secs": 65.118569,
+      "tokens_per_sec": 251.35687487235785,
+      "ms_per_token": 3.978407196969697,
+      "weight_uploads_during_pass": 3488,
+      "perplexity": 8.372882308168492,
+      "cross_entropy_nats": 2.124998187010822,
+      "git_commit": "f394aa1",
+      "git_dirty": false,
+      "build_profile": "release",
+      "machine_load_note": "other agents active on the machine (CPU 40 to 80 percent during these runs)",
+      "speedup_vs_baseline": 1.1212877911982373,
+      "cross_entropy_diff_nats_vs_baseline": 0.0,
+      "perplexity_diff_vs_baseline": 0.0
+    },
+    {
+      "step": "2_resident",
+      "description": "+ weights resident on the device (12 GiB budget)",
+      "weights_used": "F32",
+      "old_gemm_kernel": false,
+      "old_attention_kernel": true,
+      "weight_budget_gb": 12,
+      "corpus_tokens_used": 16384,
+      "scored_tokens": 16368,
+      "elapsed_secs": 19.2877353,
+      "tokens_per_sec": 848.6221811640063,
+      "ms_per_token": 1.1783807001466275,
+      "weight_uploads_during_pass": 0,
+      "perplexity": 8.372882308168492,
+      "cross_entropy_nats": 2.124998187010822,
+      "git_commit": "f394aa1",
+      "git_dirty": false,
+      "build_profile": "release",
+      "machine_load_note": "other agents active on the machine (CPU 40 to 80 percent during these runs)",
+      "speedup_vs_baseline": 3.7856521392638567,
+      "cross_entropy_diff_nats_vs_baseline": 0.0,
+      "perplexity_diff_vs_baseline": 0.0
+    },
+    {
+      "step": "3_tiledattn",
+      "description": "+ tiled causal attention",
+      "weights_used": "F32",
+      "old_gemm_kernel": false,
+      "old_attention_kernel": false,
+      "weight_budget_gb": 12,
+      "corpus_tokens_used": 16384,
+      "scored_tokens": 16368,
+      "elapsed_secs": 7.7448841999999996,
+      "tokens_per_sec": 2113.3950588957805,
+      "ms_per_token": 0.47317229960899315,
+      "weight_uploads_during_pass": 0,
+      "perplexity": 8.372881969118097,
+      "cross_entropy_nats": 2.124998146516953,
+      "git_commit": "f394aa1",
+      "git_dirty": false,
+      "build_profile": "release",
+      "machine_load_note": "other agents active on the machine (CPU 40 to 80 percent during these runs)",
+      "speedup_vs_baseline": 9.427727324832048,
+      "cross_entropy_diff_nats_vs_baseline": -4.0493869146729367e-08,
+      "perplexity_diff_vs_baseline": -3.390503948708101e-07
+    },
+    {
+      "step": "4_f16",
+      "description": "f16 weight storage, f32 accumulation (default budget: fits)",
+      "weights_used": "F16",
+      "old_gemm_kernel": false,
+      "old_attention_kernel": false,
+      "weight_budget_gb": null,
+      "corpus_tokens_used": 16384,
+      "scored_tokens": 16368,
+      "elapsed_secs": 7.4262791,
+      "tokens_per_sec": 2204.0647516196905,
+      "ms_per_token": 0.45370717864125126,
+      "weight_uploads_during_pass": 0,
+      "perplexity": 8.372881717391483,
+      "cross_entropy_nats": 2.12499811645244,
+      "git_commit": "f394aa1",
+      "git_dirty": false,
+      "build_profile": "release",
+      "machine_load_note": "other agents active on the machine (CPU 40 to 80 percent during these runs)",
+      "speedup_vs_baseline": 9.832199331156298,
+      "cross_entropy_diff_nats_vs_baseline": -7.055838224800937e-08,
+      "perplexity_diff_vs_baseline": -5.907770095348042e-07
+    },
+    {
+      "step": "5_q8",
+      "description": "Q8_0 weight storage, dequantized in the kernel",
+      "weights_used": "Q8_0",
+      "old_gemm_kernel": false,
+      "old_attention_kernel": false,
+      "weight_budget_gb": null,
+      "corpus_tokens_used": 16384,
+      "scored_tokens": 16368,
+      "elapsed_secs": 7.4394907,
+      "tokens_per_sec": 2200.150609772252,
+      "ms_per_token": 0.4545143389540567,
+      "weight_uploads_during_pass": 0,
+      "perplexity": 8.377269299366894,
+      "cross_entropy_nats": 2.1255220021262313,
+      "git_commit": "f394aa1",
+      "git_dirty": false,
+      "build_profile": "release",
+      "machine_load_note": "other agents active on the machine (CPU 40 to 80 percent during these runs)",
+      "speedup_vs_baseline": 9.814738581499942,
+      "cross_entropy_diff_nats_vs_baseline": 0.0005238151154092208,
+      "perplexity_diff_vs_baseline": 0.004386991198401802
+    },
+    {
+      "step": "6_q4",
+      "description": "Q4_0 weight storage, dequantized in the kernel",
+      "weights_used": "Q4_0",
+      "old_gemm_kernel": false,
+      "old_attention_kernel": false,
+      "weight_budget_gb": null,
+      "corpus_tokens_used": 16384,
+      "scored_tokens": 16368,
+      "elapsed_secs": 7.3632318,
+      "tokens_per_sec": 2222.936944617172,
+      "ms_per_token": 0.4498553152492669,
+      "weight_uploads_during_pass": 0,
+      "perplexity": 9.870078710364034,
+      "cross_entropy_nats": 2.2895078281211947,
+      "git_commit": "f394aa1",
+      "git_dirty": false,
+      "build_profile": "release",
+      "machine_load_note": "other agents active on the machine (CPU 40 to 80 percent during these runs)",
+      "speedup_vs_baseline": 9.916387040809987,
+      "cross_entropy_diff_nats_vs_baseline": 0.16450964111037258,
+      "perplexity_diff_vs_baseline": 1.4971964021955415
+    }
+  ],
+  "matmul_tflops_per_shape": {
+    "gemm_old": {
+      "weights_used": "F32",
+      "old_gemm_kernel": true,
+      "machine_load_note": "not recorded",
+      "git_commit": "16bf6a6",
+      "shapes": [
+        {
+          "in_dim": 2048,
+          "median_us": 2125.216,
+          "min_us": 2120.832,
+          "out_dim": 2048,
+          "rows": 1024,
+          "tflops_best": 4.050266401110507,
+          "tflops_median": 4.04191131254423
+        },
+        {
+          "in_dim": 2048,
+          "median_us": 8688.544,
+          "min_us": 8655.904,
+          "out_dim": 8192,
+          "rows": 1024,
+          "tflops_best": 3.96951472289896,
+          "tflops_median": 3.9546025626388026
+        },
+        {
+          "in_dim": 8192,
+          "median_us": 8603.872,
+          "min_us": 8069.632,
+          "out_dim": 2048,
+          "rows": 1024,
+          "tflops_best": 4.257906478015355,
+          "tflops_median": 3.993520401977156
+        },
+        {
+          "in_dim": 2048,
+          "median_us": 44837.6,
+          "min_us": 44693.92,
+          "out_dim": 49152,
+          "rows": 1024,
+          "tflops_best": 4.612672824581061,
+          "tflops_median": 4.597891729441361
+        },
+        {
+          "in_dim": 576,
+          "median_us": 432.768,
+          "min_us": 432.512,
+          "out_dim": 1536,
+          "rows": 1024,
+          "tflops_best": 4.189338857650192,
+          "tflops_median": 4.186860692102928
+        }
+      ]
+    },
+    "gemm_f32": {
+      "weights_used": "F32",
+      "old_gemm_kernel": false,
+      "machine_load_note": "not recorded",
+      "git_commit": "ef100a4",
+      "shapes": [
+        {
+          "in_dim": 2048,
+          "median_us": 958.976,
+          "min_us": 956.192,
+          "out_dim": 2048,
+          "rows": 1024,
+          "tflops_best": 8.983483015963321,
+          "tflops_median": 8.957403096636412
+        },
+        {
+          "in_dim": 2048,
+          "median_us": 4185.12,
+          "min_us": 4167.968,
+          "out_dim": 8192,
+          "rows": 1024,
+          "tflops_best": 8.243762516410873,
+          "tflops_median": 8.209976862790075
+        },
+        {
+          "in_dim": 8192,
+          "median_us": 3790.08,
+          "min_us": 3723.264,
+          "out_dim": 2048,
+          "rows": 1024,
+          "tflops_best": 9.228391639163917,
+          "tflops_median": 9.065702668017561
+        },
+        {
+          "in_dim": 2048,
+          "median_us": 22646.208,
+          "min_us": 22229.696,
+          "out_dim": 49152,
+          "rows": 1024,
+          "tflops_best": 9.274010324207762,
+          "tflops_median": 9.103441521335492
+        },
+        {
+          "in_dim": 576,
+          "median_us": 249.696,
+          "min_us": 210.08,
+          "out_dim": 1536,
+          "rows": 1024,
+          "tflops_best": 8.624996801218582,
+          "tflops_median": 7.2565813148788925
+        }
+      ]
+    },
+    "gemm_f16": {
+      "weights_used": "F16",
+      "old_gemm_kernel": false,
+      "machine_load_note": "not recorded",
+      "git_commit": "ef100a4",
+      "shapes": [
+        {
+          "in_dim": 2048,
+          "median_us": 854.304,
+          "min_us": 853.792,
+          "out_dim": 2048,
+          "rows": 1024,
+          "tflops_best": 10.060921854503205,
+          "tflops_median": 10.054892160167809
+        },
+        {
+          "in_dim": 2048,
+          "median_us": 3568.128,
+          "min_us": 3558.368,
+          "out_dim": 8192,
+          "rows": 1024,
+          "tflops_best": 9.656038489554762,
+          "tflops_median": 9.629626058257998
+        },
+        {
+          "in_dim": 8192,
+          "median_us": 3504.928,
+          "min_us": 3490.496,
+          "out_dim": 2048,
+          "rows": 1024,
+          "tflops_best": 9.843798236124607,
+          "tflops_median": 9.803265107870974
+        },
+        {
+          "in_dim": 2048,
+          "median_us": 20417.408,
+          "min_us": 20021.472,
+          "out_dim": 49152,
+          "rows": 1024,
+          "tflops_best": 10.296866794209736,
+          "tflops_median": 10.097189134291678
+        },
+        {
+          "in_dim": 576,
+          "median_us": 206.624,
+          "min_us": 206.336,
+          "out_dim": 1536,
+          "rows": 1024,
+          "tflops_best": 8.78149875930521,
+          "tflops_median": 8.769258788911259
+        }
+      ]
+    },
+    "gemm_q8_0": {
+      "weights_used": "Q8_0",
+      "old_gemm_kernel": false,
+      "machine_load_note": "not recorded",
+      "git_commit": "ef100a4",
+      "shapes": [
+        {
+          "in_dim": 2048,
+          "median_us": 879.52,
+          "min_us": 878.784,
+          "out_dim": 2048,
+          "rows": 1024,
+          "tflops_best": 9.774796300342292,
+          "tflops_median": 9.766616554484264
+        },
+        {
+          "in_dim": 2048,
+          "median_us": 3483.808,
+          "min_us": 3482.112,
+          "out_dim": 8192,
+          "rows": 1024,
+          "tflops_best": 9.867499485369796,
+          "tflops_median": 9.862695753612138
+        },
+        {
+          "in_dim": 8192,
+          "median_us": 3567.264,
+          "min_us": 3562.016,
+          "out_dim": 2048,
+          "rows": 1024,
+          "tflops_best": 9.64614936260814,
+          "tflops_median": 9.631958377064326
+        },
+        {
+          "in_dim": 2048,
+          "median_us": 21461.952,
+          "min_us": 20244.832,
+          "out_dim": 49152,
+          "rows": 1024,
+          "tflops_best": 10.183262089208743,
+          "tflops_median": 9.60576326924969
+        },
+        {
+          "in_dim": 576,
+          "median_us": 222.368,
+          "min_us": 222.304,
+          "out_dim": 1536,
+          "rows": 1024,
+          "tflops_best": 8.150727508276953,
+          "tflops_median": 8.148381637645704
+        }
+      ]
+    },
+    "gemm_q4_0": {
+      "weights_used": "Q4_0",
+      "old_gemm_kernel": false,
+      "machine_load_note": "not recorded",
+      "git_commit": "ef100a4",
+      "shapes": [
+        {
+          "in_dim": 2048,
+          "median_us": 936.064,
+          "min_us": 934.752,
+          "out_dim": 2048,
+          "rows": 1024,
+          "tflops_best": 9.189533258019239,
+          "tflops_median": 9.176653083549843
+        },
+        {
+          "in_dim": 2048,
+          "median_us": 3685.888,
+          "min_us": 3684.864,
+          "out_dim": 8192,
+          "rows": 1024,
+          "tflops_best": 9.32456078921773,
+          "tflops_median": 9.321970273649118
+        },
+        {
+          "in_dim": 8192,
+          "median_us": 3807.168,
+          "min_us": 3721.28,
+          "out_dim": 2048,
+          "rows": 1024,
+          "tflops_best": 9.23331175509502,
+          "tflops_median": 9.02501238926152
+        },
+        {
+          "in_dim": 2048,
+          "median_us": 19834.144,
+          "min_us": 19829.472,
+          "out_dim": 49152,
+          "rows": 1024,
+          "tflops_best": 10.396566797542567,
+          "tflops_median": 10.394117850914059
+        },
+        {
+          "in_dim": 576,
+          "median_us": 208.704,
+          "min_us": 207.264,
+          "out_dim": 1536,
+          "rows": 1024,
+          "tflops_best": 8.742180639184808,
+          "tflops_median": 8.681862005519779
+        }
+      ]
+    }
+  },
+  "profile_one_1024_window": {
+    "profile_old": {
+      "window_tokens": 1024,
+      "wall_ms": 4641.5446999999995,
+      "device_ms_sum": 1665.23952,
+      "device_ms_by_kind": {
+        "add": 2.796736,
+        "attention": 817.824544,
+        "linear (matmul)": 830.006528,
+        "nll": 1.836032,
+        "rms_norm": 1.52896,
+        "rope": 2.120896,
+        "swiglu": 9.125824
+      },
+      "dispatches": 369,
+      "submits": 1,
+      "weight_uploads_during_window": 218,
+      "host_ms": {
+        "encode": 11.3126,
+        "input_write": 0.9353,
+        "readback": 0.0012,
+        "submit": 0.3844,
+        "wait": 1844.562,
+        "weight_upload": 2736.7399
+      },
+      "perplexity": 6.0962898477766725,
+      "kernels": [
+        {
+          "dispatches": 24,
+          "label": "attention",
+          "ms": 817.824544,
+          "share_of_device_time": 0.49111526250590065,
+          "tflops": 0.0
+        },
+        {
+          "dispatches": 48,
+          "label": "linear gemm64 1024x2048x8192",
+          "ms": 377.676704,
+          "share_of_device_time": 0.22680022871424527,
+          "tflops": 4.366876283859964
+        },
+        {
+          "dispatches": 96,
+          "label": "linear gemm64 1024x2048x2048",
+          "ms": 204.077792,
+          "share_of_device_time": 0.12255161467702856,
+          "tflops": 4.040781276347796
+        },
+        {
+          "dispatches": 24,
+          "label": "linear gemm64 1024x8192x2048",
+          "ms": 201.661568,
+          "share_of_device_time": 0.12110063782296014,
+          "tflops": 4.089196216266651
+        },
+        {
+          "dispatches": 3,
+          "label": "linear gemm64 320x2048x49152",
+          "ms": 43.53824,
+          "share_of_device_time": 0.026145331933991094,
+          "tflops": 4.4391672313809645
+        },
+        {
+          "dispatches": 24,
+          "label": "swiglu",
+          "ms": 9.125824,
+          "share_of_device_time": 0.005480187018381596,
+          "tflops": 0.0
+        },
+        {
+          "dispatches": 1,
+          "label": "linear gemm64 63x2048x49152",
+          "ms": 3.052224,
+          "share_of_device_time": 0.001832903893609251,
+          "tflops": 4.155519154557464
+        },
+        {
+          "dispatches": 48,
+          "label": "add",
+          "ms": 2.796736,
+          "share_of_device_time": 0.0016794797183290486,
+          "tflops": 0.0
+        },
+        {
+          "dispatches": 48,
+          "label": "rope",
+          "ms": 2.120896,
+          "share_of_device_time": 0.0012736281925377318,
+          "tflops": 0.0
+        },
+        {
+          "dispatches": 4,
+          "label": "nll",
+          "ms": 1.836032,
+          "share_of_device_time": 0.0011025633117330773,
+          "tflops": 0.0
+        },
+        {
+          "dispatches": 49,
+          "label": "rms_norm",
+          "ms": 1.52896,
+          "share_of_device_time": 0.0009181622112835756,
+          "tflops": 0.0
+        }
+      ],
+      "method": "One untimed warm-up window (weight upload), then one window with every dispatch in its own compute pass with timestamp queries; wall_ms includes the per-dispatch pass overhead, so it exceeds an unprofiled window.",
+      "old_gemm_kernel": true,
+      "old_attention_kernel": null,
+      "weight_budget_gb": null,
+      "git_commit": "16bf6a6",
+      "git_dirty": true,
+      "build_profile": "release"
+    },
+    "profile_final": {
+      "window_tokens": 1024,
+      "wall_ms": 489.0298,
+      "device_ms_sum": 465.031904,
+      "device_ms_by_kind": {
+        "add": 2.296192,
+        "attention tiled": 57.780416,
+        "linear (matmul)": 390.196832,
+        "nll": 1.858592,
+        "rms_norm": 1.732256,
+        "rope": 2.116448,
+        "swiglu": 9.051168
+      },
+      "dispatches": 369,
+      "submits": 1,
+      "weight_uploads_during_window": 0,
+      "host_ms": {
+        "encode": 12.5213,
+        "input_write": 0.8155,
+        "readback": 0.0012,
+        "submit": 0.4321,
+        "wait": 468.318,
+        "weight_upload": 0.0
+      },
+      "perplexity": 6.096289242519916,
+      "kernels": [
+        {
+          "dispatches": 48,
+          "label": "linear gemm128 1024x2048x8192",
+          "ms": 188.004768,
+          "share_of_device_time": 0.4042835908307917,
+          "tflops": 8.772476672846935
+        },
+        {
+          "dispatches": 96,
+          "label": "linear gemm128 1024x2048x2048",
+          "ms": 87.090624,
+          "share_of_device_time": 0.18727881517565728,
+          "tflops": 9.468685410176874
+        },
+        {
+          "dispatches": 24,
+          "label": "linear gemm128 1024x8192x2048",
+          "ms": 86.619616,
+          "share_of_device_time": 0.18626596423801495,
+          "tflops": 9.520172899773648
+        },
+        {
+          "dispatches": 24,
+          "label": "attention tiled",
+          "ms": 57.780416,
+          "share_of_device_time": 0.124250434223971,
+          "tflops": 0.0
+        },
+        {
+          "dispatches": 3,
+          "label": "linear gemm128 320x2048x49152",
+          "ms": 25.358336,
+          "share_of_device_time": 0.05453031454805303,
+          "tflops": 7.621696010337586
+        },
+        {
+          "dispatches": 24,
+          "label": "swiglu",
+          "ms": 9.051168,
+          "share_of_device_time": 0.01946354201108748,
+          "tflops": 0.0
+        },
+        {
+          "dispatches": 1,
+          "label": "linear gemm128 63x2048x49152",
+          "ms": 3.123488,
+          "share_of_device_time": 0.006716717655569714,
+          "tflops": 4.0607088280793775
+        },
+        {
+          "dispatches": 48,
+          "label": "add",
+          "ms": 2.296192,
+          "share_of_device_time": 0.004937708531929027,
+          "tflops": 0.0
+        },
+        {
+          "dispatches": 48,
+          "label": "rope",
+          "ms": 2.116448,
+          "share_of_device_time": 0.0045511888147786094,
+          "tflops": 0.0
+        },
+        {
+          "dispatches": 4,
+          "label": "nll",
+          "ms": 1.858592,
+          "share_of_device_time": 0.0039966978265646045,
+          "tflops": 0.0
+        },
+        {
+          "dispatches": 49,
+          "label": "rms_norm",
+          "ms": 1.732256,
+          "share_of_device_time": 0.003725026143582613,
+          "tflops": 0.0
+        }
+      ],
+      "method": "One untimed warm-up window (weight upload), then one window with every dispatch in its own compute pass with timestamp queries; wall_ms includes the per-dispatch pass overhead, so it exceeds an unprofiled window.",
+      "old_gemm_kernel": false,
+      "old_attention_kernel": false,
+      "weight_budget_gb": 12,
+      "git_commit": "7694dd6",
+      "git_dirty": false,
+      "build_profile": "release"
+    }
+  },
+  "full_split": {
+    "full_f32": {
+      "step": "full_f32",
+      "description": "full test split, quiet machine",
+      "weights_used": "F32",
+      "old_gemm_kernel": false,
+      "old_attention_kernel": false,
+      "weight_budget_gb": 12,
+      "corpus_tokens_used": 303415,
+      "scored_tokens": 303118,
+      "elapsed_secs": 145.4692108,
+      "tokens_per_sec": 2083.7261598727255,
+      "ms_per_token": 0.4799095098278558,
+      "weight_uploads_during_pass": 0,
+      "perplexity": 9.109147231653633,
+      "cross_entropy_nats": 2.209279098948947,
+      "git_commit": "7694dd6",
+      "git_dirty": false,
+      "build_profile": "release (stock profile: LTO on, codegen-units 1)",
+      "machine_load_note": "NOT a quiet machine: other agent sessions and VS Code were running. Total CPU sampled every 8 s by a separate process during both full passes (35 samples): mean 32 percent, min 13, max 66; the GPU pass itself uses about one host core. The owner threshold of 15 percent was not met, so treat the time as an upper bound measured under load.",
+      "windows": 297,
+      "extrapolated_baseline_secs_from_16k_slice": 1352.1910346196971,
+      "extrapolated_baseline_note": "The full baseline pass was not re-run (about 23 minutes); this is the baseline ms per token of the 16,384-token slice times the scored tokens, labelled an extrapolation.",
+      "note": "elapsed_secs is the timed pass after one untimed warm-up window (weight upload)"
+    },
+    "full_f16": {
+      "step": "full_f16",
+      "description": "full test split, quiet machine",
+      "weights_used": "F16",
+      "old_gemm_kernel": false,
+      "old_attention_kernel": false,
+      "weight_budget_gb": null,
+      "corpus_tokens_used": 303415,
+      "scored_tokens": 303118,
+      "elapsed_secs": 139.8514313,
+      "tokens_per_sec": 2167.428657557114,
+      "ms_per_token": 0.4613762010174256,
+      "weight_uploads_during_pass": 0,
+      "perplexity": 9.10914730650465,
+      "cross_entropy_nats": 2.2092791071660733,
+      "git_commit": "7694dd6",
+      "git_dirty": false,
+      "build_profile": "release (stock profile: LTO on, codegen-units 1)",
+      "machine_load_note": "NOT a quiet machine: other agent sessions and VS Code were running. Total CPU sampled every 8 s by a separate process during both full passes (35 samples): mean 32 percent, min 13, max 66; the GPU pass itself uses about one host core. The owner threshold of 15 percent was not met, so treat the time as an upper bound measured under load.",
+      "windows": 297,
+      "extrapolated_baseline_secs_from_16k_slice": 1352.1910346196971,
+      "extrapolated_baseline_note": "The full baseline pass was not re-run (about 23 minutes); this is the baseline ms per token of the 16,384-token slice times the scored tokens, labelled an extrapolation.",
+      "note": "elapsed_secs is the timed pass after one untimed warm-up window (weight upload)"
+    }
+  }
+}

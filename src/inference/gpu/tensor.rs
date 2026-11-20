@@ -4,6 +4,8 @@
 use std::sync::{Arc, OnceLock};
 use wgpu::util::DeviceExt;
 
+use super::backend::WeightStorage;
+use super::dense::repack_blocks;
 use super::error::ThmeError;
 use crate::inference::weights::{decode_payload, read_tensor_bytes};
 use crate::inference::WeightPrecision;
@@ -243,20 +245,35 @@ impl QuantizedTensor {
         let max_limit = max_buf_size.min(max_binding_size);
 
         let buffer = if !self.raw_bytes.is_empty() {
-            if self.raw_bytes.len() as u64 > max_limit {
+            // GGML Q8_0 / Q4_0 blocks are 34 / 18 bytes, which a u32 view cannot index: split
+            // them into scales and codes. Every other format uploads as stored.
+            let repacked;
+            let contents: &[u8] = match self.dtype {
+                QuantDtype::Q8_0 | QuantDtype::Q4_0 => {
+                    let storage = if self.dtype == QuantDtype::Q8_0 {
+                        WeightStorage::Q8_0
+                    } else {
+                        WeightStorage::Q4_0
+                    };
+                    repacked = repack_blocks(storage, &self.raw_bytes)?;
+                    &repacked
+                }
+                _ => &self.raw_bytes,
+            };
+            if contents.len() as u64 > max_limit {
                 return Err(ThmeError::BufferAllocationFailed {
                     name: self.name.clone(),
-                    bytes: self.raw_bytes.len(),
+                    bytes: contents.len(),
                     reason: format!(
                         "Tensor size {} exceeds GPU limit {}",
-                        self.raw_bytes.len(),
+                        contents.len(),
                         max_limit
                     ),
                 });
             }
             device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some(&format!("gpu_weight_{}", self.name)),
-                contents: &self.raw_bytes,
+                contents,
                 usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             })
         } else {
