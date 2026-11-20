@@ -649,6 +649,7 @@ impl GemmaModel {
             num_heads: cfg.num_heads,
             num_kv_heads: cfg.num_kv_heads,
             head_dim,
+            pos_offset: 0,
         });
 
         // 6. Attention Out projection
