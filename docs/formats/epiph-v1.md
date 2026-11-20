@@ -189,3 +189,25 @@ Changes: 1.1 added `name` on attachments and the `gguf-metadata` and `hf-file` k
 `placement`. 1.3 adds the per-tensor `encoding` for lossless compression of tensor payloads.
 Shortcut: a 1.2 or older reader ignores `encoding` and is not tested to refuse a compressed file;
 it must not be given one. Only 1.3 readers are expected to decode `deflate` payloads.
+
+## 9. Portability
+
+Verified by `tests/test_epiph_portability.rs`:
+
+- The layout in section 2 is little-endian by specification. The golden hashes in the test are asserted on the
+  three CI hosts: Linux x86-64, Windows x86-64 and macOS arm64.
+- For a fixed model (built from fixed integers, with no clock, random value or host path), the
+  writer produces the same bytes on each of those hosts. The SHA-256 of the whole file with
+  identity encoding is pinned, and so is the SHA-256 of the decoded payloads of a `deflate`
+  file.
+- Reading the packed file back reproduces every tensor's name, shape and bytes exactly.
+
+Not verified:
+
+- Big-endian hosts. The layout is little-endian by specification, but no big-endian run exists.
+- Chips other than x86-64 and arm64, and 32-bit targets.
+- The DEFLATE stream bytes. Section 3.2 fixes the decoded payload, not the compressed stream,
+  so the test pins only the decoded bytes.
+
+The golden hashes change when the writer or its tool version changes. They are updated
+deliberately, in the same change as the writer.
