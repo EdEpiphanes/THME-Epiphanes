@@ -25,7 +25,10 @@ use thme::inference::read_token_file;
 const TOP_K: [usize; 3] = [1024, 4096, 8192];
 
 #[derive(Parser, Debug)]
-#[command(name = "token_frequency", about = "Token frequency table and top-K row coverage")]
+#[command(
+    name = "token_frequency",
+    about = "Token frequency table and top-K row coverage"
+)]
 struct Args {
     /// Train-split token file (little-endian u32)
     #[arg(long)]
@@ -40,7 +43,10 @@ struct Args {
     vocab_size: usize,
 
     /// Where to write the report
-    #[arg(long, default_value = "docs/benchmarks/pythia-14m/data/token_frequency.json")]
+    #[arg(
+        long,
+        default_value = "docs/benchmarks/pythia-14m/data/token_frequency.json"
+    )]
     report_json: PathBuf,
 }
 
@@ -77,8 +83,8 @@ fn sha256_file(path: &Path) -> Result<String> {
 
 fn sidecar(tokens: &Path) -> Result<Value> {
     let path = tokens.with_extension("json");
-    let text =
-        std::fs::read_to_string(&path).with_context(|| format!("Failed to read sidecar {path:?}"))?;
+    let text = std::fs::read_to_string(&path)
+        .with_context(|| format!("Failed to read sidecar {path:?}"))?;
     serde_json::from_str(&text).with_context(|| format!("Failed to parse sidecar {path:?}"))
 }
 
