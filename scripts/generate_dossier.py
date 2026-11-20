@@ -332,11 +332,12 @@ def awq_section(report, heading):
                 f"| {label} | {s['n']} | {s['mean']:.4f} | {sd} | {s['min']:.4f} | {s['max']:.4f} | "
                 f"{s['mean'] - rtn:+.4f} | {s['mean'] - ceiling:+.4f} |"
             )
-        alphas = ", ".join(f"seed {r['seed']}: {r['alpha']}" for r in block["awq"]["runs"])
+        grid = f"{report['preregistration']['alpha_grid'][0]} to {report['preregistration']['alpha_grid'][-1]}"
+        alphas = ", ".join(f"seed {r['seed']}: {r['alpha']}" for r in block["awq"]["runs"] if r.get("alpha") is not None)
         lines += [
             "",
-            f"Chosen alpha per calibration seed (grid {report['preregistration']['alpha_grid'][0]} to "
-            f"{report['preregistration']['alpha_grid'][-1]}): {alphas}.",
+            f"Chosen alpha per calibration seed (grid {grid}): {alphas}." if alphas else
+            f"Alpha (grid {grid}) is chosen per tensor inside the CLI and is not reported per run.",
             "",
             f"AWQ beats round-to-nearest: {'yes' if result['awq_wins'] else 'no'}. Gap RTN minus AWQ mean "
             f"{result['gap']:+.4f} against 2 x pooled SD {result['threshold']:.4f} (pooled SD "
