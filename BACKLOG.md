@@ -16,6 +16,7 @@ closes it.
 
 - **Milestone**: v0.2.0 · **Roadmap**: v0.2.0.6 · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: blocked
 - **Problem**: Measured perplexities rely on THME's own forward pass, which is unit-tested but has never been compared with the reference implementation.
+- **Progress** (20 November 2026): Pythia-14M passes on CPU and GPU, max absolute logit difference 1.9e-4 against a 0.005 tolerance (report: docs/research/hf-cross-check-pythia-14m.json). The script now loads the reference in fp32; newer transformers default to the stored dtype (fp16 for Pythia), which had shown a false 0.36 gap. SmolLM-135M still not run.
 - **Done means**: A script compares THME and Hugging Face logits on fixed prompts for SmolLM-135M and Pythia-14M; maximum absolute logit difference is reported and below an agreed tolerance. Blocked while new model runs are paused.
 
 ### [THME-2002] Upgrade egui/eframe to clear RUSTSEC-2026-0194/0195
