@@ -1,0 +1,92 @@
+{
+  "evaluation": {
+    "context_len": 1024,
+    "corpus": {
+      "corpus": "WikiText-2 (raw) test split",
+      "corpus_bytes": 1290590,
+      "corpus_member": "wikitext-2-raw/wiki.test.raw",
+      "corpus_sha256": "173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08",
+      "corpus_source": "https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip",
+      "special_tokens_added": false,
+      "token_count": 287159,
+      "token_file_sha256": "973595d9c7c580360a39eedde7297ec050f362a521940f7527eca4a00ea85278",
+      "tokenizer_repo": "EleutherAI/pythia-14m",
+      "tokenizer_sha256": "870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+      "tokenizer_source": "local file"
+    },
+    "gate_passed": false,
+    "max_ppl_delta": 0.45,
+    "max_tokens": null,
+    "measured": true,
+    "variants": [
+      {
+        "accepted": null,
+        "corpus_tokens_used": 287159,
+        "cross_entropy_nats": 4.738705902066962,
+        "delta_ppl": null,
+        "description": "Source weights exactly as stored on disk",
+        "elapsed_secs": 60.9394151,
+        "id": "baseline",
+        "perplexity": 114.28620839585075,
+        "scored_tokens": 286878,
+        "tokens_per_sec": 4707.593591589953,
+        "windows": 281
+      },
+      {
+        "accepted": false,
+        "corpus_tokens_used": 287159,
+        "cross_entropy_nats": 4.74597263747772,
+        "delta_ppl": 0.8335124268154317,
+        "description": "Exported GGUF artifact re-imported and decoded (uniform Q8_0)",
+        "elapsed_secs": 50.4249456,
+        "id": "exported_gguf",
+        "perplexity": 115.11972082266618,
+        "scored_tokens": 286878,
+        "tokens_per_sec": 5689.207922516826,
+        "windows": 281
+      },
+      {
+        "accepted": false,
+        "corpus_tokens_used": 287159,
+        "cross_entropy_nats": 6.427347416116127,
+        "delta_ppl": 504.2448561036356,
+        "description": "Recipe 'Production-Pareto-pythia-14m' applied in memory: each tensor round-tripped through its selected format",
+        "elapsed_secs": 52.6798987,
+        "id": "recipe",
+        "perplexity": 618.5310644994863,
+        "scored_tokens": 286878,
+        "tokens_per_sec": 5445.682453447846,
+        "windows": 281
+      }
+    ]
+  },
+  "export": {
+    "bytes": 14954336,
+    "container": "GGUF v3",
+    "quant_type": "Q8_0 (uniform, all tensors)",
+    "sha256": "efcb930e51569a20135fef402e5f62e0cd3cc3d85c32701a21bb657f5bac32e2"
+  },
+  "generated_unix_secs": 1795149956,
+  "host": {
+    "arch": "x86_64",
+    "backend": "THME reference CPU forward pass (f32, multithreaded)",
+    "cpu": "12th Gen Intel(R) Core(TM) i5-12400F",
+    "logical_cpus": 12,
+    "os": "windows"
+  },
+  "model_name": "pythia-14m",
+  "num_parameters": 14067712,
+  "recipe": {
+    "estimated_bytes": 27662156,
+    "estimated_bytes_note": "Computed from nominal bits per weight; no artifact of this size is written.",
+    "format_counts": {
+      "FP16": 68,
+      "Ternary (1.58b)": 8
+    },
+    "name": "Production-Pareto-pythia-14m",
+    "relabelled_tensors": 8
+  },
+  "source_payload_bytes": 28135424,
+  "target": "Smollm135m",
+  "thme_version": "0.1.9"
+}
