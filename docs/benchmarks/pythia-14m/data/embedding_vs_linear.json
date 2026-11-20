@@ -1,7 +1,7 @@
 {
   "ticket": "THME-3080 first question (A1a)",
   "question": "Does the Q8_0 quality-gate failure of Pythia-14M come from the embedding and output-head matrices or from the linear layers?",
-  "status": "pre-registered, not yet run",
+  "status": "measured",
   "pre_registration": {
     "written_before_first_run": true,
     "model": "Pythia-14M, fp16 safetensors as stored",
@@ -25,5 +25,410 @@
     "also_reported": "additivity (rise of E alone plus rise of L alone versus rise of both), bytes of the written GGUF per variant, the quality-gate verdict per variant, device, adapter and driver as the run report records them",
     "no_protocol_change_after_results": true
   },
-  "results": null
+  "results": {
+    "runs": {
+      "a1a_both_q4_0": {
+        "recipe": "docs/benchmarks/pythia-14m/recipes/a1a_both_q4_0.json",
+        "format_counts": {
+          "Q4_0": 26
+        },
+        "baseline_perplexity": 114.28599799301628,
+        "perplexity": 216.40509167681327,
+        "delta_ppl": 102.11909368379699,
+        "gate_accepted": false,
+        "gate_verdict": {
+          "accepted": false,
+          "gate": "thme-perplexity@v1",
+          "gate_hash": "4311fb024c9fe1fec6e2fa622ce0caaca5b67a03a7d305be2b11ab3b97fbc34c",
+          "outcomes": [
+            {
+              "baseline": 114.28599799301628,
+              "candidate": 216.40509167681327,
+              "degradation": 102.11909368379699,
+              "metric": "perplexity",
+              "relative_degradation": 0.8935398515751442,
+              "status": "fail"
+            }
+          ]
+        },
+        "artifact_bytes": 7934240,
+        "device": {
+          "adapter": {
+            "backend": "Vulkan",
+            "device_type": "DiscreteGpu",
+            "driver": "NVIDIA",
+            "driver_info": "616.92",
+            "name": "NVIDIA GeForce RTX 4060 Ti"
+          },
+          "requested": "auto",
+          "used": "gpu"
+        },
+        "backend": "THME reference forward pass on the GPU (wgpu, f32 weights and activations)",
+        "corpus": {
+          "benchmark_id": "wikitext2-raw",
+          "benchmark_version": "1",
+          "corpus": "WikiText-2 (raw) test split",
+          "corpus_bytes": 1290590,
+          "corpus_member": "wikitext-2-raw/wiki.test.raw",
+          "corpus_sha256": "173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08",
+          "corpus_source": "https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip",
+          "order": "window",
+          "random_ids": null,
+          "selection": null,
+          "special_tokens_added": false,
+          "split": "test",
+          "split_token_count": 287159,
+          "token_count": 287159,
+          "token_file_bytes": 1148636,
+          "token_file_sha256": "973595d9c7c580360a39eedde7297ec050f362a521940f7527eca4a00ea85278",
+          "tokenizer_repo": "EleutherAI/pythia-14m",
+          "tokenizer_sha256": "870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+          "tokenizer_source": "local file"
+        },
+        "thme_version": "0.1.9"
+      },
+      "a1a_both_q8_0": {
+        "recipe": "docs/benchmarks/pythia-14m/recipes/a1a_both_q8_0.json",
+        "format_counts": {
+          "Q8_0": 26
+        },
+        "baseline_perplexity": 114.28599799301628,
+        "perplexity": 115.03049674266707,
+        "delta_ppl": 0.7444987496507878,
+        "gate_accepted": false,
+        "gate_verdict": {
+          "accepted": false,
+          "gate": "thme-perplexity@v1",
+          "gate_hash": "4311fb024c9fe1fec6e2fa622ce0caaca5b67a03a7d305be2b11ab3b97fbc34c",
+          "outcomes": [
+            {
+              "baseline": 114.28599799301628,
+              "candidate": 115.03049674266707,
+              "degradation": 0.7444987496507878,
+              "metric": "perplexity",
+              "relative_degradation": 0.006514347887973837,
+              "status": "fail"
+            }
+          ]
+        },
+        "artifact_bytes": 14962976,
+        "device": {
+          "adapter": {
+            "backend": "Vulkan",
+            "device_type": "DiscreteGpu",
+            "driver": "NVIDIA",
+            "driver_info": "616.92",
+            "name": "NVIDIA GeForce RTX 4060 Ti"
+          },
+          "requested": "auto",
+          "used": "gpu"
+        },
+        "backend": "THME reference forward pass on the GPU (wgpu, f32 weights and activations)",
+        "corpus": {
+          "benchmark_id": "wikitext2-raw",
+          "benchmark_version": "1",
+          "corpus": "WikiText-2 (raw) test split",
+          "corpus_bytes": 1290590,
+          "corpus_member": "wikitext-2-raw/wiki.test.raw",
+          "corpus_sha256": "173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08",
+          "corpus_source": "https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip",
+          "order": "window",
+          "random_ids": null,
+          "selection": null,
+          "special_tokens_added": false,
+          "split": "test",
+          "split_token_count": 287159,
+          "token_count": 287159,
+          "token_file_bytes": 1148636,
+          "token_file_sha256": "973595d9c7c580360a39eedde7297ec050f362a521940f7527eca4a00ea85278",
+          "tokenizer_repo": "EleutherAI/pythia-14m",
+          "tokenizer_sha256": "870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+          "tokenizer_source": "local file"
+        },
+        "thme_version": "0.1.9"
+      },
+      "a1a_emb_q4_0": {
+        "recipe": "docs/benchmarks/pythia-14m/recipes/a1a_emb_q4_0.json",
+        "format_counts": {
+          "Q4_0": 2
+        },
+        "baseline_perplexity": 114.28599799301628,
+        "perplexity": 126.70995290106272,
+        "delta_ppl": 12.42395490804644,
+        "gate_accepted": false,
+        "gate_verdict": {
+          "accepted": false,
+          "gate": "thme-perplexity@v1",
+          "gate_hash": "4311fb024c9fe1fec6e2fa622ce0caaca5b67a03a7d305be2b11ab3b97fbc34c",
+          "outcomes": [
+            {
+              "baseline": 114.28599799301628,
+              "candidate": 126.70995290106272,
+              "degradation": 12.42395490804644,
+              "metric": "perplexity",
+              "relative_degradation": 0.10870933558112374,
+              "status": "fail"
+            }
+          ]
+        },
+        "artifact_bytes": 9629984,
+        "device": {
+          "adapter": {
+            "backend": "Vulkan",
+            "device_type": "DiscreteGpu",
+            "driver": "NVIDIA",
+            "driver_info": "616.92",
+            "name": "NVIDIA GeForce RTX 4060 Ti"
+          },
+          "requested": "auto",
+          "used": "gpu"
+        },
+        "backend": "THME reference forward pass on the GPU (wgpu, f32 weights and activations)",
+        "corpus": {
+          "benchmark_id": "wikitext2-raw",
+          "benchmark_version": "1",
+          "corpus": "WikiText-2 (raw) test split",
+          "corpus_bytes": 1290590,
+          "corpus_member": "wikitext-2-raw/wiki.test.raw",
+          "corpus_sha256": "173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08",
+          "corpus_source": "https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip",
+          "order": "window",
+          "random_ids": null,
+          "selection": null,
+          "special_tokens_added": false,
+          "split": "test",
+          "split_token_count": 287159,
+          "token_count": 287159,
+          "token_file_bytes": 1148636,
+          "token_file_sha256": "973595d9c7c580360a39eedde7297ec050f362a521940f7527eca4a00ea85278",
+          "tokenizer_repo": "EleutherAI/pythia-14m",
+          "tokenizer_sha256": "870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+          "tokenizer_source": "local file"
+        },
+        "thme_version": "0.1.9"
+      },
+      "a1a_emb_q8_0": {
+        "recipe": "docs/benchmarks/pythia-14m/recipes/a1a_emb_q8_0.json",
+        "format_counts": {
+          "Q8_0": 2
+        },
+        "baseline_perplexity": 114.28599799301628,
+        "perplexity": 114.36878636524168,
+        "delta_ppl": 0.08278837222539437,
+        "gate_accepted": true,
+        "gate_verdict": {
+          "accepted": true,
+          "gate": "thme-perplexity@v1",
+          "gate_hash": "4311fb024c9fe1fec6e2fa622ce0caaca5b67a03a7d305be2b11ab3b97fbc34c",
+          "outcomes": [
+            {
+              "baseline": 114.28599799301628,
+              "candidate": 114.36878636524168,
+              "degradation": 0.08278837222539437,
+              "metric": "perplexity",
+              "relative_degradation": 0.0007243964587022581,
+              "status": "pass"
+            }
+          ]
+        },
+        "artifact_bytes": 16068896,
+        "device": {
+          "adapter": {
+            "backend": "Vulkan",
+            "device_type": "DiscreteGpu",
+            "driver": "NVIDIA",
+            "driver_info": "616.92",
+            "name": "NVIDIA GeForce RTX 4060 Ti"
+          },
+          "requested": "auto",
+          "used": "gpu"
+        },
+        "backend": "THME reference forward pass on the GPU (wgpu, f32 weights and activations)",
+        "corpus": {
+          "benchmark_id": "wikitext2-raw",
+          "benchmark_version": "1",
+          "corpus": "WikiText-2 (raw) test split",
+          "corpus_bytes": 1290590,
+          "corpus_member": "wikitext-2-raw/wiki.test.raw",
+          "corpus_sha256": "173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08",
+          "corpus_source": "https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip",
+          "order": "window",
+          "random_ids": null,
+          "selection": null,
+          "special_tokens_added": false,
+          "split": "test",
+          "split_token_count": 287159,
+          "token_count": 287159,
+          "token_file_bytes": 1148636,
+          "token_file_sha256": "973595d9c7c580360a39eedde7297ec050f362a521940f7527eca4a00ea85278",
+          "tokenizer_repo": "EleutherAI/pythia-14m",
+          "tokenizer_sha256": "870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+          "tokenizer_source": "local file"
+        },
+        "thme_version": "0.1.9"
+      },
+      "a1a_lin_q4_0": {
+        "recipe": "docs/benchmarks/pythia-14m/recipes/a1a_lin_q4_0.json",
+        "format_counts": {
+          "Q4_0": 24
+        },
+        "baseline_perplexity": 114.28599799301628,
+        "perplexity": 193.0026145569871,
+        "delta_ppl": 78.71661656397083,
+        "gate_accepted": false,
+        "gate_verdict": {
+          "accepted": false,
+          "gate": "thme-perplexity@v1",
+          "gate_hash": "4311fb024c9fe1fec6e2fa622ce0caaca5b67a03a7d305be2b11ab3b97fbc34c",
+          "outcomes": [
+            {
+              "baseline": 114.28599799301628,
+              "candidate": 193.0026145569871,
+              "degradation": 78.71661656397083,
+              "metric": "perplexity",
+              "relative_degradation": 0.6887686851085729,
+              "status": "fail"
+            }
+          ]
+        },
+        "artifact_bytes": 26446112,
+        "device": {
+          "adapter": {
+            "backend": "Vulkan",
+            "device_type": "DiscreteGpu",
+            "driver": "NVIDIA",
+            "driver_info": "616.92",
+            "name": "NVIDIA GeForce RTX 4060 Ti"
+          },
+          "requested": "auto",
+          "used": "gpu"
+        },
+        "backend": "THME reference forward pass on the GPU (wgpu, f32 weights and activations)",
+        "corpus": {
+          "benchmark_id": "wikitext2-raw",
+          "benchmark_version": "1",
+          "corpus": "WikiText-2 (raw) test split",
+          "corpus_bytes": 1290590,
+          "corpus_member": "wikitext-2-raw/wiki.test.raw",
+          "corpus_sha256": "173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08",
+          "corpus_source": "https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip",
+          "order": "window",
+          "random_ids": null,
+          "selection": null,
+          "special_tokens_added": false,
+          "split": "test",
+          "split_token_count": 287159,
+          "token_count": 287159,
+          "token_file_bytes": 1148636,
+          "token_file_sha256": "973595d9c7c580360a39eedde7297ec050f362a521940f7527eca4a00ea85278",
+          "tokenizer_repo": "EleutherAI/pythia-14m",
+          "tokenizer_sha256": "870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+          "tokenizer_source": "local file"
+        },
+        "thme_version": "0.1.9"
+      },
+      "a1a_lin_q8_0": {
+        "recipe": "docs/benchmarks/pythia-14m/recipes/a1a_lin_q8_0.json",
+        "format_counts": {
+          "Q8_0": 24
+        },
+        "baseline_perplexity": 114.28599799301628,
+        "perplexity": 114.95241912943149,
+        "delta_ppl": 0.6664211364152095,
+        "gate_accepted": false,
+        "gate_verdict": {
+          "accepted": false,
+          "gate": "thme-perplexity@v1",
+          "gate_hash": "4311fb024c9fe1fec6e2fa622ce0caaca5b67a03a7d305be2b11ab3b97fbc34c",
+          "outcomes": [
+            {
+              "baseline": 114.28599799301628,
+              "candidate": 114.95241912943149,
+              "degradation": 0.6664211364152095,
+              "metric": "perplexity",
+              "relative_degradation": 0.005831170468108725,
+              "status": "fail"
+            }
+          ]
+        },
+        "artifact_bytes": 27035936,
+        "device": {
+          "adapter": {
+            "backend": "Vulkan",
+            "device_type": "DiscreteGpu",
+            "driver": "NVIDIA",
+            "driver_info": "616.92",
+            "name": "NVIDIA GeForce RTX 4060 Ti"
+          },
+          "requested": "auto",
+          "used": "gpu"
+        },
+        "backend": "THME reference forward pass on the GPU (wgpu, f32 weights and activations)",
+        "corpus": {
+          "benchmark_id": "wikitext2-raw",
+          "benchmark_version": "1",
+          "corpus": "WikiText-2 (raw) test split",
+          "corpus_bytes": 1290590,
+          "corpus_member": "wikitext-2-raw/wiki.test.raw",
+          "corpus_sha256": "173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08",
+          "corpus_source": "https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip",
+          "order": "window",
+          "random_ids": null,
+          "selection": null,
+          "special_tokens_added": false,
+          "split": "test",
+          "split_token_count": 287159,
+          "token_count": 287159,
+          "token_file_bytes": 1148636,
+          "token_file_sha256": "973595d9c7c580360a39eedde7297ec050f362a521940f7527eca4a00ea85278",
+          "tokenizer_repo": "EleutherAI/pythia-14m",
+          "tokenizer_sha256": "870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+          "tokenizer_source": "local file"
+        },
+        "thme_version": "0.1.9"
+      }
+    },
+    "verdict_q8_0": {
+      "delta_E": 0.08278837222539437,
+      "delta_L": 0.6664211364152095,
+      "delta_both": 0.7444987496507878,
+      "E_fails_alone": false,
+      "L_fails_alone": true,
+      "cause_by_rule": "L (linear layers)",
+      "additivity": {
+        "sum_of_singles": 0.7492095086406039,
+        "both": 0.7444987496507878,
+        "gap": -0.0047107589898160995
+      }
+    },
+    "verdict_q4_0": {
+      "delta_E": 12.42395490804644,
+      "delta_L": 78.71661656397083,
+      "delta_both": 102.11909368379699,
+      "E_fails_alone": true,
+      "L_fails_alone": true,
+      "cause_by_rule": "L (linear layers)",
+      "additivity": {
+        "sum_of_singles": 91.14057147201727,
+        "both": 102.11909368379699,
+        "gap": 10.978522211779719
+      }
+    },
+    "reproduction": {
+      "committed_delta": 0.8335124268154317,
+      "measured_delta": 0.7444987496507878,
+      "within_0_02": false
+    }
+  },
+  "post_hoc_diagnostics": [
+    {
+      "written_after_results": true,
+      "what": "E and L at Q8_0 repeated on the CPU (--device cpu) to test whether the GPU explains the missed reproduction",
+      "baseline_perplexity": 114.2862,
+      "perplexity": 115.0307,
+      "delta_ppl": 0.7445,
+      "outcome": "Same rise on CPU and GPU (+0.7445), so the device is not the cause of the gap to the committed +0.8335.",
+      "untested_hypothesis": "The committed +0.8335 is the exporter path, which writes every tensor as Q8_0 including norms and biases; the recipe path leaves 1-D tensors as stored. Not measured here."
+    }
+  ]
 }

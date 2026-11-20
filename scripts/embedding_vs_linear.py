@@ -28,7 +28,12 @@ def run(args, name, work):
            "--tokens", args.tokens, "--eval-context", "1024", "--device", args.device,
            "--report", report, "--baseline-cache-dir", os.path.join(work, "baseline-cache")]
     print(" ".join(cmd), flush=True)
-    subprocess.run(cmd, check=True)
+    if os.path.exists(report):
+        os.remove(report)
+    # exit status 1 means the quality gate failed; the report is still written and holds the verdict
+    done = subprocess.run(cmd)
+    if not os.path.exists(report):
+        raise SystemExit(f"{name}: no report written (exit {done.returncode})")
     with open(report, encoding="utf-8") as f:
         r = json.load(f)
     base, rec = r["evaluation"]["variants"]
