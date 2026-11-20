@@ -83,6 +83,8 @@ bits per weight. Everything is read from the model file's header; no weights are
 
 More figures, and how they are made: [docs/figures.md](docs/figures.md).
 
+Models that passed THME's checks, with their evidence: [docs/hall-of-fame.md](docs/hall-of-fame.md).
+
 ## Plug and play
 
 THME is meant to work for people who arrive from any background and with whatever tools they use,
@@ -109,7 +111,10 @@ so it reads what you already have instead of asking you to move files.
   loads a model through the safety scan. Its logic is tested; nobody has looked at the window yet.
 - **Know your machine.** `thme doctor` says what works here (system, memory, disk, GPU adapter, the models
   found) and what to try next. It marks each fact as checked or assumed.
+- **Guides and notebooks.** [Getting started](docs/getting-started.md) has install steps and short guides for analysts, AI engineers and data scientists; [notebooks](docs/notebooks.md) lists the `--json` output of each command.
 
+Planned, not built yet: model download from the Hugging Face hub, and bridges to Ollama and
+llama.cpp (THME-3042 in the [backlog](BACKLOG.md)). Notebooks already work through the `--json` output of each command, with no separate bridge.
 Planned, not built yet: bridges to notebooks, Ollama and llama.cpp (THME-3042 in the [backlog](BACKLOG.md)).
 
 ## Measurements

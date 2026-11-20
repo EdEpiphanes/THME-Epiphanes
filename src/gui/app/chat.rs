@@ -11,9 +11,56 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
 
+/// Which device the chat's forward pass runs on. CPU is the default.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum ChatDevice {
+    #[default]
+    Cpu,
+    Gpu,
+    CpuGpu,
+}
+
+impl ChatDevice {
+    const ALL: [ChatDevice; 3] = [ChatDevice::Cpu, ChatDevice::Gpu, ChatDevice::CpuGpu];
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Cpu => "CPU",
+            Self::Gpu => "GPU (experimental)",
+            Self::CpuGpu => "CPU + GPU (experimental)",
+        }
+    }
+
+    fn arg(self) -> DeviceArg {
+        match self {
+            Self::Cpu => DeviceArg::Cpu,
+            Self::Gpu => DeviceArg::Gpu,
+            Self::CpuGpu => DeviceArg::Auto,
+        }
+    }
+
+    /// Tooltip for the choice. The GPU timing is the only measurement; it is not a speedup claim.
+    fn tooltip(self) -> &'static str {
+        match self {
+            Self::Cpu => "Reference CPU forward pass (default).",
+            Self::Gpu => {
+                "Experimental. Measured on SmolLM-135M, 128-token pass, RTX 4060 Ti, 20 November 2026: \
+                 4.3 s on the GPU path vs 1.1 s on CPU. GPU is currently slower; no speedup is claimed."
+            }
+            Self::CpuGpu => {
+                "Experimental. GPU takes the tensor formats it supports, CPU does the rest, and CPU \
+                 alone if no adapter is found. Not measured yet; the GPU path alone is slower than CPU \
+                 (4.3 s vs 1.1 s on SmolLM-135M, 128 tokens, RTX 4060 Ti, 20 November 2026)."
+            }
+        }
+    }
+}
+
 /// A model loaded for chat: the weights and the folder's tokenizer, kept between replies.
+/// The device is part of the cache key, so a device change reloads the model.
 struct Loaded {
     source: PathBuf,
+    device: ChatDevice,
     model: Box<dyn CausalLm>,
     tokenizer: Tokenizer,
 }
@@ -33,6 +80,7 @@ struct Session {
 /// Chat state: the turns, the picked model and the reply in progress.
 pub(super) struct ChatTab {
     model: Option<usize>,
+    device: ChatDevice,
     max_new_tokens: usize,
     plain_text: bool,
     input: String,
@@ -47,6 +95,7 @@ impl Default for ChatTab {
     fn default() -> Self {
         Self {
             model: None,
+            device: ChatDevice::default(),
             max_new_tokens: 64,
             plain_text: false,
             input: String::new(),
@@ -85,9 +134,14 @@ impl ChatTab {
             content: self.input.trim().to_string(),
         });
         self.input.clear();
+        let device = self.device;
         let job = Job {
-            cached: self.loaded.take().filter(|l| l.source == source),
+            cached: self
+                .loaded
+                .take()
+                .filter(|l| l.source == source && l.device == device),
             source,
+            device,
             messages: self.turns.clone(),
             plain_text: self.plain_text,
             max_new_tokens: self.max_new_tokens,
@@ -127,6 +181,7 @@ impl ChatTab {
             match message {
                 Message::Progress(tokens) => session.tokens = tokens,
                 Message::Done(loaded, reply) => {
+                    let device = loaded.device;
                     self.loaded = Some(loaded);
                     if !reply.token_ids.is_empty() {
                         self.turns.push(ChatMessage {
@@ -134,7 +189,7 @@ impl ChatTab {
                             content: reply.text.clone(),
                         });
                     }
-                    self.status = run_status(&reply);
+                    self.status = run_status(&reply, device);
                     finished = true;
                 }
                 Message::Failed(error) => {
@@ -152,6 +207,7 @@ impl ChatTab {
 /// Everything the worker needs, moved to its thread.
 struct Job {
     source: PathBuf,
+    device: ChatDevice,
     cached: Option<Arc<Loaded>>,
     messages: Vec<ChatMessage>,
     plain_text: bool,
@@ -168,11 +224,12 @@ fn run_job(
         Some(loaded) => loaded,
         None => {
             let (_, _, model) =
-                crate::inference::load_reference_model(&job.source, DeviceArg::Cpu)?;
+                crate::inference::load_reference_model(&job.source, job.device.arg())?;
             let dir = folder_of(&job.source);
             let tokenizer = Tokenizer::from_model_dir(&dir)?;
             Arc::new(Loaded {
                 source: job.source.clone(),
+                device: job.device,
                 model,
                 tokenizer,
             })
@@ -199,18 +256,19 @@ fn run_job(
 }
 
 // provenance: chat-speed
-fn run_status(reply: &Reply) -> String {
+fn run_status(reply: &Reply, device: ChatDevice) -> String {
     let stop = match reply.finish {
         Finish::Eos => "end of sequence",
         Finish::MaxTokens => "token limit",
         Finish::Cancelled => "cancelled",
     };
     format!(
-        "{} tokens in {:.1} s ({:.2} tok/s, {}, CPU reference forward pass); stopped: {stop}",
+        "{} tokens in {:.1} s ({:.2} tok/s, {}, {} reference forward pass); stopped: {stop}",
         reply.token_ids.len(),
         reply.wall_secs,
         reply.tokens_per_sec,
-        Evidence::Measured.tag()
+        Evidence::Measured.tag(),
+        device.label()
     )
 }
 
@@ -231,7 +289,7 @@ impl THMEApp {
             .show(ui, |ui| {
                 ui.label(
                     egui::RichText::new(
-                        "Replies come from THME's reference CPU forward pass, which is slow. \
+                        "Replies come from THME's reference forward pass, which is slow (CPU by default). \
                          Speed is measured on this machine. A mock model has random weights, so its \
                          text is meaningless. No reply here is a measure of quality.",
                     )
@@ -278,6 +336,17 @@ impl THMEApp {
                 });
             ui.label("Max new tokens:");
             ui.add(egui::Slider::new(&mut self.chat.max_new_tokens, 1..=256));
+            ui.label("Device:");
+            egui::ComboBox::from_id_salt("chat_device")
+                .selected_text(self.chat.device.label())
+                .show_ui(ui, |ui| {
+                    for choice in ChatDevice::ALL {
+                        ui.add_enabled_ui(!busy, |ui| {
+                            ui.selectable_value(&mut self.chat.device, choice, choice.label())
+                                .on_hover_text(choice.tooltip())
+                        });
+                    }
+                });
         });
 
         let Some(path) = picked_path else {
@@ -371,5 +440,18 @@ impl THMEApp {
                     .color(p.text_main),
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn device_choice_maps_to_device_arg() {
+        assert_eq!(ChatDevice::default(), ChatDevice::Cpu);
+        assert_eq!(ChatDevice::Cpu.arg(), DeviceArg::Cpu);
+        assert_eq!(ChatDevice::Gpu.arg(), DeviceArg::Gpu);
+        assert_eq!(ChatDevice::CpuGpu.arg(), DeviceArg::Auto);
     }
 }
