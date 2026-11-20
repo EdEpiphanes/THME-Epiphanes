@@ -218,6 +218,24 @@ closes it.
 - **Problem**: Each tensor today has one storage format. The memory work needs layouts inside a tensor (for example embedding rows split into precision bands by token frequency, factorised or codebook tensors, row-sparse blocks). The format should accept new layouts without breaking readers, and stay readable by tools that do not know them.
 - **Done means**: A design and a spec section (`docs/formats/epiph-v1.md`, a minor version): a tensor entry carries an `encoding` description (codec id, parameters, optional row bands with a band map) from an open registry; each codec is marked critical (a reader that does not know it refuses with an exact message and the way to convert) or optional (a reader may skip it when a canonical copy is present); every non-canonical encoding can be written together with, or converted to, a canonical block-format copy; the manifest lists the features used so a reader can tell before reading tensors; unknown optional manifest fields and attachment kinds are ignored; tests for old reader and new file, new reader and old file, unknown critical codec, band map round trip, and the golden-hash portability test extended to the new encodings. The first codec (per-row-band precision) is added only if experiment A1 of the unified concept note shows a measured gain in bytes at an acceptable perplexity change on Pythia-14M.
 
+### [THME-3081] Frequent-row draft pass for the output head (Pythia-14M)
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: experiment · **Status**: ready
+- **Problem**: Decode reads the whole output head for every token. If the greedy token is almost always among the most frequent rows, a draft over those rows plus an exact verification step could cut the bytes read without changing the output.
+- **Done means**: One pass measures how often the greedy token lies in the top 1,024, 4,096 and 8,192 frequent rows (rows from THME-3079) over the test split; a decision rule fixed in the report before the run says whether to build the verified draft; if built, the output must be identical to normal greedy decoding and tokens per second are measured paired against it.
+
+### [THME-3082] KV cache in int8 and int4 per group, counted in the placement budget
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: experiment · **Status**: ready
+- **Problem**: The KV cache is now real (THME-3070): 12.6 MB at 2,048 context for Pythia-14M, more for larger models. Lower-precision KV could cut it, mainly for models at SmolLM size and above.
+- **Done means**: KV stored in int8 and int4 per group behind the existing cache type; cache bytes, perplexity at 1k and 4k context and decode tokens per second measured against the f32 cache on Pythia-14M, with SmolLM-135M as the late confirmation; the placement budget (THME-3016) counts the real KV bytes.
+
+### [THME-3083] Layer-removal check on the small models
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: experiment · **Status**: ready
+- **Problem**: Published work reports that some layers can be removed from larger models with little loss; small models may be more fragile.
+- **Done means**: Block influence per layer computed for Pythia-14M (and SmolLM-135M late), perplexity measured against the number of removed blocks on the same token hash with a random-removal control; the rule and the stop threshold are written before the run.
+
 ## Engine, format, security and quality tracks (v0.2.5 to v0.2.9)
 
 > From the research dossier v3.1 (`docs/research/`) and the owner's direction of 13 November 2026.
