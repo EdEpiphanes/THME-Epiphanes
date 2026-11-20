@@ -14,8 +14,9 @@ closes it.
 
 ### [THME-2001] Cross-check the forward pass against the Hugging Face reference
 
-- **Milestone**: v0.2.0 · **Roadmap**: v0.2.0.6 · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: blocked
+- **Milestone**: v0.2.0 · **Roadmap**: v0.2.0.6 · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: done
 - **Problem**: Measured perplexities rely on THME's own forward pass, which is unit-tested but has never been compared with the reference implementation.
+- **Progress** (20 November 2026): Pythia-14M passes on CPU and GPU, max absolute logit difference 1.9e-4 against a 0.005 tolerance (report: docs/research/hf-cross-check-pythia-14m.json). The script now loads the reference in fp32; newer transformers default to the stored dtype (fp16 for Pythia), which had shown a false 0.36 gap. SmolLM-135M passes too, 2.1e-5 (docs/research/hf-cross-check-smollm-135m.json).
 - **Done means**: A script compares THME and Hugging Face logits on fixed prompts for SmolLM-135M and Pythia-14M; maximum absolute logit difference is reported and below an agreed tolerance. Blocked while new model runs are paused.
 
 ### [THME-2002] Upgrade egui/eframe to clear RUSTSEC-2026-0194/0195
@@ -368,6 +369,7 @@ closes it.
 
 - **Milestone**: v0.3.0 · **Roadmap**: v0.3.0.4 · **Priority**: p3 · **Area**: gui · **Type**: feature · **Status**: ready
 - **Progress** (19 November 2026): the Studio has a Chat tab. `src/chat.rs` renders the model's own chat template, encodes, and decodes greedily on a background thread with Cancel, a max-new-tokens slider and a status line (tokens, seconds, tokens per second, labelled Measured on this machine). A banner says replies come from the slow CPU reference forward pass, and that the mock model's text is meaningless. 9 tests on the mock model with a fixture tokenizer. Not done: the live window was never opened, so layout and look are unchecked by eye; there is no KV cache, so long replies are slow; chat needs a model loaded from a file (the synthetic demo model has no folder). No real model was used.
+- **Progress** (20 November 2026): device selector added (CPU default, GPU and CPU + GPU marked experimental with a tooltip). The loaded-model cache is keyed by device, so a change reloads. GPU is currently slower: 4.3 s vs 1.1 s for a 128-token pass on SmolLM-135M (RTX 4060 Ti). Not done: resolved GPU device name in the reply stats; CPU + GPU not measured; no live window check.
 - **Problem**: Users cannot talk to or test a loaded model inside the Studio.
 - **Done means**: A tab that sends a prompt through the reference forward pass and shows the reply, labelled with the measured speed. Depends on THME-3037.
 
@@ -492,6 +494,90 @@ closes it.
 
 Tickets below are the original sprint ledger. Sprints 1 to 9 are completed or superseded by the
 active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later (see ROADMAP.md).
+
+### [THME-3055] VRAM and adapter facts in `HostFacts`
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p1 · **Area**: doctor · **Type**: feature · **Status**: triage
+- **Problem**: only an adapter name is reported.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: `Fact<u64>` dedicated VRAM total/free per adapter, device type (discrete, integrated, CPU), shared-budget field, physical core count; unit tests with fake data; JSON schema updated; unknown stays `Unknown`.
+
+### [THME-3056] Memory model for a run
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: placement counts weights only.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: pure function from header + context + KV type to weights, KV and scratch bytes; table test against hand-computed LLaMA and GPT-NeoX shapes; no model read.
+
+### [THME-3057] `RunPlan` type and decision order, CPU-only
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p1 · **Area**: cli · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: `thme plan-run --model X` prints the plan for a header, with basis labels, using only `predicted`; golden-file test for a mock model (`examples/generate_mock_model.rs`).
+
+### [THME-3058] Shrink loop
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: property test: for any budget the result fits or errors; context never below the floor except by explicit user value; fixed flags unchanged.
+
+### [THME-3059] Roofline decode estimate per device
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p2 · **Area**: profiling · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: predicted decode tok/s from bandwidth and bytes per token for CPU and GPU, GPU dispatch-overhead term; unit tests; output labelled predicted; no claim in docs.
+
+### [THME-3060] CPU probe
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: threads sweep on synthetic matvec under 1 s; deterministic test using an injected clock; result struct with raw samples.
+
+### [THME-3061] GPU probe and CPU-wins rule
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p1 · **Area**: gpu · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: probe uses the real dispatch pattern, 2 s timeout, returns an error instead of hanging; with a fake backend the plan picks CPU when the GPU is slower; on a real machine, a report under `docs/benchmarks/` records probe vs real tokens/s (pending hardware run; mark pending, no LLM run by agents).
+
+### [THME-3062] Hybrid placement through `epiph::placement`
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: plan feeds budget after KV, scratch and margin; partial offload accepted only when the probe says it beats CPU.
+
+### [THME-3063] Plan cache
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: key and TTL tests, corrupt file ignored, `--no-cache`, `--reprobe`.
+
+### [THME-3064] Wire `DeviceArg::Auto` and Studio selector to the plan
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: Auto no longer means "GPU if init works"; Studio shows the recommended device and reason; test with a stubbed plan.
+
+### [THME-3065] `--verify` predicted vs measured report
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: JSON report with error percentages per field; schema in `docs/schemas/`; becomes the source for any published number.
+
+### [THME-3066] Windows shared-memory guard
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: plan counts dedicated VRAM only; warns when the driver reports shared memory spill; documented in the manual.
 
 ## Sprint 1: Format Correctness & Fuzzing (Milestone v0.1.2) [COMPLETED]
 

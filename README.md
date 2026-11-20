@@ -83,6 +83,8 @@ bits per weight. Everything is read from the model file's header; no weights are
 
 More figures, and how they are made: [docs/figures.md](docs/figures.md).
 
+Models that passed THME's checks, with their evidence: [docs/hall-of-fame.md](docs/hall-of-fame.md).
+
 ## Plug and play
 
 THME is meant to work for people who arrive from any background and with whatever tools they use,
