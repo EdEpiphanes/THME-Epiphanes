@@ -190,6 +190,18 @@ closes it.
 - **Problem**: The extension's sidebar trees show static example text (a model name such as "thme-hybrid-12l" and a throughput such as "620 tok/sec") that THME never measured, which breaks the rule that no unmeasured number is presented as a result (found by the THME-3048 fix).
 - **Done means**: Each sidebar value is read from the CLI's own output for the selected model, or the tree says "no model selected" or is labelled as an example; a test lists every string the tree can show and checks none is a made-up number.
 
+### [THME-3077] Quality gate v2: a margin that fits the model's perplexity (two regimes)
+
+- **Milestone**: v0.2.8 · **Roadmap**: none · **Priority**: p1 · **Area**: quality · **Type**: feature · **Status**: ready
+- **Problem**: The default gate (`thme-perplexity-v1`) is one absolute limit of 0.45 perplexity. That fits models whose perplexity is in the single digits, but Pythia-14M has a baseline of 114, where even a uniform Q8_0 export (+0.83, 0.73 percent) fails. An accuracy rule from emissions monitoring (a relative limit when the level is high, an absolute limit when it is low, because a relative limit misbehaves near zero) is the model: the owner's recollection, not yet checked against the standard's text.
+- **Done means**: A versioned gate `thme-perplexity-v2` whose criterion applies a relative margin when the baseline is above a stated threshold and an absolute margin when it is below, with the threshold, margins and the rule written in the gate file and covered by its hash; both regimes documented in `docs/quality-gate.md` with the reasoning and a table of what each committed report would have been under v1 and v2; old reports keep their v1 verdicts; the decision rule is stated before it is applied to any new run; unit tests on both sides of the threshold.
+
+### [THME-3078] `.epiph` flexible encodings: any tensor layout, safely extensible
+
+- **Milestone**: v0.2.6 · **Roadmap**: none · **Priority**: p2 · **Area**: format · **Type**: feature · **Status**: triage
+- **Problem**: Each tensor today has one storage format. The memory work needs layouts inside a tensor (for example embedding rows split into precision bands by token frequency, factorised or codebook tensors, row-sparse blocks). The format should accept new layouts without breaking readers, and stay readable by tools that do not know them.
+- **Done means**: A design and a spec section (`docs/formats/epiph-v1.md`, a minor version): a tensor entry carries an `encoding` description (codec id, parameters, optional row bands with a band map) from an open registry; each codec is marked critical (a reader that does not know it refuses with an exact message and the way to convert) or optional (a reader may skip it when a canonical copy is present); every non-canonical encoding can be written together with, or converted to, a canonical block-format copy; the manifest lists the features used so a reader can tell before reading tensors; unknown optional manifest fields and attachment kinds are ignored; tests for old reader and new file, new reader and old file, unknown critical codec, band map round trip, and the golden-hash portability test extended to the new encodings. The first codec (per-row-band precision) is added only if experiment A1 of the unified concept note shows a measured gain in bytes at an acceptable perplexity change on Pythia-14M.
+
 ## Engine, format, security and quality tracks (v0.2.5 to v0.2.9)
 
 > From the research dossier v3.1 (`docs/research/`) and the owner's direction of 13 November 2026.
