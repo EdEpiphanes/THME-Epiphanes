@@ -812,6 +812,20 @@ pub trait GpuBackend: Send + Sync {
         Ok(None)
     }
 
+    /// Output head plus negative log-likelihood on the device for already normalized rows:
+    /// returns one score per row but the last (`targets[r]` is row `r`'s next token) and reads
+    /// back only those scores. `Ok(None)` means unsupported; use the per-op path.
+    fn score_head_nll(
+        &self,
+        _normed: &[f32],
+        _head: &[f32],
+        _d: usize,
+        _vocab: usize,
+        _targets: &[u32],
+    ) -> Result<Option<Vec<f32>>, ThmeError> {
+        Ok(None)
+    }
+
     fn is_format_supported(&self, dtype: QuantDtype) -> bool;
     fn device_name(&self) -> &str;
 }
@@ -897,6 +911,17 @@ impl GpuBackend for GpuContext {
         embedded: &[f32],
     ) -> Result<Option<Vec<f32>>, ThmeError> {
         GpuContext::forward_decoder(self, plan, embedded)
+    }
+
+    fn score_head_nll(
+        &self,
+        normed: &[f32],
+        head: &[f32],
+        d: usize,
+        vocab: usize,
+        targets: &[u32],
+    ) -> Result<Option<Vec<f32>>, ThmeError> {
+        GpuContext::score_head_nll(self, normed, head, d, vocab, targets)
     }
 
     fn is_format_supported(&self, dtype: QuantDtype) -> bool {

@@ -137,3 +137,25 @@ fn swiglu(@builtin(workgroup_id) wid: vec3<u32>, @builtin(local_invocation_id) l
     let g = in_a[idx];
     out[idx] = g / (1.0 + exp(-g)) * in_b[idx];
 }
+
+// Negative log-likelihood of the next token. params: rows, vocab, first row index.
+// in_a = logits [rows, vocab], in_b = target ids (u32 bits) indexed by global row,
+// out[global row] = logsumexp(logits) - logits[target].
+@compute @workgroup_size(64)
+fn nll(@builtin(workgroup_id) wid: vec3<u32>, @builtin(local_invocation_id) lid: vec3<u32>) {
+    let vocab = p[1];
+    let row = wid.x;
+    let base = row * vocab;
+    let tid = lid.x;
+    var lm = -3.0e38;
+    for (var i = tid; i < vocab; i += 64u) { lm = max(lm, in_a[base + i]); }
+    let m = reduce_max(tid, lm);
+    var ls = 0.0;
+    for (var i = tid; i < vocab; i += 64u) { ls += exp(in_a[base + i] - m); }
+    let total = reduce_sum(tid, ls);
+    if (tid == 0u) {
+        let g = p[2] + row;
+        let target_id = bitcast<u32>(in_b[g]);
+        out[g] = m + log(total) - in_a[base + target_id];
+    }
+}

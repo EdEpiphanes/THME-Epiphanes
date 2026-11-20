@@ -67,6 +67,9 @@ impl CausalLm for LlamaModel {
     ) -> Result<(DepthExit, ForwardTrace)> {
         LlamaModel::forward_traced(self, tokens, schedule)
     }
+    fn forward_nll(&self, tokens: &[u32]) -> Result<Vec<f32>> {
+        LlamaModel::forward_nll(self, tokens)
+    }
     fn forward_logits(&self, tokens: &[u32]) -> Result<Vec<f32>> {
         LlamaModel::forward_logits(self, tokens)
     }
@@ -93,6 +96,9 @@ impl CausalLm for NeoxModel {
         schedule: &[usize],
     ) -> Result<(DepthExit, ForwardTrace)> {
         NeoxModel::forward_traced(self, tokens, schedule)
+    }
+    fn forward_nll(&self, tokens: &[u32]) -> Result<Vec<f32>> {
+        NeoxModel::forward_nll(self, tokens)
     }
     fn forward_logits(&self, tokens: &[u32]) -> Result<Vec<f32>> {
         NeoxModel::forward_logits(self, tokens)
