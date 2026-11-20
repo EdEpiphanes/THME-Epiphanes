@@ -284,3 +284,7 @@ play workspace) is the natural home.
 - No THME speed figure here is measured. The "4x slower on SmolLM-135M" figure is a local one-run
   timing from 20 November 2026 (128 tokens: 4.3 s GPU, 1.1 s CPU, RTX 4060 Ti, release build, includes
   adapter start-up and weight upload); it is not a committed report.
+
+## Before building from this note
+
+Run a short reference audit first: read each project's LICENSE and NOTICE files and patent terms, check AGPL compatibility, record an entry in the third-party register, and decide per item between a clean-room rewrite and integration with attribution. Unknown or unlicensed sources are clean-room only. The licence column above comes from the GitHub licence API and is a starting point, not a legal conclusion.
