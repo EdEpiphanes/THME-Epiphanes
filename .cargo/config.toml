@@ -1,2 +1,6 @@
+# Committed build settings only. Machine-local limits (jobs, test threads, debug info) belong in
+# the global ~/.cargo/config.toml, never here.
+# Path remapping (AGENTS.md rule 1) needs the machine's own prefixes, which a committed config
+# cannot name; the release workflow passes --remap-path-prefix through RUSTFLAGS instead.
 [build]
 rustflags = ["-C", "strip=symbols"]

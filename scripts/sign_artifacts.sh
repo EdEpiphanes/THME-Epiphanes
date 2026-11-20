@@ -7,8 +7,8 @@ set -euo pipefail
 DIST_DIR="${1:-dist}"
 
 if [ ! -d "${DIST_DIR}" ]; then
-    echo "Directory ${DIST_DIR} does not exist. Skipping signing."
-    exit 0
+    echo "Directory ${DIST_DIR} does not exist." >&2
+    exit 1
 fi
 
 echo "Signing release artifacts in ${DIST_DIR}..."
@@ -16,16 +16,18 @@ echo "Signing release artifacts in ${DIST_DIR}..."
 # Minisign signature
 if command -v minisign >/dev/null 2>&1 && [ -n "${MINISIGN_KEY:-}" ]; then
     umask 077
-    printf '%s\n' "${MINISIGN_KEY}" > /tmp/minisign.key
+    KEY_FILE="$(mktemp)"
+    printf '%s\n' "${MINISIGN_KEY}" > "${KEY_FILE}"
     for f in "${DIST_DIR}"/*.tar.gz "${DIST_DIR}"/SHA256SUMS.txt; do
         if [ -f "$f" ]; then
             echo "  [minisign] Signing $(basename "$f")..."
-            minisign -Sm "$f" -s /tmp/minisign.key -t "THME Epiphanes Release Asset"
+            minisign -Sm "$f" -s "${KEY_FILE}" -t "THME Epiphanes Release Asset"
         fi
     done
-    rm -f /tmp/minisign.key
+    rm -f "${KEY_FILE}"
 else
-    echo "  [minisign] Skipping (minisign CLI not installed or MINISIGN_KEY not provided)"
+    echo "  [minisign] minisign CLI or MINISIGN_KEY missing; releases must be signed (SECURITY.md)." >&2
+    exit 1
 fi
 
 # GPG detached signature
