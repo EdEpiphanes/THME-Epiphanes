@@ -5,7 +5,7 @@
   "thme": "target release build of main after #92; thme forward --json",
   "tolerance": 0.005,
   "runs": {
-    "cpu": {
+    "hf_reference_on_cpu": {
       "model": "models/pythia-14m",
       "tolerance": 0.005,
       "method": "cli",
@@ -87,7 +87,7 @@
       "overall_passed": true,
       "status": "PASSED"
     },
-    "cuda_rtx_4060_ti": {
+    "hf_reference_on_cuda_rtx_4060_ti": {
       "model": "models/pythia-14m",
       "tolerance": 0.005,
       "method": "cli",
@@ -170,5 +170,6 @@
       "status": "PASSED"
     }
   },
-  "scope": "Pythia-14M only; SmolLM-135M not run (model runs paused)"
+  "scope": "Pythia-14M only; SmolLM-135M not run (model runs paused)",
+  "label_note": "The run names say where the Hugging Face (torch) reference ran. The THME side used its default device in both runs; the GPU backend at that date was the earlier per-operation Vulkan path. Names corrected on 20 November 2026."
 }

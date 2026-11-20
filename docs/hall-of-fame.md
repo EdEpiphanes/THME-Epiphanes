@@ -19,7 +19,7 @@ EleutherAI, Apache-2.0, GPT-NeoX, 6 layers, 76 tensors.
 | Capability | Result | Evidence |
 | :--- | :--- | :--- |
 | Safety scan, then load | Loaded and drawn without a blocking finding | `thme figure` scans before it reads |
-| Reference forward pass vs Hugging Face fp32 | Max logit difference 1.9e-4 on CPU, 1.6e-4 on GPU (tolerance 0.005) | [report](research/hf-cross-check-pythia-14m.json) |
+| Reference forward pass vs Hugging Face fp32 | Max logit difference 1.9e-4 against the reference run on CPU and 1.6e-4 against the reference run on CUDA (tolerance 0.005); THME itself ran on its default device both times | [report](research/hf-cross-check-pythia-14m.json) |
 | Figures | Parts tray, layer-by-layer and forward-pass animations | [docs/figures](figures) |
 | Measured perplexity, search, export | **pending** | needs a committed measured report |
 
@@ -42,7 +42,7 @@ HuggingFaceTB, Apache-2.0, LLaMA architecture, 30 layers.
 | Capability | Result | Evidence |
 | :--- | :--- | :--- |
 | Safety scan, then load | Loaded and drawn without a blocking finding | `thme figure` scans before it reads |
-| Reference forward pass vs Hugging Face fp32 | Max logit difference 2.1e-5 on CPU, 1.5e-5 on GPU (tolerance 0.005) | [report](research/hf-cross-check-smollm-135m.json) |
+| Reference forward pass vs Hugging Face fp32 | Max logit difference 2.1e-5 against the reference run on CPU and 1.5e-5 against the reference run on CUDA (tolerance 0.005); THME itself ran on its default device both times | [report](research/hf-cross-check-smollm-135m.json) |
 | GPU path (wgpu, Vulkan) | Same logits as CPU; **slower** today: 4.3 s against 1.1 s for one 128-token pass, one run each, RTX 4060 Ti, 20 November 2026 | `thme forward MODEL --device gpu` |
 | Figures | Parts tray, layer-by-layer and forward-pass animations | [docs/figures](figures) |
 | Measured perplexity, search, export | **pending** | needs a committed measured report |
