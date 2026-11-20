@@ -1,0 +1,240 @@
+{
+  "label": "Measured on this machine by examples/decode_speed.rs. Not a published benchmark.",
+  "lengths": [
+    {
+      "generated_tokens": 16,
+      "greedy_tokens_identical": true,
+      "kv_cache": {
+        "tokens_per_sec": {
+          "max": 34.567209890370094,
+          "median": 33.173561169351444,
+          "min": 24.394326977289797
+        },
+        "tokens_per_sec_runs": [
+          24.394326977289797,
+          29.02392187921187,
+          33.715669020020364,
+          34.567209890370094,
+          33.173561169351444
+        ],
+        "wall_secs_runs": [
+          0.6558902,
+          0.5512694,
+          0.4745568,
+          0.4628664,
+          0.4823118
+        ]
+      },
+      "kv_cache_bytes": {
+        "context_tokens": 23,
+        "estimate_bytes": 1059840,
+        "matches_estimate": true,
+        "measured_bytes": 1059840
+      },
+      "speedup_paired": {
+        "max": 4.491844214168775,
+        "median": 4.121883766028383,
+        "min": 3.5902498850834093
+      },
+      "speedup_paired_runs": [
+        4.491844214168775,
+        3.5902498850834093,
+        4.121732740949029,
+        4.121883766028383,
+        4.311923738958906
+      ],
+      "whole_sequence": {
+        "tokens_per_sec": {
+          "max": 8.386265079880486,
+          "median": 8.084095204570303,
+          "min": 5.430804323164627
+        },
+        "tokens_per_sec_runs": [
+          5.430804323164627,
+          8.084095204570303,
+          8.179974573571535,
+          8.386265079880486,
+          7.693448024050872
+        ],
+        "wall_secs_runs": [
+          2.9461566,
+          1.9791949,
+          1.9559963,
+          1.9078815,
+          2.0796917
+        ]
+      }
+    },
+    {
+      "generated_tokens": 64,
+      "greedy_tokens_identical": true,
+      "kv_cache": {
+        "tokens_per_sec": {
+          "max": 38.109785598514485,
+          "median": 36.20226886406897,
+          "min": 34.89182389703946
+        },
+        "tokens_per_sec_runs": [
+          34.89182389703946,
+          38.109785598514485,
+          37.467262247828494,
+          35.69660075772728,
+          36.20226886406897
+        ],
+        "wall_secs_runs": [
+          1.8342406,
+          1.6793586999999999,
+          1.7081579,
+          1.7928878,
+          1.7678449999999999
+        ]
+      },
+      "kv_cache_bytes": {
+        "context_tokens": 71,
+        "estimate_bytes": 3271680,
+        "matches_estimate": true,
+        "measured_bytes": 3271680
+      },
+      "speedup_paired": {
+        "max": 7.558739458716594,
+        "median": 6.409326488736445,
+        "min": 5.839624822032923
+      },
+      "speedup_paired_runs": [
+        7.558739458716594,
+        6.409326488736445,
+        6.521102820763818,
+        5.839624822032923,
+        6.25777333420068
+      ],
+      "whole_sequence": {
+        "tokens_per_sec": {
+          "max": 6.1128243415645285,
+          "median": 5.785167811402228,
+          "min": 4.616090300189257
+        },
+        "tokens_per_sec_runs": [
+          4.616090300189257,
+          5.945989124674403,
+          5.745540789286305,
+          6.1128243415645285,
+          5.785167811402228
+        ],
+        "wall_secs_runs": [
+          13.8645468,
+          10.7635582,
+          11.1390733,
+          10.4697921,
+          11.0627733
+        ]
+      }
+    },
+    {
+      "generated_tokens": 256,
+      "greedy_tokens_identical": true,
+      "kv_cache": {
+        "tokens_per_sec": {
+          "max": 38.15225357239595,
+          "median": 37.494148313171216,
+          "min": 30.85867121549196
+        },
+        "tokens_per_sec_runs": [
+          38.15225357239595,
+          36.937983708127135,
+          37.494148313171216,
+          37.87888091699563,
+          30.85867121549196
+        ],
+        "wall_secs_runs": [
+          6.7099575,
+          6.9305353,
+          6.8277321,
+          6.7583834,
+          8.2958854
+        ]
+      },
+      "kv_cache_bytes": {
+        "context_tokens": 263,
+        "estimate_bytes": 12119040,
+        "matches_estimate": true,
+        "measured_bytes": 12119040
+      },
+      "speedup_paired": {
+        "max": 17.131630663557626,
+        "median": 10.623272260641501,
+        "min": 10.42979988861755
+      },
+      "speedup_paired_runs": [
+        10.641730547473662,
+        10.42979988861755,
+        10.444355073626863,
+        10.623272260641501,
+        17.131630663557626
+      ],
+      "whole_sequence": {
+        "tokens_per_sec": {
+          "max": 3.5898959819786325,
+          "median": 3.565650958352474,
+          "min": 1.801268765450009
+        },
+        "tokens_per_sec_runs": [
+          3.5851550085952204,
+          3.541581248211579,
+          3.5898959819786325,
+          3.565650958352474,
+          1.801268765450009
+        ],
+        "wall_secs_runs": [
+          71.4055597,
+          72.2840963,
+          71.3112584,
+          71.7961469,
+          142.1220447
+        ]
+      }
+    }
+  ],
+  "machine": {
+    "arch": "x86_64",
+    "build_profile": "release",
+    "cpu": "Intel64 Family 6 Model 151 Stepping 2, GenuineIntel",
+    "git_commit": "d23f84c",
+    "git_tracked_files_dirty": true,
+    "os": "windows",
+    "threads": 12
+  },
+  "machine_note": "Shared machine: another CPU-heavy job ran during these measurements, so timing is noisy. Paired, interleaved runs share that noise between the two paths; the spread is reported.",
+  "method": {
+    "decoding": "greedy (argmax); no sampling, so no seed is involved",
+    "order": "paired and interleaved; the first path alternates each run",
+    "paths": {
+      "kv_cache": "forward_extend: prompt prefill, then one token per step",
+      "whole_sequence": "forward_logits over the growing sequence each step (the old chat loop)"
+    },
+    "prompt_construction": "id = (i * 7919 + 13) mod vocab_size, i = 0..prompt_tokens",
+    "prompt_token_ids": [
+      13,
+      7932,
+      15851,
+      23770,
+      31689,
+      39608,
+      47527,
+      6294
+    ],
+    "timed_runs": 5,
+    "tokens_per_sec": "generated tokens / wall seconds of the whole reply, prompt prefill included",
+    "warmup_runs": 1
+  },
+  "model": {
+    "attention_heads": 9,
+    "family": "LLaMA",
+    "hidden_size": 576,
+    "kv_heads": 3,
+    "layers": 30,
+    "name": "smollm-135m",
+    "vocab_size": 49152,
+    "weights": "as stored, dense f32 in memory"
+  },
+  "schema": "thme.decode_speed.v1"
+}
