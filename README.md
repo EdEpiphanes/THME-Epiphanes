@@ -333,7 +333,7 @@ is in **[docs/subsystems.md](docs/subsystems.md)**.
 
 Two views of one plan. The **[now, next, later](ROADMAP.md#now-next-later)** view groups work by
 track (math engine, Epiphanes model format, security, quality and evidence). The numbered
-milestones below track the measured-model programme, which waits while model runs are paused.
+milestones below track the measured-model programme, which now runs on Pythia-14M and SmolLM-135M only, by decision, until results are stable.
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'fontFamily': 'Chakra Petch, Bahnschrift, Arial Narrow, sans-serif', 'primaryColor': '#ffffff', 'primaryTextColor': '#0b0b0b', 'primaryBorderColor': '#0b0b0b', 'lineColor': '#0b0b0b', 'secondaryColor': '#f6f6f4', 'tertiaryColor': '#ffffff', 'clusterBkg': '#f6f6f4', 'clusterBorder': '#0b0b0b', 'edgeLabelBackground': '#ffffff', 'noteBkgColor': '#ffffff', 'noteBorderColor': '#0b0b0b', 'actorBkg': '#ffffff', 'actorBorder': '#0b0b0b', 'signalColor': '#0b0b0b', 'labelBoxBkgColor': '#ffffff'}}}%%
@@ -361,7 +361,7 @@ flowchart LR
 
 | Milestone | Goal | Done when |
 | :--- | :--- | :--- |
-| **v0.2.0 Measured core** (active; the HF cross-check is paused) | Real forward pass, measured gate, honest dossier | Every published figure regenerates from a report; analytic proxy retired or labelled everywhere |
+| **v0.2.0 Measured core** (active; the HF cross-check passed on Pythia-14M and SmolLM-135M) | Real forward pass, measured gate, honest dossier | Every published figure regenerates from a report; analytic proxy retired or labelled everywhere |
 | **v0.2.1 Recipe and BYOA lab** (done) | Any recipe or BYOA algorithm runs through the measured gate | A searched recipe beats uniform and random placement at matched size |
 | **v0.2.2 Formats and calibration** (in progress) | 4-bit K-quants, activation-aware scales, Hadamard rotation, per-tensor export | A heterogeneous artifact smaller than uniform Q8_0 passes the gate |
 | v0.2.3 Recovery | Distillation and LoRA recovery for aggressive formats | A recovered ternary-heavy candidate passes the gate |
