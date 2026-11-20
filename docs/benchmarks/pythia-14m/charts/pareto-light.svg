@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 400" width="760" height="400" role="img" font-family='"Chakra Petch", Bahnschrift, "Arial Narrow", "Segoe UI", sans-serif'>
+<title>Measured size vs quality, pythia-14m</title>
+<desc>Perplexity increase against nominal linear-tensor size for searched recipes and random placements.</desc>
+<rect x="6" y="6" width="754" height="394" fill="#0b0b0b"/>
+<rect x="1.5" y="1.5" width="753" height="393" stroke-width="3" fill="#ffffff" stroke="#0b0b0b"/>
+<text x="24.0" y="34.0" font-size="16" font-weight="700" fill="#0b0b0b" text-anchor="start">Measured size vs quality, pythia-14m</text>
+<text x="24.0" y="54.0" font-size="12" font-weight="400" fill="#3d3d3d" text-anchor="start">Validation slice, 16,384 tokens · formats Q8_0, Q4_0 · Δ perplexity vs source · lower and further left is better</text>
+<line x1="72.0" y1="330.0" x2="730.0" y2="330.0" stroke="#9a9a98" stroke-width="1"/>
+<text x="64.0" y="334.0" font-size="11" font-weight="400" fill="#7a7a7a" text-anchor="end">-0.00</text>
+<line x1="72.0" y1="275.0" x2="730.0" y2="275.0" stroke="#e4e4e2" stroke-width="1"/>
+<text x="64.0" y="279.0" font-size="11" font-weight="400" fill="#7a7a7a" text-anchor="end">+0.13</text>
+<line x1="72.0" y1="220.0" x2="730.0" y2="220.0" stroke="#e4e4e2" stroke-width="1"/>
+<text x="64.0" y="224.0" font-size="11" font-weight="400" fill="#7a7a7a" text-anchor="end">+0.27</text>
+<line x1="72.0" y1="165.0" x2="730.0" y2="165.0" stroke="#e4e4e2" stroke-width="1"/>
+<text x="64.0" y="169.0" font-size="11" font-weight="400" fill="#7a7a7a" text-anchor="end">+0.41</text>
+<line x1="72.0" y1="110.0" x2="730.0" y2="110.0" stroke="#e4e4e2" stroke-width="1"/>
+<text x="64.0" y="114.0" font-size="11" font-weight="400" fill="#7a7a7a" text-anchor="end">+0.54</text>
+<text x="72.0" y="348.0" font-size="11" font-weight="400" fill="#7a7a7a" text-anchor="middle">0%</text>
+<text x="236.5" y="348.0" font-size="11" font-weight="400" fill="#7a7a7a" text-anchor="middle">25%</text>
+<text x="401.0" y="348.0" font-size="11" font-weight="400" fill="#7a7a7a" text-anchor="middle">50%</text>
+<text x="565.5" y="348.0" font-size="11" font-weight="400" fill="#7a7a7a" text-anchor="middle">75%</text>
+<text x="730.0" y="348.0" font-size="11" font-weight="400" fill="#7a7a7a" text-anchor="middle">100%</text>
+<text x="401.0" y="370.0" font-size="12" font-weight="400" fill="#3d3d3d" text-anchor="middle">Nominal size of the linear tensors, share of stored size</text>
+<line x1="72.0" y1="147.2" x2="730.0" y2="147.2" stroke="#0b0b0b" stroke-width="1.5"/>
+<text x="730.0" y="141.2" font-size="11" font-weight="400" fill="#3d3d3d" text-anchor="end">Gate Δ ≤ 0.45</text>
+<circle cx="455.8" cy="148.5" r="3.5" fill="#b4b4b2" stroke="#ffffff" stroke-width="2"/>
+<circle cx="455.8" cy="199.8" r="3.5" fill="#b4b4b2" stroke="#ffffff" stroke-width="2"/>
+<circle cx="455.8" cy="147.6" r="3.5" fill="#b4b4b2" stroke="#ffffff" stroke-width="2"/>
+<circle cx="455.8" cy="126.2" r="3.5" fill="#b4b4b2" stroke="#ffffff" stroke-width="2"/>
+<circle cx="455.8" cy="199.8" r="3.5" fill="#b4b4b2" stroke="#ffffff" stroke-width="2"/>
+<circle cx="455.8" cy="148.5" r="3.5" fill="#b4b4b2" stroke="#ffffff" stroke-width="2"/>
+<circle cx="455.8" cy="199.8" r="3.5" fill="#b4b4b2" stroke="#ffffff" stroke-width="2"/>
+<circle cx="455.8" cy="147.6" r="3.5" fill="#b4b4b2" stroke="#ffffff" stroke-width="2"/>
+<circle cx="455.8" cy="126.2" r="3.5" fill="#b4b4b2" stroke="#ffffff" stroke-width="2"/>
+<circle cx="455.8" cy="199.8" r="3.5" fill="#b4b4b2" stroke="#ffffff" stroke-width="2"/>
+<circle cx="510.7" cy="160.4" r="3.5" fill="#b4b4b2" stroke="#ffffff" stroke-width="2"/>
+<circle cx="510.7" cy="266.9" r="3.5" fill="#b4b4b2" stroke="#ffffff" stroke-width="2"/>
+<circle cx="510.7" cy="217.5" r="3.5" fill="#b4b4b2" stroke="#ffffff" stroke-width="2"/>
+<circle cx="510.7" cy="177.3" r="3.5" fill="#b4b4b2" stroke="#ffffff" stroke-width="2"/>
+<circle cx="510.7" cy="251.4" r="3.5" fill="#b4b4b2" stroke="#ffffff" stroke-width="2"/>
+<circle cx="620.3" cy="273.2" r="3.5" fill="#b4b4b2" stroke="#ffffff" stroke-width="2"/>
+<circle cx="620.3" cy="287.6" r="3.5" fill="#b4b4b2" stroke="#ffffff" stroke-width="2"/>
+<circle cx="620.3" cy="265.6" r="3.5" fill="#b4b4b2" stroke="#ffffff" stroke-width="2"/>
+<circle cx="620.3" cy="257.8" r="3.5" fill="#b4b4b2" stroke="#ffffff" stroke-width="2"/>
+<polyline points="455.8,206.4 455.8,206.4 510.7,257.5 620.3,330.0 730.0,328.7" fill="none" stroke="#0b0b0b" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="730.0" cy="328.7" r="4" fill="#0b0b0b" stroke="#ffffff" stroke-width="2"/>
+<circle cx="620.3" cy="330.0" r="4" fill="#0b0b0b" stroke="#ffffff" stroke-width="2"/>
+<circle cx="510.7" cy="257.5" r="4" fill="#0b0b0b" stroke="#ffffff" stroke-width="2"/>
+<circle cx="455.8" cy="206.4" r="4" fill="#0b0b0b" stroke="#ffffff" stroke-width="2"/>
+<circle cx="455.8" cy="206.4" r="4" fill="#0b0b0b" stroke="#ffffff" stroke-width="2"/>
+<line x1="72.0" y1="82.0" x2="90.0" y2="82.0" stroke="#0b0b0b" stroke-width="2"/>
+<circle cx="81.0" cy="82.0" r="3" fill="#0b0b0b" stroke="#ffffff" stroke-width="2"/>
+<text x="98.0" y="86.0" font-size="12" font-weight="400" fill="#3d3d3d" text-anchor="start">Searched recipe (and source at 100%)</text>
+<rect x="352" y="77" width="10" height="10" rx="2" fill="#b4b4b2"/>
+<text x="368.0" y="86.0" font-size="12" font-weight="400" fill="#3d3d3d" text-anchor="start">Random placement, same formats</text>
+</svg>
