@@ -15,12 +15,17 @@ Last checked: 20 November 2026.
 
 | Dataset | Used for | Original source | Licence as stated by the source |
 | :--- | :--- | :--- | :--- |
-| WikiText-2 (raw v1) | Perplexity scoring on the test split; calibration statistics from the train split | <https://huggingface.co/datasets/Salesforce/wikitext> (paper: Merity et al., "Pointer Sentinel Mixture Models", arXiv 1609.07843) | CC BY-SA 3.0 and GFDL (the dataset card lists both; other pages label it CC BY-SA 4.0) |
+| WikiText-2 (raw v1) | Perplexity scoring on the test split; calibration statistics from the train split | Authors' download <https://wikitext.smerity.com/wikitext-2-raw-v1.zip>; dataset card <https://huggingface.co/datasets/Salesforce/wikitext> (paper: Merity et al., "Pointer Sentinel Mixture Models", arXiv 1609.07843) | CC BY-SA 3.0 and GFDL (the dataset card lists both; other pages label it CC BY-SA 4.0) |
 
 How THME gets WikiText-2: `scripts/prepare_eval_tokens.py` downloads the raw zip from a mirror
 (<https://huggingface.co/datasets/ggml-org/ci>, file `wikitext-2-raw-v1.zip`) because it is a
-single stable file. The mirror is not the original source. Every report records the SHA-256 of the
-raw text used, so a copy fetched from the original source can be checked against it:
+single stable file. On 20 November 2026 we compared the mirror's `wiki.test.raw` and
+`wiki.train.raw` with the same files from the authors' original download
+(<https://wikitext.smerity.com/wikitext-2-raw-v1.zip>, zip dated 26 September 2016): both are
+**byte-identical** (same SHA-256 and size). The Hugging Face `Salesforce/wikitext` parquet files
+carry the same text but cut the lines differently, so their hashes do not match these; the hashes
+below are those of the authors' raw files. Every report records the SHA-256 of the raw text used,
+so anyone can check their own copy against it:
 
 | Split | File in the zip | SHA-256 of the raw file (recorded in the reports) |
 | :--- | :--- | :--- |
