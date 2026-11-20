@@ -127,8 +127,8 @@ Read briefly from the worktree (accuracy checked against source, not run):
   `docs/` (grep for "4x" and "slower than CPU" found nothing), so it is **not a committed
   measurement**; claim register V-30 is about a different claim. Consequence: `Auto` choosing GPU
   just because init works is wrong today; a speed probe must be able to choose CPU.
-- Studio chat device selector (CPU, GPU, CPU+GPU, experimental): I did not locate the code with a
-  quick grep (`CPU+GPU` strings not found in `src/gui`), so its wiring is not verified here. The plan
+- Studio chat device selector (CPU, GPU, CPU+GPU, experimental): it is in an open pull request
+  (#99), not yet on `main`, which is why `src/gui` does not show it. The plan
   should feed this selector a recommended default and a reason line.
 
 ## 5. Proposal: `thme plan-run` (name open; alternative `thme tune`)
@@ -281,5 +281,6 @@ play workspace) is the natural home.
 - Several vLLM, ExLlama, MLC and MLX details come from secondary pages and are marked as such.
 - Not verified: LM Studio algorithm, ExLlamaV3 internals, MLC runtime estimator, ONNX Runtime GenAI
   licence and auto-selection, any engine's thermal handling, threads default logic in llama.cpp.
-- No THME speed figure here is measured. The "4x slower on SmolLM-135M" figure is owner-reported and
-  has no committed report that I could find.
+- No THME speed figure here is measured. The "4x slower on SmolLM-135M" figure is a local one-run
+  timing from 20 November 2026 (128 tokens: 4.3 s GPU, 1.1 s CPU, RTX 4060 Ti, release build, includes
+  adapter start-up and weight upload); it is not a committed report.
