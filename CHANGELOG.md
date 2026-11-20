@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - v0.2.0 Measured Core
 
 ### Added
+- Real-model tests use the two small open-weights models, Pythia-14M and SmolLM-135M (`THME_TEST_MODELS_DIR`, `THME_REAL_MODEL_TESTS=1`), and print a SKIP reason when they do not run; the MedGemma-only tests are gone.
+- Fixed: `production_verification` refuses a checkpoint whose family or shape differs from `--target`, and names WikiText-2 only when the token file matches its provenance sidecar (otherwise the heading says "not WikiText-2").
+- Fixed: the MCP server no longer falls back to a MedGemma file under `%LOCALAPPDATA%` (THME-3051); it loads a model from `THME_MODEL` or an explicit argument only.
 - **First-pass audit tickets** (19 November 2026): THME-3047 to 3054 record the findings of a read-only audit (publication from a clean export, VS Code extension shell injection, release pipeline hardening, removal of agent notes and personal settings, a hard-coded model fallback, hygiene, a subprocess timeout, MCP trust model).
 - **Real-model tests are opt-in**: tests that open a real model file need `THME_REAL_MODEL_TESTS=1`.
 - **`thme download`**: fetch a model from the Hugging Face hub (config, tokenizer, safetensors or GGUF), licence printed first, checksum verified, pickle files skipped unless named, import scan after. Tested with a fake fetcher only.
