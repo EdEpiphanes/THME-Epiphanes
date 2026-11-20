@@ -77,6 +77,9 @@ pub enum TransformationRule {
     ActivationAware {
         format: String,
         alpha_grid: Vec<f32>,
+        /// `Calibrated` unless running control A (`PermutedScales`); absent in older JSON.
+        #[serde(default)]
+        scales: crate::transform::awq::ScaleSource,
     },
     /// GPTQ-style second-order rounding: round columns in a Cholesky-pivot order and let the
     /// not-yet-quantized columns absorb each rounding error, weighted by the calibration
@@ -300,14 +303,26 @@ fn apply_rule(
     let n = weights.len();
     let orig_norm_sq: f32 = weights.iter().map(|&x| x * x).sum();
     match rule {
-        TransformationRule::ActivationAware { format, alpha_grid } => {
-            let stats = ctx.calibration.ok_or(
+        TransformationRule::ActivationAware {
+            format,
+            alpha_grid,
+            scales,
+        } => {
+            let calibrated = ctx.calibration.ok_or(
                 "activation-aware rules need calibration statistics; run `thme calibrate` and pass `--calibration` to `thme evaluate`",
             )?;
             let round = ctx.round.ok_or(
                 "activation-aware rules need the block-format codec of the inference path",
             )?;
             let in_dim = ctx.row_width.unwrap_or(n);
+            let permuted;
+            let stats = match scales {
+                crate::transform::awq::ScaleSource::Calibrated => calibrated,
+                crate::transform::awq::ScaleSource::PermutedScales { seed } => {
+                    permuted = crate::transform::awq::permute_scales(calibrated, *seed);
+                    &permuted
+                }
+            };
             let round_in_format = |v: &mut [f32]| round(v, format).map_err(|e| anyhow::anyhow!(e));
             crate::transform::awq::activation_aware_quantize(
                 weights,
@@ -581,6 +596,7 @@ impl AlgorithmRegistry {
                 rule: TransformationRule::ActivationAware {
                     format: format.to_string(),
                     alpha_grid: (0..=10).map(|k| k as f32 / 10.0).collect(),
+                    scales: Default::default(),
                 },
             });
         }
@@ -803,6 +819,7 @@ mod tests {
             rule: TransformationRule::ActivationAware {
                 format: "grid".into(),
                 alpha_grid: vec![0.0, 0.5, 1.0],
+                scales: Default::default(),
             },
             ..AlgorithmRegistry::new()
                 .get("thme.awq_q4_0")
@@ -851,6 +868,68 @@ mod tests {
             .unwrap_err()
             .contains("codec"));
         assert!(rule.apply_to_weights(&mut w.clone()).is_err());
+    }
+
+    /// Control A (THME-2204): the permuted-scale option runs through the same context, changes
+    /// the output for some seed, and recipes written before the option keep the real scales.
+    #[test]
+    fn permuted_scale_control_runs_and_old_rules_default_to_calibrated() {
+        use crate::transform::awq::{ChannelStats, ScaleSource};
+        let mut mean_abs = vec![0.05f32; 8];
+        mean_abs[2] = 2.0;
+        let stats = ChannelStats {
+            rms: mean_abs.clone(),
+            mean_abs,
+        };
+        let w: Vec<f32> = (0..32)
+            .map(|i| ((i * 7 % 32) as f32 - 15.5) / 20.0)
+            .collect();
+        let round = |v: &mut [f32], _: &str| -> Result<(), String> {
+            v.iter_mut().for_each(|x| *x = (*x * 4.0).round() / 4.0);
+            Ok(())
+        };
+        let run = |scales: ScaleSource| {
+            let rule = AlgorithmDefinition {
+                rule: TransformationRule::ActivationAware {
+                    format: "grid".into(),
+                    alpha_grid: vec![0.0, 0.5, 1.0],
+                    scales,
+                },
+                ..AlgorithmRegistry::new()
+                    .get("thme.awq_q4_0")
+                    .unwrap()
+                    .clone()
+            };
+            let ctx = ApplyContext {
+                row_width: Some(8),
+                calibration: Some(&stats),
+                hessian: None,
+                round: Some(&round),
+            };
+            let mut out = w.clone();
+            rule.apply_with(&mut out, &ctx).map(|_| out)
+        };
+        let real = run(ScaleSource::Calibrated).unwrap();
+        let changed = (1..=5u64).any(|seed| {
+            run(ScaleSource::PermutedScales { seed })
+                .map(|out| out != real)
+                .unwrap_or(false)
+        });
+        assert!(
+            changed,
+            "a permuted scale vector should change the result for some seed"
+        );
+
+        let old_json =
+            r#"{"type":"ActivationAware","params":{"format":"Q4_0","alpha_grid":[0.0,1.0]}}"#;
+        let old: TransformationRule = serde_json::from_str(old_json).unwrap();
+        assert!(matches!(
+            old,
+            TransformationRule::ActivationAware {
+                scales: ScaleSource::Calibrated,
+                ..
+            }
+        ));
     }
 
     /// The zero band is in scaled units (w / gamma), like BitNet b1.58 round-and-clamp:
