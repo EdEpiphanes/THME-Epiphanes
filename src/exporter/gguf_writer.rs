@@ -5,8 +5,7 @@
 //! containers adhering to the GGML specification with 32-byte alignment.
 
 use anyhow::{bail, Result};
-use std::fs::File;
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{Read, Write};
 use std::path::Path;
 
 use crate::exporter::streaming_writer::StreamingChunkWriter;
@@ -324,23 +323,20 @@ impl GgufWriter {
             .zip(&payload_lengths)
         {
             if let Some(TensorPayloadSource::Copy(source)) = source {
-                let mut file = File::open(&source.path)
-                    .map_err(|_| anyhow::anyhow!("Failed to open GGUF tensor source payload"))?;
-                file.seek(SeekFrom::Start(source.byte_offset))
-                    .map_err(|_| anyhow::anyhow!("Failed to seek to GGUF tensor source payload"))?;
+                let mut payload = crate::inference::open_payload(source).map_err(|e| {
+                    anyhow::anyhow!("Failed to open GGUF tensor source payload: {e:#}")
+                })?;
                 let mut chunk_writer = StreamingChunkWriter::new(&mut writer);
                 total_written +=
-                    usize::try_from(chunk_writer.write_reader(&mut file, source.byte_len)?)?;
+                    usize::try_from(chunk_writer.write_reader(&mut payload, source.byte_len)?)?;
             } else if let Some(TensorPayloadSource::Convert {
                 source,
                 source_dtype,
             }) = source
             {
-                let mut file = File::open(&source.path)
-                    .map_err(|_| anyhow::anyhow!("Failed to open GGUF tensor source payload"))?;
-                file.seek(SeekFrom::Start(source.byte_offset))
-                    .map_err(|_| anyhow::anyhow!("Failed to seek to GGUF tensor source payload"))?;
-                let mut limited = file.take(source.byte_len);
+                let mut limited = crate::inference::open_payload(source).map_err(|e| {
+                    anyhow::anyhow!("Failed to open GGUF tensor source payload: {e:#}")
+                })?;
                 let elements = tensor
                     .shape
                     .iter()
@@ -356,7 +352,7 @@ impl GgufWriter {
                 if written != payload_len as u64 {
                     bail!("Converted GGUF tensor payload length mismatch");
                 }
-                if limited.limit() != 0 {
+                if limited.read(&mut [0u8; 1])? != 0 {
                     bail!("GGUF tensor source payload ended before recorded length");
                 }
                 total_written += usize::try_from(written)?;

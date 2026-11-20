@@ -48,6 +48,7 @@ fn resolve_or_pack_epiph_path(gguf_path: &Path) -> PathBuf {
         quantize: false,
         allow_partial: false,
         placement: None,
+        compress: None,
     };
     thme::cli::epiph::pack(&pack_args).expect("pack epiph container");
     target

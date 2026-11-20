@@ -99,6 +99,11 @@ pub struct PackArgs {
     /// Plan GPU/CPU placement for a memory budget, `VRAM_MIB:HOST_MIB`, and store it in the file
     #[arg(long, value_name = "VRAM_MIB:HOST_MIB")]
     pub placement: Option<String>,
+
+    /// Compress tensor payloads losslessly (`deflate`); a payload stays as stored when that is
+    /// not smaller. Put it after the model path, or give the value explicitly.
+    #[arg(long, value_name = "ENCODING", num_args = 0..=1, default_missing_value = "deflate")]
+    pub compress: Option<String>,
 }
 
 fn read_json(path: &Path) -> Result<Value> {
@@ -160,6 +165,11 @@ pub fn pack(args: &PackArgs) -> Result<epiph::PackSummary> {
             .map(epiph::placement::Budget::parse_mib)
             .transpose()?,
         store_selected: args.quantize,
+        compress: match args.compress.as_deref() {
+            None => None,
+            Some("deflate") => Some(epiph::Encoding::Deflate),
+            Some(other) => bail!("--compress takes deflate, not '{other}'"),
+        },
         hf_files: if args.model.is_dir() {
             epiph::HF_FILES
                 .iter()
@@ -185,6 +195,13 @@ pub fn execute(args: EpiphArgs) -> Result<()> {
             println!(
                 "Packed {} tensors and {} attachments into {:?} ({} bytes, sha256 {}{planned})",
                 s.tensors, s.attachments, pack_args.out, s.file_bytes, s.sha256
+            );
+            println!(
+                "Tensor payloads: {} compressed; {} bytes stored, {} decoded, ratio {:.3} (decoded/stored)",
+                s.compressed_tensors,
+                s.tensor_stored_bytes,
+                s.tensor_decoded_bytes,
+                s.ratio()
             );
         }
         EpiphCommand::Verify {
@@ -298,6 +315,7 @@ mod tests {
             quantize: false,
             allow_partial: false,
             placement: None,
+            compress: None,
         })
         .unwrap();
         let pair = minisign::KeyPair::generate_unencrypted_keypair().unwrap();
@@ -348,6 +366,7 @@ mod tests {
             quantize: true,
             allow_partial: false,
             placement: None,
+            compress: None,
         };
         pack(&base).unwrap();
         let (m, manifest) = epiph::read(&base.out).unwrap();
@@ -379,6 +398,7 @@ mod tests {
             quantize: false,
             allow_partial: false,
             placement: None,
+            compress: None,
         };
         pack(&args).unwrap();
         // Re-pack from the .epiph itself, recording lineage.
@@ -413,6 +433,7 @@ mod tests {
             quantize: false,
             allow_partial: false,
             placement: None,
+            compress: None,
         };
         assert!(pack(&bad).is_err());
     }
@@ -429,7 +450,22 @@ mod tests {
             quantize: false,
             allow_partial: false,
             placement: placement.map(String::from),
+            compress: None,
         }
+    }
+
+    #[test]
+    fn compress_flag_takes_deflate_and_refuses_other_values() {
+        let dir = tempfile::tempdir().unwrap();
+        let (model, _) = synthetic_checkpoint(dir.path());
+        let mut args = args_for(&model, &dir.path().join("c.epiph"), None);
+        args.compress = Some("deflate".into());
+        let summary = pack(&args).unwrap();
+        assert!(summary.tensor_stored_bytes <= summary.tensor_decoded_bytes);
+        args.compress = Some("gzip".into());
+        args.out = dir.path().join("g.epiph");
+        assert!(format!("{:#}", pack(&args).unwrap_err()).contains("deflate"));
+        assert!(!args.out.exists(), "nothing is written on a bad value");
     }
 
     #[test]
