@@ -1,0 +1,29 @@
+{
+  "ticket": "THME-3080 first question (A1a)",
+  "question": "Does the Q8_0 quality-gate failure of Pythia-14M come from the embedding and output-head matrices or from the linear layers?",
+  "status": "pre-registered, not yet run",
+  "pre_registration": {
+    "written_before_first_run": true,
+    "model": "Pythia-14M, fp16 safetensors as stored",
+    "corpus": "WikiText-2 raw test split, whole split, tokenised with the model's own tokenizer (hashes in the run reports)",
+    "tool": "thme evaluate, --eval-context 1024, default quality gate (max perplexity rise 0.45), --device auto",
+    "groups": {
+      "E": "embed_in (role Embedding) and embed_out (role OutputHead)",
+      "L": "attention qkv, attention output, MLP up, MLP down in layers 0 to 5"
+    },
+    "variants": [
+      "E at Q8_0, L as stored",
+      "L at Q8_0, E as stored",
+      "E and L at Q8_0",
+      "E at Q4_0, L as stored",
+      "L at Q4_0, E as stored",
+      "E and L at Q4_0"
+    ],
+    "unchanged": "norms and biases (1-D tensors) stay as stored in every variant",
+    "reproduction_check": "E and L at Q8_0 must reproduce the committed uniform Q8_0 rise of +0.8335 (verification_report.json) within 0.02 perplexity; if not, the report says so and the device difference is named as the first suspect, not hidden",
+    "rule": "At Q8_0 the group (E or L) whose single-group variant has the larger perplexity rise over the unquantised baseline is called the cause of the failure. A group 'fails alone' if its single-group rise exceeds 0.45. The same comparison at Q4_0 is reported as secondary. If the two single-group rises differ by less than 20 percent of the larger one, the result is called 'both contribute' instead of naming one cause.",
+    "also_reported": "additivity (rise of E alone plus rise of L alone versus rise of both), bytes of the written GGUF per variant, the quality-gate verdict per variant, device, adapter and driver as the run report records them",
+    "no_protocol_change_after_results": true
+  },
+  "results": null
+}

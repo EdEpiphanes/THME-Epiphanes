@@ -1,0 +1,8 @@
+{
+  "name": "a1a_both_q8_0",
+  "author": "THME-3080 A1a",
+  "target_model": "pythia-14m",
+  "version": "1.0",
+  "description": "a1a_both_q8_0: Q8_0 on Embedding OutputHead AttentionQkv AttentionOut MlpUp MlpDown, everything else as stored",
+  "operations": [{"type":"SetPrecision","params":{"start_layer":0,"end_layer":0,"role":"Embedding","format":"Q8_0"}},{"type":"SetPrecision","params":{"start_layer":0,"end_layer":0,"role":"OutputHead","format":"Q8_0"}},{"type":"SetPrecision","params":{"start_layer":0,"end_layer":5,"role":"AttentionQkv","format":"Q8_0"}},{"type":"SetPrecision","params":{"start_layer":0,"end_layer":5,"role":"AttentionOut","format":"Q8_0"}},{"type":"SetPrecision","params":{"start_layer":0,"end_layer":5,"role":"MlpUp","format":"Q8_0"}},{"type":"SetPrecision","params":{"start_layer":0,"end_layer":5,"role":"MlpDown","format":"Q8_0"}}]
+}

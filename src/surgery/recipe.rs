@@ -150,14 +150,19 @@ impl SurgeryEngine {
                     format,
                 } => {
                     for tensor in &mut model.tensors {
-                        if let Some(l) = tensor.layer_index {
-                            if l >= *start_layer
-                                && l <= *end_layer
-                                && role.is_none_or(|r| r == tensor.role)
-                            {
-                                tensor.selected_format = format.clone();
-                                modified_count += 1;
+                        // Tensors outside the layers (embeddings, head) are reached only by
+                        // naming their role; the layer range does not apply to them.
+                        let selected = match tensor.layer_index {
+                            Some(l) => {
+                                l >= *start_layer
+                                    && l <= *end_layer
+                                    && role.is_none_or(|r| r == tensor.role)
                             }
+                            None => *role == Some(tensor.role),
+                        };
+                        if selected {
+                            tensor.selected_format = format.clone();
+                            modified_count += 1;
                         }
                     }
                     audit_log.push(format!(
@@ -369,5 +374,46 @@ mod tests {
         let diff = SurgeryEngine::apply_recipe(&mut model, &recipe);
         assert_eq!(diff.modified_tensors_count, 3);
         assert!(diff.savings_percent > 0.0);
+    }
+
+    #[test]
+    fn explicit_role_reaches_tensors_without_a_layer_index() {
+        let tensors = vec![
+            TensorIR::new(
+                "gpt_neox.embed_in.weight".into(),
+                vec![64, 8],
+                "F16".into(),
+                1024,
+            ),
+            TensorIR::new("embed_out.weight".into(), vec![64, 8], "F16".into(), 1024),
+        ];
+        let mut model = ModelIR::new(
+            "m".into(),
+            ModelArchitecture::Llama,
+            1,
+            8,
+            1,
+            1,
+            64,
+            16,
+            tensors,
+        );
+        let set = |role| TweakRecipe {
+            operations: vec![TweakOperation::SetPrecision {
+                start_layer: 0,
+                end_layer: 99,
+                role,
+                format: TensorFormat::Q8_0,
+            }],
+            ..TweakRecipe::default()
+        };
+        // no role: layer-less tensors stay untouched, as before
+        SurgeryEngine::apply_recipe(&mut model, &set(None));
+        assert_ne!(model.tensors[0].selected_format, TensorFormat::Q8_0);
+        SurgeryEngine::apply_recipe(&mut model, &set(Some(TensorRole::Embedding)));
+        assert_eq!(model.tensors[0].selected_format, TensorFormat::Q8_0);
+        assert_ne!(model.tensors[1].selected_format, TensorFormat::Q8_0);
+        SurgeryEngine::apply_recipe(&mut model, &set(Some(TensorRole::OutputHead)));
+        assert_eq!(model.tensors[1].selected_format, TensorFormat::Q8_0);
     }
 }
