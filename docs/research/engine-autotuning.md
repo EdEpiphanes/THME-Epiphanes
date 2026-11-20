@@ -2,7 +2,7 @@
 
 Status: research note, 2026-11-20. Question: THME must pick the best settings to run each LLM on the
 user's machine instead of one fixed loading path. This note studies open engines, distils a recipe and
-proposes `thme plan-run`.
+proposes `thme pathfinder`.
 
 Rules for this note:
 
@@ -131,7 +131,7 @@ Read briefly from the worktree (accuracy checked against source, not run):
   (#99), not yet on `main`, which is why `src/gui` does not show it. The plan
   should feed this selector a recommended default and a reason line.
 
-## 5. Proposal: `thme plan-run` (name open; alternative `thme tune`)
+## 5. Proposal: `thme pathfinder` (named by the owner on 20 November 2026; the GPU/CPU backends are called Compute Bridge, detection stays `thme doctor`)
 
 ### 5.1 Contract
 
@@ -206,7 +206,7 @@ Purpose: replace the two least trustworthy predictions (device speed, scratch me
 - Budget: hard 2 s wall clock, abort on first error; run again only if the cache key changed.
 - Thermal: record that the probe is a burst; if a longer `--probe-seconds 15` was run, store the
   sustained ratio.
-- Validation: `plan-run --verify` loads the real model, generates a few tokens and writes
+- Validation: `pathfinder --verify` loads the real model, generates a few tokens and writes
   predicted vs measured into a report; that report is the only thing docs may quote.
 
 ### 5.4 Cache
@@ -217,11 +217,11 @@ Purpose: replace the two least trustworthy predictions (device speed, scratch me
   quant type, model shape hash). Free memory is NOT in the key (it is read fresh every run).
 - Entry: raw probe numbers, timestamp, schema version. TTL 30 days, invalidated by any key change
   (TensorRT's timing cache is similarly tied to device and versions, see section 1).
-- `thme plan-run --no-cache` and `--reprobe`.
+- `thme pathfinder --no-cache` and `--reprobe`.
 
 ### 5.5 Where it plugs in
 
-- `thme chat`, `thme serve`, Studio call `plan_run()` when device is `Auto` (replaces the "GPU if init
+- `thme chat`, `thme serve`, Studio call `pathfinder()` when device is `Auto` (replaces the "GPU if init
   works" rule in `DeviceArg::resolve`).
 - Studio device selector keeps the four choices; the plan supplies the default and a one-line reason.
   "CPU+GPU" is offered only when the plan has a Hybrid candidate.
@@ -232,7 +232,7 @@ Purpose: replace the two least trustworthy predictions (device speed, scratch me
 - Any explicit flag wins and removes that decision from tuning (llama.cpp's rule): `--device`,
   `--threads`, `--ctx`, `--kv-type`, `--batch`, `--gpu-layers`.
 - `--budget VRAM_MIB:HOST_MIB` reuses the existing `Budget::parse_mib`.
-- `--plan FILE` loads a saved RunPlan; `--explain` prints reasons; `thme plan-run --json` for tools.
+- `--plan FILE` loads a saved RunPlan; `--explain` prints reasons; `thme pathfinder --json` for tools.
 - A user override is shown with what the auto choice would have been.
 
 ### 5.7 Ticket list (numbers are placeholders; assign real THME ids when merging into BACKLOG.md)
@@ -247,7 +247,7 @@ play workspace) is the natural home. Filed in BACKLOG.md as THME-3055 to THME-30
 2. **[THME-PLAN-2] Memory model for a run** - p1, inference. Problem: placement counts weights only.
    Done: pure function from header + context + KV type to weights, KV and scratch bytes; table test
    against hand-computed LLaMA and GPT-NeoX shapes; no model read.
-3. **[THME-PLAN-3] `RunPlan` type and decision order, CPU-only** - p1, cli. Done: `thme plan-run
+3. **[THME-PLAN-3] `RunPlan` type and decision order, CPU-only** - p1, cli. Done: `thme pathfinder
    --model X` prints the plan for a header, with basis labels, using only `predicted`; golden-file
    test for a mock model (`examples/generate_mock_model.rs`).
 4. **[THME-PLAN-4] Shrink loop** - p1. Done: property test: for any budget the result fits or errors;

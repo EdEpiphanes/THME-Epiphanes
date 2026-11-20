@@ -193,6 +193,8 @@ def search_section(report, heading):
         spread = (f"{min(controls):+.3f} / {sum(controls) / len(controls):+.3f} / {max(controls):+.3f}"
                   if controls else "none distinct")
         verdict = "PASSED" if p["validation_delta"] <= ev["max_ppl_delta"] else "FAILED"
+        if p["achieved_fraction"] > p["budget"] + 1e-9:
+            verdict += " (BUDGET NOT MET)"
         lines.append(
             f"| {100 * p['budget']:.0f}% | {100 * p['achieved_fraction']:.1f}% | {p['validation_delta']:+.4f} | "
             f"{spread} | {verdict} |"
@@ -217,13 +219,8 @@ def generate_markdown(reports, output_md, sweep=None, probe=None, searches=None)
         "> Every number below was produced by a real forward pass on the host listed under Provenance.",
         "> Nothing in this document is simulated, projected, or estimated unless the row says so.",
         "",
-        "> **Known issue in the code that produced these reports (fixed 13 November 2026, THME-3023).**",
-        "> THME's float32-to-float16 conversion lost the rounding carry for values just below a",
-        "> power of two (about 1 value in 2,000), storing them at half their size. Block formats",
-        "> store their scale in float16, so in Q8_0, Q4_0 and ternary (TQ1_0) results, and in FP16",
-        "> results, roughly 1 block in 2,000 was decoded at half its true value. The numbers below",
-        "> are what that code measured; they likely overstate the quality loss of those formats",
-        "> slightly. They will be re-measured when model runs resume.",
+        "> These reports were measured with the code after the FP16 rounding fix (THME-3023, 13 November",
+        "> 2026). Reports measured before that fix were removed and re-run, not patched.",
         "",
         h("Perplexity Quality Gate"),
         "",

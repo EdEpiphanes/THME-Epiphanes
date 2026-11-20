@@ -388,17 +388,7 @@ fn tool_inspect_model(
         .and_then(|v| v.as_str())
         .map(ToString::to_string)
         .or_else(|| active_model_path.clone())
-        .or_else(|| std::env::var("THME_MODEL").ok())
-        .or_else(|| {
-            if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-                let p = std::path::PathBuf::from(local_app_data)
-                    .join("hermes/models/medgemma-4b-it-UD-Q4_K_XL.gguf");
-                if p.exists() {
-                    return Some(p.to_string_lossy().to_string());
-                }
-            }
-            None
-        });
+        .or_else(|| std::env::var("THME_MODEL").ok());
 
     if let Some(path_str) = model_path {
         let path = Path::new(&path_str);
@@ -453,17 +443,7 @@ fn tool_auto_decide(args: &Value, active_model_path: &Option<String>) -> Result<
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
         .or_else(|| active_model_path.clone())
-        .or_else(|| std::env::var("THME_MODEL").ok())
-        .or_else(|| {
-            if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-                let p = std::path::PathBuf::from(local_app_data)
-                    .join("hermes/models/medgemma-4b-it-UD-Q4_K_XL.gguf");
-                if p.exists() {
-                    return Some(p.to_string_lossy().to_string());
-                }
-            }
-            None
-        });
+        .or_else(|| std::env::var("THME_MODEL").ok());
 
     if let Some(ref path_str) = model_path {
         let p = std::path::Path::new(path_str);
@@ -496,7 +476,11 @@ fn tool_auto_decide(args: &Value, active_model_path: &Option<String>) -> Result<
                                 || t.name.contains("q_proj")
                                 || t.name.contains("o_proj")
                                 || t.name.contains("gate_proj")
-                                || t.name.contains("down_proj"))
+                                || t.name.contains("down_proj")
+                                // GPT-NeoX names (Pythia)
+                                || t.name.contains("attention.dense")
+                                || t.name.contains("dense_h_to_4h")
+                                || t.name.contains("dense_4h_to_h"))
                         {
                             let wp = t.weight_profile.clone().unwrap_or_else(|| {
                                 if let Ok(bytes) = crate::inference::read_tensor_bytes(t) {
@@ -546,6 +530,12 @@ fn tool_auto_decide(args: &Value, active_model_path: &Option<String>) -> Result<
                 if sampled_count > 0 {
                     return Ok(output);
                 }
+                // Never answer for a loaded model with made-up numbers.
+                return Err(format!(
+                    "No recognised linear tensors found in `{}` ({} tensors); no plan was made",
+                    model.name,
+                    model.tensors.len()
+                ));
             }
         }
     }
@@ -559,7 +549,9 @@ fn tool_auto_decide(args: &Value, active_model_path: &Option<String>) -> Result<
     ];
 
     let mut output = format!(
-        "### THME Pareto AutoDecider Plan (Tolerance ε = {:.3})\n\n",
+        "### THME Pareto AutoDecider Plan, ILLUSTRATIVE EXAMPLE (no model loaded; tensor names and numbers are made up, not measured; ε = {:.3})
+
+",
         tol
     );
     output.push_str("| Tensor Parameter | Outlier Ratio | Spectral Decay | Layer | Recommended Algorithm | Reason |\n");
@@ -601,17 +593,7 @@ fn tool_apply_surgery(args: &Value, active_model_path: &Option<String>) -> Resul
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
         .or_else(|| active_model_path.clone())
-        .or_else(|| std::env::var("THME_MODEL").ok())
-        .or_else(|| {
-            if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-                let p = std::path::PathBuf::from(local_app_data)
-                    .join("hermes/models/medgemma-4b-it-UD-Q4_K_XL.gguf");
-                if p.exists() {
-                    return Some(p.to_string_lossy().to_string());
-                }
-            }
-            None
-        });
+        .or_else(|| std::env::var("THME_MODEL").ok());
 
     let (mut model_ir, target_desc) = if let Some(ref path_str) = model_path {
         let p = std::path::Path::new(path_str);
@@ -702,17 +684,7 @@ fn tool_validate_quality(
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
         .or_else(|| active_model_path.clone())
-        .or_else(|| std::env::var("THME_MODEL").ok())
-        .or_else(|| {
-            if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-                let p = std::path::PathBuf::from(local_app_data)
-                    .join("hermes/models/medgemma-4b-it-UD-Q4_K_XL.gguf");
-                if p.exists() {
-                    return Some(p.to_string_lossy().to_string());
-                }
-            }
-            None
-        });
+        .or_else(|| std::env::var("THME_MODEL").ok());
 
     let tokens_path = args.get("tokens_path").and_then(|v| v.as_str());
 
@@ -791,17 +763,7 @@ fn tool_simulate_token_flow(
         .and_then(|v| v.as_str())
         .map(ToString::to_string)
         .or_else(|| active_model_path.clone())
-        .or_else(|| std::env::var("THME_MODEL").ok())
-        .or_else(|| {
-            if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-                let p = std::path::PathBuf::from(local_app_data)
-                    .join("hermes/models/medgemma-4b-it-UD-Q4_K_XL.gguf");
-                if p.exists() {
-                    return Some(p.to_string_lossy().to_string());
-                }
-            }
-            None
-        });
+        .or_else(|| std::env::var("THME_MODEL").ok());
 
     let (num_layers, hidden_size, vocab) = if let Some(ref path_str) = model_path_str {
         let p = Path::new(path_str);
@@ -1348,16 +1310,6 @@ fn tool_forward_pass(
         .map(String::from)
         .or_else(|| active_model_path.clone())
         .or_else(|| std::env::var("THME_MODEL").ok())
-        .or_else(|| {
-            if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-                let p = std::path::PathBuf::from(local_app_data)
-                    .join("hermes/models/medgemma-4b-it-UD-Q4_K_XL.gguf");
-                if p.exists() {
-                    return Some(p.to_string_lossy().to_string());
-                }
-            }
-            None
-        })
         .ok_or_else(|| "No model path provided or found in environment".to_string())?;
 
     let p = std::path::Path::new(&model_path);
