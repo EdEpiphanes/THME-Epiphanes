@@ -66,21 +66,38 @@ fn main(@builtin(workgroup_id) wid: vec3<u32>, @builtin(local_invocation_id) lid
 
         var s: array<f32, KT>;
         var tile_max = -3.0e38;
-        for (var j = 0u; j < KT; j++) {
-            var a = vec4<f32>(0.0);
-            for (var c = 0u; c < HD4; c++) { a += q[c] * ks[j * HD4 + c]; }
-            let sc = a.x + a.y + a.z + a.w;
-            s[j] = select(-3.0e38, sc, k0 + j <= qi);
-            tile_max = max(tile_max, s[j]);
+        for (var j = 0u; j < KT; j += 4u) {
+            var a0 = vec4<f32>(0.0);
+            var a1 = vec4<f32>(0.0);
+            var a2 = vec4<f32>(0.0);
+            var a3 = vec4<f32>(0.0);
+            for (var c = 0u; c < HD4; c++) {
+                let qc = q[c];
+                a0 += qc * ks[j * HD4 + c];
+                a1 += qc * ks[(j + 1u) * HD4 + c];
+                a2 += qc * ks[(j + 2u) * HD4 + c];
+                a3 += qc * ks[(j + 3u) * HD4 + c];
+            }
+            s[j] = select(-3.0e38, a0.x + a0.y + a0.z + a0.w, k0 + j <= qi);
+            s[j + 1u] = select(-3.0e38, a1.x + a1.y + a1.z + a1.w, k0 + j + 1u <= qi);
+            s[j + 2u] = select(-3.0e38, a2.x + a2.y + a2.z + a2.w, k0 + j + 2u <= qi);
+            s[j + 3u] = select(-3.0e38, a3.x + a3.y + a3.z + a3.w, k0 + j + 3u <= qi);
+            tile_max = max(tile_max, max(max(s[j], s[j + 1u]), max(s[j + 2u], s[j + 3u])));
         }
         let m_new = max(m, tile_max);
         let alpha = exp(m - m_new);
         l *= alpha;
         for (var c = 0u; c < HD4; c++) { o[c] *= alpha; }
-        for (var j = 0u; j < KT; j++) {
-            let w = select(0.0, exp(s[j] - m_new), k0 + j <= qi);
-            l += w;
-            for (var c = 0u; c < HD4; c++) { o[c] += w * vs[j * HD4 + c]; }
+        for (var j = 0u; j < KT; j += 4u) {
+            let w0 = select(0.0, exp(s[j] - m_new), k0 + j <= qi);
+            let w1 = select(0.0, exp(s[j + 1u] - m_new), k0 + j + 1u <= qi);
+            let w2 = select(0.0, exp(s[j + 2u] - m_new), k0 + j + 2u <= qi);
+            let w3 = select(0.0, exp(s[j + 3u] - m_new), k0 + j + 3u <= qi);
+            l += (w0 + w1) + (w2 + w3);
+            for (var c = 0u; c < HD4; c++) {
+                o[c] += (w0 * vs[j * HD4 + c] + w1 * vs[(j + 1u) * HD4 + c])
+                    + (w2 * vs[(j + 2u) * HD4 + c] + w3 * vs[(j + 3u) * HD4 + c]);
+            }
         }
         m = m_new;
         workgroupBarrier();
