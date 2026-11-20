@@ -363,11 +363,7 @@ impl GpuContext {
         slice.map_async(wgpu::MapMode::Read, move |res| {
             let _ = tx.send(res);
         });
-        dev.poll(wgpu::PollType::Wait {
-            submission_index: None,
-            timeout: None,
-        })
-        .map_err(|e| ThmeError::DataTransferFailed(format!("GPU poll failed: {e}")))?;
+        self.wait_for_device()?;
         rx.recv()
             .map_err(|e| ThmeError::DataTransferFailed(format!("GPU channel recv failed: {e}")))?
             .map_err(|e| ThmeError::DataTransferFailed(format!("GPU buffer map failed: {e}")))?;
@@ -659,11 +655,7 @@ impl GpuContext {
         slice.map_async(wgpu::MapMode::Read, move |res| {
             let _ = tx.send(res);
         });
-        dev.poll(wgpu::PollType::Wait {
-            submission_index: None,
-            timeout: None,
-        })
-        .map_err(|e| ThmeError::DataTransferFailed(format!("GPU poll failed: {e}")))?;
+        self.wait_for_device()?;
         rx.recv()
             .map_err(|e| ThmeError::DataTransferFailed(format!("GPU channel recv failed: {e}")))?
             .map_err(|e| ThmeError::DataTransferFailed(format!("GPU buffer map failed: {e}")))?;
