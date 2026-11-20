@@ -48,12 +48,19 @@ struct Cli {
     /// Resident weight budget in GiB (library default when absent)
     #[arg(long, global = true)]
     weight_budget_gb: Option<usize>,
-    /// Use the cooperative-matrix (tensor-core) matmul when the adapter has it
+    /// Cooperative-matrix (tensor-core) matmul for every weight storage; without --coop or
+    /// --no-coop the library default applies (on for f16 weights when the adapter has it)
     #[arg(long, global = true)]
     coop: bool,
+    /// Never use cooperative matrices (paired baseline)
+    #[arg(long, global = true)]
+    no_coop: bool,
     /// With --coop and f16 weights, stage the weights too instead of reading them in place
     #[arg(long, global = true)]
     no_coop_direct: bool,
+    /// With --coop, keep the tiled (not cooperative-matrix) attention kernel
+    #[arg(long, global = true)]
+    no_coop_attention: bool,
     /// Weight storage on the device: f32, f16, q8_0 or q4_0
     #[arg(long, global = true, default_value = "f32")]
     weights: String,
@@ -116,7 +123,7 @@ fn header(cli: &Cli, gpu: &GpuContext) -> Value {
         "shader_f16": gpu.shader_f16_supported(),
         "weights_requested": cli.weights,
         "coop_matrix_ready": gpu.coop_matrix_ready(),
-        "coop_matrix_requested": cli.coop,
+        "coop_flag": if cli.no_coop { "off" } else if cli.coop { "all storages" } else { "library default" },
         "old_gemm_kernel": cli.old_gemm,
         "old_attention_kernel": cli.old_attention,
         "weight_budget_gb": cli.weight_budget_gb,
@@ -322,8 +329,13 @@ fn main() -> Result<()> {
     let gpu = Arc::new(GpuContext::init().context("GPU adapter init failed")?);
     gpu.set_weight_storage(parse_storage(&cli.weights)?);
     gpu.set_register_blocked_gemm(!cli.old_gemm);
-    gpu.set_coop_matrix(cli.coop);
+    if cli.no_coop {
+        gpu.set_coop_matrix(false);
+    } else if cli.coop {
+        gpu.set_coop_matrix(true);
+    }
     gpu.set_coop_direct_f16(!cli.no_coop_direct);
+    gpu.set_coop_attention(!cli.no_coop_attention);
     gpu.set_tiled_attention(!cli.old_attention);
     if let Some(gb) = cli.weight_budget_gb {
         gpu.set_weight_budget(gb << 30);

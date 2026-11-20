@@ -20,11 +20,12 @@ fn main() -> Result<()> {
         flags: wgpu::InstanceFlags::empty(),
         ..wgpu::InstanceDescriptor::new_without_display_handle()
     });
-    let reports: Vec<Value> = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY))
-        .iter()
-        .filter(|a| a.get_info().device_type != wgpu::DeviceType::Cpu)
-        .map(audit)
-        .collect();
+    let reports: Vec<Value> =
+        pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY))
+            .iter()
+            .filter(|a| a.get_info().device_type != wgpu::DeviceType::Cpu)
+            .map(audit)
+            .collect();
     let text = serde_json::to_string_pretty(&json!({ "adapters": reports }))?;
     match out {
         Some(p) => std::fs::write(&p, text + "\n").with_context(|| p.display().to_string())?,

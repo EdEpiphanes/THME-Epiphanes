@@ -120,6 +120,42 @@ impl DecoderKernels {
 }
 
 impl DecoderKernels {
+    /// The cooperative-matrix attention pipeline (head size 64), compiled once; cached under the
+    /// head size 0 of the tiled map.
+    fn coop_attention(
+        &self,
+        device: &wgpu::Device,
+    ) -> Result<std::sync::Arc<wgpu::ComputePipeline>, ThmeError> {
+        let mut cache = self
+            .tiled
+            .lock()
+            .map_err(|_| ThmeError::ExecutionFailed("attention pipeline cache poisoned".into()))?;
+        if let Some(hit) = cache.get(&0) {
+            return Ok(std::sync::Arc::clone(hit));
+        }
+        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("attention_coop"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/attention_coop.wgsl").into()),
+        });
+        let pipeline = std::sync::Arc::new(device.create_compute_pipeline(
+            &wgpu::ComputePipelineDescriptor {
+                label: Some("attention_coop"),
+                layout: Some(&self.pipeline_layout),
+                module: &module,
+                entry_point: Some("main"),
+                compilation_options: Default::default(),
+                cache: None,
+            },
+        ));
+        cache.insert(0, std::sync::Arc::clone(&pipeline));
+        Ok(pipeline)
+    }
+
+    /// Compiles the cooperative-matrix attention pipeline ahead of use (the capability probe).
+    pub(super) fn coop_attention_pipeline(&self, device: &wgpu::Device) -> Result<(), ThmeError> {
+        self.coop_attention(device).map(|_| ())
+    }
+
     /// The tiled attention pipeline for `head_dim`, compiled once per head size.
     fn tiled_attention(
         &self,
@@ -653,8 +689,10 @@ impl GpuContext {
             let kx = &self.decoder;
             let lay = &kx.layout;
             let (td, tint) = (t * d, t * plan.inter);
+            let coop_attention = self.attention_kernel_name(hd) == "coop";
             let tiled_attention = match self.attention_kernel_name(hd) {
                 "tiled" => Some(kx.tiled_attention(dev, hd)?),
+                "coop" => Some(kx.coop_attention(dev)?),
                 _ => None,
             };
             let eps = plan.eps.to_bits();
@@ -690,7 +728,11 @@ impl GpuContext {
                 )?;
                 match &tiled_attention {
                     Some(tiled) => rec.op(
-                        "attention tiled",
+                        if coop_attention {
+                            "attention coop"
+                        } else {
+                            "attention tiled"
+                        },
                         tiled,
                         words(&[t as u32, heads as u32, kv_heads as u32, hd as u32, scale]),
                         [&q, &k, &v, &mixed],
