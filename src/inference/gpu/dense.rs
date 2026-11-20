@@ -104,9 +104,12 @@ pub fn repack_blocks(storage: WeightStorage, blocks: &[u8]) -> Result<Vec<u8>, T
     Ok(out)
 }
 
+/// Packed bytes of one chunk: scales (or the whole payload) and codes.
+type Packed = Result<(Vec<u8>, Vec<u8>), ThmeError>;
+
 /// Converts `w` to the device layout of `storage`, splitting the work over the host threads.
 pub(super) fn pack_for_device(storage: WeightStorage, w: &[f32]) -> Result<Vec<u8>, ThmeError> {
-    let one = |part: &[f32]| -> Result<(Vec<u8>, Vec<u8>), ThmeError> {
+    let one = |part: &[f32]| -> Packed {
         match storage {
             WeightStorage::F32 => Ok((bytemuck::cast_slice(part).to_vec(), Vec::new())),
             WeightStorage::F16 => Ok((
@@ -127,7 +130,7 @@ pub(super) fn pack_for_device(storage: WeightStorage, w: &[f32]) -> Result<Vec<u
     };
     let threads = std::thread::available_parallelism().map_or(1, |n| n.get());
     let step = (w.len() / threads).next_multiple_of(BLOCK).max(BLOCK);
-    let parts: Vec<Result<(Vec<u8>, Vec<u8>), ThmeError>> = std::thread::scope(|scope| {
+    let parts: Vec<Packed> = std::thread::scope(|scope| {
         let handles: Vec<_> = w
             .chunks(step)
             .map(|part| scope.spawn(move || one(part)))

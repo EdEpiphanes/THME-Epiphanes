@@ -15,7 +15,7 @@ use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -120,7 +120,7 @@ fn header(cli: &Cli, gpu: &GpuContext) -> Value {
     })
 }
 
-fn load(gpu: &Arc<GpuContext>, model_path: &PathBuf) -> Result<Box<dyn thme::inference::CausalLm>> {
+fn load(gpu: &Arc<GpuContext>, model_path: &Path) -> Result<Box<dyn thme::inference::CausalLm>> {
     let ir = ModelImporter::import(model_path).context("model import failed")?;
     let config = ArchConfig::detect(&ir, model_path)?;
     let backend: Arc<dyn GpuBackend> = gpu.clone();
@@ -141,8 +141,8 @@ fn label_flops(label: &str) -> f64 {
 fn profile(
     cli: &Cli,
     gpu: &Arc<GpuContext>,
-    model_path: &PathBuf,
-    tokens: &PathBuf,
+    model_path: &Path,
+    tokens: &Path,
     window: usize,
 ) -> Result<Value> {
     let model = load(gpu, model_path)?;
@@ -267,8 +267,8 @@ fn gemm(cli: &Cli, gpu: &Arc<GpuContext>, rows: usize, runs: usize) -> Result<Va
 fn ppl(
     cli: &Cli,
     gpu: &Arc<GpuContext>,
-    model_path: &PathBuf,
-    tokens: &PathBuf,
+    model_path: &Path,
+    tokens: &Path,
     context: usize,
     max_tokens: Option<usize>,
 ) -> Result<Value> {

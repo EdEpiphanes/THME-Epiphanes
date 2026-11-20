@@ -717,13 +717,18 @@ fn tiled_attention_matches_the_reference_kernel_across_blocks_and_head_sizes() {
 fn cpu_decode_blocks(storage: thme::inference::gpu::WeightStorage, blocks: &[u8]) -> Vec<f32> {
     use thme::inference::gpu::WeightStorage;
     use thme::parser::gguf::GgufBlockDecoder;
-    let (size, unpack): (usize, fn(&[u8]) -> anyhow::Result<[f32; 32]>) = match storage {
-        WeightStorage::Q8_0 => (34, GgufBlockDecoder::unpack_q8_0),
-        _ => (18, GgufBlockDecoder::unpack_q4_0),
-    };
+    let q8 = storage == WeightStorage::Q8_0;
+    let size = if q8 { 34 } else { 18 };
     blocks
         .chunks_exact(size)
-        .flat_map(|b| unpack(b).expect("block"))
+        .flat_map(|b| {
+            if q8 {
+                GgufBlockDecoder::unpack_q8_0(b)
+            } else {
+                GgufBlockDecoder::unpack_q4_0(b)
+            }
+            .expect("block")
+        })
         .collect()
 }
 
