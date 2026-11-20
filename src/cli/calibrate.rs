@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 use clap::Args;
 use std::path::PathBuf;
 
+use crate::inference::gpu::DeviceArg;
 use crate::inference::{collect_calibration, read_token_file, ArchConfig, WeightPrecision};
 use crate::parser::ModelImporter;
 
@@ -28,6 +29,10 @@ pub struct CalibrateArgs {
     #[arg(long, default_value_t = 32_768)]
     pub max_tokens: usize,
 
+    /// Execution compute device (auto, gpu, cpu)
+    #[arg(long, value_enum, default_value_t = DeviceArg::Auto)]
+    pub device: DeviceArg,
+
     /// Output statistics file
     #[arg(long, default_value = "target/calibration.json")]
     pub out: PathBuf,
@@ -37,7 +42,9 @@ pub fn execute(args: CalibrateArgs) -> Result<()> {
     let ir = ModelImporter::import(&args.model)
         .with_context(|| format!("Failed to load model from {:?}", args.model))?;
     let arch = ArchConfig::detect(&ir, &args.model)?;
-    let model = arch.load(&ir, WeightPrecision::AsStored)?;
+    let gpu = args.device.resolve();
+    let device = crate::cli::evaluate::device_json(args.device, gpu.as_deref());
+    let model = arch.load_with_gpu(&ir, WeightPrecision::AsStored, gpu)?;
     let tokens = read_token_file(&args.tokens)?;
     println!(
         "Calibrating '{}' ({}) on up to {} tokens, {} per window",
@@ -46,7 +53,8 @@ pub fn execute(args: CalibrateArgs) -> Result<()> {
         args.max_tokens.min(tokens.len()),
         args.context
     );
-    let file = collect_calibration(&*model, &ir, &tokens, args.context, Some(args.max_tokens))?;
+    let mut file = collect_calibration(&*model, &ir, &tokens, args.context, Some(args.max_tokens))?;
+    file.device = Some(device);
     file.save(&args.out)?;
     println!(
         "Recorded {} tensors over {} tokens -> {:?}",

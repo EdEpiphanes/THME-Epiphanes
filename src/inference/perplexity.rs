@@ -7,7 +7,7 @@
 //! `exp(mean negative log-likelihood)` over all scored tokens.
 
 use anyhow::{bail, Context, Result};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::time::Instant;
 
@@ -22,7 +22,7 @@ pub struct PerplexityConfig {
     pub max_tokens: Option<usize>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PerplexityReport {
     pub perplexity: f64,
     pub cross_entropy_nats: f64,

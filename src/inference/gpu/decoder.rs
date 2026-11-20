@@ -129,6 +129,7 @@ impl<'a> Recorder<'a, '_> {
     }
 
     /// Y[rows, out_dim] = X[rows, in_dim] * W^T, written at `out` from float 0.
+    #[allow(clippy::too_many_arguments)]
     fn linear(
         &mut self,
         x: &wgpu::Buffer,
