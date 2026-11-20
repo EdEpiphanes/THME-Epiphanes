@@ -225,6 +225,11 @@ impl QuantizedTensor {
     }
 
     /// Returns a reference to the uploaded GPU buffer, uploading on first access.
+    /// True once the weights live on a device buffer.
+    pub fn has_gpu_buffer(&self) -> bool {
+        self.gpu_buffer.get().is_some()
+    }
+
     pub fn get_or_create_gpu_buffer(
         &self,
         device: &wgpu::Device,

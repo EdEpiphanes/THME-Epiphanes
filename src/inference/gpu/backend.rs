@@ -2,7 +2,9 @@
 //! WGPU Compute Acceleration Backend for THME Tensor Forward Passes.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use super::error::ThmeError;
 use super::tensor::{QuantDtype, QuantizedTensor};
@@ -64,6 +66,47 @@ pub struct GemvParams {
     pub stride_bytes: u32,
 }
 
+/// Cumulative host-side wall-clock counters for the GPU path, read with [`GpuContext::stats`].
+/// Times are nanoseconds on the host; they say where the host waited, not kernel time.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize)]
+pub struct GpuStats {
+    /// Compute dispatches encoded.
+    pub dispatches: u64,
+    /// Command buffer submissions (each one is followed by one wait and read-back).
+    pub submits: u64,
+    /// Weight buffers created on the device.
+    pub weight_uploads: u64,
+    /// Time creating and filling weight buffers.
+    pub weight_upload_ns: u64,
+    /// Time writing inputs and parameters to the device.
+    pub input_write_ns: u64,
+    /// Time creating bind groups and encoding commands.
+    pub encode_ns: u64,
+    /// Time inside `queue.submit`.
+    pub submit_ns: u64,
+    /// Time waiting for the device to finish and the map callback.
+    pub wait_ns: u64,
+    /// Time copying mapped results into host vectors.
+    pub readback_ns: u64,
+}
+
+#[derive(Default)]
+struct StatCounters {
+    dispatches: AtomicU64,
+    submits: AtomicU64,
+    weight_uploads: AtomicU64,
+    weight_upload_ns: AtomicU64,
+    input_write_ns: AtomicU64,
+    encode_ns: AtomicU64,
+    submit_ns: AtomicU64,
+    wait_ns: AtomicU64,
+    readback_ns: AtomicU64,
+}
+
+fn bump(counter: &AtomicU64, since: Instant) {
+    counter.fetch_add(since.elapsed().as_nanos() as u64, Ordering::Relaxed);
+}
+
 struct BufferPool {
     input_buffer: wgpu::Buffer,
     input_capacity: usize,
@@ -81,6 +124,7 @@ pub struct GpuContext {
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub adapter_info: wgpu::AdapterInfo,
     buffer_pool: Mutex<BufferPool>,
+    counters: StatCounters,
 }
 
 impl GpuContext {
@@ -235,7 +279,25 @@ impl GpuContext {
             bind_group_layout,
             adapter_info,
             buffer_pool,
+            counters: StatCounters::default(),
         })
+    }
+
+    /// Snapshot of the cumulative host-side counters.
+    pub fn stats(&self) -> GpuStats {
+        let c = &self.counters;
+        let get = |a: &AtomicU64| a.load(Ordering::Relaxed);
+        GpuStats {
+            dispatches: get(&c.dispatches),
+            submits: get(&c.submits),
+            weight_uploads: get(&c.weight_uploads),
+            weight_upload_ns: get(&c.weight_upload_ns),
+            input_write_ns: get(&c.input_write_ns),
+            encode_ns: get(&c.encode_ns),
+            submit_ns: get(&c.submit_ns),
+            wait_ns: get(&c.wait_ns),
+            readback_ns: get(&c.readback_ns),
+        }
     }
 
     /// Dispatches a single vector GEMV (y = W * x) for length `in_dim` -> `out_dim`.
@@ -305,11 +367,14 @@ impl GpuContext {
             pool.staging_capacity = new_cap;
         }
 
+        let t_in = Instant::now();
         self.queue
             .write_buffer(&pool.params_buffer, 0, bytemuck::bytes_of(&params));
         self.queue
             .write_buffer(&pool.input_buffer, 0, bytemuck::cast_slice(x));
+        bump(&self.counters.input_write_ns, t_in);
 
+        let t_enc = Instant::now();
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("gemv_bind_group"),
             layout: &self.bind_group_layout,
@@ -357,8 +422,16 @@ impl GpuContext {
             y_bytes as u64,
         );
 
-        self.queue.submit(Some(encoder.finish()));
+        let finished = encoder.finish();
+        bump(&self.counters.encode_ns, t_enc);
+        self.counters.dispatches.fetch_add(1, Ordering::Relaxed);
+        self.counters.submits.fetch_add(1, Ordering::Relaxed);
 
+        let t_sub = Instant::now();
+        self.queue.submit(Some(finished));
+        bump(&self.counters.submit_ns, t_sub);
+
+        let t_wait = Instant::now();
         let slice = pool.staging_buffer.slice(..y_bytes as u64);
         let (tx, rx) = std::sync::mpsc::channel();
         slice.map_async(wgpu::MapMode::Read, move |res| {
@@ -375,12 +448,16 @@ impl GpuContext {
             .map_err(|e| ThmeError::DataTransferFailed(format!("GPU channel recv failed: {e}")))?
             .map_err(|e| ThmeError::DataTransferFailed(format!("GPU buffer map failed: {e}")))?;
 
+        bump(&self.counters.wait_ns, t_wait);
+
+        let t_read = Instant::now();
         let data = slice
             .get_mapped_range()
             .map_err(|e| ThmeError::DataTransferFailed(format!("GPU map range failed: {e}")))?;
         let result: Vec<f32> = bytemuck::cast_slice(&data).to_vec();
         drop(data);
         pool.staging_buffer.unmap();
+        bump(&self.counters.readback_ns, t_read);
 
         Ok(result)
     }
@@ -439,7 +516,13 @@ impl GpuBackend for GpuContext {
             }
         };
 
+        let t_up = Instant::now();
+        let fresh = !weights.has_gpu_buffer();
         let weights_buf = weights.get_or_create_gpu_buffer(&self.device)?;
+        if fresh {
+            self.counters.weight_uploads.fetch_add(1, Ordering::Relaxed);
+            bump(&self.counters.weight_upload_ns, t_up);
+        }
         let rows = x.len() / in_dim;
 
         if rows == 1 {

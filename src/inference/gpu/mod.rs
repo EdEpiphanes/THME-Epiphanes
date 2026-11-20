@@ -7,7 +7,7 @@ pub mod tensor;
 
 pub use backend::{
     dispatch_linear, dispatch_linear_slice, dispatch_score_head, dispatch_score_head_slice,
-    score_head_from_logits, DeviceArg, GemvParams, GpuBackend, GpuContext, ShaderKind,
+    score_head_from_logits, DeviceArg, GemvParams, GpuBackend, GpuContext, GpuStats, ShaderKind,
 };
 pub use error::ThmeError;
 pub use tensor::{QuantDtype, QuantizedTensor};
