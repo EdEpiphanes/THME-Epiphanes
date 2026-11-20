@@ -9,6 +9,7 @@ use std::time::Instant;
 use wgpu::util::DeviceExt;
 
 use super::decoder::{DecoderKernels, DecoderPlan};
+use super::dense::DenseKernel;
 
 use super::error::ThmeError;
 use super::tensor::{QuantDtype, QuantizedTensor};
@@ -117,7 +118,7 @@ pub(super) struct StatCounters {
 
 /// How dense weights are stored on the device. Activations and accumulation stay f32.
 #[allow(non_camel_case_types)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum WeightStorage {
     #[default]
     F32,
@@ -288,7 +289,7 @@ struct CachedWeight {
 
 #[derive(Default)]
 struct WeightCache {
-    entries: HashMap<(usize, usize), CachedWeight>,
+    entries: HashMap<(usize, usize, u8), CachedWeight>,
     bytes: usize,
 }
 
@@ -303,13 +304,19 @@ fn fingerprint(w: &[f32]) -> u64 {
     h
 }
 
+/// A weight matrix on the device with the storage format its kernel must decode.
+#[derive(Clone)]
+pub(super) struct DeviceWeight {
+    pub(super) buffer: Arc<wgpu::Buffer>,
+    pub(super) storage: WeightStorage,
+}
+
 /// One linear in a batched submission: `Y = X * W^T` for the shared input rows.
 struct LinearOp<'a> {
     kind: ShaderKind,
+    storage: WeightStorage,
     weights: &'a wgpu::Buffer,
     out_dim: usize,
-    /// Offset, in floats, of this op's block in the shared output buffer.
-    out_offset: usize,
 }
 
 pub struct GpuContext {
@@ -321,6 +328,9 @@ pub struct GpuContext {
     pub(super) gemm_f32: wgpu::ComputePipeline,
     /// Register-blocked kernel; `None` when the device's workgroup memory is too small.
     pub(super) gemm_v4: Option<wgpu::ComputePipeline>,
+    /// Kernels for f16 / Q8_0 / Q4_0 weights, compiled on first use.
+    dense: Mutex<HashMap<(DenseKernel, WeightStorage), wgpu::ComputePipeline>>,
+    dense_layout: wgpu::PipelineLayout,
     pub(super) decoder: DecoderKernels,
     pub(super) timestamps: Option<TimestampProbe>,
     pub(super) kernel_timing: AtomicBool,
@@ -427,6 +437,7 @@ impl GpuContext {
             bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
         });
+        let dense_layout = pipeline_layout.clone();
         let build = |label: &str, source: &str| {
             let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some(label),
@@ -462,7 +473,12 @@ impl GpuContext {
         ]);
         let gemm_f32 = build("F32_gemm", include_str!("shaders/gemm_f32.wgsl"));
         let gemm_v4 = (device.limits().max_compute_workgroup_storage_size >= GEMM_V4_SHARED_BYTES)
-            .then(|| build("F32_gemm_v4", include_str!("shaders/gemm_f32_v4.wgsl")));
+            .then(|| {
+                build(
+                    "F32_gemm_v4",
+                    &super::dense::kernel_source(DenseKernel::Gemm, WeightStorage::F32),
+                )
+            });
         let scratch = Mutex::new(Scratch::new(&device));
         let decoder = DecoderKernels::new(&device);
         let timestamps = timestamp_support.then(|| TimestampProbe::new(&device, &queue));
@@ -475,6 +491,8 @@ impl GpuContext {
             adapter_info,
             gemm_f32,
             gemm_v4,
+            dense: Mutex::new(HashMap::new()),
+            dense_layout,
             decoder,
             timestamps,
             kernel_timing: AtomicBool::new(false),
@@ -596,26 +614,55 @@ impl GpuContext {
         }
     }
 
-    /// Pipeline, workgroup grid and kernel name for a dense f32 linear.
+    /// Pipeline, workgroup grid and kernel name for a dense linear stored as `storage`.
     pub(super) fn dense_dispatch(
         &self,
+        storage: WeightStorage,
         rows: usize,
         in_dim: usize,
         out_dim: usize,
         out_offset: usize,
-    ) -> Result<(&wgpu::ComputePipeline, [u32; 3], &'static str), ThmeError> {
+    ) -> Result<(wgpu::ComputePipeline, [u32; 3], &'static str), ThmeError> {
         let (r, o) = (rows as u32, out_dim as u32);
+        if storage != WeightStorage::F32 {
+            let few = rows <= GEMV_MAX_ROWS;
+            let kernel = if few {
+                DenseKernel::Gemv
+            } else {
+                DenseKernel::Gemm
+            };
+            if !storage.fits(in_dim, out_dim) || !out_offset.is_multiple_of(4) {
+                return Err(ThmeError::UnsupportedFormat {
+                    dtype: format!("{storage:?} {out_dim}x{in_dim} at offset {out_offset}"),
+                    backend: "WGPU dense kernels",
+                });
+            }
+            let pipeline = self.dense_pipeline(kernel, storage)?;
+            return Ok(if few {
+                (
+                    pipeline,
+                    [o.min(MAX_GROUPS), o.div_ceil(MAX_GROUPS), r],
+                    "gemv",
+                )
+            } else {
+                (
+                    pipeline,
+                    [o.div_ceil(GEMM_V4_TILE), r.div_ceil(GEMM_V4_TILE), 1],
+                    "gemm128",
+                )
+            });
+        }
         match (
             self.gemm_kernel_name(rows, in_dim, out_dim, out_offset),
             &self.gemm_v4,
         ) {
             ("gemm128", Some(v4)) => Ok((
-                v4,
+                v4.clone(),
                 [o.div_ceil(GEMM_V4_TILE), r.div_ceil(GEMM_V4_TILE), 1],
                 "gemm128",
             )),
             ("gemm64", _) => Ok((
-                &self.gemm_f32,
+                self.gemm_f32.clone(),
                 [o.div_ceil(GEMM_TILE), r.div_ceil(GEMM_TILE), 1],
                 "gemm64",
             )),
@@ -623,9 +670,49 @@ impl GpuContext {
                 let gemv = self.pipelines.get(&ShaderKind::F32).ok_or_else(|| {
                     ThmeError::ExecutionFailed("Compute pipeline for F32 not found".into())
                 })?;
-                Ok((gemv, [o.min(MAX_GROUPS), o.div_ceil(MAX_GROUPS), r], "gemv"))
+                Ok((
+                    gemv.clone(),
+                    [o.min(MAX_GROUPS), o.div_ceil(MAX_GROUPS), r],
+                    "gemv",
+                ))
             }
         }
+    }
+
+    /// The f16 / Q8_0 / Q4_0 kernel, compiled on first use.
+    fn dense_pipeline(
+        &self,
+        kernel: DenseKernel,
+        storage: WeightStorage,
+    ) -> Result<wgpu::ComputePipeline, ThmeError> {
+        let mut cache = self
+            .dense
+            .lock()
+            .map_err(|_| ThmeError::ExecutionFailed("dense pipeline cache poisoned".into()))?;
+        if let Some(hit) = cache.get(&(kernel, storage)) {
+            return Ok(hit.clone());
+        }
+        let label = format!("{kernel:?}_{storage:?}");
+        let module = self
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some(&label),
+                source: wgpu::ShaderSource::Wgsl(
+                    super::dense::kernel_source(kernel, storage).into(),
+                ),
+            });
+        let pipeline = self
+            .device
+            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some(&label),
+                layout: Some(&self.dense_layout),
+                module: &module,
+                entry_point: Some("main"),
+                compilation_options: Default::default(),
+                cache: None,
+            });
+        cache.insert((kernel, storage), pipeline.clone());
+        Ok(pipeline)
     }
 
     /// Turns the register-blocked kernel off (or back on) so a paired before/after run can use
@@ -742,9 +829,33 @@ impl GpuContext {
         }
     }
 
-    /// Device buffer holding `w`, uploaded once per (address, length) and then reused.
+    /// Device buffer holding `w` as f32, uploaded once per (address, length) and then reused.
+    /// Used for norm weights and anything read as plain floats.
     pub(super) fn resident_slice(&self, w: &[f32]) -> Result<Arc<wgpu::Buffer>, ThmeError> {
-        let key = (w.as_ptr() as usize, w.len());
+        Ok(self.resident_as(w, WeightStorage::F32)?.buffer)
+    }
+
+    /// Device buffer for a `[out_dim, in_dim]` linear in the storage chosen with
+    /// [`GpuContext::set_weight_storage`]; falls back to f32 when the shape does not fit it.
+    pub(super) fn resident_linear(
+        &self,
+        w: &[f32],
+        in_dim: usize,
+        out_dim: usize,
+    ) -> Result<DeviceWeight, ThmeError> {
+        let wanted = self.weight_storage();
+        let storage = if wanted.fits(in_dim, out_dim)
+            && (wanted == WeightStorage::F32 || self.gemm_v4.is_some())
+        {
+            wanted
+        } else {
+            WeightStorage::F32
+        };
+        self.resident_as(w, storage)
+    }
+
+    fn resident_as(&self, w: &[f32], storage: WeightStorage) -> Result<DeviceWeight, ThmeError> {
+        let key = (w.as_ptr() as usize, w.len(), storage.tag());
         let print = fingerprint(w);
         let mut cache = self
             .weight_cache
@@ -752,10 +863,13 @@ impl GpuContext {
             .map_err(|_| ThmeError::ExecutionFailed("GPU weight cache mutex poisoned".into()))?;
         if let Some(hit) = cache.entries.get(&key) {
             if hit.fingerprint == print {
-                return Ok(Arc::clone(&hit.buffer));
+                return Ok(DeviceWeight {
+                    buffer: Arc::clone(&hit.buffer),
+                    storage,
+                });
             }
         }
-        let bytes = w.len() * 4;
+        let bytes = storage.device_bytes(w.len());
         let limits = self.device.limits();
         let cap = limits
             .max_buffer_size
@@ -771,11 +885,18 @@ impl GpuContext {
             *cache = WeightCache::default();
         }
         let t_up = Instant::now();
+        let packed;
+        let contents: &[u8] = if storage == WeightStorage::F32 {
+            bytemuck::cast_slice(w)
+        } else {
+            packed = super::dense::pack_for_device(storage, w)?;
+            &packed
+        };
         let buffer = Arc::new(
             self.device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("gpu_weight_slice"),
-                    contents: bytemuck::cast_slice(w),
+                    contents,
                     usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                 }),
         );
@@ -788,7 +909,7 @@ impl GpuContext {
         if cache.entries.insert(key, entry).is_none() {
             cache.bytes += bytes;
         }
-        Ok(buffer)
+        Ok(DeviceWeight { buffer, storage })
     }
 
     /// Reads the two timestamps of the submission that just finished and adds the difference.
@@ -829,7 +950,19 @@ impl GpuContext {
         if rows == 0 || ops.is_empty() {
             return Ok(ops.iter().map(|_| Vec::new()).collect());
         }
-        let total_out: usize = ops.iter().map(|o| rows * o.out_dim).sum();
+        // Each op's block starts on a multiple of 4 floats so vec4 kernels can write it.
+        let offsets: Vec<usize> = ops
+            .iter()
+            .scan(0usize, |next, op| {
+                let at = *next;
+                *next = (at + rows * op.out_dim).next_multiple_of(4);
+                Some(at)
+            })
+            .collect();
+        let total_out = ops
+            .last()
+            .zip(offsets.last())
+            .map_or(0, |(op, at)| at + rows * op.out_dim);
         let out_bytes = total_out * 4;
         let mut scratch = self
             .scratch
@@ -843,20 +976,18 @@ impl GpuContext {
         );
 
         let mut params_bytes = vec![0u8; ops.len() * PARAM_STRIDE];
-        let mut out_offset = 0usize;
         for (i, op) in ops.iter().enumerate() {
             let params = GemvParams {
                 in_dim: in_dim as u32,
                 out_dim: op.out_dim as u32,
                 num_blocks_per_row: (in_dim / 256) as u32,
                 rows: rows as u32,
-                out_offset: out_offset as u32,
+                out_offset: offsets[i] as u32,
                 _pad: [0; 3],
             };
             let at = i * PARAM_STRIDE;
             params_bytes[at..at + std::mem::size_of::<GemvParams>()]
                 .copy_from_slice(bytemuck::bytes_of(&params));
-            out_offset += rows * op.out_dim;
         }
 
         let t_in = Instant::now();
@@ -886,15 +1017,20 @@ impl GpuContext {
             });
             for (i, op) in ops.iter().enumerate() {
                 let (pipeline, groups) = if op.kind == ShaderKind::F32 {
-                    let (p, g, _) = self.dense_dispatch(rows, in_dim, op.out_dim, op.out_offset)?;
+                    let (p, g, _) =
+                        self.dense_dispatch(op.storage, rows, in_dim, op.out_dim, offsets[i])?;
                     (p, g)
                 } else {
-                    let p = self.pipelines.get(&op.kind).ok_or_else(|| {
-                        ThmeError::ExecutionFailed(format!(
-                            "Compute pipeline for {:?} not found",
-                            op.kind
-                        ))
-                    })?;
+                    let p = self
+                        .pipelines
+                        .get(&op.kind)
+                        .ok_or_else(|| {
+                            ThmeError::ExecutionFailed(format!(
+                                "Compute pipeline for {:?} not found",
+                                op.kind
+                            ))
+                        })?
+                        .clone();
                     let out = op.out_dim as u32;
                     // Output rows spread over x then y; token rows ride on z.
                     (
@@ -930,7 +1066,7 @@ impl GpuContext {
                         },
                     ],
                 });
-                pass.set_pipeline(pipeline);
+                pass.set_pipeline(&pipeline);
                 pass.set_bind_group(0, &bind_group, &[]);
                 pass.dispatch_workgroups(groups[0], groups[1], groups[2]);
             }
@@ -972,11 +1108,8 @@ impl GpuContext {
             .map_err(|e| ThmeError::DataTransferFailed(format!("GPU map range failed: {e}")))?;
         let all: &[f32] = bytemuck::cast_slice(&data);
         let mut results = Vec::with_capacity(ops.len());
-        let mut at = 0usize;
-        for op in ops {
-            let len = rows * op.out_dim;
-            results.push(all[at..at + len].to_vec());
-            at += len;
+        for (op, &at) in ops.iter().zip(&offsets) {
+            results.push(all[at..at + rows * op.out_dim].to_vec());
         }
         drop(data);
         scratch.staging.unmap();
@@ -985,12 +1118,16 @@ impl GpuContext {
     }
 }
 
-fn shader_kind(dtype: QuantDtype) -> Result<ShaderKind, ThmeError> {
+/// Kernel family and weight storage a tensor of this dtype runs with.
+fn shader_kind(dtype: QuantDtype) -> Result<(ShaderKind, WeightStorage), ThmeError> {
     match dtype {
-        QuantDtype::Q4_K => Ok(ShaderKind::Q4_K),
-        QuantDtype::Q5_K => Ok(ShaderKind::Q5_K),
-        QuantDtype::IQ4_XS => Ok(ShaderKind::IQ4_XS),
-        QuantDtype::F32 => Ok(ShaderKind::F32),
+        QuantDtype::Q4_K => Ok((ShaderKind::Q4_K, WeightStorage::F32)),
+        QuantDtype::Q5_K => Ok((ShaderKind::Q5_K, WeightStorage::F32)),
+        QuantDtype::IQ4_XS => Ok((ShaderKind::IQ4_XS, WeightStorage::F32)),
+        QuantDtype::F32 => Ok((ShaderKind::F32, WeightStorage::F32)),
+        QuantDtype::F16 => Ok((ShaderKind::F32, WeightStorage::F16)),
+        QuantDtype::Q8_0 => Ok((ShaderKind::F32, WeightStorage::Q8_0)),
+        QuantDtype::Q4_0 => Ok((ShaderKind::F32, WeightStorage::Q4_0)),
         other => Err(ThmeError::UnsupportedFormat {
             dtype: format!("{other:?}"),
             backend: "WGPU",
@@ -1093,7 +1230,7 @@ impl GpuBackend for GpuContext {
                 found: format!("{}", x.len()),
             });
         }
-        let kind = shader_kind(weights.dtype())?;
+        let (kind, storage) = shader_kind(weights.dtype())?;
         let t_up = Instant::now();
         let fresh = !weights.has_gpu_buffer();
         let buffer = weights.get_or_create_gpu_buffer(&self.device)?;
@@ -1104,9 +1241,9 @@ impl GpuBackend for GpuContext {
         let rows = x.len() / in_dim;
         let op = LinearOp {
             kind,
+            storage,
             weights: buffer,
             out_dim,
-            out_offset: 0,
         };
         let mut out = self.run_ops(x, rows, in_dim, &[op])?;
         let y = out.pop().unwrap_or_default();
@@ -1137,22 +1274,16 @@ impl GpuBackend for GpuContext {
         }
         let buffers = ops
             .iter()
-            .map(|(w, _)| self.resident_slice(w))
+            .map(|(w, out_dim)| self.resident_linear(w, in_dim, *out_dim))
             .collect::<Result<Vec<_>, _>>()?;
-        let rows = x.len() / in_dim;
-        let mut out_offset = 0usize;
         let linear_ops: Vec<LinearOp<'_>> = buffers
             .iter()
             .zip(ops)
-            .map(|(buffer, (_, out_dim))| {
-                let op = LinearOp {
-                    kind: ShaderKind::F32,
-                    weights: buffer,
-                    out_dim: *out_dim,
-                    out_offset,
-                };
-                out_offset += rows * out_dim;
-                op
+            .map(|(dw, (_, out_dim))| LinearOp {
+                kind: ShaderKind::F32,
+                storage: dw.storage,
+                weights: &dw.buffer,
+                out_dim: *out_dim,
             })
             .collect();
         let results = self.run_ops(x, x.len() / in_dim, in_dim, &linear_ops)?;
@@ -1184,7 +1315,13 @@ impl GpuBackend for GpuContext {
     fn is_format_supported(&self, dtype: QuantDtype) -> bool {
         matches!(
             dtype,
-            QuantDtype::Q4_K | QuantDtype::Q5_K | QuantDtype::IQ4_XS | QuantDtype::F32
+            QuantDtype::Q4_K
+                | QuantDtype::Q5_K
+                | QuantDtype::IQ4_XS
+                | QuantDtype::F32
+                | QuantDtype::F16
+                | QuantDtype::Q8_0
+                | QuantDtype::Q4_0
         )
     }
 

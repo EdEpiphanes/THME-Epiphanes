@@ -3,6 +3,7 @@
 
 pub mod backend;
 pub mod decoder;
+pub mod dense;
 pub mod error;
 pub mod tensor;
 
@@ -12,5 +13,6 @@ pub use backend::{
     GpuBackend, GpuContext, GpuStats, OpSample, ShaderKind, WeightStorage,
 };
 pub use decoder::{DecoderPlan, LayerWeights, MAX_DEVICE_CONTEXT};
+pub use dense::{quantize_blocks, repack_blocks};
 pub use error::ThmeError;
 pub use tensor::{QuantDtype, QuantizedTensor};

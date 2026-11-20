@@ -712,3 +712,111 @@ fn tiled_attention_matches_the_reference_kernel_across_blocks_and_head_sizes() {
         "head size above 128"
     );
 }
+
+/// Dequantizes GGML block bytes with the CPU decoders the loader uses.
+fn cpu_decode_blocks(storage: thme::inference::gpu::WeightStorage, blocks: &[u8]) -> Vec<f32> {
+    use thme::inference::gpu::WeightStorage;
+    use thme::parser::gguf::GgufBlockDecoder;
+    let (size, unpack): (usize, fn(&[u8]) -> anyhow::Result<[f32; 32]>) = match storage {
+        WeightStorage::Q8_0 => (34, GgufBlockDecoder::unpack_q8_0),
+        _ => (18, GgufBlockDecoder::unpack_q4_0),
+    };
+    blocks
+        .chunks_exact(size)
+        .flat_map(|b| unpack(b).expect("block"))
+        .collect()
+}
+
+#[test]
+fn quantized_and_f16_weight_storage_match_the_cpu_decoders_for_few_and_many_rows() {
+    use thme::inference::gpu::{quantize_blocks, WeightStorage};
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut seed = 77u64;
+    let (in_dim, out_dim) = (96usize, 136usize);
+    let w = pseudo_random(&mut seed, in_dim * out_dim, 0.7);
+    for storage in [WeightStorage::Q8_0, WeightStorage::Q4_0, WeightStorage::F16] {
+        let reference: Vec<f32> = match storage {
+            WeightStorage::F16 => w
+                .iter()
+                .map(|&v| {
+                    thme::engine::minifloat::f16_to_f32(thme::engine::minifloat::f32_to_f16(v))
+                })
+                .collect(),
+            _ => cpu_decode_blocks(storage, &quantize_blocks(storage, &w).expect("quantize")),
+        };
+        gpu.set_weight_storage(storage);
+        for rows in [1usize, 5, 130] {
+            let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+            let got = gpu
+                .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+                .expect("gpu linear");
+            assert_close(
+                &linear(&x, &reference, in_dim, out_dim),
+                &got[0],
+                2e-4,
+                &format!("{storage:?} rows={rows}"),
+            );
+        }
+    }
+    // A shape the formats cannot hold (in_dim not a multiple of 32) silently stays f32.
+    gpu.set_weight_storage(WeightStorage::Q4_0);
+    let (rows, in_dim, out_dim) = (9usize, 70usize, 100usize);
+    let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+    let w = pseudo_random(&mut seed, out_dim * in_dim, 0.5);
+    let got = gpu
+        .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+        .expect("fallback");
+    assert_close(
+        &linear(&x, &w, in_dim, out_dim),
+        &got[0],
+        1e-4,
+        "f32 fallback",
+    );
+    gpu.set_weight_storage(WeightStorage::F32);
+}
+
+#[test]
+fn quantized_tensors_run_on_the_device_without_expanding_to_f32() {
+    use thme::inference::gpu::{quantize_blocks, WeightStorage};
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut seed = 5u64;
+    let (in_dim, out_dim) = (64usize, 40usize);
+    let w = pseudo_random(&mut seed, in_dim * out_dim, 0.6);
+    for (storage, dtype) in [
+        (WeightStorage::Q8_0, QuantDtype::Q8_0),
+        (WeightStorage::Q4_0, QuantDtype::Q4_0),
+    ] {
+        let blocks = quantize_blocks(storage, &w).expect("quantize");
+        let reference = cpu_decode_blocks(storage, &blocks);
+        let tensor = QuantizedTensor::new_quantized(
+            "quantized_test",
+            vec![out_dim, in_dim],
+            dtype,
+            Arc::from(blocks.into_boxed_slice()),
+        )
+        .expect("tensor");
+        assert!(gpu.is_format_supported(dtype));
+        for rows in [1usize, 33] {
+            let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+            let got = gpu
+                .compute_linear(&x, &tensor, in_dim, out_dim)
+                .expect("gpu linear");
+            assert_close(
+                &linear(&x, &reference, in_dim, out_dim),
+                &got,
+                2e-4,
+                &format!("{dtype:?} rows={rows}"),
+            );
+        }
+    }
+}
+
+#[test]
+fn quantized_storage_cuts_resident_weight_bytes() {
+    use thme::inference::gpu::WeightStorage;
+    let n = 1 << 20;
+    assert_eq!(WeightStorage::F32.device_bytes(n), 4 << 20);
+    assert_eq!(WeightStorage::F16.device_bytes(n), 2 << 20);
+    assert_eq!(WeightStorage::Q8_0.device_bytes(n), n / 32 * 36);
+    assert_eq!(WeightStorage::Q4_0.device_bytes(n), n / 32 * 20);
+}

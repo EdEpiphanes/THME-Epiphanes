@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// Register-blocked matrix-matrix product for dense F32 weights: Y[t, o] = sum_k X[t, k] * W[o, k].
+// Register-blocked matrix-matrix product: Y[t, o] = sum_k X[t, k] * W[o, k], f32 activations and
+// accumulation. The weights binding and `load_w` (four consecutive weights as a vec4) come from
+// dense.rs, which inserts the loader for f32, f16, Q8_0 or Q4_0 weights at //WEIGHTS_PRELUDE.
 // A workgroup computes a 128 x 128 tile of Y with 16 x 16 threads, each owning an 8 x 8 block
 // (sixteen vec4 accumulators). Slices of X and W, 16 deep, are loaded as vec4 along k and kept in
 // shared memory k-major with a padded stride, so each k step reads four vec4 per thread and does
 // 64 multiply-adds. The host uses this kernel only when in_dim, out_dim and the output offset are
-// multiples of 4; every other shape goes through gemm_f32.wgsl.
+// multiples of 4; other f32 shapes go through gemm_f32.wgsl.
 
 struct GemvParams {
     in_dim: u32,
@@ -16,7 +18,7 @@ struct GemvParams {
 
 @group(0) @binding(0) var<storage, read> params: GemvParams;
 @group(0) @binding(1) var<storage, read> input_x: array<vec4<f32>>;
-@group(0) @binding(2) var<storage, read> weights: array<vec4<f32>>;
+//WEIGHTS_PRELUDE
 @group(0) @binding(3) var<storage, read_write> output_y: array<vec4<f32>>;
 
 const BK: u32 = 16u;
@@ -48,7 +50,7 @@ fn main(
             var wv = vec4<f32>(0.0);
             if (k4 < in4) {
                 if (t0 + r < params.rows) { xv = input_x[(t0 + r) * in4 + k4]; }
-                if (o0 + r < params.out_dim) { wv = weights[(o0 + r) * in4 + k4]; }
+                if (o0 + r < params.out_dim) { wv = load_w((o0 + r) * in4 + k4); }
             }
             let at = kq * 4u * STRIDE + (r >> 2u);
             let lane = r & 3u;

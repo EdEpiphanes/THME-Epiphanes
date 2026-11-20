@@ -10,8 +10,8 @@ use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use super::backend::{
-    bump, check_finite, storage_buffer, storage_entry, GemvParams, GpuContext, MAX_GROUPS,
-    PARAM_STRIDE,
+    bump, check_finite, storage_buffer, storage_entry, DeviceWeight, GemvParams, GpuContext,
+    MAX_GROUPS, PARAM_STRIDE,
 };
 use super::error::ThmeError;
 use wgpu::util::DeviceExt;
@@ -245,7 +245,7 @@ impl<'a> Recorder<'a> {
         &mut self,
         x: &wgpu::Buffer,
         x_row0: usize,
-        w: &wgpu::Buffer,
+        w: &DeviceWeight,
         out: &wgpu::Buffer,
         rows: usize,
         in_dim: usize,
@@ -260,7 +260,7 @@ impl<'a> Recorder<'a> {
             _pad: [0; 3],
         };
         let ctx = self.ctx;
-        let (pipeline, groups, kernel) = ctx.dense_dispatch(rows, in_dim, out_dim, 0)?;
+        let (pipeline, groups, kernel) = ctx.dense_dispatch(w.storage, rows, in_dim, out_dim, 0)?;
         let binding = self.params_binding(bytemuck::bytes_of(&params));
         let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("decoder_linear"),
@@ -280,7 +280,7 @@ impl<'a> Recorder<'a> {
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: w.as_entire_binding(),
+                    resource: w.buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
@@ -290,7 +290,7 @@ impl<'a> Recorder<'a> {
         });
         let label = format!("linear {kernel} {rows}x{in_dim}x{out_dim}");
         let pass = self.pass_for(label)?;
-        pass.set_pipeline(pipeline);
+        pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
         pass.dispatch_workgroups(groups[0], groups[1], groups[2]);
         self.dispatches += 1;
@@ -392,7 +392,7 @@ impl GpuContext {
         let Some(chunk_rows) = self.nll_chunk_rows(d, vocab, scored) else {
             return Ok(None);
         };
-        let head_buf = self.resident_slice(head)?;
+        let head_buf = self.resident_linear(head, d, vocab)?;
         let dev = &self.device;
         let io = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST;
         let src = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC;
@@ -521,22 +521,27 @@ impl GpuContext {
 
         // Weights stay resident; keep the handles alive until the work has finished.
         let norm_buf = |w: &[f32]| self.resident_slice(w);
+        let inter = plan.inter;
+        let lin =
+            |w: &[f32], in_dim: usize, out_dim: usize| self.resident_linear(w, in_dim, out_dim);
         let mut resident = Vec::with_capacity(plan.layers.len());
         for l in &plan.layers {
-            resident.push([
+            resident.push((
                 norm_buf(l.attn_norm)?,
-                norm_buf(l.q)?,
-                norm_buf(l.k)?,
-                norm_buf(l.v)?,
-                norm_buf(l.o)?,
                 norm_buf(l.mlp_norm)?,
-                norm_buf(l.gate)?,
-                norm_buf(l.up)?,
-                norm_buf(l.down)?,
-            ]);
+                [
+                    lin(l.q, d, d)?,
+                    lin(l.k, d, kv_dim)?,
+                    lin(l.v, d, kv_dim)?,
+                    lin(l.o, d, d)?,
+                    lin(l.gate, d, inter)?,
+                    lin(l.up, d, inter)?,
+                    lin(l.down, inter, d)?,
+                ],
+            ));
         }
         let final_norm = norm_buf(plan.final_norm)?;
-        let head = norm_buf(plan.head)?;
+        let head = lin(plan.head, d, plan.vocab)?;
 
         let dev = &self.device;
         let io = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST;
@@ -635,7 +640,7 @@ impl GpuContext {
             let eps = plan.eps.to_bits();
             let scale = (1.0 / (hd as f32).sqrt()).to_bits();
             for res in &resident {
-                let [attn_norm, wq, wk, wv, wo, mlp_norm, wg, wu, wd] = res;
+                let (attn_norm, mlp_norm, [wq, wk, wv, wo, wg, wu, wd]) = res;
                 rec.op(
                     "rms_norm",
                     &kx.rms_norm,
