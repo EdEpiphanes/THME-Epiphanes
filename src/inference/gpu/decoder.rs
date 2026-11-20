@@ -62,6 +62,16 @@ pub(super) struct DecoderKernels {
     add: wgpu::ComputePipeline,
     swiglu: wgpu::ComputePipeline,
     pub(super) nll: wgpu::ComputePipeline,
+    pipeline_layout: wgpu::PipelineLayout,
+    /// Tiled attention pipelines by head size (compiled on first use).
+    tiled: std::sync::Mutex<TiledPipelines>,
+}
+
+type TiledPipelines = std::collections::HashMap<usize, std::sync::Arc<wgpu::ComputePipeline>>;
+
+/// Head sizes the tiled attention kernel supports.
+pub(super) fn tiled_attention_supports(head_dim: usize) -> bool {
+    head_dim > 0 && head_dim <= 128 && head_dim.is_multiple_of(4)
 }
 
 impl DecoderKernels {
@@ -103,7 +113,44 @@ impl DecoderKernels {
             swiglu: build("swiglu"),
             nll: build("nll"),
             layout,
+            pipeline_layout,
+            tiled: std::sync::Mutex::new(std::collections::HashMap::new()),
         }
+    }
+}
+
+impl DecoderKernels {
+    /// The tiled attention pipeline for `head_dim`, compiled once per head size.
+    fn tiled_attention(
+        &self,
+        device: &wgpu::Device,
+        head_dim: usize,
+    ) -> Result<std::sync::Arc<wgpu::ComputePipeline>, ThmeError> {
+        let mut cache = self
+            .tiled
+            .lock()
+            .map_err(|_| ThmeError::ExecutionFailed("attention pipeline cache poisoned".into()))?;
+        if let Some(hit) = cache.get(&head_dim) {
+            return Ok(std::sync::Arc::clone(hit));
+        }
+        let source = include_str!("shaders/attention_tiled.wgsl")
+            .replace("HEAD_DIM_VEC4", &(head_dim / 4).to_string());
+        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("attention_tiled"),
+            source: wgpu::ShaderSource::Wgsl(source.into()),
+        });
+        let pipeline = std::sync::Arc::new(device.create_compute_pipeline(
+            &wgpu::ComputePipelineDescriptor {
+                label: Some("attention_tiled"),
+                layout: Some(&self.pipeline_layout),
+                module: &module,
+                entry_point: Some("main"),
+                compilation_options: Default::default(),
+                cache: None,
+            },
+        ));
+        cache.insert(head_dim, std::sync::Arc::clone(&pipeline));
+        Ok(pipeline)
     }
 }
 
@@ -581,6 +628,10 @@ impl GpuContext {
             let kx = &self.decoder;
             let lay = &kx.layout;
             let (td, tint) = (t * d, t * plan.inter);
+            let tiled_attention = match self.attention_kernel_name(hd) {
+                "tiled" => Some(kx.tiled_attention(dev, hd)?),
+                _ => None,
+            };
             let eps = plan.eps.to_bits();
             let scale = (1.0 / (hd as f32).sqrt()).to_bits();
             for res in &resident {
@@ -612,14 +663,24 @@ impl GpuContext {
                     grid(t * kv_heads * half),
                     lay,
                 )?;
-                rec.op(
-                    "attention",
-                    &kx.attention,
-                    words(&[t as u32, heads as u32, kv_heads as u32, hd as u32, scale]),
-                    [&q, &k, &v, &mixed],
-                    (heads as u32, t as u32, 1),
-                    lay,
-                )?;
+                match &tiled_attention {
+                    Some(tiled) => rec.op(
+                        "attention tiled",
+                        tiled,
+                        words(&[t as u32, heads as u32, kv_heads as u32, hd as u32, scale]),
+                        [&q, &k, &v, &mixed],
+                        (t.div_ceil(64) as u32, heads as u32, 1),
+                        lay,
+                    )?,
+                    None => rec.op(
+                        "attention",
+                        &kx.attention,
+                        words(&[t as u32, heads as u32, kv_heads as u32, hd as u32, scale]),
+                        [&q, &k, &v, &mixed],
+                        (heads as u32, t as u32, 1),
+                        lay,
+                    )?,
+                }
                 rec.linear(&mixed, 0, wo, &tmp, t, d, d)?;
                 rec.op(
                     "add",

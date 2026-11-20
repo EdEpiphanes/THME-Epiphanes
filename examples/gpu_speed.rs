@@ -42,6 +42,9 @@ struct Cli {
     /// Use the old 64 x 64 matmul kernel (paired baseline)
     #[arg(long, global = true)]
     old_gemm: bool,
+    /// Resident weight budget in GiB (library default when absent)
+    #[arg(long, global = true)]
+    weight_budget_gb: Option<usize>,
     /// Weight storage on the device: f32, f16, q8_0 or q4_0
     #[arg(long, global = true, default_value = "f32")]
     weights: String,
@@ -104,6 +107,7 @@ fn header(cli: &Cli, gpu: &GpuContext) -> Value {
         "shader_f16": gpu.shader_f16_supported(),
         "weights_requested": cli.weights,
         "old_gemm_kernel": cli.old_gemm,
+        "weight_budget_gb": cli.weight_budget_gb,
         "weights_used": format!("{:?}", gpu.weight_storage()),
         "build_profile": if cfg!(debug_assertions) { "debug" } else { "release" },
         "git_commit": git(&["rev-parse", "--short", "HEAD"]),
@@ -306,6 +310,9 @@ fn main() -> Result<()> {
     let gpu = Arc::new(GpuContext::init().context("GPU adapter init failed")?);
     gpu.set_weight_storage(parse_storage(&cli.weights)?);
     gpu.set_register_blocked_gemm(!cli.old_gemm);
+    if let Some(gb) = cli.weight_budget_gb {
+        gpu.set_weight_budget(gb << 30);
+    }
     let value = match &cli.mode {
         Mode::Profile {
             model_path,

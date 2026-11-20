@@ -163,8 +163,9 @@ const GEMM_V4_SHARED_BYTES: u32 = 2 * 528 * 16;
 /// Row counts at or below this use the matrix-vector kernel per row: a 64-row tile mostly
 /// computes padding, and small grids leave the device idle.
 pub(super) const GEMV_MAX_ROWS: usize = 8;
-/// Weight bytes kept resident for slice-backed linears before the cache is flushed.
-/// shortcut: flush-all, not LRU; switch to LRU if models above this size must stay fast.
+/// Default weight bytes kept resident for slice-backed linears before the cache is flushed;
+/// raise it with [`GpuContext::set_weight_budget`] when the card has the memory.
+/// shortcut: flush-all, not LRU; a model larger than the budget re-uploads every pass.
 const WEIGHT_CACHE_BUDGET: usize = 4 << 30;
 
 pub(super) fn storage_buffer(
@@ -325,6 +326,8 @@ pub struct GpuContext {
     pub(super) kernel_timing: AtomicBool,
     shader_f16: bool,
     use_gemm_v4: AtomicBool,
+    use_tiled_attention: AtomicBool,
+    weight_budget: std::sync::atomic::AtomicUsize,
     pub(super) op_profile: AtomicBool,
     weight_storage: std::sync::atomic::AtomicU8,
     op_samples: Mutex<Vec<OpSample>>,
@@ -477,6 +480,8 @@ impl GpuContext {
             kernel_timing: AtomicBool::new(false),
             shader_f16: false,
             use_gemm_v4: AtomicBool::new(true),
+            use_tiled_attention: AtomicBool::new(true),
+            weight_budget: std::sync::atomic::AtomicUsize::new(WEIGHT_CACHE_BUDGET),
             op_profile: AtomicBool::new(false),
             weight_storage: std::sync::atomic::AtomicU8::new(0),
             op_samples: Mutex::new(Vec::new()),
@@ -629,6 +634,29 @@ impl GpuContext {
         self.use_gemm_v4.store(on, Ordering::Relaxed);
     }
 
+    /// Turns the tiled attention kernel off (or back on) for paired before/after runs.
+    pub fn set_tiled_attention(&self, on: bool) {
+        self.use_tiled_attention.store(on, Ordering::Relaxed);
+    }
+
+    /// Which attention kernel runs for this head size: `tiled` (online softmax, head size a
+    /// multiple of 4 and at most 128) or `reference` (one workgroup per query and head).
+    pub fn attention_kernel_name(&self, head_dim: usize) -> &'static str {
+        if self.use_tiled_attention.load(Ordering::Relaxed)
+            && super::decoder::tiled_attention_supports(head_dim)
+        {
+            "tiled"
+        } else {
+            "reference"
+        }
+    }
+
+    /// Bytes of weights kept on the device before the cache is flushed (default 4 GiB). Size it
+    /// to the card: a model larger than the budget re-uploads its weights on every pass.
+    pub fn set_weight_budget(&self, bytes: usize) {
+        self.weight_budget.store(bytes, Ordering::Relaxed);
+    }
+
     /// Chooses how weights are stored from now on (buffers already resident keep their format
     /// until the cache is cleared). A format the adapter cannot run falls back to f32.
     pub fn set_weight_storage(&self, storage: WeightStorage) {
@@ -739,7 +767,7 @@ impl GpuContext {
                 reason: format!("Tensor size {bytes} exceeds GPU limit {cap}"),
             });
         }
-        if cache.bytes + bytes > WEIGHT_CACHE_BUDGET {
+        if cache.bytes + bytes > self.weight_budget.load(Ordering::Relaxed) {
             *cache = WeightCache::default();
         }
         let t_up = Instant::now();

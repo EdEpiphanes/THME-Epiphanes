@@ -574,3 +574,141 @@ fn large_vec4_friendly_shapes_use_the_register_blocked_gemm_and_match_cpu() {
         );
     }
 }
+
+#[test]
+fn a_weight_budget_above_the_model_keeps_every_weight_resident_across_passes() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut seed = 31u64;
+    let in_dim = 64;
+    let x = pseudo_random(&mut seed, in_dim, 1.0);
+    // Three 64 KiB weights: a 100 KiB budget cannot hold them, a 1 MiB budget can.
+    let ws: Vec<Vec<f32>> = (0..3)
+        .map(|_| pseudo_random(&mut seed, 256 * in_dim, 0.5))
+        .collect();
+    let pass = |gpu: &GpuContext| {
+        for w in &ws {
+            gpu.compute_linear_slices(&x, &[(w, 256)], in_dim)
+                .expect("linear");
+        }
+    };
+    gpu.set_weight_budget(100 << 10);
+    pass(&gpu);
+    let before = gpu.stats().weight_uploads;
+    pass(&gpu);
+    assert!(
+        gpu.stats().weight_uploads - before >= 1,
+        "a small budget flushes and re-uploads"
+    );
+    gpu.set_weight_budget(1 << 20);
+    pass(&gpu);
+    let before = gpu.stats().weight_uploads;
+    pass(&gpu);
+    assert_eq!(
+        gpu.stats().weight_uploads - before,
+        0,
+        "a large budget keeps all three resident"
+    );
+}
+
+/// Runs one random decoder plan on the device and returns its last-position logits.
+fn random_plan_logits(
+    gpu: &GpuContext,
+    seed: u64,
+    (heads, kv_heads, hd, t): (usize, usize, usize, usize),
+) -> Vec<f32> {
+    use thme::inference::gpu::{DecoderPlan, LayerWeights};
+    let mut seed = seed;
+    let (d, kv_dim, inter, vocab) = (heads * hd, kv_heads * hd, 2 * heads * hd, 48);
+    let mut rand = |n: usize, scale: f32| pseudo_random(&mut seed, n, scale);
+    let ones = |n: usize| vec![1.0f32; n];
+    let attn_norm = ones(d);
+    let mlp_norm = ones(d);
+    let final_norm = ones(d);
+    let owned: Vec<[Vec<f32>; 7]> = (0..2)
+        .map(|_| {
+            [
+                rand(d * d, 0.05),
+                rand(kv_dim * d, 0.05),
+                rand(kv_dim * d, 0.05),
+                rand(d * d, 0.05),
+                rand(inter * d, 0.05),
+                rand(inter * d, 0.05),
+                rand(d * inter, 0.05),
+            ]
+        })
+        .collect();
+    let layers = owned
+        .iter()
+        .map(|w| LayerWeights {
+            attn_norm: &attn_norm,
+            q: &w[0],
+            k: &w[1],
+            v: &w[2],
+            o: &w[3],
+            mlp_norm: &mlp_norm,
+            gate: &w[4],
+            up: &w[5],
+            down: &w[6],
+        })
+        .collect();
+    let head = rand(vocab * d, 0.1);
+    let x0 = rand(t * d, 1.0);
+    let half = hd / 2;
+    let angle = |i: usize| (i as f32) * 0.37;
+    let cos: Vec<f32> = (0..t * half).map(|i| angle(i).cos()).collect();
+    let sin: Vec<f32> = (0..t * half).map(|i| angle(i).sin()).collect();
+    let plan = DecoderPlan {
+        layers,
+        final_norm: &final_norm,
+        head: &head,
+        hidden: d,
+        heads,
+        kv_heads,
+        head_dim: hd,
+        inter,
+        vocab,
+        eps: 1e-5,
+        rope_cos: &cos,
+        rope_sin: &sin,
+        targets: None,
+    };
+    gpu.forward_decoder(&plan, &x0)
+        .expect("decoder")
+        .expect("supported shape")
+}
+
+#[test]
+fn tiled_attention_matches_the_reference_kernel_across_blocks_and_head_sizes() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    // (heads, kv_heads, head_dim, positions): grouped-query, several 64-query blocks, a ragged
+    // last block, and a head size that is not 64.
+    for shape in [
+        (4, 2, 64, 150),
+        (2, 2, 128, 130),
+        (3, 1, 32, 65),
+        (2, 2, 64, 1000),
+    ] {
+        gpu.set_tiled_attention(false);
+        let reference = random_plan_logits(&gpu, 5, shape);
+        gpu.set_tiled_attention(true);
+        let tiled = random_plan_logits(&gpu, 5, shape);
+        let worst = reference
+            .iter()
+            .zip(&tiled)
+            .map(|(a, b)| (a - b).abs() / a.abs().max(1.0))
+            .fold(0.0f32, f32::max);
+        assert!(worst < 1e-3, "{shape:?}: worst relative diff {worst}");
+    }
+    gpu.set_tiled_attention(true);
+    assert_eq!(gpu.attention_kernel_name(64), "tiled");
+    assert_eq!(
+        gpu.attention_kernel_name(6),
+        "reference",
+        "head size not a multiple of 4"
+    );
+    assert_eq!(
+        gpu.attention_kernel_name(256),
+        "reference",
+        "head size above 128"
+    );
+}
