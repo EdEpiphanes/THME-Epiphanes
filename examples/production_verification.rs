@@ -20,9 +20,10 @@
 //! Without them the gate is reported as NOT EVALUATED. No perplexity figure is
 //! ever estimated or synthesized by this pipeline.
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use clap::{Parser, ValueEnum};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -32,7 +33,7 @@ use thme::inference::{
     WeightPrecision,
 };
 use thme::ir::rebuilder::{ArchitectureBlueprint, ModelRebuilder};
-use thme::ir::{ModelIR, TensorFormat, TensorRole};
+use thme::ir::{ModelArchitecture, ModelIR, TensorFormat, TensorRole};
 use thme::parser::ModelImporter;
 use thme::profiling::SensitivityProfiler;
 use thme::quality::evaluator::{EvaluationCorpus, ModelEvaluator, PerplexityGateDecision};
@@ -44,6 +45,19 @@ pub enum VerificationTarget {
     Smollm135m,
     /// LLaMA-3.2-1B (16 layers, hidden dim 2048, intermediate size 8192)
     Llama321b,
+}
+
+/// The corpus name `scripts/prepare_eval_tokens.py` writes into its provenance sidecar.
+const WIKITEXT2_CORPUS: &str = "WikiText-2 (raw) test split";
+
+impl VerificationTarget {
+    /// Layer count and hidden size of this target; a supplied checkpoint must match both.
+    fn expected_shape(self) -> (usize, usize) {
+        match self {
+            Self::Smollm135m => (30, 576),
+            Self::Llama321b => (16, 2048),
+        }
+    }
 }
 
 #[derive(Parser, Debug)]
@@ -125,6 +139,7 @@ pub fn run_verification(args: &VerificationArgs) -> Result<ProductionVerificatio
             build_target_scaffold(args.target)
         }
     };
+    check_target_matches(args.target, &model)?;
     let source_payload_bytes = model.original_byte_size;
     println!(
         "  Loaded model '{}' ({} layers, {} tensors, {:.2} MB source payload)",
@@ -200,11 +215,15 @@ pub fn run_verification(args: &VerificationArgs) -> Result<ProductionVerificatio
     let mut variants = Vec::new();
     let mut gate_passed = None;
     let mut corpus_provenance = Value::Null;
+    let mut corpus_is_wikitext2 = false;
 
     match (&args.tokens, &args.model_path) {
         (Some(token_path), Some(model_path)) if has_weights => {
             let tokens = read_token_file(token_path)?;
             corpus_provenance = read_provenance(token_path);
+            let token_sha256 = sha256_hex(&std::fs::read(token_path)?);
+            corpus_is_wikitext2 =
+                is_wikitext2_provenance(&corpus_provenance, tokens.len(), &token_sha256);
             let eval = PerplexityConfig {
                 context_len: args.eval_context,
                 max_tokens: args.eval_max_tokens,
@@ -287,7 +306,12 @@ pub fn run_verification(args: &VerificationArgs) -> Result<ProductionVerificatio
             }
             gate_passed = Some(all_accepted);
 
-            println!("\n  Measured perplexity (WikiText-2 raw test):");
+            println!("\n  {}", perplexity_heading(corpus_is_wikitext2));
+            if !corpus_is_wikitext2 {
+                println!(
+                    "  Warning: the token file has no matching WikiText-2 provenance sidecar; do not cite these numbers as WikiText-2."
+                );
+            }
             for variant in &variants {
                 let verdict = match variant.accepted {
                     None => "baseline".to_string(),
@@ -332,6 +356,7 @@ pub fn run_verification(args: &VerificationArgs) -> Result<ProductionVerificatio
         "evaluation": {
             "measured": gate_passed.is_some(),
             "corpus": corpus_provenance,
+            "corpus_is_wikitext2": corpus_is_wikitext2,
             "context_len": args.eval_context,
             "max_tokens": args.eval_max_tokens,
             "max_ppl_delta": args.max_ppl_delta,
@@ -391,6 +416,50 @@ fn measure(
         report.perplexity, report.scored_tokens, report.tokens_per_sec, report.elapsed_secs
     );
     Ok(report)
+}
+
+/// Refuses a checkpoint whose family or shape differs from `--target`, so a model is never
+/// reported under another model's name.
+fn check_target_matches(target: VerificationTarget, model: &ModelIR) -> Result<()> {
+    let (layers, hidden) = target.expected_shape();
+    if matches!(model.architecture, ModelArchitecture::Llama)
+        && model.num_layers == layers
+        && model.hidden_size == hidden
+    {
+        return Ok(());
+    }
+    bail!(
+        "--target {target:?} expects a LLaMA-family model with {layers} layers and hidden size {hidden}, \
+         but '{}' is {} with {} layers and hidden size {}. Pass the --target that matches this model.",
+        model.name,
+        model.architecture.display_name(),
+        model.num_layers,
+        model.hidden_size
+    )
+}
+
+/// The heading above the measured variants. WikiText-2 is named only when the tokens are proven to be it.
+fn perplexity_heading(is_wikitext2: bool) -> &'static str {
+    if is_wikitext2 {
+        "Measured perplexity (WikiText-2 raw test):"
+    } else {
+        "Perplexity on supplied tokens (not WikiText-2):"
+    }
+}
+
+/// True when the sidecar describes exactly these tokens: same corpus, count and token file hash.
+fn is_wikitext2_provenance(
+    provenance: &Value,
+    token_count: usize,
+    token_file_sha256: &str,
+) -> bool {
+    provenance.get("corpus").and_then(Value::as_str) == Some(WIKITEXT2_CORPUS)
+        && provenance.get("token_file_sha256").and_then(Value::as_str) == Some(token_file_sha256)
+        && provenance.get("token_count").and_then(Value::as_u64) == Some(token_count as u64)
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
 }
 
 /// Loads the provenance sidecar written next to the token file, if present.
@@ -490,4 +559,79 @@ fn main() -> Result<()> {
         ),
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use thme::ir::ModelArchitecture;
+
+    #[test]
+    fn checkpoint_must_match_the_target_family_and_shape() -> Result<()> {
+        let smollm = build_target_scaffold(VerificationTarget::Smollm135m);
+        check_target_matches(VerificationTarget::Smollm135m, &smollm)?;
+        assert!(check_target_matches(VerificationTarget::Llama321b, &smollm).is_err());
+
+        // Pythia-14M: GPT-NeoX, 6 layers, hidden 128. Must not pass as SmolLM-135M.
+        let mut pythia = build_target_scaffold(VerificationTarget::Smollm135m);
+        pythia.architecture = ModelArchitecture::from_str_name("GPTNeoXForCausalLM");
+        pythia.num_layers = 6;
+        pythia.hidden_size = 128;
+        let err = check_target_matches(VerificationTarget::Smollm135m, &pythia)
+            .err()
+            .map(|e| e.to_string())
+            .unwrap_or_default();
+        assert!(err.contains("GPTNeoXForCausalLM"), "{err}");
+        assert!(err.contains("Pass the --target"), "{err}");
+        Ok(())
+    }
+
+    #[test]
+    fn measured_heading_is_used_only_for_wikitext2() {
+        assert_eq!(
+            perplexity_heading(true),
+            "Measured perplexity (WikiText-2 raw test):"
+        );
+        assert_eq!(
+            perplexity_heading(false),
+            "Perplexity on supplied tokens (not WikiText-2):"
+        );
+        assert!(!perplexity_heading(false).contains("Measured"));
+    }
+
+    #[test]
+    fn wikitext2_needs_a_sidecar_that_matches_the_token_file() {
+        let sidecar = json!({
+            "corpus": WIKITEXT2_CORPUS,
+            "token_count": 3,
+            "token_file_sha256": "abc",
+        });
+        assert!(is_wikitext2_provenance(&sidecar, 3, "abc"));
+        assert!(
+            !is_wikitext2_provenance(&sidecar, 3, "def"),
+            "token file changed"
+        );
+        assert!(
+            !is_wikitext2_provenance(&sidecar, 4, "abc"),
+            "token count differs"
+        );
+        assert!(
+            !is_wikitext2_provenance(&Value::Null, 3, "abc"),
+            "no sidecar"
+        );
+        let other = json!({
+            "corpus": "C4",
+            "token_count": 3,
+            "token_file_sha256": "abc",
+        });
+        assert!(!is_wikitext2_provenance(&other, 3, "abc"));
+    }
+
+    #[test]
+    fn sha256_hex_matches_the_standard_test_vector() {
+        assert_eq!(
+            sha256_hex(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
 }
