@@ -476,7 +476,11 @@ fn tool_auto_decide(args: &Value, active_model_path: &Option<String>) -> Result<
                                 || t.name.contains("q_proj")
                                 || t.name.contains("o_proj")
                                 || t.name.contains("gate_proj")
-                                || t.name.contains("down_proj"))
+                                || t.name.contains("down_proj")
+                                // GPT-NeoX names (Pythia)
+                                || t.name.contains("attention.dense")
+                                || t.name.contains("dense_h_to_4h")
+                                || t.name.contains("dense_4h_to_h"))
                         {
                             let wp = t.weight_profile.clone().unwrap_or_else(|| {
                                 if let Ok(bytes) = crate::inference::read_tensor_bytes(t) {
@@ -526,6 +530,12 @@ fn tool_auto_decide(args: &Value, active_model_path: &Option<String>) -> Result<
                 if sampled_count > 0 {
                     return Ok(output);
                 }
+                // Never answer for a loaded model with made-up numbers.
+                return Err(format!(
+                    "No recognised linear tensors found in `{}` ({} tensors); no plan was made",
+                    model.name,
+                    model.tensors.len()
+                ));
             }
         }
     }
@@ -539,7 +549,9 @@ fn tool_auto_decide(args: &Value, active_model_path: &Option<String>) -> Result<
     ];
 
     let mut output = format!(
-        "### THME Pareto AutoDecider Plan (Tolerance ε = {:.3})\n\n",
+        "### THME Pareto AutoDecider Plan, ILLUSTRATIVE EXAMPLE (no model loaded; tensor names and numbers are made up, not measured; ε = {:.3})
+
+",
         tol
     );
     output.push_str("| Tensor Parameter | Outlier Ratio | Spectral Decay | Layer | Recommended Algorithm | Reason |\n");

@@ -106,6 +106,21 @@ fn test_mcp_validate_quality_format_bug_fix() {
 }
 
 #[test]
+fn test_mcp_auto_decide_without_a_model_is_labelled_illustrative() {
+    let mut model_path = None;
+    let req = json!({
+        "jsonrpc": "2.0",
+        "id": 9,
+        "method": "tools/call",
+        "params": { "name": "thme_auto_decide", "arguments": { "model_path": "no/such/model" } }
+    });
+    let res_str = process_json_rpc(&req.to_string(), &mut model_path).expect("auto decide");
+    let res: Value = serde_json::from_str(&res_str).expect("parse json");
+    let text = res["result"]["content"][0]["text"].as_str().expect("text");
+    assert!(text.contains("ILLUSTRATIVE EXAMPLE"), "{text}");
+}
+
+#[test]
 fn test_mcp_profile_roofline() {
     let mut model_path = None;
     let call_req = json!({
