@@ -4,9 +4,11 @@
 //!
 //! Tests that need an adapter print a skip reason and return when there is none.
 //! Real-model tests are opt-in: set THME_REAL_MODEL_TESTS=1 and THME_TEST_MODELS_DIR to a
-//! folder holding `pythia-14m` and `smollm-135m`.
+//! folder holding `pythia-14m` and `smollm-135m` (see tests/common).
 
-use std::path::PathBuf;
+mod common;
+
+use common::{real_model_dir, TestModel, PYTHIA_14M, SMOLLM_135M};
 use std::sync::Arc;
 use thme::inference::gpu::{GpuBackend, GpuContext, QuantDtype, QuantizedTensor, ThmeError};
 use thme::inference::llama::{linear, synthetic_demo};
@@ -306,25 +308,9 @@ fn synthetic_model_gpu_matches_cpu_within_tolerance() {
     }
 }
 
-fn real_model_dir(name: &str) -> Option<PathBuf> {
-    if std::env::var_os("THME_REAL_MODEL_TESTS").is_none() {
-        eprintln!("SKIP: set THME_REAL_MODEL_TESTS=1 to run real-model tests");
-        return None;
-    }
-    let Some(root) = std::env::var_os("THME_TEST_MODELS_DIR") else {
-        eprintln!("SKIP: set THME_TEST_MODELS_DIR to the folder holding {name}");
-        return None;
-    };
-    let dir = PathBuf::from(root).join(name);
-    if !dir.exists() {
-        eprintln!("SKIP: {name} not found under THME_TEST_MODELS_DIR");
-        return None;
-    }
-    Some(dir)
-}
-
-fn real_model_parity(name: &str) {
-    let Some(dir) = real_model_dir(name) else {
+fn real_model_parity(model: &TestModel) {
+    let name = model.dir_name;
+    let Some(dir) = real_model_dir(model) else {
         return;
     };
     if gpu_or_skip().is_none() {
@@ -356,12 +342,12 @@ fn real_model_parity(name: &str) {
 
 #[test]
 fn smollm_135m_gpu_matches_cpu() {
-    real_model_parity("smollm-135m");
+    real_model_parity(&SMOLLM_135M);
 }
 
 #[test]
 fn pythia_14m_gpu_matches_cpu() {
-    real_model_parity("pythia-14m");
+    real_model_parity(&PYTHIA_14M);
 }
 
 #[test]
