@@ -1,355 +1,180 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-use std::path::{Path, PathBuf};
+//! Real-model tests on Pythia-14M (GPT-NeoX) and SmolLM-135M (LLaMA), CPU only.
+//!
+//! Opt-in: set `THME_REAL_MODEL_TESTS=1` and `THME_TEST_MODELS_DIR` to the folder that holds
+//! `pythia-14m` and `smollm-135m`. Without both, each test prints a SKIP line and passes.
+//! The assertions use only what both families share, plus each model's own config values.
+
+mod common;
+
+use common::{real_model_dir, resolve_model_dir, TestModel, PYTHIA_14M, SMOLLM_135M};
+use std::ffi::OsStr;
 use thme::inference::arch::ArchConfig;
 use thme::parser::ModelImporter;
 
-fn resolve_medgemma_path() -> Option<PathBuf> {
-    // Tests that open a real model file are opt-in: set THME_REAL_MODEL_TESTS=1 to run them.
-    std::env::var_os("THME_REAL_MODEL_TESTS")?;
-    let path = std::env::var("THME_MEDGEMMA_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            let relative = PathBuf::from("models/medgemma-4b-it-UD-Q4_K_XL.gguf");
-            if relative.exists() {
-                relative
-            } else if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-                PathBuf::from(local_app_data).join("hermes/models/medgemma-4b-it-UD-Q4_K_XL.gguf")
-            } else {
-                relative
-            }
-        });
-    if path.exists() {
-        Some(path)
-    } else {
-        None
-    }
-}
+const MODELS: [&TestModel; 2] = [&PYTHIA_14M, &SMOLLM_135M];
 
-fn resolve_or_pack_epiph_path(gguf_path: &Path) -> PathBuf {
-    let candidates = [
-        PathBuf::from("tmp/medgemma.epiph"),
-        PathBuf::from("THME-Epiphanes/tmp/medgemma.epiph"),
-    ];
-    for p in &candidates {
-        if p.exists() {
-            return p.clone();
-        }
-    }
-    let target = PathBuf::from("tmp/medgemma.epiph");
-    let _ = std::fs::create_dir_all("tmp");
-    let pack_args = thme::cli::epiph::PackArgs {
-        model: gguf_path.to_path_buf(),
-        out: target.clone(),
-        recipe: None,
-        calibration: None,
-        quality: Vec::new(),
-        parent: Vec::new(),
-        annotate: Vec::new(),
-        quantize: false,
-        allow_partial: false,
-        placement: None,
-        compress: None,
-    };
-    thme::cli::epiph::pack(&pack_args).expect("pack epiph container");
-    target
+// Token ids are valid in both vocabularies (50304 and 49152).
+const TOKENS: [u32; 2] = [12, 345];
+
+#[test]
+fn resolver_needs_config_and_weights_in_the_models_folder() {
+    let root = tempfile::tempdir().expect("temp dir");
+    let base = root.path();
+
+    // Missing folder: nothing found.
+    assert!(resolve_model_dir(Some(base.as_os_str()), "pythia-14m").is_none());
+
+    // Config only: incomplete, nothing found.
+    let partial = base.join("pythia-14m");
+    std::fs::create_dir_all(&partial).expect("create partial");
+    std::fs::write(partial.join("config.json"), "{}").expect("write config");
+    assert!(resolve_model_dir(Some(base.as_os_str()), "pythia-14m").is_none());
+
+    // Config and weights: found.
+    std::fs::write(partial.join("model.safetensors"), b"").expect("write weights");
+    assert_eq!(
+        resolve_model_dir(Some(base.as_os_str()), "pythia-14m"),
+        Some(partial)
+    );
+
+    // Without THME_TEST_MODELS_DIR the relative models/ folder is used; this name is absent.
+    assert!(resolve_model_dir(None::<&OsStr>, "no-such-model-folder").is_none());
 }
 
 #[test]
-fn test_medgemma_model_structure_and_tensor_resolution() {
-    let Some(path) = resolve_medgemma_path() else {
-        eprintln!("MedGemma model file not found on host disk; skipping test");
-        return;
-    };
-
-    let model = ModelImporter::import(&path).expect("import medgemma model");
-    assert_eq!(model.num_layers, 34);
-    assert_eq!(model.hidden_size, 2560);
-    assert_eq!(model.num_attention_heads, 8);
-    assert_eq!(model.num_key_value_heads, 4);
-
-    let arch_cfg = ArchConfig::detect(&model, &path).expect("detect architecture for medgemma");
-    assert_eq!(arch_cfg.family(), "Gemma");
-
-    match arch_cfg {
-        ArchConfig::Gemma(ref cfg) => {
-            assert_eq!(cfg.num_layers, 34);
-            assert_eq!(cfg.hidden_size, 2560);
-            assert_eq!(cfg.num_heads, 8);
-            assert_eq!(cfg.num_kv_heads, 4);
-            assert_eq!(cfg.head_dim, 256);
-        }
-        _ => panic!("Expected Gemma family architecture for medgemma"),
-    }
-
-    // Verify all 34 layer tensors are mapped by find_tensor aliases
-    assert!(thme::inference::gemma::find_tensor(&model, "token_embd.weight").is_some());
-    assert!(thme::inference::gemma::find_tensor(&model, "output_norm.weight").is_some());
-
-    for layer in 0..1 {
-        let q_tensor =
-            thme::inference::gemma::find_tensor(&model, &format!("blk.{layer}.attn_q.weight"))
-                .expect("attn_q");
-        println!(
-            "Layer 0 Q tensor shape: {:?}, numel: {}, dtype: {}",
-            q_tensor.shape, q_tensor.numel, q_tensor.original_dtype
+fn real_model_import_detects_family_and_shape() {
+    for model in MODELS {
+        let Some(dir) = real_model_dir(model) else {
+            continue;
+        };
+        let ir = ModelImporter::import(&dir).expect("import real model folder");
+        assert_eq!(ir.num_layers, model.num_layers, "{}", model.dir_name);
+        assert_eq!(ir.hidden_size, model.hidden_size, "{}", model.dir_name);
+        assert_eq!(
+            ir.num_attention_heads, model.num_heads,
+            "{}",
+            model.dir_name
         );
-        let k_tensor =
-            thme::inference::gemma::find_tensor(&model, &format!("blk.{layer}.attn_k.weight"))
-                .expect("attn_k");
-        println!(
-            "Layer 0 K tensor shape: {:?}, numel: {}, dtype: {}",
-            k_tensor.shape, k_tensor.numel, k_tensor.original_dtype
+        assert_eq!(ir.vocab_size, model.vocab_size, "{}", model.dir_name);
+
+        let arch = ArchConfig::detect(&ir, &dir).expect("detect architecture");
+        assert_eq!(arch.family(), model.family, "{}", model.dir_name);
+
+        let runnable = arch
+            .load(&ir, thme::inference::WeightPrecision::AsStored)
+            .expect("load runnable model");
+        assert_eq!(
+            runnable.num_layers(),
+            model.num_layers,
+            "{}",
+            model.dir_name
         );
-        let norm_tensor =
-            thme::inference::gemma::find_tensor(&model, &format!("blk.{layer}.attn_norm.weight"));
-        println!(
-            "Layer 0 attn_norm tensor: {:?}",
-            norm_tensor.map(|t| (&t.name, &t.shape, t.numel, &t.original_dtype))
+        assert_eq!(
+            runnable.vocab_size(),
+            model.vocab_size,
+            "{}",
+            model.dir_name
         );
     }
-
-    // Load runnable model and verify forward pass over 1 layer
-    let runnable = arch_cfg
-        .load(&model, thme::inference::WeightPrecision::AsStored)
-        .expect("load runnable gemma model");
-    assert_eq!(runnable.num_layers(), 34);
-    assert_eq!(runnable.vocab_size(), 262208);
-
-    // Run scheduled forward pass across layer 0 with exit after layer 0
-    let tokens = [2u32, 106u32];
-    let exits = runnable
-        .forward_scheduled(&tokens, &[0], &[1])
-        .expect("forward_scheduled layer 0");
-    assert_eq!(exits.len(), 1);
-    assert_eq!(exits[0].layers_applied, 1);
-    assert_eq!(exits[0].nll.len(), 1);
-    assert!(exits[0].nll[0].is_finite());
-    println!(
-        "Layer 0 exit NLL: {:.4}, top1: {:?}",
-        exits[0].nll[0], exits[0].top1
-    );
-    if let Some(thme::ir::model::ModelMetadataValue::Array(tokens_meta)) =
-        model.source_gguf_metadata.get("tokenizer.ggml.tokens")
-    {
-        let next_id = exits[0].top1[0] as usize;
-        if let Some(thme::ir::model::ModelMetadataValue::String(tok_str)) = tokens_meta.get(next_id)
-        {
-            println!(
-                "Predicted next token for [2, 106]: ID {} = {:?}",
-                next_id, tok_str
-            );
-        }
-    }
-
-    // 2-step autoregressive generation loop on MedGemma weights
-    let mut seq = vec![2u32, 106u32];
-    for step in 0..2 {
-        let step_exits = runnable
-            .forward_scheduled(&seq, &[0], &[1])
-            .unwrap_or_else(|e| panic!("forward_scheduled at step {step} failed: {e}"));
-        assert_eq!(step_exits.len(), 1);
-        let top1 = step_exits[0]
-            .top1
-            .last()
-            .copied()
-            .expect("next token prediction");
-        println!(
-            "Autoregressive step {step}: seq_len={}, predicted_token_id={top1}",
-            seq.len()
-        );
-        seq.push(top1);
-    }
-    assert_eq!(seq.len(), 4);
 }
 
 #[test]
-fn test_medgemma_full_34_layer_forward() {
-    let Some(path) = resolve_medgemma_path() else {
-        eprintln!("MedGemma model file not found on host disk; skipping test");
-        return;
-    };
+fn real_model_forward_logits_and_full_depth_exit_are_finite() {
+    for model in MODELS {
+        let Some(dir) = real_model_dir(model) else {
+            continue;
+        };
+        let ir = ModelImporter::import(&dir).expect("import real model folder");
+        let arch = ArchConfig::detect(&ir, &dir).expect("detect architecture");
+        let runnable = arch
+            .load(&ir, thme::inference::WeightPrecision::AsStored)
+            .expect("load runnable model");
 
-    let model = ModelImporter::import(&path).expect("import medgemma model");
-    assert_eq!(model.num_layers, 34);
-    assert_eq!(model.hidden_size, 2560);
-    assert_eq!(model.num_attention_heads, 8);
-    assert_eq!(model.num_key_value_heads, 4);
-
-    let arch_cfg = ArchConfig::detect(&model, &path).expect("detect architecture for medgemma");
-    assert_eq!(arch_cfg.family(), "Gemma");
-
-    let runnable = arch_cfg
-        .load(&model, thme::inference::WeightPrecision::AsStored)
-        .expect("load runnable gemma model");
-    assert_eq!(runnable.num_layers(), 34);
-    assert_eq!(runnable.vocab_size(), 262208);
-
-    let tokens = [2u32, 106u32];
-
-    // 1. Full 34-layer forward pass producing unnormalized logits for the final token position
-    let logits = runnable
-        .forward_logits(&tokens)
-        .expect("forward_logits over all 34 layers");
-    assert_eq!(
-        logits.len(),
-        262208,
-        "Vocabulary size must match MedGemma 262,208"
-    );
-
-    // Verify all logits are finite (no NaN, no Inf)
-    let non_finite_count = logits
-        .iter()
-        .filter(|v| v.is_nan() || v.is_infinite())
-        .count();
-    assert_eq!(non_finite_count, 0, "All output logits must be finite");
-
-    // Top-1 predicted token
-    let (top1_id, top1_logit) = logits
-        .iter()
-        .enumerate()
-        .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-        .map(|(id, &v)| (id as u32, v))
-        .expect("logits non-empty");
-
-    println!(
-        "MedGemma full 34-layer forward: top1_token_id={}, logit={:.4}",
-        top1_id, top1_logit
-    );
-    assert_eq!(
-        top1_id, 107,
-        "Top-1 token after [2, 106] (<start_of_turn>) must be 107 (<end_of_turn>)"
-    );
-    assert!(top1_logit.is_finite());
-    assert!(
-        top1_logit > 0.0,
-        "Top-1 logit should be positive and high confidence"
-    );
-
-    // 2. Scheduled forward pass across all 34 layers with depth exit at layer 34
-    let schedule: Vec<usize> = (0..34).collect();
-    let exits = runnable
-        .forward_scheduled(&tokens, &schedule, &[34])
-        .expect("forward_scheduled all 34 layers");
-    assert_eq!(exits.len(), 1);
-    assert_eq!(exits[0].layers_applied, 34);
-    assert_eq!(exits[0].nll.len(), 1);
-    assert!(
-        exits[0].nll[0].is_finite(),
-        "34-layer exit NLL must be finite"
-    );
-    println!("MedGemma full 34-layer exit NLL: {:.4}", exits[0].nll[0]);
-}
-
-#[test]
-fn test_medgemma_epiph_loading_and_inference_parity() {
-    let Some(gguf_path) = resolve_medgemma_path() else {
-        eprintln!("MedGemma model file not found on host disk; skipping test");
-        return;
-    };
-
-    let epiph_path = resolve_or_pack_epiph_path(&gguf_path);
-    assert!(
-        epiph_path.exists(),
-        ".epiph container must exist at {:?}",
-        epiph_path
-    );
-
-    // 1. Verify .epiph container format, 444 tensors and attachment digests
-    let report = thme::epiph::verify(&epiph_path).expect("verify epiph container");
-    assert_eq!(
-        report.tensors, 444,
-        "MedGemma .epiph container must verify exactly 444 tensors"
-    );
-    assert_eq!(
-        report.attachments, 1,
-        "MedGemma .epiph container must contain GGUF metadata attachment"
-    );
-    assert!(
-        report.payload_bytes > 2_500_000_000,
-        "Payload bytes must exceed 2.5 GB"
-    );
-    println!(
-        "Verified .epiph container: {} tensors, {} attachments, {} bytes",
-        report.tensors, report.attachments, report.payload_bytes
-    );
-
-    // 2. Load model from GGUF and run forward pass
-    let gguf_ir = ModelImporter::import(&gguf_path).expect("import gguf model");
-    let gguf_arch = ArchConfig::detect(&gguf_ir, &gguf_path).expect("detect gguf architecture");
-    let gguf_runnable = gguf_arch
-        .load(&gguf_ir, thme::inference::WeightPrecision::AsStored)
-        .expect("load gguf runnable");
-
-    let tokens = [2u32, 106u32];
-    let gguf_logits = gguf_runnable
-        .forward_logits(&tokens)
-        .expect("gguf forward_logits");
-    assert_eq!(gguf_logits.len(), 262208);
-
-    // 3. Load model from .epiph container via ModelImporter::import
-    let epiph_ir = ModelImporter::import(&epiph_path).expect("import epiph model");
-    assert_eq!(epiph_ir.num_layers, 34);
-    assert_eq!(epiph_ir.hidden_size, 2560);
-    assert_eq!(epiph_ir.vocab_size, 262208);
-
-    let epiph_arch = ArchConfig::detect(&epiph_ir, &epiph_path).expect("detect epiph architecture");
-    assert_eq!(epiph_arch.family(), "Gemma");
-
-    let epiph_runnable = epiph_arch
-        .load(&epiph_ir, thme::inference::WeightPrecision::AsStored)
-        .expect("load epiph runnable");
-    assert_eq!(epiph_runnable.num_layers(), 34);
-    assert_eq!(epiph_runnable.vocab_size(), 262208);
-
-    let epiph_logits = epiph_runnable
-        .forward_logits(&tokens)
-        .expect("epiph forward_logits");
-    assert_eq!(epiph_logits.len(), 262208);
-
-    // 4. Verify numerical parity between GGUF and .epiph logits (< 1e-4 tolerance)
-    let mut max_abs_diff = 0.0f32;
-    for (idx, (&g_val, &e_val)) in gguf_logits.iter().zip(&epiph_logits).enumerate() {
-        let diff = (g_val - e_val).abs();
-        if diff > max_abs_diff {
-            max_abs_diff = diff;
-        }
+        let logits = runnable.forward_logits(&TOKENS).expect("forward_logits");
+        assert_eq!(logits.len(), model.vocab_size, "{}", model.dir_name);
         assert!(
-            diff < 1e-4,
-            "Logit parity mismatch at index {idx}: GGUF={g_val}, EPIPH={e_val}, diff={diff}"
+            logits.iter().all(|v| v.is_finite()),
+            "{}: all logits must be finite",
+            model.dir_name
+        );
+
+        let schedule: Vec<usize> = (0..model.num_layers).collect();
+        let exits = runnable
+            .forward_scheduled(&TOKENS, &schedule, &[model.num_layers])
+            .expect("forward_scheduled over all layers");
+        assert_eq!(exits.len(), 1);
+        assert_eq!(exits[0].layers_applied, model.num_layers);
+        assert_eq!(exits[0].nll.len(), 1);
+        assert!(exits[0].nll[0].is_finite(), "{}: NLL", model.dir_name);
+        println!(
+            "{} ({}): full-depth exit NLL {:.4}",
+            model.dir_name, model.family, exits[0].nll[0]
         );
     }
+}
 
-    println!(
-        "MedGemma GGUF vs .epiph parity confirmed: max_abs_diff = {:.6e}",
-        max_abs_diff
-    );
-    assert!(
-        max_abs_diff < 1e-4,
-        "Logit max difference ({max_abs_diff}) must be < 1e-4"
-    );
+#[test]
+fn real_model_epiph_round_trip_keeps_logits() {
+    for model in MODELS {
+        let Some(dir) = real_model_dir(model) else {
+            continue;
+        };
+        let out_root = tempfile::tempdir().expect("temp dir");
+        let epiph_path = out_root.path().join(format!("{}.epiph", model.dir_name));
 
-    // Compare top-1 predictions
-    let gguf_top1 = gguf_logits
-        .iter()
-        .enumerate()
-        .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-        .map(|(id, &v)| (id as u32, v))
-        .expect("gguf top1");
+        let pack_args = thme::cli::epiph::PackArgs {
+            model: dir.clone(),
+            out: epiph_path.clone(),
+            recipe: None,
+            calibration: None,
+            quality: Vec::new(),
+            parent: Vec::new(),
+            annotate: Vec::new(),
+            quantize: false,
+            allow_partial: false,
+            placement: None,
+            compress: None,
+        };
+        thme::cli::epiph::pack(&pack_args).expect("pack epiph container");
 
-    let epiph_top1 = epiph_logits
-        .iter()
-        .enumerate()
-        .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-        .map(|(id, &v)| (id as u32, v))
-        .expect("epiph top1");
+        let report = thme::epiph::verify(&epiph_path).expect("verify epiph container");
+        let source_ir = ModelImporter::import(&dir).expect("import source");
+        assert!(report.tensors > 0, "{}: no tensors", model.dir_name);
+        assert_eq!(
+            report.tensors,
+            source_ir.tensors.len(),
+            "{}",
+            model.dir_name
+        );
 
-    assert_eq!(
-        gguf_top1.0, epiph_top1.0,
-        "Top-1 predicted token ID must match between GGUF and .epiph"
-    );
-    assert_eq!(gguf_top1.0, 107);
-    println!(
-        "GGUF top-1: ID {}, logit {:.4}; .epiph top-1: ID {}, logit {:.4}",
-        gguf_top1.0, gguf_top1.1, epiph_top1.0, epiph_top1.1
-    );
+        let source_arch = ArchConfig::detect(&source_ir, &dir).expect("detect source");
+        let source_logits = source_arch
+            .load(&source_ir, thme::inference::WeightPrecision::AsStored)
+            .expect("load source")
+            .forward_logits(&TOKENS)
+            .expect("source forward_logits");
+
+        let epiph_ir = ModelImporter::import(&epiph_path).expect("import epiph model");
+        assert_eq!(epiph_ir.num_layers, model.num_layers, "{}", model.dir_name);
+        let epiph_arch = ArchConfig::detect(&epiph_ir, &epiph_path).expect("detect epiph");
+        assert_eq!(epiph_arch.family(), model.family, "{}", model.dir_name);
+        let epiph_logits = epiph_arch
+            .load(&epiph_ir, thme::inference::WeightPrecision::AsStored)
+            .expect("load epiph")
+            .forward_logits(&TOKENS)
+            .expect("epiph forward_logits");
+
+        assert_eq!(source_logits.len(), epiph_logits.len());
+        let max_abs_diff = source_logits
+            .iter()
+            .zip(&epiph_logits)
+            .map(|(s, e)| (s - e).abs())
+            .fold(0.0f32, f32::max);
+        assert!(
+            max_abs_diff < 1e-4,
+            "{}: source vs .epiph logit max diff {max_abs_diff} must be < 1e-4",
+            model.dir_name
+        );
+    }
 }
