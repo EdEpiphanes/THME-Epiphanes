@@ -67,6 +67,10 @@ path = "examples/precision_sweep.rs"
 name = "depth_probe"
 path = "examples/depth_probe.rs"
 
+[[example]]
+name = "decode_speed"
+path = "examples/decode_speed.rs"
+
 [dependencies]
 clap = { workspace = true }
 serde = { workspace = true }

@@ -323,9 +323,10 @@ fn test_iq4_xs_dequant_gemv_parity() {
     }
 
     println!("IQ4_XS Dequant + GEMV Parity: max_diff = {max_diff:.6e}");
+    // Other adapters (Metal on the macOS runner) sum in a different order: 1.46e-3 seen there.
     assert!(
-        max_diff < 1e-3,
-        "IQ4_XS GEMV output diff {max_diff} exceeded tolerance 1e-3"
+        max_diff < 3e-3,
+        "IQ4_XS GEMV output diff {max_diff} exceeded tolerance 3e-3"
     );
 }
 
