@@ -183,6 +183,36 @@ closes it.
 - **Not done**: a device-resident GPT-NeoX decoder (Pythia gain is modest), device KV cache, f16 and subgroup kernels, Metal and DX12 timings.
 - **Done means**: Perplexity over the full test split on GPU matches CPU within 1e-4 nats per window and is faster on both small models; the report records the device.
 
+### [THME-3079] Token-frequency count for Pythia-14M (weights-only)
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: experiment · **Status**: ready
+- **Problem**: Pythia-14M stores about 92 percent of its parameters in the two embedding matrices, and the output head is about 85 percent of the bytes read per decoded token. Which rows matter depends on how often tokens occur, and nothing counts that yet.
+- **Done means**: A command or example counts token frequencies over the WikiText-2 train split with the model's own tokenizer (no model forward pass), writes a hash-pinned frequency table, and reports the share of tokens covered by the top 1,024, 4,096 and 8,192 rows; the result is committed as a report and cited by THME-3080 and THME-3081.
+
+### [THME-3080] Per-row precision bands for the embedding and output matrices (Pythia-14M)
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: experiment · **Status**: ready
+- **Problem**: The linear layers are about 8 percent of Pythia-14M, so uniform quantisation of them barely changes its size; the embedding rows are the lever. Rare tokens may tolerate fewer bits than frequent ones.
+- **Done means**: Measured on Pythia-14M with the existing quality gate and a pre-registered rule written in the report before the run: bytes of the written `.epiph` and perplexity on the WikiText-2 test split for uniform Q8_0, uniform lower-bit, and frequency-banded rows (bands from THME-3079), each with a shuffled-band control; also reports whether the Q8_0 gate failure on Pythia comes from the embeddings or the linear layers. A positive result is the condition for the per-row-band codec of THME-3078.
+
+### [THME-3081] Frequent-row draft pass for the output head (Pythia-14M)
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: experiment · **Status**: ready
+- **Problem**: Decode reads the whole output head for every token. If the greedy token is almost always among the most frequent rows, a draft over those rows plus an exact verification step could cut the bytes read without changing the output.
+- **Done means**: One pass measures how often the greedy token lies in the top 1,024, 4,096 and 8,192 frequent rows (rows from THME-3079) over the test split; a decision rule fixed in the report before the run says whether to build the verified draft; if built, the output must be identical to normal greedy decoding and tokens per second are measured paired against it.
+
+### [THME-3082] KV cache in int8 and int4 per group, counted in the placement budget
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: experiment · **Status**: ready
+- **Problem**: The KV cache is now real (THME-3070): 12.6 MB at 2,048 context for Pythia-14M, more for larger models. Lower-precision KV could cut it, mainly for models at SmolLM size and above.
+- **Done means**: KV stored in int8 and int4 per group behind the existing cache type; cache bytes, perplexity at 1k and 4k context and decode tokens per second measured against the f32 cache on Pythia-14M, with SmolLM-135M as the late confirmation; the placement budget (THME-3016) counts the real KV bytes.
+
+### [THME-3083] Layer-removal check on the small models
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: experiment · **Status**: ready
+- **Problem**: Published work reports that some layers can be removed from larger models with little loss; small models may be more fragile.
+- **Done means**: Block influence per layer computed for Pythia-14M (and SmolLM-135M late), perplexity measured against the number of removed blocks on the same token hash with a random-removal control; the rule and the stop threshold are written before the run.
+
 ## Engine, format, security and quality tracks (v0.2.5 to v0.2.9)
 
 > From the research dossier v3.1 (`docs/research/`) and the owner's direction of 13 November 2026.
