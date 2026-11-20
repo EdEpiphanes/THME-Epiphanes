@@ -17,7 +17,8 @@ confidence-threshold = 0.8
 # Dependencies must stay permissive so THME can be offered both under AGPL-3.0-only and under a
 # commercial license (LICENSING.md). Copyleft licences such as GPL or AGPL are therefore not on
 # this list; only THME itself is AGPL, via the exception below.
-# OFL-1.1, UFL-1.0 and Ubuntu-font-1.0 cover the fonts bundled by egui.
+# OFL-1.1 and Ubuntu-font-1.0 cover the fonts bundled by egui. Only licences met by the current
+# lockfile are listed; re-add one with a ticket when a dependency needs it.
 exceptions = [
     { allow = ["AGPL-3.0-only"], crate = "thme" },
     { allow = ["AGPL-3.0-only"], crate = "neutron-gpu" },
@@ -31,15 +32,10 @@ allow = [
     "BSD-2-Clause",
     "BSD-3-Clause",
     "BSL-1.0",
-    "CC0-1.0",
     "ISC",
-    "LicenseRef-UFL-1.0",
     "MIT",
-    "MIT-0",
-    "MPL-2.0",
     "OFL-1.1",
     "Unicode-3.0",
-    "Unicode-DFS-2016",
     "Ubuntu-font-1.0",
     "Zlib",
 ]

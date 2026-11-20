@@ -33,6 +33,12 @@ RWTNMQP8+1rfNWQsVzNDUlnVRotV3ZdJrNsbpoP8+FedvedBGyRUzB6O
 
 If the key ever changes, the new key is announced in a release signed with the old one.
 
+## Known limits
+
+- **Memory-mapped model files.** The parsers map user model files read-only with `unsafe Mmap::map`. If another process truncates or shrinks a file while THME has it mapped, reading the missing pages raises a bus error or access violation and the process crashes (denial of service, not code execution). THME does not lock files; do not modify a model file while THME uses it, and copy untrusted files to a private folder first.
+- **MCP server.** It trusts its client and reads any path the user account can read. See "MCP trust model" in [tutorials/mcp_copilot_setup.md](tutorials/mcp_copilot_setup.md).
+- **VS Code extension.** It runs a `thme` binary found under the workspace `target/` folder before PATH, so it declares untrusted workspaces unsupported.
+
 ## Reporting a Vulnerability
 
 We take the security of **THME** by **Epiphanes** seriously. If you discover a vulnerability or security flaw, please do not disclose it publicly in an issue or forum.
