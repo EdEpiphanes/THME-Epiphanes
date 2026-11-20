@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - v0.2.0 Measured Core
 
 ### Added
+- **KV cache for incremental decoding (THME-3070)**: the LLaMA and GPT-NeoX reference models decode one token per step from a cache (`forward_extend`); the Studio Chat reply loop uses it. Incremental logits match the full forward pass at every position (largest gap 7.6e-6 on a 96-token synthetic model, tolerance 1e-4; 0 on the real models at 24 tokens). Gemma keeps the whole-sequence loop. Measured decode speed is in `docs/benchmarks/` (see its README).
 - **Run planner tickets and research** (THME-3055 to THME-3066): how other engines auto-tune loading (`docs/research/engine-autotuning.md`) and 12 small tickets for a `thme plan-run`.
 - **Hugging Face cross-check measured (THME-2001)**: THME logits match the fp32 reference within 1.9e-4 (Pythia-14M) and 2.1e-5 (SmolLM-135M) on CPU and GPU; `scripts/cross_check_hf.py` gains `--device` and pins the reference to fp32.
 - **First-pass audit tickets** (19 November 2026): THME-3047 to 3054 record the findings of a read-only audit (publication from a clean export, VS Code extension shell injection, release pipeline hardening, removal of agent notes and personal settings, a hard-coded model fallback, hygiene, a subprocess timeout, MCP trust model).
