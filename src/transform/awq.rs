@@ -45,6 +45,9 @@ pub enum ScaleSource {
 /// Copy of `stats` with `mean_abs` (the scale source) permuted across input channels. The
 /// shuffle is seeded by `seed` mixed with the layer's own statistics, so every layer draws its
 /// own permutation. `rms` is unchanged.
+/// shortcut: the key is the seed and the statistics, not the tensor name, so two layers with
+/// identical statistics draw the same permutation; pass the tensor name through `ApplyContext`
+/// if that ever matters.
 pub fn permute_scales(stats: &ChannelStats, seed: u64) -> ChannelStats {
     let mut state = stats
         .mean_abs
