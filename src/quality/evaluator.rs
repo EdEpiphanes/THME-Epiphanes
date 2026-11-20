@@ -10,7 +10,6 @@
 //! - External Bridge: Supports calling external evaluation tools (e.g., `llama-perplexity`) with structured output parsing.
 
 use serde::{Deserialize, Serialize};
-use std::path::Path;
 
 /// Standard evaluation corpora for language model quality benchmarking
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -189,32 +188,6 @@ impl ModelEvaluator {
             summary,
             recommended_action,
         }
-    }
-
-    /// Dispatches external evaluation command (e.g. `llama-perplexity`) if available
-    pub fn evaluate_external(
-        cmd: &str,
-        model_path: &Path,
-        corpus_path: &Path,
-    ) -> Result<PerplexityMetrics, String> {
-        let output = std::process::Command::new(cmd)
-            .arg("--model")
-            .arg(model_path)
-            .arg("--file")
-            .arg(corpus_path)
-            .output()
-            .map_err(|e| format!("Failed to execute external evaluator '{}': {}", cmd, e))?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!(
-                "External evaluator failed with status {}: {}",
-                output.status, stderr
-            ));
-        }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        Self::parse_external_output(&stdout)
     }
 
     /// Parses standard external evaluation stdout (searching for perplexity values)
