@@ -238,7 +238,7 @@ Purpose: replace the two least trustworthy predictions (device speed, scratch me
 ### 5.7 Ticket list (numbers are placeholders; assign real THME ids when merging into BACKLOG.md)
 
 Style follows BACKLOG.md: milestone, priority, area, problem, done means. Milestone v0.3.0 (plug and
-play workspace) is the natural home.
+play workspace) is the natural home. Filed in BACKLOG.md as THME-3055 to THME-3066 (PLAN-1 to PLAN-12).
 
 1. **[THME-PLAN-1] VRAM and adapter facts in `HostFacts`** - p1, doctor. Problem: only an adapter name
    is reported. Done: `Fact<u64>` dedicated VRAM total/free per adapter, device type (discrete,
