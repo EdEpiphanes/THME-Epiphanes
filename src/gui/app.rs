@@ -629,6 +629,8 @@ pub struct THMEApp {
     live: super::live::LiveView,
     /// Chat with a loaded model (tab 11, THME-3038).
     chat: chat::ChatTab,
+    /// First-run Welcome window (THME-3039); open until a model file is loaded.
+    welcome: welcome::WelcomePanel,
 
     // Closed-Loop Co-Surgery Dashboard (v0.1.9)
     cosurgery_budget_iterations: usize,
@@ -806,6 +808,7 @@ impl THMEApp {
             capture: super::capture::CaptureState::from_env(),
             live: super::live::LiveView::default(),
             chat: chat::ChatTab::default(),
+            welcome: welcome::WelcomePanel::default(),
             status_msg: "THME Master Engine initialized. System ready.".to_string(),
             start_instant,
             exit_ratio_pct: 80.0,
@@ -966,6 +969,8 @@ impl THMEApp {
             }
         }
 
+        // The Welcome window opens only when no model file is loaded and no capture run is going.
+        app.welcome.open = app.model().source_path.is_none() && app.capture.is_none();
         app.auto_scan_and_benchmark();
         app.create_checkpoint(
             "Initial Baseline",
@@ -1146,6 +1151,34 @@ impl THMEApp {
         );
         self.status_msg =
             "Global Pareto transformation plan executed and locked across all layers!".to_string();
+    }
+
+    /// Loads a model file as the Studio does: the import runs the safety scan first. Used by
+    /// "Load Model File..." and the Welcome window's Open buttons.
+    fn open_model_file(&mut self, path: &Path) -> Result<(), String> {
+        match UniversalModel::load_universal(path) {
+            Ok(m) => {
+                let name = m.name.clone();
+                self.models.push(m);
+                self.active_model_idx = self.models.len() - 1;
+                self.checkpoint_layer_idx =
+                    (self.model().layers.len() as f32 * 0.30).round() as usize;
+                self.auto_scan_and_benchmark();
+                self.run_auto_decider_internal();
+                self.log_audit(
+                    "INFO",
+                    "ModelLoad",
+                    &format!("Imported file: {:?}", path),
+                    &name,
+                );
+                self.status_msg = f!("Loaded model [{}]: {:?}", self.model().format, path);
+                Ok(())
+            }
+            Err(err) => {
+                self.status_msg = f!("Error loading file: {}", err);
+                Err(err)
+            }
+        }
     }
 
     fn auto_scan_and_benchmark(&mut self) {
@@ -1615,33 +1648,12 @@ impl eframe::App for THMEApp {
                                     .add_filter("SafeTensors (*.safetensors)", &["safetensors"])
                                     .pick_file()
                                 {
-                                    match UniversalModel::load_universal(&path) {
-                                        Ok(m) => {
-                                            let name = m.name.clone();
-                                            self.models.push(m);
-                                            self.active_model_idx = self.models.len() - 1;
-                                            self.checkpoint_layer_idx =
-                                                (self.model().layers.len() as f32 * 0.30).round()
-                                                    as usize;
-                                            self.auto_scan_and_benchmark();
-                                            self.run_auto_decider_internal();
-                                            self.log_audit(
-                                                "INFO",
-                                                "ModelLoad",
-                                                &format!("Imported file: {:?}", path),
-                                                &name,
-                                            );
-                                            self.status_msg = f!(
-                                                "Loaded model [{}]: {:?}",
-                                                self.model().format,
-                                                path
-                                            );
-                                        }
-                                        Err(err) => {
-                                            self.status_msg = f!("Error loading file: {}", err);
-                                        }
-                                    }
+                                    let _ = self.open_model_file(&path);
                                 }
+                            }
+
+                            if ui.button("Welcome").clicked() {
+                                self.show_welcome();
                             }
 
                             if ui.button("Load Model Folder...").clicked() {
@@ -1817,6 +1829,8 @@ impl eframe::App for THMEApp {
                 }
             });
         });
+
+        self.render_welcome(&ctx);
     }
 }
 
@@ -1832,6 +1846,7 @@ mod layer_tweaker;
 mod matrix_engine;
 mod models;
 mod surgery_export;
+mod welcome;
 
 fn render_stat_box(
     ui: &mut egui::Ui,

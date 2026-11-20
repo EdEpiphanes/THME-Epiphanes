@@ -389,6 +389,7 @@ closes it.
 
 - **Milestone**: v0.3.0 · **Roadmap**: v0.3.0.2 · **Priority**: p2 · **Area**: onboarding · **Type**: feature · **Status**: done
 - **Progress** (19 November 2026): `thme doctor [--json]` reports operating system, memory, disk, CPU threads, GPU adapters found through wgpu and the models `thme discover` finds, each marked checked or assumed, then prints a short Next list. 9 tests on a `HostFacts` struct, none depending on this machine. Not done: the Studio first-start summary.
+- **Progress** (19 November 2026, later): the Studio shows the doctor summary and the discover list in a Welcome panel when no model is loaded (`src/gui/app/welcome.rs`); checks run on a background thread, Open runs the safety scan first, at most 10 rows with the total. 12 state-machine tests. The live window was not opened.
 - **Problem**: People come from different backgrounds and tools. They need one command that says what works on their machine and what to do next.
 - **Done means**: `thme doctor` reports operating system, memory, disk, GPU adapter found through wgpu, and the models `thme discover` finds, then prints the next command to try. The Studio shows the same summary on first start. Every line states what was checked and what was only assumed.
 
