@@ -34,8 +34,9 @@ closes it.
 
 ### [THME-2004] Publish the first measured recipe search and Pareto chart
 
-- **Milestone**: v0.2.0 · **Roadmap**: v0.2.1.7 · **Priority**: p2 · **Area**: research · **Type**: experiment · **Status**: blocked
+- **Milestone**: v0.2.0 · **Roadmap**: v0.2.1.7 · **Priority**: p2 · **Area**: research · **Type**: experiment · **Status**: done
 - **Problem**: `thme search` and the Pareto chart exist but no measured search report is committed.
+- **Progress** (20 November 2026): `docs/benchmarks/{pythia-14m,smollm-135m}/data/search_report.json` committed (Q8_0, Q4_0, grouped by layer, 8,192 calibration tokens, 16,384 validation tokens, 5 random controls each); pareto charts regenerated. Pythia-14M: the 50% budget was **not met** (58.3% achieved, validation Δ +0.303, passes the 0.45 gate); the 30% Pareto point could not be reached and repeats the 58.3% plan. SmolLM-135M: 50% met (validation Δ −0.018); all points are within about ±0.02 PPL of the baseline, which is within noise (no interval computed). Searched plans beat all five controls on Pythia and are not separated from them on SmolLM.
 - **Done means**: `docs/benchmarks/<model>/data/search_report.json` committed for Pythia-14M and SmolLM-135M with five or more random controls; chart and dossier section regenerated. Blocked while new model runs are paused.
 
 ### [THME-2005] Release v0.2.0
@@ -73,9 +74,9 @@ closes it.
 
 ### [THME-2204] Activation-aware scaling (AWQ-style)
 
-- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.4 · **Priority**: p1 · **Area**: byoa · **Type**: feature · **Status**: blocked
+- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.4 · **Priority**: p1 · **Area**: byoa · **Type**: feature · **Status**: ready
 - **Problem**: Round-to-nearest 4-bit fails the gate on Pythia-14M (Δ +31 to +74).
-- **Progress**: Implemented and tested (`thme.awq_q4_0`, `thme.awq_q4_k`, `--calibration`). Blocked on the real-model measurement: the owner has paused model runs.
+- **Progress**: Implemented and tested (`thme.awq_q4_0`, `thme.awq_q4_k`, `--calibration`). 20 November 2026: the owner allowed runs on Pythia-14M and SmolLM-135M only; the comparison is not run yet. Open design points: calibration tokens must come from a split outside the evaluation text (the prepared corpus has only the test split), and the random control for a BYOA rule needs a definition.
 - **Done means**: A BYOA rule using captured activations; measured against plain Q4_0 on the same split with random controls.
 
 ### [THME-2205] Second-order rounding (GPTQ-style)
@@ -333,8 +334,9 @@ closes it.
 
 ### [THME-3023] Re-measure reports affected by the FP16 rounding fix
 
-- **Milestone**: v0.2.2 · **Roadmap**: none · **Priority**: p1 · **Area**: research · **Type**: chore · **Status**: blocked
+- **Milestone**: v0.2.2 · **Roadmap**: none · **Priority**: p1 · **Area**: research · **Type**: chore · **Status**: done
 - **Progress** (19 November 2026): the stale committed reports, charts and dossier were removed instead of re-run for now; results will be re-measured and published with their method.
+- **Progress** (20 November 2026): verification, precision-sweep, depth-probe and search reports re-run with the fixed code for both models and committed; the dossier caveat is replaced by a note that the reports come from the fixed code. Gate results as measured: Pythia-14M exported Q8_0 Δ +0.834 (FAILED, gate 0.45); recipe Δ +504.2 (FAILED). SmolLM-135M exported Q8_0 Δ +0.034 (PASSED); recipe Δ +28.9 (FAILED).
 - **Problem**: Until 13 November 2026, f32-to-f16 conversion lost the rounding carry for values just below a power of two, so about 1 in 2,000 Q8_0, Q4_0 and TQ1_0 block scales (and FP16 values) were stored at half their size. Committed reports were measured with that code.
 - **Done means**: The verification, precision-sweep and depth-probe reports for both models are re-run with the fixed code and committed; the dossier caveat is removed. Blocked while model runs are paused.
 
@@ -410,8 +412,9 @@ closes it.
 
 ### [THME-3044] Re-measure on Pythia-14M with the corrected code
 
-- **Milestone**: v0.2.0 · **Roadmap**: v0.2.0.9 · **Priority**: p1 · **Area**: research · **Type**: chore · **Status**: ready
+- **Milestone**: v0.2.0 · **Roadmap**: v0.2.0.9 · **Priority**: p1 · **Area**: research · **Type**: chore · **Status**: done
 - **Problem**: The earlier reports were measured before the FP16 rounding fix and have been removed. Pythia-14M (Apache-2.0, 14,067,712 parameters, 6 layers) is downloaded for local testing and loads in `thme inspect`.
+- **Progress** (20 November 2026): `docs/benchmarks/pythia-14m/data/verification_report.json` (source perplexity 114.2862 on the full WikiText-2 test split, 286,878 scored tokens), `precision_sweep.json` (`--layer-scan`), `depth_probe.json`, and `search_report.json` committed; charts and dossier regenerated with `scripts/generate_dossier.py` and `scripts/generate_charts.py`. The tokenizer was read from a local `tokenizer.json`, not downloaded for this run; its hash is in the report but was not compared with the hub copy (unverified).
 - **Done means**: Perplexity of the source model, the Q8_0 round trip and a precision sweep are re-run with the fixed code, committed as reports under `docs/benchmarks/` with their method, and charts regenerate from them. Results are published as they come, with the method beside them.
 
 ### [THME-3047] Clean public repository from a clean export
