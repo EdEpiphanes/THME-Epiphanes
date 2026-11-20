@@ -212,7 +212,7 @@
     "test": "tsc -p ./ && node --test out/"
   },
   "devDependencies": {
-    "@types/node": "^20.19.43",
+    "@types/node": "^26.6.6",
     "@types/vscode": "^1.90.0",
     "@vscode/vsce": "^4.1.1",
     "typescript": "^5.9.3"
