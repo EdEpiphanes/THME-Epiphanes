@@ -223,6 +223,56 @@ impl NeoxModel {
         self.layers.len()
     }
 
+    /// Negative log-likelihood of each next token through the full stack. The layers run on
+    /// the per-operation path; with a GPU the head and the scoring run fused on the device so
+    /// only one score per token is read back.
+    pub fn forward_nll(&self, tokens: &[u32]) -> Result<Vec<f32>> {
+        let schedule: Vec<usize> = (0..self.layers.len()).collect();
+        self.validate(tokens, &schedule, &[schedule.len()])?;
+        let d = self.config.hidden_size;
+        let head_dim = d / self.config.num_heads;
+        let mut x = vec![0.0f32; tokens.len() * d];
+        for (row, &token) in x.chunks_exact_mut(d).zip(tokens) {
+            let start = token as usize * d;
+            row.copy_from_slice(&self.embed[start..start + d]);
+        }
+        let rope = RopeTable::new(
+            tokens.len(),
+            head_dim,
+            self.config.rotary_dims(),
+            self.config.rope_theta,
+        );
+        for layer in &self.layers {
+            self.apply_layer(layer, &mut x, &rope, None);
+        }
+        let mut normed = vec![0.0f32; x.len()];
+        layer_norm(
+            &x,
+            &self.final_w,
+            &self.final_b,
+            self.config.layer_norm_eps,
+            &mut normed,
+        );
+        let head = self.head.as_deref().unwrap_or(&self.embed);
+        if let Some(gpu) = self.gpu_backend.as_deref() {
+            match gpu.score_head_nll(&normed, head, d, self.vocab_size, &tokens[1..]) {
+                Ok(Some(nll)) => return Ok(nll),
+                Ok(None) => {}
+                Err(err) => eprintln!("Notice: GPU head fallback to per-operation path: {err}"),
+            }
+        }
+        Ok(dispatch_score_head_slice(
+            self.gpu_backend.as_deref(),
+            head,
+            d,
+            self.vocab_size,
+            &normed,
+            tokens,
+            self.layers.len(),
+        )
+        .nll)
+    }
+
     /// Runs the layers named by `schedule` and reads out after each count in `exits`.
     /// See `LlamaModel::forward_scheduled` for the meaning of intermediate readouts.
     pub fn forward_scheduled(

@@ -387,3 +387,102 @@ fn context_longer_than_the_device_limit_falls_back_to_the_per_op_path() {
         .fold(0.0f32, f32::max);
     assert!(worst < PARITY_TOL, "max abs logit diff {worst}");
 }
+
+/// Tolerance on cross-entropy (nats) between the device and CPU perplexity passes.
+const NLL_TOL: f64 = 1e-4;
+
+fn window_report(
+    model: &dyn thme::inference::CausalLm,
+    tokens: &[u32],
+    ctx: usize,
+) -> thme::inference::PerplexityReport {
+    let config = thme::inference::PerplexityConfig {
+        context_len: ctx,
+        max_tokens: None,
+    };
+    thme::inference::evaluate_perplexity(model, tokens, &config, |_, _, _| {}).expect("perplexity")
+}
+
+#[test]
+fn synthetic_perplexity_on_device_matches_cpu() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let gpu = Arc::new(gpu);
+    let tokens: Vec<u32> = (0..300).map(|i| (i * 53 % 256) as u32).collect();
+    let (cpu_model, _) = synthetic_demo(9);
+    let (mut gpu_model, _) = synthetic_demo(9);
+    gpu_model.set_gpu(Some(gpu.clone()));
+    let cpu = window_report(&cpu_model, &tokens, 128);
+    let before = gpu.stats();
+    let got = window_report(&gpu_model, &tokens, 128);
+    // Through the trait object: one device submission per window (128, 128, 44 tokens).
+    assert_eq!(gpu.stats().submits - before.submits, 3);
+    assert_eq!(cpu.scored_tokens, got.scored_tokens);
+    let diff = (cpu.cross_entropy_nats - got.cross_entropy_nats).abs();
+    assert!(diff < NLL_TOL, "cross-entropy diff {diff}");
+}
+
+#[test]
+fn nll_pass_is_one_submit_and_reads_back_only_the_scores() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let gpu = Arc::new(gpu);
+    let (mut model, _) = synthetic_demo(3);
+    model.set_gpu(Some(gpu.clone()));
+    let tokens: Vec<u32> = (0..200).map(|i| (i * 41 % 256) as u32).collect();
+    let before = gpu.stats();
+    let nll = model.forward_nll(&tokens).expect("gpu nll");
+    let after = gpu.stats();
+    assert_eq!(nll.len(), tokens.len() - 1);
+    assert_eq!(after.submits - before.submits, 1, "one submit");
+}
+
+fn real_model_perplexity_parity(model: &TestModel) {
+    let name = model.dir_name;
+    let Some(dir) = real_model_dir(model) else {
+        return;
+    };
+    if gpu_or_skip().is_none() {
+        return;
+    }
+    let (_, _, cpu_model) = load_reference_model(&dir, DeviceArg::Cpu).expect("cpu load");
+    let (_, _, gpu_model) = load_reference_model(&dir, DeviceArg::Gpu).expect("gpu load");
+    let vocab = cpu_model.vocab_size();
+    let tokens: Vec<u32> = (0..512).map(|i| ((i * 7919 + 13) % vocab) as u32).collect();
+    let cpu = window_report(&*cpu_model, &tokens, 256);
+    let got = window_report(&*gpu_model, &tokens, 256);
+    let diff = (cpu.cross_entropy_nats - got.cross_entropy_nats).abs();
+    println!(
+        "{name}: cpu {:.6} nats, gpu {:.6} nats, diff {diff:.3e}",
+        cpu.cross_entropy_nats, got.cross_entropy_nats
+    );
+    assert!(diff < NLL_TOL, "{name}: cross-entropy diff {diff}");
+}
+
+#[test]
+fn smollm_135m_perplexity_on_device_matches_cpu() {
+    real_model_perplexity_parity(&SMOLLM_135M);
+}
+
+#[test]
+fn pythia_14m_perplexity_on_device_matches_cpu() {
+    real_model_perplexity_parity(&PYTHIA_14M);
+}
+
+#[test]
+fn fused_head_nll_matches_cpu_across_chunks() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut seed = 77u64;
+    // 700 rows and a 100000-word vocabulary force several head chunks.
+    let (t, d, vocab) = (700usize, 24usize, 100_000usize);
+    let normed = pseudo_random(&mut seed, t * d, 1.0);
+    let head = pseudo_random(&mut seed, vocab * d, 0.5);
+    let tokens: Vec<u32> = (0..t).map(|i| (i * 7919 % vocab) as u32).collect();
+    let cpu = thme::inference::llama::score_head(&head, d, vocab, &normed, &tokens, 0).nll;
+    let got = gpu
+        .score_head_nll(&normed, &head, d, vocab, &tokens[1..])
+        .expect("gpu head")
+        .expect("supported");
+    assert_eq!(got.len(), t - 1);
+    for (c, g) in cpu.iter().zip(&got) {
+        assert!((c - g).abs() < 1e-3, "nll {c} vs {g}");
+    }
+}
