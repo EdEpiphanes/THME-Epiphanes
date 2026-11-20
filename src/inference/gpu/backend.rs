@@ -166,6 +166,28 @@ const GEMM_V4_SHARED_BYTES: u32 = 2 * 528 * 16;
 /// Kernel name reported for the cooperative product that reads f16 weights and activations in
 /// place; callers convert the activations first with `coop_convert_x`.
 pub(super) const COOP_DIRECT_KERNEL: &str = "gemm_coop_f16";
+/// Kernel name of the integer dot product on Q8_0 and Q4_0 weights; callers quantize the
+/// activations first with `convert_activations`.
+pub(super) const Q8DOT_KERNEL: &str = "gemm_q8dot";
+
+/// Which activation copy a kernel reads at binding 1.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum ActivationCopy {
+    F16,
+    Int8,
+}
+
+impl ActivationCopy {
+    /// The copy the named kernel needs, if any.
+    pub(super) fn for_kernel(name: &str) -> Option<Self> {
+        match name {
+            COOP_DIRECT_KERNEL => Some(Self::F16),
+            Q8DOT_KERNEL => Some(Self::Int8),
+            _ => None,
+        }
+    }
+}
+
 pub(super) const GEMV_MAX_ROWS: usize = 8;
 /// Default weight bytes kept resident for slice-backed linears before the cache is flushed;
 /// raise it with [`GpuContext::set_weight_budget`] when the card has the memory.
@@ -345,6 +367,7 @@ pub struct GpuContext {
     /// Cooperative matrices for f16 weight storage, whose values are f16 already (default).
     coop_f16_default: AtomicBool,
     use_coop_direct: AtomicBool,
+    use_int8_dot: AtomicBool,
     use_coop_attention: AtomicBool,
     /// f16 copy of the activations for the in-place cooperative kernel, grown on demand.
     x16: Mutex<Option<wgpu::Buffer>>,
@@ -544,6 +567,7 @@ impl GpuContext {
             use_coop: AtomicBool::new(false),
             coop_f16_default: AtomicBool::new(true),
             use_coop_direct: AtomicBool::new(true),
+            use_int8_dot: AtomicBool::new(false),
             use_coop_attention: AtomicBool::new(true),
             x16: Mutex::new(None),
             use_gemm_v4: AtomicBool::new(true),
@@ -644,12 +668,14 @@ impl GpuContext {
         self.coop_ready.load(Ordering::Relaxed)
     }
 
-    /// Records the conversion of the f32 activations `x` (rows x in_dim) into the shared f16
-    /// scratch buffer, rows padded to 16, and returns that buffer for binding 1 of the
-    /// `COOP_DIRECT_KERNEL` product. `params` is any GemvParams binding with the same rows and
+    /// Records the conversion of the f32 activations `x` (rows x in_dim) into the shared
+    /// scratch buffer (f16 with rows padded to 16, or int8 blocks) and returns that buffer for
+    /// binding 1 of the matching product. `params` is any GemvParams binding with the same rows and
     /// in_dim; `spare` fills the layout's unused weights slot.
-    pub(super) fn coop_convert_x(
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn convert_activations(
         &self,
+        copy: ActivationCopy,
         pass: &mut wgpu::ComputePass<'_>,
         params: wgpu::BindingResource<'_>,
         x: wgpu::BindingResource<'_>,
@@ -657,10 +683,19 @@ impl GpuContext {
         rows: usize,
         in_dim: usize,
     ) -> Result<wgpu::Buffer, ThmeError> {
-        let vec4s = rows.next_multiple_of(16) * in_dim / 4;
-        let groups = vec4s.div_ceil(256);
+        // f16: one thread per vec4 of the padded rows; int8: one thread per block of 32.
+        let (threads, bytes, kernel) = match copy {
+            ActivationCopy::F16 => {
+                let vec4s = rows.next_multiple_of(16) * in_dim / 4;
+                (vec4s, (vec4s * 8) as u64, DenseKernel::ConvertX)
+            }
+            ActivationCopy::Int8 => {
+                let blocks = rows * (in_dim / 32);
+                (blocks, (blocks * 36) as u64, DenseKernel::ConvertQ8)
+            }
+        };
+        let groups = threads.div_ceil(256);
         let (gx, gy) = (groups.min(65535) as u32, groups.div_ceil(65535) as u32);
-        let bytes = (vec4s * 8) as u64;
         let buffer = {
             let mut slot = self
                 .x16
@@ -702,10 +737,16 @@ impl GpuContext {
                 },
             ],
         });
-        pass.set_pipeline(&self.dense_pipeline(DenseKernel::ConvertX, WeightStorage::F32)?);
+        pass.set_pipeline(&self.dense_pipeline(kernel, WeightStorage::F32)?);
         pass.set_bind_group(0, &bind_group, &[]);
         pass.dispatch_workgroups(gx, gy, 1);
         Ok(buffer)
+    }
+
+    /// Runs Q8_0 and Q4_0 weights on packed 4 x 8-bit integer dot products, quantizing the
+    /// activations per block of 32 to int8 (off by default).
+    pub fn set_int8_dot(&self, on: bool) {
+        self.use_int8_dot.store(on, Ordering::Relaxed);
     }
 
     /// Lets head size 64 use the cooperative-matrix attention when the matmul does (on by default).
@@ -839,6 +880,18 @@ impl GpuContext {
         out_offset: usize,
     ) -> Result<(wgpu::ComputePipeline, [u32; 3], &'static str), ThmeError> {
         let (r, o) = (rows as u32, out_dim as u32);
+        if rows > GEMV_MAX_ROWS
+            && self.use_int8_dot.load(Ordering::Relaxed)
+            && matches!(storage, WeightStorage::Q8_0 | WeightStorage::Q4_0)
+            && storage.fits(in_dim, out_dim)
+            && out_offset.is_multiple_of(4)
+        {
+            return Ok((
+                self.dense_pipeline(DenseKernel::Q8Dot, storage)?,
+                [o.div_ceil(GEMM_V4_TILE), r.div_ceil(GEMM_V4_TILE), 1],
+                Q8DOT_KERNEL,
+            ));
+        }
         if rows > GEMV_MAX_ROWS
             && self.coop_active(storage)
             && storage.fits(in_dim, out_dim)
@@ -1260,18 +1313,18 @@ impl GpuContext {
                     end_of_pass_write_index: Some(1),
                 }),
             });
-            let mut x16: Option<wgpu::Buffer> = None;
+            let mut converted: Option<(ActivationCopy, wgpu::Buffer)> = None;
             for (i, op) in ops.iter().enumerate() {
                 let params_binding = wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                     buffer: &scratch.params,
                     offset: (i * PARAM_STRIDE) as u64,
                     size: wgpu::BufferSize::new(std::mem::size_of::<GemvParams>() as u64),
                 });
-                let mut direct = false;
+                let mut copy = None;
                 let (pipeline, groups) = if op.kind == ShaderKind::F32 {
                     let (p, g, name) =
                         self.dense_dispatch(op.storage, rows, in_dim, op.out_dim, offsets[i])?;
-                    direct = name == COOP_DIRECT_KERNEL;
+                    copy = ActivationCopy::for_kernel(name);
                     (p, g)
                 } else {
                     let p = self
@@ -1291,18 +1344,22 @@ impl GpuContext {
                         [out.min(MAX_GROUPS), out.div_ceil(MAX_GROUPS), rows as u32],
                     )
                 };
-                if direct && x16.is_none() {
-                    x16 = Some(self.coop_convert_x(
-                        &mut pass,
-                        params_binding.clone(),
-                        scratch.input.as_entire_binding(),
-                        op.weights.as_entire_binding(),
-                        rows,
-                        in_dim,
-                    )?);
+                if let Some(kind) = copy.filter(|k| converted.as_ref().is_none_or(|c| c.0 != *k)) {
+                    converted = Some((
+                        kind,
+                        self.convert_activations(
+                            kind,
+                            &mut pass,
+                            params_binding.clone(),
+                            scratch.input.as_entire_binding(),
+                            op.weights.as_entire_binding(),
+                            rows,
+                            in_dim,
+                        )?,
+                    ));
                 }
-                let x_resource = match (&x16, direct) {
-                    (Some(b), true) => b.as_entire_binding(),
+                let x_resource = match (&converted, copy) {
+                    (Some((k, b)), Some(want)) if *k == want => b.as_entire_binding(),
                     _ => scratch.input.as_entire_binding(),
                 };
                 let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
