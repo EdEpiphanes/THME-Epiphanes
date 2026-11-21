@@ -131,7 +131,8 @@ in [docs/benchmark_dossier.md](docs/benchmark_dossier.md).
 
 Read these with care: the SmolLM-135M search differences are about 0.02 perplexity, which is noise
 and has no confidence interval yet; the Pythia-14M Q8_0 result has not been cross-checked with a
-reference quantizer. To see how a result is produced, read the
+reference quantizer. Datasets, sources, licences and the notice that THME does not own or distribute them are on
+[docs/benchmark-datasets.md](docs/benchmark-datasets.md). To see how a result is produced, read the
 [benchmark registry](docs/benchmark-registry.md) and the [quality gate](docs/quality-gate.md).
 
 ## What is real today
