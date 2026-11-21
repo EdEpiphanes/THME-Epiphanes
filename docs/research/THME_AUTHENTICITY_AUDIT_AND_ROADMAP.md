@@ -28,7 +28,7 @@ In accordance with [CONTEXT.md](../../CONTEXT.md), all subsystems are classified
 4. **Simulated**: Generated from a synthetic toy model; does not reflect a trained language model.
 5. **Mock**: Hardcoded placeholder values or modulo math used for UI rendering without computation.
 
-```
+```text
 +-------------------------------------------------------------------------------------------------------+
 | Subsystem & Path                     | Classification | Mechanism                                     |
 +--------------------------------------+----------------+-----------------------------------------------+
@@ -59,7 +59,9 @@ In accordance with [CONTEXT.md](../../CONTEXT.md), all subsystems are classified
 The following files contain synthetic placeholders or mock data that require remediation:
 
 ### A. Live Token Flow Simulator (src/profiling/token_flow.rs, lines 288–315)
+
 - **Current Mock Code**:
+
   ```rust
   let vocab_samples = [
       "heterogeneous", "manifold", "representation", "topology", "latency",
@@ -70,34 +72,44 @@ The following files contain synthetic placeholders or mock data that require rem
   let idx = (self.generated_tokens.len() + (self.elapsed_time_ms as usize)) % vocab_samples.len();
   self.generated_tokens.push(vocab_samples[idx].to_string());
   ```
+
 - **Defect**: Generates text in the Studio GUI by indexing into a fixed 20-word array using modulo arithmetic. No actual model weights are evaluated.
 
 ### B. GUI Performance Telemetry (src/gui/app.rs, lines 1113–1122)
+
 - **Current Mock Code**:
+
   ```rust
   let num_layers = self.model().layers.len();
   let ttft_ms = 42.0 + (num_layers as f32 * 1.8);
   let ms_per_tok = 28.0 + (num_layers as f32 * 1.1);
   let energy_mj = 12.0 + (num_layers as f32 * 0.45);
   ```
+
 - **Defect**: Time-to-first-token (`TTFT`), latency per token, and energy consumption are linear synthetic functions of the number of layers, completely disconnected from real hardware clock cycles or memory bandwidth.
 
 ### C. In-Engine Micro-Trainer (src/trainer/mod.rs, lines 147–200)
+
 - **Current Mock Code**:
+
   ```rust
   // Synthetic gradient based on token context and parameter offset
   let grad = ((i as f32 + step as f32).sin() * 0.1 + (*w * 0.01));
   ```
+
 - **Defect**: Parameter adaptation does not compute real loss gradients through backward propagation; it uses a trigonometric sine wave as a surrogate gradient.
 
 ### D. Speculative Decoding Telemetry (src/speculative/engine.rs, lines 160–175)
+
 - **Current Mock Code**:
+
   ```rust
   let pseudo_rand = (((step + 1) * 73 + (token_pos + 1) * 31) % 100) as f64 / 100.0;
   if pseudo_rand <= p_accept {
       accepted_in_step += 1;
   }
   ```
+
 - **Defect**: Evaluates multi-token draft acceptance using a deterministic pseudo-random hash generator rather than running joint forward verification between a draft model and a target model.
 
 ---
@@ -107,6 +119,7 @@ The following files contain synthetic placeholders or mock data that require rem
 To bring the entire repository up to 100% genuine execution, the mock components will be replaced across four structured sprints:
 
 ### Sprint 1: Authentic Token Generation Subsystem
+
 - **Target**: `src/profiling/token_flow.rs` and `src/gui/app/benchmarks.rs`
 - **Objective**: Eliminate `vocab_samples` modulo cycling.
 - **Implementation**:
@@ -116,6 +129,7 @@ To bring the entire repository up to 100% genuine execution, the mock components
 - **Exit Criteria**: Emitted text in Tab 0 and Tab 4 is produced by real tensor matrix multiplications; zero hardcoded word slices.
 
 ### Sprint 2: Real Micro-Gradients & LoRA Parameter Adaptation
+
 - **Target**: `src/trainer/mod.rs`
 - **Objective**: Eliminate synthetic sine-wave gradients.
 - **Implementation**:
@@ -125,6 +139,7 @@ To bring the entire repository up to 100% genuine execution, the mock components
 - **Exit Criteria**: `trainer.step()` computes genuine analytical gradients that reduce cross-entropy loss monotonically on a real sequence.
 
 ### Sprint 3: Empirical Speculative Decoding Engine
+
 - **Target**: `src/speculative/engine.rs`
 - **Objective**: Eliminate pseudo-random modulo acceptance checks.
 - **Implementation**:
@@ -135,6 +150,7 @@ To bring the entire repository up to 100% genuine execution, the mock components
 - **Exit Criteria**: Acceptance rate and speedup reflect actual logit divergence between the draft and target models.
 
 ### Sprint 4: Hardware-Calibrated Wall-Clock Profiler
+
 - **Target**: `src/profiling/roofline.rs` and `src/gui/app.rs`
 - **Objective**: Replace theoretical linear formulas with calibrated hardware measurements.
 - **Implementation**:
@@ -150,6 +166,7 @@ To bring the entire repository up to 100% genuine execution, the mock components
 To expand THME beyond standard architectures, the following three advanced research paradigms are formally scheduled for integration:
 
 ### A. NVIDIA Dory 1.0 (Looped Transformer Recurrence)
+
 - **Concept**: A looped transformer where a shared manifold of $M$ layers is iterated $K$ times with hyperspherical normalization (`justnorm`).
 - **Mathematical Specification**:
   $$\mathbf{h}^{(k+1)} = \text{LayerBlock}\left(\text{JustNorm}(\mathbf{h}^{(k)})\right), \quad \text{where } \text{JustNorm}(\mathbf{x}) = \frac{\mathbf{x}}{\|\mathbf{x}\|_2 + \epsilon}$$
@@ -157,6 +174,7 @@ To expand THME beyond standard architectures, the following three advanced resea
 - **Implementation Path**: Add `DoryLoopedTransformer` to `src/ir/rebuilder.rs` and wire `justnorm` into `src/inference/llama.rs`.
 
 ### B. Extended Geodesic Manifold (EGM)
+
 - **Concept**: Non-Euclidean activation propagation along constant-curvature Riemannian manifolds.
 - **Mathematical Specification**:
   $$\text{Slerp}(\mathbf{x}_1, \mathbf{x}_2; t) = \frac{\sin((1-t)\theta)}{\sin\theta}\mathbf{x}_1 + \frac{\sin(t\theta)}{\sin\theta}\mathbf{x}_2, \quad \theta = \arccos\left(\frac{\mathbf{x}_1 \cdot \mathbf{x}_2}{\|\mathbf{x}_1\| \|\mathbf{x}_2\|}\right)$$
@@ -164,6 +182,7 @@ To expand THME beyond standard architectures, the following three advanced resea
 - **Implementation Path**: Add `egm_slerp` kernel to `src/engine/basis.rs`.
 
 ### C. Multi-Head Latent Attention (MLA)
+
 - **Concept**: Compresses Key-Value cache vectors into a low-rank latent subspace, as pioneered by DeepSeek-V2/V3.
 - **Mathematical Specification**:
   $$\mathbf{c}_t^{KV} = W_{DKV} \mathbf{h}_t, \quad \mathbf{k}_t^C = W_{UK} \mathbf{c}_t^{KV}, \quad \mathbf{v}_t^C = W_{UV} \mathbf{c}_t^{KV}$$
@@ -178,21 +197,25 @@ To expand THME beyond standard architectures, the following three advanced resea
 All binaries listed below have been compiled in Release mode (`opt-level = 3`, Link-Time Optimization enabled, symbols stripped) and verified on the local host:
 
 ### 1. Main THME Engine CLI
+
 - **Path**: `target/release/thme.exe`
 - **File Size**: `5,499,904 bytes` (~$5.25\text{ MB}$, strictly $\le 10\text{ MB}$)
 - **Capabilities**: Zero-copy GGUF/SafeTensors parsing, `.epiph` packing/verification, security scanning, Roofline analysis, and quality gate validation.
 
 ### 2. Native Desktop Studio GUI
+
 - **Path**: `target/release/thme-gui.exe`
 - **File Size**: `5,868,544 bytes` (~$5.59\text{ MB}$, strictly $\le 15\text{ MB}$)
 - **Capabilities**: 60 FPS Manga-style visual workbench across 11 tabs, Live 3D Calabi-Yau manifold visualization, and automatic `$env:THME_MODEL` ingestion.
 
 ### 3. Backwards-Compatible CLI Alias
+
 - **Path**: `target/release/llm-tweaker.exe`
 - **File Size**: `5,499,904 bytes` (~$5.25\text{ MB}$)
 - **Capabilities**: Exact alias redirecting to `thme`.
 
 ### 4. Standalone Micro-Kernel Engine
+
 - **Path**: `scratch/real_thme_engine/target/release/real_thme_engine.exe`
 - **File Size**: `719,872 bytes` (~$703\text{ KB}$)
 - **Capabilities**: Standalone micro-benchmarks for BitNet b1.58 2-bit packing ($16\times$ compression), Dory hyperspherical normalization (`justnorm`), and MLA KV cache compression.
@@ -202,12 +225,14 @@ All binaries listed below have been compiled in Release mode (`opt-level = 3`, L
 ## 7. Two-Pass Authenticity Verification Sign-Off
 
 ### Pass 1: Codebase AST & Symbol Audit
+
 - [x] Confirmed zero `unwrap()`, `expect()`, or `panic!` calls outside tests in production modules.
 - [x] Confirmed zero developer machine path leaks (`git grep` clean).
 - [x] Confirmed all mock word lists and synthetic formulas explicitly identified with line numbers.
 - [x] Confirmed `.epiph` file filter added to GUI file dialog and format detector in `src/gui/app.rs`.
 
 ### Pass 2: Runtime Execution & Test Invariants
+
 - [x] `cargo test` passes all **327 unit tests and 25 integration suites** with 100% pass rate.
 - [x] `cargo clippy --all-targets -- -D warnings` exits with **0 warnings**.
 - [x] `cargo fmt --check` exits with **0 violations**.
