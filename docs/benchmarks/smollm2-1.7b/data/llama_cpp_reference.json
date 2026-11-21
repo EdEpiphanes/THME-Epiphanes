@@ -1,0 +1,2138 @@
+{
+ "schema": 1,
+ "tickets": [
+  "THME-3085",
+  "THME-2208"
+ ],
+ "date": "2026-11-20",
+ "machine": {
+  "gpu": "NVIDIA GeForce RTX 4060 Ti 16 GB",
+  "driver": "616.92 (nvidia-smi)",
+  "cpu": "12th Gen Intel(R) Core(TM) i5-12400F",
+  "gpu_memory_idle_baseline_mib": 1154
+ },
+ "llama_cpp": {
+  "release_tag": "b12584",
+  "build_number": 12584,
+  "commit": "8e7862411",
+  "licence": "MIT, read from the LICENSE file at tag b12584 (Copyright (c) 2023-2026 The ggml authors, sha256 94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d)",
+  "release_note": "GitHub's latest marker points at v1.0.0, which carries no binaries; b12584 was the newest numbered release with assets at the time.",
+  "source": "official ggml-org/llama.cpp GitHub release assets, downloaded outside the repository; the sha256 of each file equals the digest GitHub shows for the asset",
+  "assets": [
+   {
+    "name": "llama-b12584-bin-win-cuda-12.4-x64.zip",
+    "bytes": 357904825,
+    "sha256": "8485a33a2d795bab7fb7127763243d9f7a908a2f0dcb9bf080957f2a8d2eb506"
+   },
+   {
+    "name": "cudart-llama-bin-win-cuda-12.4-x64.zip",
+    "bytes": 391443627,
+    "sha256": "8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6"
+   },
+   {
+    "name": "llama-b12584-bin-win-vulkan-x64.zip",
+    "bytes": 38811408,
+    "sha256": "362094a7b2ed5df7c1146238a848356686703794621f1088ef12976719562fbe"
+   }
+  ],
+  "built_with": "Clang 22.1.8 for Windows x86_64",
+  "vulkan_device_line": "NVIDIA GeForce RTX 4060 Ti (NVIDIA) | fp16: 1 | bf16: 1 | int dot: 1 | matrix cores: NV_coopmat2"
+ },
+ "model": "SmolLM2-1.7B (Apache-2.0), 1,711,376,384 parameters, 24 layers, hidden 2048, 32 heads (MHA), vocab 49152",
+ "files": {
+  "f16": "smollm2-1.7b-f16.gguf",
+  "q8_0": "smollm2-1.7b-q8_0.gguf",
+  "q4_0": "smollm2-1.7b-q4_0.gguf",
+  "note": "written by `thme export` with a per-tensor recipe (SetPrecision on every layer and role; the 49 one-dimensional norm tensors stay BF16). `--quant fp16` and `--quant q8_0` fail on this checkpoint with 'Tensor model.embed_tokens.weight has source dtype BF16, cannot export as F16/Q8_0'; the recipe path converts it. Q4_0 is only reachable through a recipe."
+ },
+ "thme_gguf_checker": "src/exporter/gguf_check.rs through examples/check_gguf.rs: the f16, q8_0 and q4_0 files and the epiph-derived q8_0 file all report 0 errors and 0 warnings",
+ "llama_cpp_load": {
+  "raw_thme_files": "all four files fail to load in llama.cpp (CUDA build): 'error loading model vocabulary: cannot find tokenizer vocab in model file'. THME's GGUF carries only tokenizer.ggml.model = llama and no vocabulary.",
+  "second_blocker": "with a tokenizer added, load fails: check_tensor_dims: tensor 'token_embd.weight' not found. THME writes Hugging Face tensor names (model.embed_tokens.weight, model.layers.N.self_attn.q_proj.weight) not GGML names (token_embd.weight, blk.N.attn_q.weight).",
+  "other_gaps_handled_by_adapter": [
+   "norm weights are BF16 (llama.cpp expects F32 norms)",
+   "q/k rows are not permuted for the llama.cpp rope layout",
+   "llama.rope.dimension_count is absent"
+  ],
+  "adapter": "scripts/gguf_to_llamacpp.py, kept outside the repository (thme-tools): renames tensors, widens BF16 norms to F32, applies the llama.cpp q/k row permutation, adds the vocabulary, merges, token types, ids and rope dimension count from the checkpoint's tokenizer.json. Weight blocks are copied byte for byte apart from the q/k row permutation.",
+  "adapted_files_load_and_generate": true,
+  "generation_command": "llama-completion -m <file> -p \"The capital of France is\" -n 20 --seed 1 --temp 0 -ngl 99 -no-cnv --no-display-prompt",
+  "generated_text_f16_q8_0_q4_0_epiph_q8_0_on_cuda_and_vulkan": " Paris.\n\nThe capital of the United States is Washington, D.C.\n\nThe",
+  "text_identical_across_files_and_builds": true
+ },
+ "epiph_chain": {
+  "pack": "thme epiph pack <model dir> --out smollm2-1.7b.epiph: 218 tensors, 7 attachments, 3,426,560,087 bytes, sha256 43fae94bd2f1be6388521daaac5ca0a4cffc8c36dd8f50f0625439742a2b8d62",
+  "verify": "thme epiph verify: OK, 218 tensors and 7 attachments verified; Signature: none",
+  "export": "thme export smollm2-1.7b.epiph -o <file> --recipe q8_0_recipe.json (the recipe used for the direct export)",
+  "direct_q8_0_sha256": "5f3f77eb5c3f7ce95e435c05931fe027bfaebd155ade1797d2a7370fb8a4eef0",
+  "epiph_q8_0_sha256": "5f3f77eb5c3f7ce95e435c05931fe027bfaebd155ade1797d2a7370fb8a4eef0",
+  "result": "the two GGUF files are byte-identical (same tensor types, sizes, metadata and tensor data): the chain .epiph to GGUF is lossless for the tensor payloads here. After the same adapter both load in llama.cpp and generate the same text on CUDA and Vulkan.",
+  "dropped_by_the_chain": [
+   "the tokenizer and the other attachments (the GGUF export writes no tokenizer, from a .epiph or from a directory)",
+   "any signature (none present here; the exporter does not carry one)"
+  ],
+  "same_flag_failure": "`thme export smollm2-1.7b.epiph --quant q8_0` fails with the same BF16 error as the directory source"
+ },
+ "llama_bench": {
+  "command": "llama-bench -m <file> -p 512,1024 -n 128 -ngl 99 -r 5 -fa auto,off,on -b 2048 -ub 512,2048 -o json",
+  "flags_note": "all layers on the GPU, KV cache on the GPU (no -nkvo), 5 repetitions. default = llama-bench defaults (-fa auto, -b 2048, -ub 512); best = highest mean over the six flag combinations. pp = prompt tokens per second as one batch, tg = generated tokens per second. Mean and standard deviation as the tool reports them.",
+  "results": {
+   "cuda": {
+    "f16": {
+     "model_size_bytes": 3422953472,
+     "n_params": 1711376384,
+     "gpu_memory_peak_mib_total_incl_desktop_baseline": 5089,
+     "default_config": {
+      "pp512": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12561.92,
+       "tokens_per_sec_stddev": 440.53
+      },
+      "pp1024": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12352.62,
+       "tokens_per_sec_stddev": 347.8
+      },
+      "tg128": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 74.22,
+       "tokens_per_sec_stddev": 0.05
+      }
+     },
+     "best_config": {
+      "pp512": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 12624.87,
+       "tokens_per_sec_stddev": 243.21
+      },
+      "pp1024": {
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12503.24,
+       "tokens_per_sec_stddev": 319.28
+      },
+      "tg128": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 74.22,
+       "tokens_per_sec_stddev": 0.05
+      }
+     },
+     "all_runs": [
+      {
+       "test": "pp512",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12561.92,
+       "tokens_per_sec_stddev": 440.53,
+       "samples_tokens_per_sec": [
+        11802,
+        12947.1,
+        12736.1,
+        12665.5,
+        12658.9
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12352.62,
+       "tokens_per_sec_stddev": 347.8,
+       "samples_tokens_per_sec": [
+        11782.6,
+        12279.2,
+        12522.6,
+        12668.4,
+        12510.4
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 74.22,
+       "tokens_per_sec_stddev": 0.05,
+       "samples_tokens_per_sec": [
+        74.2067,
+        74.2403,
+        74.1594,
+        74.1801,
+        74.2978
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 9053.59,
+       "tokens_per_sec_stddev": 257.41,
+       "samples_tokens_per_sec": [
+        8605.16,
+        9214.17,
+        9166.97,
+        9211.83,
+        9069.84
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 7679.19,
+       "tokens_per_sec_stddev": 138.09,
+       "samples_tokens_per_sec": [
+        7437.16,
+        7731.13,
+        7708.11,
+        7784.01,
+        7735.54
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 73.3,
+       "tokens_per_sec_stddev": 0.04,
+       "samples_tokens_per_sec": [
+        73.3429,
+        73.3004,
+        73.2501,
+        73.2797,
+        73.3514
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12531.65,
+       "tokens_per_sec_stddev": 248.16,
+       "samples_tokens_per_sec": [
+        12176.4,
+        12599.7,
+        12797,
+        12692.3,
+        12392.9
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12503.24,
+       "tokens_per_sec_stddev": 319.28,
+       "samples_tokens_per_sec": [
+        11952.8,
+        12683.1,
+        12722.8,
+        12658.7,
+        12498.7
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 74.19,
+       "tokens_per_sec_stddev": 0.12,
+       "samples_tokens_per_sec": [
+        74.0693,
+        74.2918,
+        74.3431,
+        74.0799,
+        74.1589
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 12624.87,
+       "tokens_per_sec_stddev": 243.21,
+       "samples_tokens_per_sec": [
+        12224,
+        12723.2,
+        12800.6,
+        12805.2,
+        12571.4
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 11212.95,
+       "tokens_per_sec_stddev": 110.44,
+       "samples_tokens_per_sec": [
+        11029.6,
+        11198.3,
+        11258.2,
+        11264.7,
+        11314
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 74.09,
+       "tokens_per_sec_stddev": 0.18,
+       "samples_tokens_per_sec": [
+        74.1109,
+        74.1553,
+        74.2762,
+        74.1277,
+        73.7865
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 9033.42,
+       "tokens_per_sec_stddev": 67.31,
+       "samples_tokens_per_sec": [
+        8915.05,
+        9064.67,
+        9044.87,
+        9062.85,
+        9079.66
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 5980.35,
+       "tokens_per_sec_stddev": 56.11,
+       "samples_tokens_per_sec": [
+        5896.42,
+        6054.27,
+        5986.29,
+        5977.84,
+        5986.95
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 73.19,
+       "tokens_per_sec_stddev": 0.13,
+       "samples_tokens_per_sec": [
+        73.273,
+        73.2982,
+        73.2163,
+        73.1764,
+        72.97
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 12584.98,
+       "tokens_per_sec_stddev": 302.54,
+       "samples_tokens_per_sec": [
+        12088.7,
+        12907.8,
+        12625.9,
+        12702.3,
+        12600.2
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 10488.41,
+       "tokens_per_sec_stddev": 342.16,
+       "samples_tokens_per_sec": [
+        10110.9,
+        10411.3,
+        10388,
+        10486.9,
+        11044.9
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 74.2,
+       "tokens_per_sec_stddev": 0.11,
+       "samples_tokens_per_sec": [
+        74.0237,
+        74.2459,
+        74.3301,
+        74.1803,
+        74.2321
+       ]
+      }
+     ]
+    },
+    "q8_0": {
+     "model_size_bytes": 1818632192,
+     "n_params": 1711376384,
+     "gpu_memory_peak_mib_total_incl_desktop_baseline": 3539,
+     "default_config": {
+      "pp512": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 14650.64,
+       "tokens_per_sec_stddev": 384.65
+      },
+      "pp1024": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 14347.86,
+       "tokens_per_sec_stddev": 296.94
+      },
+      "tg128": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 130.65,
+       "tokens_per_sec_stddev": 0.1
+      }
+     },
+     "best_config": {
+      "pp512": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 14741.81,
+       "tokens_per_sec_stddev": 140.41
+      },
+      "pp1024": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 14347.86,
+       "tokens_per_sec_stddev": 296.94
+      },
+      "tg128": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 130.74,
+       "tokens_per_sec_stddev": 0.14
+      }
+     },
+     "all_runs": [
+      {
+       "test": "pp512",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 14650.64,
+       "tokens_per_sec_stddev": 384.65,
+       "samples_tokens_per_sec": [
+        13979.1,
+        14700.5,
+        14788.7,
+        14926.9,
+        14858.1
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 14347.86,
+       "tokens_per_sec_stddev": 296.94,
+       "samples_tokens_per_sec": [
+        13820.6,
+        14463.5,
+        14476.4,
+        14537.9,
+        14440.9
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 130.65,
+       "tokens_per_sec_stddev": 0.1,
+       "samples_tokens_per_sec": [
+        130.567,
+        130.587,
+        130.614,
+        130.679,
+        130.811
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 10022.93,
+       "tokens_per_sec_stddev": 138.72,
+       "samples_tokens_per_sec": [
+        9827.39,
+        10150.5,
+        10121.5,
+        10086.1,
+        9929.23
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 8258.5,
+       "tokens_per_sec_stddev": 88.86,
+       "samples_tokens_per_sec": [
+        8107.69,
+        8303.51,
+        8291.91,
+        8255.47,
+        8333.9
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 127.95,
+       "tokens_per_sec_stddev": 0.26,
+       "samples_tokens_per_sec": [
+        127.696,
+        127.689,
+        128.042,
+        128.305,
+        128.008
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 14560.38,
+       "tokens_per_sec_stddev": 333.88,
+       "samples_tokens_per_sec": [
+        14036.4,
+        14462.6,
+        14624.8,
+        14805.3,
+        14872.8
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 14326.81,
+       "tokens_per_sec_stddev": 176.12,
+       "samples_tokens_per_sec": [
+        14042.3,
+        14526.6,
+        14372.6,
+        14359.9,
+        14332.5
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 130.54,
+       "tokens_per_sec_stddev": 0.21,
+       "samples_tokens_per_sec": [
+        130.523,
+        130.534,
+        130.45,
+        130.323,
+        130.882
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 14741.81,
+       "tokens_per_sec_stddev": 140.41,
+       "samples_tokens_per_sec": [
+        14557.7,
+        14734.5,
+        14917.8,
+        14832.5,
+        14666.5
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 14054.61,
+       "tokens_per_sec_stddev": 256.44,
+       "samples_tokens_per_sec": [
+        13614.9,
+        14186.2,
+        14221.7,
+        14210.3,
+        14040
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 130.74,
+       "tokens_per_sec_stddev": 0.14,
+       "samples_tokens_per_sec": [
+        130.62,
+        130.868,
+        130.925,
+        130.67,
+        130.635
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 9988.01,
+       "tokens_per_sec_stddev": 169.28,
+       "samples_tokens_per_sec": [
+        9716.4,
+        10140.6,
+        10102.5,
+        9943.18,
+        10037.3
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 6704.78,
+       "tokens_per_sec_stddev": 52.7,
+       "samples_tokens_per_sec": [
+        6632.66,
+        6708.93,
+        6780.8,
+        6694.5,
+        6707
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 127.8,
+       "tokens_per_sec_stddev": 0.2,
+       "samples_tokens_per_sec": [
+        127.924,
+        127.817,
+        127.509,
+        128.028,
+        127.734
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 14597.2,
+       "tokens_per_sec_stddev": 229.77,
+       "samples_tokens_per_sec": [
+        14235.2,
+        14499.5,
+        14749.1,
+        14758,
+        14744.3
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 14099.29,
+       "tokens_per_sec_stddev": 133.48,
+       "samples_tokens_per_sec": [
+        13884.3,
+        14191.8,
+        14223.6,
+        14075.4,
+        14121.3
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 130.66,
+       "tokens_per_sec_stddev": 0.1,
+       "samples_tokens_per_sec": [
+        130.583,
+        130.727,
+        130.56,
+        130.804,
+        130.644
+       ]
+      }
+     ]
+    },
+    "q4_0": {
+     "model_size_bytes": 962994176,
+     "n_params": 1711376384,
+     "gpu_memory_peak_mib_total_incl_desktop_baseline": 2746,
+     "default_config": {
+      "pp512": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12091.61,
+       "tokens_per_sec_stddev": 2276.63
+      },
+      "pp1024": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 13286.18,
+       "tokens_per_sec_stddev": 440.89
+      },
+      "tg128": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 220.84,
+       "tokens_per_sec_stddev": 1.84
+      }
+     },
+     "best_config": {
+      "pp512": {
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 13685.46,
+       "tokens_per_sec_stddev": 316.89
+      },
+      "pp1024": {
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 13353.91,
+       "tokens_per_sec_stddev": 239.81
+      },
+      "tg128": {
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 223.45,
+       "tokens_per_sec_stddev": 0.33
+      }
+     },
+     "all_runs": [
+      {
+       "test": "pp512",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12091.61,
+       "tokens_per_sec_stddev": 2276.63,
+       "samples_tokens_per_sec": [
+        8025.78,
+        13031.8,
+        12993.1,
+        13079,
+        13328.4
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 13286.18,
+       "tokens_per_sec_stddev": 440.89,
+       "samples_tokens_per_sec": [
+        12507.4,
+        13418.5,
+        13440.5,
+        13466.6,
+        13597.9
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 220.84,
+       "tokens_per_sec_stddev": 1.84,
+       "samples_tokens_per_sec": [
+        221.181,
+        220.691,
+        217.898,
+        222.925,
+        221.521
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 9389.46,
+       "tokens_per_sec_stddev": 274.63,
+       "samples_tokens_per_sec": [
+        9001.8,
+        9336.51,
+        9322.62,
+        9730.86,
+        9555.52
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 7762.75,
+       "tokens_per_sec_stddev": 124.32,
+       "samples_tokens_per_sec": [
+        7581.01,
+        7839.15,
+        7910.07,
+        7728.14,
+        7755.39
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 209.92,
+       "tokens_per_sec_stddev": 4.65,
+       "samples_tokens_per_sec": [
+        211.755,
+        209.572,
+        202.181,
+        211.728,
+        214.379
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 13577.6,
+       "tokens_per_sec_stddev": 314.88,
+       "samples_tokens_per_sec": [
+        13057.6,
+        13657.1,
+        13713,
+        13564.3,
+        13896
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 13353.91,
+       "tokens_per_sec_stddev": 239.81,
+       "samples_tokens_per_sec": [
+        12959.2,
+        13530.5,
+        13382.4,
+        13558.8,
+        13338.6
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 221.0,
+       "tokens_per_sec_stddev": 0.97,
+       "samples_tokens_per_sec": [
+        220.273,
+        221.264,
+        220.594,
+        222.578,
+        220.272
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 13552.9,
+       "tokens_per_sec_stddev": 207.52,
+       "samples_tokens_per_sec": [
+        13197.2,
+        13741.8,
+        13630.9,
+        13599,
+        13595.7
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 12638.3,
+       "tokens_per_sec_stddev": 170.79,
+       "samples_tokens_per_sec": [
+        12352.5,
+        12621.9,
+        12700.3,
+        12726.5,
+        12790.3
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 222.46,
+       "tokens_per_sec_stddev": 1.82,
+       "samples_tokens_per_sec": [
+        222.762,
+        223.588,
+        223.613,
+        219.276,
+        223.066
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 9507.81,
+       "tokens_per_sec_stddev": 153.9,
+       "samples_tokens_per_sec": [
+        9354.84,
+        9487.88,
+        9650.84,
+        9680.93,
+        9364.56
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 6399.4,
+       "tokens_per_sec_stddev": 68.36,
+       "samples_tokens_per_sec": [
+        6310.47,
+        6424.36,
+        6484.59,
+        6352.22,
+        6425.36
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 214.91,
+       "tokens_per_sec_stddev": 0.52,
+       "samples_tokens_per_sec": [
+        214.666,
+        214.505,
+        215.763,
+        214.568,
+        215.059
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 13685.46,
+       "tokens_per_sec_stddev": 316.89,
+       "samples_tokens_per_sec": [
+        13155.6,
+        13935.3,
+        13754.8,
+        13665.4,
+        13916.3
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 12709.7,
+       "tokens_per_sec_stddev": 212.09,
+       "samples_tokens_per_sec": [
+        12375,
+        12713.5,
+        12789.7,
+        12957.7,
+        12712.6
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 223.45,
+       "tokens_per_sec_stddev": 0.33,
+       "samples_tokens_per_sec": [
+        223.181,
+        223.493,
+        223.812,
+        223.039,
+        223.706
+       ]
+      }
+     ]
+    }
+   },
+   "vulkan": {
+    "f16": {
+     "model_size_bytes": 3422953472,
+     "n_params": 1711376384,
+     "gpu_memory_peak_mib_total_incl_desktop_baseline": 5448,
+     "default_config": {
+      "pp512": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12781.6,
+       "tokens_per_sec_stddev": 261.48
+      },
+      "pp1024": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 11347.65,
+       "tokens_per_sec_stddev": 2816.68
+      },
+      "tg128": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 75.44,
+       "tokens_per_sec_stddev": 0.11
+      }
+     },
+     "best_config": {
+      "pp512": {
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12962.78,
+       "tokens_per_sec_stddev": 61.51
+      },
+      "pp1024": {
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12768.34,
+       "tokens_per_sec_stddev": 184.03
+      },
+      "tg128": {
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 75.64,
+       "tokens_per_sec_stddev": 0.12
+      }
+     },
+     "all_runs": [
+      {
+       "test": "pp512",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12781.6,
+       "tokens_per_sec_stddev": 261.48,
+       "samples_tokens_per_sec": [
+        12498.7,
+        12558.8,
+        12776.2,
+        13118.5,
+        12955.8
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 11347.65,
+       "tokens_per_sec_stddev": 2816.68,
+       "samples_tokens_per_sec": [
+        6355.98,
+        11983,
+        12557.6,
+        12935.1,
+        12906.6
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 75.44,
+       "tokens_per_sec_stddev": 0.11,
+       "samples_tokens_per_sec": [
+        75.2445,
+        75.5173,
+        75.4789,
+        75.5038,
+        75.4406
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 9246.62,
+       "tokens_per_sec_stddev": 60.32,
+       "samples_tokens_per_sec": [
+        9329.58,
+        9219.69,
+        9289.25,
+        9185.75,
+        9208.85
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 7744.22,
+       "tokens_per_sec_stddev": 437.14,
+       "samples_tokens_per_sec": [
+        6963.98,
+        7927.48,
+        7976.46,
+        7898.75,
+        7954.41
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 72.88,
+       "tokens_per_sec_stddev": 0.18,
+       "samples_tokens_per_sec": [
+        72.8878,
+        72.9436,
+        72.9449,
+        72.5891,
+        73.0535
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12962.78,
+       "tokens_per_sec_stddev": 61.51,
+       "samples_tokens_per_sec": [
+        12948.9,
+        13018.2,
+        12869.2,
+        13018.5,
+        12959.1
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12768.34,
+       "tokens_per_sec_stddev": 184.03,
+       "samples_tokens_per_sec": [
+        12912.5,
+        12494.4,
+        12798.5,
+        12688.1,
+        12948.1
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 75.35,
+       "tokens_per_sec_stddev": 0.12,
+       "samples_tokens_per_sec": [
+        75.2342,
+        75.2248,
+        75.4986,
+        75.4426,
+        75.334
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 12785.87,
+       "tokens_per_sec_stddev": 137.9,
+       "samples_tokens_per_sec": [
+        12592.8,
+        12759.5,
+        12978.7,
+        12815.7,
+        12782.6
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 12367.23,
+       "tokens_per_sec_stddev": 136.91,
+       "samples_tokens_per_sec": [
+        12439,
+        12169.2,
+        12498.7,
+        12282.9,
+        12446.3
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 75.27,
+       "tokens_per_sec_stddev": 0.1,
+       "samples_tokens_per_sec": [
+        75.3127,
+        75.1375,
+        75.3489,
+        75.1943,
+        75.3762
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 9253.01,
+       "tokens_per_sec_stddev": 104.47,
+       "samples_tokens_per_sec": [
+        9101.2,
+        9351.91,
+        9221.62,
+        9351.26,
+        9239.04
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 6692.08,
+       "tokens_per_sec_stddev": 110.42,
+       "samples_tokens_per_sec": [
+        6503.74,
+        6714.31,
+        6777.42,
+        6766.07,
+        6698.87
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 73.08,
+       "tokens_per_sec_stddev": 0.16,
+       "samples_tokens_per_sec": [
+        72.8937,
+        72.9321,
+        73.0772,
+        73.2057,
+        73.268
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 12843.48,
+       "tokens_per_sec_stddev": 83.33,
+       "samples_tokens_per_sec": [
+        12904.2,
+        12926.6,
+        12865.8,
+        12798.5,
+        12722.4
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 12400.49,
+       "tokens_per_sec_stddev": 172.99,
+       "samples_tokens_per_sec": [
+        12515.5,
+        12347.7,
+        12538.9,
+        12120.7,
+        12479.6
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 75.64,
+       "tokens_per_sec_stddev": 0.12,
+       "samples_tokens_per_sec": [
+        75.532,
+        75.8103,
+        75.7211,
+        75.6012,
+        75.5264
+       ]
+      }
+     ]
+    },
+    "q8_0": {
+     "model_size_bytes": 1818632192,
+     "n_params": 1711376384,
+     "gpu_memory_peak_mib_total_incl_desktop_baseline": 3941,
+     "default_config": {
+      "pp512": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 10183.77,
+       "tokens_per_sec_stddev": 3989.81
+      },
+      "pp1024": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12218.32,
+       "tokens_per_sec_stddev": 39.85
+      },
+      "tg128": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 133.21,
+       "tokens_per_sec_stddev": 0.31
+      }
+     },
+     "best_config": {
+      "pp512": {
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 12191.45,
+       "tokens_per_sec_stddev": 79.43
+      },
+      "pp1024": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12218.32,
+       "tokens_per_sec_stddev": 39.85
+      },
+      "tg128": {
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 133.46,
+       "tokens_per_sec_stddev": 0.21
+      }
+     },
+     "all_runs": [
+      {
+       "test": "pp512",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 10183.77,
+       "tokens_per_sec_stddev": 3989.81,
+       "samples_tokens_per_sec": [
+        3047.57,
+        11899.8,
+        11938.3,
+        11955.1,
+        12078.1
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12218.32,
+       "tokens_per_sec_stddev": 39.85,
+       "samples_tokens_per_sec": [
+        12216.6,
+        12178.5,
+        12255.1,
+        12261.9,
+        12179.4
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 133.21,
+       "tokens_per_sec_stddev": 0.31,
+       "samples_tokens_per_sec": [
+        133.559,
+        133.447,
+        133.092,
+        132.767,
+        133.196
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 8936.69,
+       "tokens_per_sec_stddev": 120.5,
+       "samples_tokens_per_sec": [
+        9024.27,
+        8996.11,
+        8979.12,
+        8725.48,
+        8958.46
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 7631.86,
+       "tokens_per_sec_stddev": 48.58,
+       "samples_tokens_per_sec": [
+        7658.31,
+        7617.21,
+        7668.06,
+        7552.8,
+        7662.93
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 125.14,
+       "tokens_per_sec_stddev": 0.78,
+       "samples_tokens_per_sec": [
+        125.641,
+        124.669,
+        124.022,
+        125.457,
+        125.913
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12180.78,
+       "tokens_per_sec_stddev": 108.76,
+       "samples_tokens_per_sec": [
+        12029.3,
+        12276.6,
+        12108.4,
+        12274.3,
+        12215.4
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12120.83,
+       "tokens_per_sec_stddev": 38.27,
+       "samples_tokens_per_sec": [
+        12131.7,
+        12099.6,
+        12172.5,
+        12070.5,
+        12129.9
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 132.84,
+       "tokens_per_sec_stddev": 0.33,
+       "samples_tokens_per_sec": [
+        132.931,
+        132.725,
+        133.092,
+        132.325,
+        133.15
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 12136.39,
+       "tokens_per_sec_stddev": 43.17,
+       "samples_tokens_per_sec": [
+        12193.6,
+        12160.3,
+        12114.6,
+        12133,
+        12080.5
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 11861.64,
+       "tokens_per_sec_stddev": 179.94,
+       "samples_tokens_per_sec": [
+        11907.7,
+        11914.3,
+        12037.6,
+        11891.5,
+        11557.1
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 133.4,
+       "tokens_per_sec_stddev": 0.4,
+       "samples_tokens_per_sec": [
+        133.128,
+        133.939,
+        133.48,
+        132.91,
+        133.544
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 8991.37,
+       "tokens_per_sec_stddev": 76.8,
+       "samples_tokens_per_sec": [
+        8922.81,
+        9086.49,
+        9003.39,
+        9039.01,
+        8905.17
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 6567.0,
+       "tokens_per_sec_stddev": 50.14,
+       "samples_tokens_per_sec": [
+        6578.99,
+        6574.99,
+        6614.18,
+        6481.62,
+        6585.25
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 126.09,
+       "tokens_per_sec_stddev": 0.66,
+       "samples_tokens_per_sec": [
+        126.358,
+        125.648,
+        125.822,
+        125.494,
+        127.104
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 12191.45,
+       "tokens_per_sec_stddev": 79.43,
+       "samples_tokens_per_sec": [
+        12242.6,
+        12266,
+        12237.1,
+        12117.5,
+        12094
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 11928.01,
+       "tokens_per_sec_stddev": 103.12,
+       "samples_tokens_per_sec": [
+        11982.7,
+        12055,
+        11877,
+        11941.2,
+        11784.3
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 133.46,
+       "tokens_per_sec_stddev": 0.21,
+       "samples_tokens_per_sec": [
+        133.226,
+        133.588,
+        133.236,
+        133.554,
+        133.68
+       ]
+      }
+     ]
+    },
+    "q4_0": {
+     "model_size_bytes": 962994176,
+     "n_params": 1711376384,
+     "gpu_memory_peak_mib_total_incl_desktop_baseline": 3115,
+     "default_config": {
+      "pp512": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 10652.1,
+       "tokens_per_sec_stddev": 4384.07
+      },
+      "pp1024": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12664.28,
+       "tokens_per_sec_stddev": 44.25
+      },
+      "tg128": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 225.49,
+       "tokens_per_sec_stddev": 2.3
+      }
+     },
+     "best_config": {
+      "pp512": {
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12834.59,
+       "tokens_per_sec_stddev": 60.76
+      },
+      "pp1024": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12664.28,
+       "tokens_per_sec_stddev": 44.25
+      },
+      "tg128": {
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 225.49,
+       "tokens_per_sec_stddev": 2.3
+      }
+     },
+     "all_runs": [
+      {
+       "test": "pp512",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 10652.1,
+       "tokens_per_sec_stddev": 4384.07,
+       "samples_tokens_per_sec": [
+        2812.36,
+        12412.9,
+        12691.9,
+        12682.1,
+        12661.2
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12664.28,
+       "tokens_per_sec_stddev": 44.25,
+       "samples_tokens_per_sec": [
+        12617.7,
+        12625,
+        12662.7,
+        12695.7,
+        12720.3
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 225.49,
+       "tokens_per_sec_stddev": 2.3,
+       "samples_tokens_per_sec": [
+        227.398,
+        227.841,
+        225.687,
+        222.262,
+        224.242
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 9092.64,
+       "tokens_per_sec_stddev": 103.85,
+       "samples_tokens_per_sec": [
+        9013.05,
+        9268.88,
+        9036.07,
+        9102.06,
+        9043.12
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 7863.41,
+       "tokens_per_sec_stddev": 69.46,
+       "samples_tokens_per_sec": [
+        7929.17,
+        7808.51,
+        7939.71,
+        7785.65,
+        7854.03
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 206.05,
+       "tokens_per_sec_stddev": 1.91,
+       "samples_tokens_per_sec": [
+        206.605,
+        204.574,
+        207.655,
+        203.553,
+        207.865
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12834.59,
+       "tokens_per_sec_stddev": 60.76,
+       "samples_tokens_per_sec": [
+        12927.1,
+        12864.9,
+        12790.7,
+        12783.7,
+        12806.6
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 12580.42,
+       "tokens_per_sec_stddev": 70.08,
+       "samples_tokens_per_sec": [
+        12473.4,
+        12577,
+        12665.5,
+        12610.8,
+        12575.4
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 512,
+       "tokens_per_sec_mean": 209.44,
+       "tokens_per_sec_stddev": 3.17,
+       "samples_tokens_per_sec": [
+        209.628,
+        204.342,
+        209.819,
+        210.384,
+        213.051
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 12507.21,
+       "tokens_per_sec_stddev": 118.78,
+       "samples_tokens_per_sec": [
+        12641.8,
+        12315.5,
+        12529,
+        12509.2,
+        12540.6
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 11794.16,
+       "tokens_per_sec_stddev": 157.06,
+       "samples_tokens_per_sec": [
+        11970.5,
+        11928.1,
+        11582.9,
+        11737.9,
+        11751.5
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "auto",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 209.75,
+       "tokens_per_sec_stddev": 6.28,
+       "samples_tokens_per_sec": [
+        212.49,
+        216.214,
+        202.202,
+        213.919,
+        203.901
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 8826.31,
+       "tokens_per_sec_stddev": 155.82,
+       "samples_tokens_per_sec": [
+        8920.64,
+        8577.21,
+        8975.54,
+        8785.05,
+        8873.13
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 6521.58,
+       "tokens_per_sec_stddev": 66.89,
+       "samples_tokens_per_sec": [
+        6411.23,
+        6533.28,
+        6519.21,
+        6556.63,
+        6587.53
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "off",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 194.9,
+       "tokens_per_sec_stddev": 0.52,
+       "samples_tokens_per_sec": [
+        194.282,
+        194.762,
+        194.585,
+        195.547,
+        195.313
+       ]
+      },
+      {
+       "test": "pp512",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 12550.28,
+       "tokens_per_sec_stddev": 70.28,
+       "samples_tokens_per_sec": [
+        12547.2,
+        12451.2,
+        12569,
+        12647.2,
+        12536.9
+       ]
+      },
+      {
+       "test": "pp1024",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 12046.04,
+       "tokens_per_sec_stddev": 86.1,
+       "samples_tokens_per_sec": [
+        12118.6,
+        12130.4,
+        12070.8,
+        11947.1,
+        11963.2
+       ]
+      },
+      {
+       "test": "tg128",
+       "flash_attn": "on",
+       "n_batch": 2048,
+       "n_ubatch": 2048,
+       "tokens_per_sec_mean": 214.74,
+       "tokens_per_sec_stddev": 1.38,
+       "samples_tokens_per_sec": [
+        216.311,
+        216.03,
+        213.4,
+        213.477,
+        214.457
+       ]
+      }
+     ]
+    }
+   }
+  }
+ },
+ "thme_full_split_pass": {
+  "command": "gpu_speed ppl --model-path models/smollm2-1.7b --tokens wikitext2_test.smollm2-1.7b.u32 --weights <f32|f16|q8_0|q4_0> --weight-budget-gb 12 (examples/gpu_speed.rs on branch feat/gpu-speed-round2, commit ba11e22; Vulkan through wgpu)",
+  "token_file_sha256": "18e663b61dd00f49796c8a6ae498b7dbe009cac4a2eaf3c67fa7d81baf47d945",
+  "results": {
+   "f32": {
+    "weights_used": "F32",
+    "elapsed_secs": 145.0986697,
+    "tokens_per_sec": 2089.0474090955777,
+    "perplexity": 9.109147231653633,
+    "scored_tokens": 303118,
+    "weight_uploads_during_pass": 0,
+    "weight_budget_gb": 12,
+    "git_commit": "",
+    "git_dirty": false,
+    "windows": 297,
+    "gpu_memory_peak_mib_total_incl_desktop_baseline": 13634
+   },
+   "f16": {
+    "weights_used": "F16",
+    "elapsed_secs": 139.9258995,
+    "tokens_per_sec": 2166.275157659429,
+    "perplexity": 9.10914730650465,
+    "scored_tokens": 303118,
+    "weight_uploads_during_pass": 0,
+    "weight_budget_gb": 12,
+    "git_commit": "",
+    "git_dirty": false,
+    "windows": 297,
+    "gpu_memory_peak_mib_total_incl_desktop_baseline": 8354
+   },
+   "q8_0": {
+    "weights_used": "Q8_0",
+    "elapsed_secs": 140.6250149,
+    "tokens_per_sec": 2155.50554938999,
+    "perplexity": 9.110653685063747,
+    "scored_tokens": 303118,
+    "weight_uploads_during_pass": 0,
+    "weight_budget_gb": 12,
+    "git_commit": "",
+    "git_dirty": false,
+    "windows": 297,
+    "gpu_memory_peak_mib_total_incl_desktop_baseline": 5346
+   },
+   "q4_0": {
+    "weights_used": "Q4_0",
+    "elapsed_secs": 139.4444776,
+    "tokens_per_sec": 2173.754064822141,
+    "perplexity": 10.743162804105841,
+    "scored_tokens": 303118,
+    "weight_uploads_during_pass": 0,
+    "weight_budget_gb": 12,
+    "git_commit": "",
+    "git_dirty": false,
+    "windows": 297,
+    "gpu_memory_peak_mib_total_incl_desktop_baseline": 3779
+   }
+  },
+  "note": "tokens per second counts the 303,118 scored tokens in 297 windows of 1,024 with the loss head; weights resident, zero re-uploads; GPU memory peak is nvidia-smi total memory used (includes the 1,154 MiB idle desktop baseline)"
+ },
+ "ratio_llama_cpp_pp1024_over_thme_stream": {
+  "f16": {
+   "cuda": {
+    "best_pp1024_over_thme": 5.77,
+    "default_pp1024_over_thme": 5.7
+   },
+   "vulkan": {
+    "best_pp1024_over_thme": 5.89,
+    "default_pp1024_over_thme": 5.24
+   }
+  },
+  "q8_0": {
+   "cuda": {
+    "best_pp1024_over_thme": 6.66,
+    "default_pp1024_over_thme": 6.66
+   },
+   "vulkan": {
+    "best_pp1024_over_thme": 5.67,
+    "default_pp1024_over_thme": 5.67
+   }
+  },
+  "q4_0": {
+   "cuda": {
+    "best_pp1024_over_thme": 6.14,
+    "default_pp1024_over_thme": 6.11
+   },
+   "vulkan": {
+    "best_pp1024_over_thme": 5.83,
+    "default_pp1024_over_thme": 5.83
+   }
+  }
+ },
+ "comparable": {
+  "is": "same model, same GPU, same weight formats (THME stores F16, Q8_0 or Q4_0 weights, its arithmetic is f32), all weights resident on the GPU, no CPU involvement in either",
+  "is_not": [
+   "llama-bench pp1024 is one batch of 1,024 tokens; THME streams 297 windows of 1,024 and computes full-vocabulary logits and cross-entropy for every position, while llama.cpp prompt processing computes logits for the last token only",
+   "different kernels and APIs: llama.cpp CUDA and Vulkan (cooperative-matrix path on this driver) against THME's wgpu Vulkan kernels with f32 arithmetic",
+   "both ran on a machine with other sessions active (see load_log)"
+  ],
+  "token_generation": "llama-bench tg128 is single-token decoding; THME has no timed decode path measured on this model yet, so the tg numbers have no THME counterpart"
+ },
+ "load_log": [
+  "19:32:33 cpu 34% ram free 15.9 GB disk free 164 GB gpu temp 66 C warnings: 0",
+  "19:33:35 cpu 49% ram free 13.8 GB disk free 164 GB gpu temp 69 C warnings: 0",
+  "19:33:35 cpu 49% ram free 13.8 GB disk free 164 GB gpu temp 69 C warnings: 0",
+  "19:34:36 cpu 15% ram free 14.7 GB disk free 164 GB gpu temp 62 C warnings: 0",
+  "19:35:37 cpu 45% ram free 15.9 GB disk free 164 GB gpu temp 61 C warnings: 0",
+  "19:40:44 cpu 19% ram free 17.8 GB disk free 162 GB gpu temp 46 C warnings: 0",
+  "19:42:46 cpu 18% ram free 11.3 GB disk free 156 GB gpu temp 76 C warnings: 0",
+  "19:45:50 cpu 19% ram free 11.5 GB disk free 162 GB gpu temp 83 C warnings: 1",
+  "19:45:49 WARN  GPU HOT: 83 C",
+  "19:48:54 cpu 16% ram free 11.4 GB disk free 162 GB gpu temp 82 C warnings: 1",
+  "19:48:53 WARN  GPU HOT: 82 C"
+ ],
+ "load_note": "not a quiet machine by the 15 percent rule: the watchdog logged total CPU of 15 to 49 percent around the llama-bench runs (other sessions active) and 16 to 19 percent around the THME passes; GPU temperature reached 83 C during the THME passes (watchdog warning)."
+}
