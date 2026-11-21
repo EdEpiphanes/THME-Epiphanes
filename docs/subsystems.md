@@ -10,7 +10,7 @@
 ---
 ---
 
-### 1. Analytical Cockpit and Pareto Precision AutoDecider
+## 1. Analytical Cockpit and Pareto Precision AutoDecider
 
 `Subsystems: Model Ingestion • Layer Sensitivity • SVD Spectral Decay • Threshold Allocator`
 
@@ -294,6 +294,7 @@ flowchart LR
 ### 5.1 Model Ingestion & Zero-Copy ModelIR
 
 THME ingests model weights without incurring full memory allocation penalties. Utilizing `memmap2::Mmap`, pointers are mapped directly into system memory:
+
 - **GGUF v2/v3 Ingestion**: Reads binary tensor metadata, layer dimension layouts, and handles 28 GGML quantization types with zero-allocation block decoders.
 - **SafeTensors Ingestion**: Parses JSON header byte lengths, maps tensor byte offsets, and identifies layer prefixes (`model.layers.N.self_attn`).
 - **Anatomy Deconstruction**: Automatically categorizes tensors into Attention ($W_q, W_k, W_v, W_o$), MLP ($W_{\text{gate}}, W_{\text{up}}, W_{\text{down}}$), Normalization ($\text{RMSNorm}$), and Embeddings.
@@ -380,6 +381,7 @@ Automated Teacher agents execute structural mutations via declarative JSON recip
 ```
 
 Applying a recipe executes atomic mutations and produces structured audit records:
+
 ```text
 [Surgery Started] Applying recipe 'optimal-heterogeneous-hybrid' by Epiphanes AutoTuner
 Applied precision FP16 to layers 0..=1 (role: None)
@@ -392,6 +394,7 @@ Configured Early-Exit at Layer 8 (Threshold: 0.85, Exit Target: 80%)
 ### 5.5 Speculative Decoding & Multi-Token Synthesizer
 
 Rather than executing $N$ sequential target forward passes for $N$ tokens, THME extracts a lightweight sub-manifold draft model to emit $\gamma$ speculative tokens, verifying all candidates in a single parallel evaluation pass:
+
 - **Speculative Rejection Sampling**: Each candidate $x_i$ is tested against uniform random draw $u \sim \mathcal{U}(0, 1)$:
   $$u \le \min\left(1, \frac{p(x_i)}{q(x_i)}\right)$$
 - **Leviathan Speedup Multiplier**:
@@ -407,6 +410,7 @@ THME models operational arithmetic intensity ($I = \text{FLOPs/byte}$) against h
 $$P(I) = \min\left(P_{\text{peak}}, I \cdot B_{\text{peak}}\right)$$
 The machine balance knee point marks the transition between regimes:
 $$I^* = \frac{P_{\text{peak}} \text{ (TFLOP/s)}}{B_{\text{peak}} \text{ (GB/s)}}$$
+
 - **Memory-Bound ($I < I^*$)**: Throughput is bottlenecked by DRAM/SRAM memory bandwidth. Optimized by quantization, weight pruning, and BitNet b1.58.
 - **Compute-Bound ($I \ge I^*$)**: Throughput is bottlenecked by Tensor Core ALU saturation. Optimized by kernel fusion, larger batch sizes, and FlashAttention-2.
 
@@ -490,6 +494,7 @@ THME features an automated structural detection and transformation engine across
 ### 5.8 PyTorch, CUDA & PEFT LoRA Interoperability Bridge
 
 THME enables direct bidirectional workflows between pure Rust and the Python/CUDA ecosystem:
+
 - **Harness Synthesis**: Exports executable `train_cuda.py` matching the exact Pareto precision plan (`thme export --strategy lora --cuda`).
 - **Hugging Face Config Exporter**: Serializes `ModelIR` into standard `config.json` compatible with `transformers.AutoModelForCausalLM`.
 - **In-Engine LoRA Merger**: Directly ingests PEFT adapters (`adapter_model.safetensors`) and merges low-rank weight updates in pure Rust prior to quantization:
@@ -500,6 +505,7 @@ THME enables direct bidirectional workflows between pure Rust and the Python/CUD
 ### 5.9 Model Context Protocol (MCP) & IDE Copilot Extension
 
 THME exposes a headless JSON-RPC server conforming to protocol version `2024-11-05`:
+
 - **VS Code Extension (`editors/vscode/`)**: Contributes 4 activity bar views (Active Model, Pareto Decisions, REA-LLM Telemetry, Copilot Tools).
 - **GitHub Copilot LM Tools**: Chat with `@copilot` using native tools: `/thme_copilot_inspect`, `/thme_copilot_surgery`, `/thme_copilot_validate`.
 - **10 Exposed MCP Tools**: Direct programmatic model inspection, surgery, verification, token simulation, and roofline profiling over standard input/output.
@@ -588,4 +594,3 @@ thme speculate [OPTIONS]
 ```
 
 </details>
-

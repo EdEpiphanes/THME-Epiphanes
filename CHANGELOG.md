@@ -10,11 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - v0.2.0 Measured Core
 
 ### Added
+
 <<<<<<< HEAD
+
 - **llama.cpp reference on this machine (THME-3085, THME-2208, THME-3078)**: official llama.cpp b12584 (MIT, downloaded outside the repository, digests checked) run with its own `llama-bench` on THME-exported SmolLM2-1.7B F16, Q8_0 and Q4_0 files, CUDA and Vulkan builds, RTX 4060 Ti: prompt processing 12,000 to 14,700 tokens per second and generation 74 (F16), 131 (Q8_0), 221 (Q4_0) on CUDA, against THME's own full-split GPU pass at about 2,100 to 2,200 tokens per second (a stream of 1,024-token windows with a loss head, so only roughly comparable). llama.cpp cannot load THME's GGUF as written (no vocabulary, Hugging Face tensor names, BF16 norms, unpermuted q/k); it loads and generates the same text once those are adapted. The `.epiph` to GGUF chain is byte-identical to the direct export. Added `examples/check_gguf.rs`; report in `docs/benchmarks/smollm2-1.7b/data/llama_cpp_reference.json`.
 =======
 - **GPU tensor cores and a feature audit (THME-3086, THME-3087, THME-3088)**: `examples/gpu_features.rs` lists what each adapter exposes through wgpu and checks a kernel per feature (RTX 4060 Ti on Vulkan: f16, subgroups of 32, 16x16x16 cooperative matrices with f16 inputs, packed 4x8 dot products; none of them on its DX12 adapter). New original WGSL kernels on cooperative matrices (f16 in, f32 accumulate): matmul with f16 weights and activations read in place (26 to 40 TFLOPS isolated against 7 to 9 for the f32 kernel), a staged variant for f32, Q8_0 and Q4_0 weights, and a flash-style attention for head size 64. SmolLM2-1.7B on the 16,384-token slice with f16 weights: 2,215 to about 7,000 tokens/s (3.2 times), perplexity 8.37288 to 8.37286; llama.cpp on the same card measures 11,300 to 12,500 at pp1024 (F16). On by default for f16 weights when a start-up probe passes (`THME_GPU_COOP=0` turns it off). The int8 dot-product route for Q8_0 and Q4_0 is slower than the rule asked (10 to 13 TOPS-equivalent, 3,030 tokens/s on the slice) and stays opt-in. Pre-registered rules and reports: `docs/benchmarks/smollm2-1.7b/gpu_tensor_core_plan.md`, `data/gpu_coop_*.json`, `docs/benchmarks/_adapters/rtx-4060-ti_features.json`. One shared machine, two runs per arm, slice only.
+
 >>>>>>> origin/main
+
 - **GPU speed round 2 (THME-3084)**: SmolLM2-1.7B full WikiText-2 test split on the RTX 4060 Ti in 145.5 s (2,084 tokens/s) against about 22.5 minutes before (4.46 ms to 0.47 ms per token on the 16,384-token slice, 9.4 times), found by a per-dispatch profile (`set_op_profile`, `examples/gpu_speed.rs`): weights re-uploaded every window past a 4 GiB budget (`set_weight_budget`), one-workgroup-per-query attention (now tiled with an online softmax) and a 4 TFLOPS matmul (now a register-blocked 128 x 128 kernel at 7.3 to 9.7 TFLOPS). New device weight storage f16, Q8_0 and Q4_0 with f32 accumulation (`set_weight_storage`, in-kernel dequantization, also for Q8_0, Q4_0 and F16 `QuantizedTensor`), perplexity differences reported per format (f16 7e-8 nats, Q8_0 5e-4, Q4_0 0.165). Pythia-14M is unchanged (null result: per-operation path). The full-split time was taken on a loaded machine (CPU mean 32 percent). Reports: `docs/benchmarks/*/data/gpu_speed_round2.json`.
 - **Embedding vs linear Q8_0 failure and token frequencies, Pythia-14M (THME-3079, THME-3080)**: `examples/token_frequency.rs` and `scripts/embedding_vs_linear.py` with six recipes under `docs/benchmarks/pythia-14m/recipes/`; reports `token_frequency.json` and `embedding_vs_linear.json` (rule pre-registered; Q8_0 rise +0.083 embeddings and head, +0.666 linear layers, +0.744 both on the RTX 4060 Ti). `SetPrecision` with an explicit role now reaches tensors that have no layer index (embeddings, output head). The reproduction of the committed +0.834 missed, see the report.
 - **AWQ on SmolLM-135M measured on the GPU (THME-2204)**: pre-registered rule applied unchanged; AWQ beats round-to-nearest in Q4_0 (22.04 against 23.70) and Q4_K (21.64 against 24.62) and beats the permuted-scale control, but not the shuffled-calibration control, and the 0.45 quality gate still fails; the report records the GPU and driver.
@@ -35,7 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed: the MCP server no longer falls back to a MedGemma file under `%LOCALAPPDATA%` (THME-3051); it loads a model from `THME_MODEL` or an explicit argument only.
 - **Re-measured reports (THME-3044, THME-3023)**: Pythia-14M and SmolLM-135M verification, precision sweep and depth probe reports under `docs/benchmarks/*/data/`, measured with the code after the FP16 rounding fix (20 November 2026). Results as measured, including failures: Pythia-14M exported Q8_0 misses the 0.45 gate (Δ +0.834 on the full WikiText-2 test split), its recipe misses it by a wide margin (Δ +504); SmolLM-135M exported Q8_0 passes (Δ +0.034), its recipe fails (Δ +28.9). Dossier and charts regenerated from the reports.
 - **Recipe search reports (THME-2004)**: `thme search` on Pythia-14M and SmolLM-135M with Q8_0 and Q4_0, five random controls, and a Pareto front. Pythia-14M does not reach its 50% budget (58.3%); SmolLM-135M reaches 50%, and its differences from baseline are within about 0.02 PPL.
+>
 >- **Run planner tickets and research** (THME-3055 to THME-3066): how other engines auto-tune loading (`docs/research/engine-autotuning.md`) and 12 small tickets for a `thme plan-run`.
+>
 - **Run planner tickets and research** (THME-3055 to THME-3066): how other engines auto-tune loading (`docs/research/engine-autotuning.md`) and 12 small tickets for a `thme pathfinder`.
 - **Hugging Face cross-check measured (THME-2001)**: THME logits match the fp32 reference within 1.9e-4 (Pythia-14M) and 2.1e-5 (SmolLM-135M) on CPU and GPU; `scripts/cross_check_hf.py` gains `--device` and pins the reference to fp32.
 - **First-pass audit tickets** (19 November 2026): THME-3047 to 3054 record the findings of a read-only audit (publication from a clean export, VS Code extension shell injection, release pipeline hardening, removal of agent notes and personal settings, a hard-coded model fallback, hygiene, a subprocess timeout, MCP trust model).
@@ -63,6 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CodeGPT MCP Service Real Binding (`src/cli/mcp.rs`)**: Connected `thme_auto_decide` and `thme_apply_surgery` to active model IR, fixed `thme_validate_quality` format string bug, and added end-to-end integration test suite in `tests/test_mcp.rs`.
 
 ### Changed
+
 - **Licences allowed**: `CDLA-Permissive-2.0` (certificate data, wasm-only path) added to `deny.toml`.
 - **Roadmap**: gains v0.3.0 Plug and Play Workspace (nine sub-milestones; discover, doctor and tokenizer done, tested on fixtures).
 - **CLI size limit** raised from 10 MiB to 16 MiB (release check and AGENTS.md); the release CLI is about 12.5 MiB with the tokenizer stack. The GUI limit stays 15 MiB.
@@ -72,22 +79,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **GPTQ rounding (`src/transform/gptq.rs`)**: rewritten to the reference algorithm (per-group scale fitting, inverse-Hessian Cholesky, damping with retry); supports `Q4_0` and `Q8_0`. Tested on synthetic matrices; not measured on a real model.
 
 ### Fixed
+
 - The Studio no longer loads a model from a developer-machine path at startup (set `THME_MODEL` to load one).
 - Hessian-proxy test values were wrong; recomputed by hand.
 
 ### Removed
+
 - **`.epiph` compression**: format 1.3 adds an optional per-tensor `deflate` encoding (`thme epiph pack --compress deflate`), only used when it shrinks the payload; digests cover both the stored and decoded bytes. Older files load unchanged.
 - neutron-gpu no longer includes the GPU-unlock engine (ported from a GPL-2.0-only upstream project, which cannot be combined with AGPL-3.0-only); only PCI/vGPU discovery and display metadata remain.
 - `agent-hub/` and 18 unrelated `neutron-*` crates are no longer part of this repository.
 - Committed benchmark reports, charts and the benchmark dossier (`docs/benchmarks/`, `docs/benchmark_dossier.md`, `docs/benchmark_dossier.csv`) were removed because they were measured before the FP16 rounding fix (THME-3023). The scripts and the CI pipeline stay; results will be re-measured and published with their method.
 
 ### License
+
 - **THME is now dual-licensed: AGPL-3.0-only or a commercial license from Epiphanes**
   ([LICENSING.md](LICENSING.md)). Source obtained before 2026-11-13, up to and including commit
   `56ae520`, stays available under Apache-2.0. Contributions are accepted under the contributor
   terms in CONTRIBUTING.md, and `deny.toml` keeps dependencies permissive.
 
 ### Added
+
 - **Keras Lambda scan** (THME-3022, v0.2.7.2): `thme scan` reads `config.json` in `.keras` zips
   (JSON only, nothing loaded). A `Lambda`, `TFOpLambda` or `__lambda__` object is a high
   `keras-lambda-layer` finding; a custom class outside keras/tensorflow is a medium
@@ -296,6 +307,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Optimal transport** (dossier WP4, ROADMAP v0.2.5.4): `src/engine/transport.rs` adds the northwest-corner start, plain-domain and log-domain Sinkhorn, and oracle tests (brute-force OT over the permutation polytope, sorted 1-D cost); Sinkhorn gaps are bounded by epsilon·ln(n²), mass is conserved, and the log-domain plan agrees with the plain domain. No measured figure.
 
 ### Changed
+
 - **Developer sandbox implementation reserved for the commercial version** (THME-3020). The design
   stays public in docs/sandbox.md; the open-source version does not run untrusted code.
 - One gate decision path: the legacy `QualityGate` functions, `assert_gate`, the co-surgery loop,
@@ -345,6 +357,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `thme validate` and the MCP quality tool label supplied perplexities as not measured by THME.
 
 ### Removed
+
 - Hand-written benchmark figures (H100, RTX 4090, M3 Max, MI300X, Xeon tables and the
   LLaMA-3.2-1B row); none were measured.
 - Drawn showcase GIFs and their generators (`examples/generate_showcase_gifs.rs`,
@@ -352,6 +365,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   depict the application.
 
 ### Fixed
+
 - `.epiph` writer placed every attachment at the same offset; harmless with one attachment, it
   would have overlapped a second. Attachments now advance and align like tensors.
 - **FP16 rounding** (THME-3023): float32-to-float16 conversion joined exponent and mantissa with
@@ -384,9 +398,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cards no longer overlap their own labels; the co-surgery state machine no longer unwraps.
 
 ---
+
 ## [0.1.9] - 2026-11-11
 
 ### Added
+
 - **Closed-Loop Teacher-Student Co-Surgery Baseline (`src/surgery/`)**:
   - Autonomous closed-loop state machine & controller (`src/surgery/closed_loop.rs`) governing iterative `ProfileSensitivity` $\to$ `SynthesizeRecipe` $\to$ `ApplySurgery` $\to$ `ValidateQuality` $\to$ `EvaluatePareto` $\to$ `Commit`/`Rollback` state transitions.
   - Teacher LLM topology analysis prompt synthesizer (`src/surgery/prompt_synth.rs`) formatting top-K layer sensitivity, SVD decay rates, and memory reach profiles.
@@ -402,6 +418,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.8] - 2026-11-11
 
 ### Added
+
 - **Binary Quantization Exporter Suite (`src/exporter/`)**:
   - Vectorized BitNet b1.58 ternary packer and unpacker (`src/exporter/bitnet_pack.rs`) with 4 weights per byte and scale product de-quantization.
   - Pure-Rust GGUF v3 binary writer (`src/exporter/gguf_writer.rs`) with 32-byte alignment and metadata serialization.
@@ -417,6 +434,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.7] - 2026-11-10
 
 ### Added
+
 - **Hardware-Calibrated Roofline & Micro-Kernel Profiler (`src/profiling/`)**:
   - Hardware specifications database for H100 SXM5, RTX 4090, Apple Silicon, AMD MI300X, and Intel Xeon (`src/profiling/hardware.rs`).
   - Operational arithmetic intensity analysis for linear GEMM, SDPA, SwiGLU FFN, and FlashAttention-2 (`src/profiling/intensity.rs`).
@@ -430,6 +448,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.6] - 2026-11-10
 
 ### Added
+
 - **Speculative Decoding & Draft Model Synthesizer Engine (`src/speculative/`)**:
   - `DraftSynthesizer` (`src/speculative/synthesizer.rs`): Automated draft model extraction supporting Prefix Layers, Strided Subsampling, Low-Rank Projection, and BitNet b1.58 Ternary Discretization.
   - `SpeculativeEngine` (`src/speculative/engine.rs`): Multi-token speculative decoding execution and verification engine modeling rejection sampling, token acceptance probability ($\alpha_{\text{spec}}$), tokens emitted per pass ($\mathbb{E}[k] + 1$), latency cost ratio ($r = \frac{T_{\text{draft}}}{T_{\text{target}}}$), and effective wall-clock latency speedup ($S$).
@@ -450,6 +469,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.5] - 2026-11-10
 
 ### Added
+
 - **Universal 8 Specialized AI Model Paradigm Converter (`src/ir/paradigm.rs`)**:
   - Full support for ingesting, detecting, and cross-converting models across 8 specialized AI paradigms:
     - **LLM** (Large Language Model - Autoregressive Causal Transformer)
@@ -497,6 +517,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `assets/pytorch_cuda_interop.gif`: Visualizes automated `train_cuda.py` script generation, QLoRA 4-bit BitsAndBytes setup, and in-engine PEFT LoRA adapter zero-copy weight merging ($W = W_0 + \frac{\alpha}{r} B \times A$).
 
 ### Changed
+
 - **Professional Engineering UI Refactoring**:
   - Removed all emojis from visual elements across the Native Desktop Studio GUI, CLI, documentation, and VS Code extension in favor of clean, high-precision engineering typography.
 
@@ -505,6 +526,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.4] - 2026-11-10
 
 ### Added
+
 - **Empirical Quality Gate & Perplexity Verification Bridge (`src/quality/evaluator.rs`)**:
   - Analytical and external evaluation harness supporting standard benchmark corpora (WikiText-2, C4, Penn Treebank, Synthetic High-Entropy).
   - Perplexity degradation computation: $\Delta PPL = PPL_{\text{candidate}} - PPL_{\text{baseline}}$ and percentage representation distortion.
@@ -523,6 +545,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.3] - 2026-11-10
 
 ### Added
+
 - **Multi-Format Dataset Ingestion & Fast Tokenizer (`src/dataset/mod.rs`)**:
   - Ingests and normalizes arbitrary training, fine-tuning, and calibration datasets from plain text (`.txt`), JSON Lines (`.jsonl`), JSON arrays (`.json`), and CSV/TSV files.
   - Native multi-schema JSON parsers auto-detecting OpenAI chat messages (`[{"role": "...", "content": "..."}]`), Alpaca instructions (`instruction`, `input`, `output`), ShareGPT formats, and raw text records.
@@ -578,6 +601,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.2] - 2026-11-10
 
 ### Added
+
 - **Full GGUF v2/v3 Quantization Matrix (`GgmlType`)**: Added complete type enumerations for `F32`, `F16`, `Q4_0`, `Q4_1`, `Q5_0`, `Q5_1`, `Q8_0`, `Q8_1`, K-quants (`Q2_K`..`Q8_K`), and I-quants (`IQ2_XXS`..`IQ4_XS`, `IQ1_M`).
 - **Zero-Allocation Block Decoders (`GgufBlockDecoder`)**: Unpacks raw block payloads for `Q8_0`, `Q4_0`, `Q4_1`, and `Q5_0` with exact floating-point scale and offset reconstitution.
 - **Resilient GGUF Stream Recovery**: Truncated or corrupt GGUF files now recover all intact tensors parsed up to the point of corruption rather than terminating with panic.
@@ -586,12 +610,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **High-Definition Studio Showcase GIF (`assets/live_neural_benchmark.gif`)**: 920x520 widescreen multi-panel animation showcasing all 8 studio tabs, 8x8 weight slice matrix heatmap, 16-bar distribution histogram, and 13-stage Transformer forward token stream.
 
 ### Fixed & Improved
+
 - **Weighted Majority Layer Precision Reporting**: `src/allocator/pareto.rs` now aggregates format distribution by parameter volume (`numel`) rather than indexing the first tensor (`tensors[0]`).
 - **Fast Walsh-Hadamard Dimension Validation**: `MatrixMath::fast_walsh_hadamard_transform` now explicitly asserts and returns error for non-power-of-two dimensions instead of silent no-ops.
 - **Unicode & Mojibake Cleansing**: Eliminated double-UTF8 mojibake sequences across GUI autotuner telemetry, Greek mathematical symbols ($\alpha, \beta, \gamma, \mu, \sigma, \tau, \epsilon$), and iconography.
 - **Dependency Hygiene**: Removed unused dependencies (`thiserror`, `serde_yaml`, `indicatif`) from `Cargo.toml`.
 
 ### Security & Correctness
+
 - Added explicit `// SAFETY:` justifications on all memory-mapped file operations in `src/parser/gguf.rs` and `src/parser/safetensors.rs`.
 - Added strict length bounds checking on GGUF string and array headers to guard against allocation exhaustion attacks.
 
@@ -600,6 +626,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.1] - 2026-11-10
 
 ### Added
+
 - **Formal CI Matrix**: Cross-platform GitHub Actions workflow covering `ubuntu-latest`, `windows-latest`, and `macos-latest` with `rustfmt`, `clippy -D warnings`, and full test execution.
 - **Automated Path-Leak Guard**: CI check rejecting absolute developer paths or user profile patterns across git-tracked assets.
 - **Release Automation Workflow**: Tag-driven (`v*`) stripped cross-platform binary releases.
@@ -608,6 +635,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Roadmap & Backlog Ledger**: Full milestone tracking in `ROADMAP.md` and actionable task breakdown in `BACKLOG.md`.
 
 ### Changed
+
 - Project rebranded to **THME** by **Epiphanes**, retaining `llm-tweaker` as backwards-compatible CLI alias.
 - Added release profile symbol stripping (`strip = "symbols"`, `debug = false`) in `Cargo.toml` and `.cargo/config.toml`.
 - Resolved all Clippy linter warnings across library, binaries, and integration test suites.
@@ -617,6 +645,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2026-11-10
 
 ### Added
+
 - **Universal Model Importer**: Zero-copy memory-mapped SafeTensors and GGUF v2/v3 parsers with automatic fallback architecture deduction.
 - **Topological Sensitivity Profiling**: SVD energy decay, condition number analysis, and Fisher information proxy estimation.
 - **Pareto Precision Allocator**: Dynamic programming budget optimization under quality gates ($Q_{\text{candidate}} \ge Q_{\text{baseline}} - \epsilon$).
