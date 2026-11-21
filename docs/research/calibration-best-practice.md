@@ -27,6 +27,7 @@ calibration set matching the test distribution does not guarantee the best resul
 ## 2. Evidence: sample size, domain, seeds
 
 **Sample size**
+
 - AQLM, Llama 2 7B, ~2.3 bits, WikiText-2 ppl averaged over 3 runs: 128 seq 6.994; 256 6.584;
   512 6.455; 1024 6.353; 2048 6.297; 4096 6.267. The authors say GPTQ saturates around 256
   sequences while AQLM keeps gaining. [arXiv 2401.06118, App. E](https://arxiv.org/html/2401.06118)
@@ -43,6 +44,7 @@ calibration set matching the test distribution does not guarantee the best resul
   summary, not verified): [arXiv 2604.13806](https://arxiv.org/pdf/2604.13806).
 
 **Domain mismatch**
+
 - AWQ, Pile subsets PubMed vs Enron: same-distribution calibration is best; across distributions
   AWQ ppl rises only 0.5 to 0.6, GPTQ rises 2.3 to 4.9. 1k eval samples, no overlap between
   calibration and evaluation splits. [arXiv 2306.00978](https://arxiv.org/html/2306.00978v5)
@@ -56,6 +58,7 @@ calibration set matching the test distribution does not guarantee the best resul
   this for models under 1B.
 
 **Leakage / overlap**
+
 - Standard practice: calibrate on train, score on a disjoint split. WikiText-2 train and test
   are disjoint article sets but the same domain and style, so the score favours WikiText
   calibration. [dataset card](https://huggingface.co/datasets/Salesforce/wikitext)
@@ -64,6 +67,7 @@ calibration set matching the test distribution does not guarantee the best resul
   same for every arm, so it does not bias the comparison, but absolute ppl is not "held-out".
 
 **Seeds / variance**
+
 - No paper I found reports AWQ seed standard deviations for small models. MatGPTQ and BayesQ
   average over 3 calibration seeds (search summary, not verified:
   [2602.03537](https://arxiv.org/pdf/2602.03537), [2511.08821](https://arxiv.org/pdf/2511.08821)).
@@ -72,6 +76,7 @@ calibration set matching the test distribution does not guarantee the best resul
 - Conclusion: THME must measure its own variance. Do not assume it is small.
 
 **Model-generated / random text (llama.cpp community, anecdotal, not verified)**
+
 - One user: ~25k tokens of high-entropy pseudo-random text gave KLD_95 1.22 vs 1.29 for ~40k
   tokens of wikitext at 7B; the same post said purely random data did worse than wikitext but
   better than no imatrix. Single model, unreviewed:
@@ -86,6 +91,7 @@ Yes as the primary arm, with changes. 32,768 = 16 x 2048, the count AWQ used in 
 16-sequence claim (a 7B model). Hidden widths are small (Pythia-14M d=128, SmolLM-135M d=576;
 check against each config), so mean |x| per channel gets thousands of tokens. The risk is rare
 outlier tokens that 32k tokens may miss; that is my inference, not a sourced fact. Changes:
+
 1. Use the model's training context as window length if CPU allows; otherwise record the shorter
    length. Cut non-overlapping windows from random offsets in the concatenated train split,
    tokenised with the model's own tokenizer.
@@ -97,6 +103,7 @@ outlier tokens that 32k tokens may miss; that is my inference, not a sourced fac
 4. Seed 1234 stays as the headline seed, but only as one of the seeds below.
 
 **Seed-variance check**
+
 - Seeds {1234, 1, 2, 3, 4}: 5 minimum, 10 if each run is cheap on CPU. Each seed draws different
   windows; nothing else changes.
 - Report per model: mean, sample std dev, min and max of test ppl (and delta vs RTN and fp16).
@@ -106,6 +113,7 @@ outlier tokens that 32k tokens may miss; that is my inference, not a sourced fac
   seed noise and grid noise can be told apart.
 
 **Random control A: real scale distribution, no information**
+
 - For each linear layer, randomly permute the real per-channel scale vector across input channels
   (same multiset of values, wrong channel assignment). Apply the same quantizer and the same
   fold into the previous op. Use >= 5 permutation seeds.
@@ -115,6 +123,7 @@ outlier tokens that 32k tokens may miss; that is my inference, not a sourced fac
   coming from activation information.
 
 **Random control B: statistics from shuffled or mismatched text**
+
 - B1 shuffled: the same 32,768 train tokens with token order permuted (keeps unigram counts,
   destroys context).
 - B2 mismatched: same token count from another domain (code, non-English, or the C4 arm); as an
@@ -134,6 +143,7 @@ directory stripped, capped at 127 chars), `quantize.imatrix.entries_count` and
 introduced by PR #6658, per a secondary page, not verified). ExLlamaV3 documents rows and columns
 but I found no provenance recording (not verified). Neither stores a content hash, tokeniser or
 seed, so THME should record more:
+
 - dataset name, exact subset and split, source URL, revision, licence;
 - SHA-256 of the raw calibration text and of the token id array;
 - tokeniser name and hash, special-token handling, BOS/EOS policy;
