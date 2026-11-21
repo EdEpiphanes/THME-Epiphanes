@@ -162,6 +162,16 @@ pub(super) fn pack_for_device(storage: WeightStorage, w: &[f32]) -> Result<Vec<u
 pub(super) enum DenseKernel {
     Gemm,
     Gemv,
+    /// Cooperative matrices, any weight storage, weights converted in workgroup memory.
+    Coop,
+    /// Cooperative matrices, f16 weights read in place.
+    CoopF16,
+    /// f32 activations to padded f16 for `CoopF16`.
+    ConvertX,
+    /// Packed 4 x 8-bit dot products, Q8_0 and Q4_0 weights.
+    Q8Dot,
+    /// f32 activations to int8 blocks for `Q8Dot`.
+    ConvertQ8,
 }
 
 /// WGSL declaration of the weights binding and `load_w(i)`: the four consecutive weights
@@ -207,14 +217,40 @@ fn weights_prelude(storage: WeightStorage) -> &'static str {
     }
 }
 
+/// WGSL `word(block, k)` for the integer dot kernel: word `k` (0..8) of weight block `block` as
+/// four signed bytes. Empty for storages without 32-value blocks.
+fn word_loader(storage: WeightStorage) -> &'static str {
+    match storage {
+        WeightStorage::Q8_0 => {
+            "fn word(block: u32, k: u32) -> u32 {\n\
+                 return weights[params.out_dim * (params.in_dim >> 5u) + block * 8u + k];\n\
+             }\n"
+        }
+        WeightStorage::Q4_0 => {
+            "fn word(block: u32, k: u32) -> u32 {\n\
+                 let w = weights[params.out_dim * (params.in_dim >> 5u) + block * 4u + (k & 3u)];\n\
+                 let n = select(w & 0x0F0F0F0Fu, (w >> 4u) & 0x0F0F0F0Fu, k >= 4u);\n\
+                 return (n + 0x78787878u) ^ 0x80808080u;\n\
+             }\n"
+        }
+        _ => "",
+    }
+}
+
 /// Complete WGSL source of the matrix kernel for `storage`.
 pub(super) fn kernel_source(kernel: DenseKernel, storage: WeightStorage) -> String {
     let template = match kernel {
         DenseKernel::Gemm => include_str!("shaders/gemm_v4.wgsl"),
         DenseKernel::Gemv => include_str!("shaders/gemv_v4.wgsl"),
+        DenseKernel::Coop => include_str!("shaders/gemm_coop.wgsl"),
+        DenseKernel::CoopF16 => include_str!("shaders/gemm_coop_f16w.wgsl"),
+        DenseKernel::ConvertX => include_str!("shaders/x_to_f16.wgsl"),
+        DenseKernel::Q8Dot => include_str!("shaders/gemm_q8dot.wgsl"),
+        DenseKernel::ConvertQ8 => include_str!("shaders/x_to_q8.wgsl"),
     };
     // Shader files may carry CRLF line endings on Windows checkouts.
     template
         .replace("\r\n", "\n")
         .replace("//WEIGHTS_PRELUDE\n", weights_prelude(storage))
+        .replace("//WORD_LOADER\n", word_loader(storage))
 }

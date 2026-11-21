@@ -173,6 +173,41 @@ closes it.
 - **Compute Bridge notes**: the per-dispatch profile (`set_op_profile`) and the paired old/new flags (`--old-gemm`, `--old-attention`) are the tools to compare any new backend against; all kernels are original WGSL from the public WebGPU specification and the tiling ideas in `docs/research/gpu-backends.md`, no code from other engines. The weight budget is a setting because wgpu does not report VRAM: a future run planner (`thme pathfinder`) should set it from the adapter and from `nvidia-smi` style probes, and pick the storage format from the free memory.
 - **Done means**: Paired before and after per step on SmolLM2-1.7B, SmolLM-135M and Pythia-14M with device, driver, build, method and load note in a committed report; parity tests green; a full-split time on a quiet machine (the committed one was taken under load, repeat when quiet).
 
+### [THME-3085] Reference comparison against llama.cpp on this machine
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p1 · **Area**: gpu · **Type**: perf · **Status**: ready
+- **Problem**: The only outside numbers we have (community scoreboards: about 3,400 prompt tokens per second for a 7B model at Q4_0 on an RTX 4060 Ti with CUDA; reported, mixed builds) are not measured on our hardware, so the gap to mature engines is unknown.
+- **Progress** (20 November 2026): measured on this machine with llama.cpp b12584 (CUDA 12.4 and Vulkan builds, official release, digests verified; reference report and compatibility findings on branch `feat/llama-cpp-reference`, pull request pending): prompt processing at 1,024 tokens 11,348 to 14,348 tokens per second and generation 74 (F16), 131 (Q8_0), 221 to 225 (Q4_0) for SmolLM2-1.7B; THME at that time 2,090 to 2,170 tokens per second for the full pass, after THME-3087 about 7,000 on a 16,384-token slice with f16 weights (different measurement shapes: see the report).
+- **Done means**: llama.cpp (MIT, prebuilt binaries downloaded into a separate folder, never bundled) run through its own benchmark tool on the same SmolLM2-1.7B file in its CUDA and Vulkan builds: prompt processing and token generation tokens per second, build number, flags, driver and load recorded in a committed report; our passes compared to those rows with the same token counts; the result sets the real target for THME-3086 to 3089.
+
+### [THME-3086] GPU feature audit: what the adapter really exposes, with checked kernels
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p1 · **Area**: gpu · **Type**: feature · **Status**: in review
+- **Related**: THME-3084 (speed round 2), THME-3087, THME-3088, `docs/benchmarks/_adapters/rtx-4060-ti_features.json`.
+- **Problem**: Round 2 assumed "wgpu exposes no tensor-core path" and "fp16 ALU runs at the f32 rate". Nobody had asked the adapter.
+- **Progress** (20 November 2026): `thme::inference::gpu::features::audit` and `examples/gpu_features.rs` request every optional feature the adapter lists and run one tiny kernel per feature whose output is compared with a CPU result (a listed feature with a failing kernel is reported as failed). RTX 4060 Ti, Vulkan, driver NVIDIA 616.92, wgpu 30.0.2: SHADER_F16 present and checked; SUBGROUP present, subgroup size 32 (min and max), checked; EXPERIMENTAL_COOPERATIVE_MATRIX present, shapes 16x16x16, 16x8x16 and 16x8x8 with f16 inputs and f16 or f32 accumulate (no f32 inputs, no integer shapes), the 16x16x16 f16/f32 and f16/f16 kernels checked; packed 4x8 integer dot product (`dot4I8Packed`) compiles, runs and gives the right numbers (the report does not say whether the driver runs it as a single instruction). The DX12 adapter of the same card exposes none of f16, subgroups or cooperative matrices in wgpu 30. naga 30 accepts only square 8x8 and 16x16 cooperative matrices, so the 16x8 shapes the card lists are not reachable from WGSL.
+- **Not done**: `thme doctor` does not call the audit (not cheap: it needs the device with experimental features); Metal and Windows-on-ARM not run.
+- **Done means**: A committed per-adapter JSON with device, driver, backend, each feature present or absent, the matrix shapes, and a passed or failed kernel check per feature. Met for the RTX 4060 Ti.
+
+### [THME-3087] Cooperative-matrix (tensor-core) matmul and attention
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p1 · **Area**: gpu · **Type**: perf · **Status**: in review
+- **Related**: THME-3086, THME-3084, `docs/benchmarks/smollm2-1.7b/gpu_tensor_core_plan.md` (rules written before the runs), `docs/benchmarks/smollm2-1.7b/data/gpu_coop_*.json`.
+- **Rule (pre-registered)**: adopt if at least 25 TFLOPS isolated on large shapes, at least 6,000 tokens per second on the 16,384-token slice, and perplexity within 0.01 nats of the f32 path.
+- **Progress** (20 November 2026, RTX 4060 Ti, Vulkan, driver 616.92, release build, GPU only, SmolLM2-1.7B, 16,384-token slice, two runs per arm; shared machine, no other GPU job from this session): original WGSL from the Vulkan cooperative-matrix and wgpu documentation (clean room, no other engine read). Kernels: 128 x 128 tile, four subgroups each owning 64 x 64 (sixteen 16 x 16 f32 accumulators), f16 weights and f16 activations read in place (activations converted once per matmul by a small pass), row tiles scheduled fastest so the workgroups in flight share each weight tile in L2 (the head matmul went from 12 to 40 TFLOPS with that one change); a staged variant converts f32, Q8_0 and Q4_0 weights in workgroup memory (slower, 10 to 20 TFLOPS); a flash-style attention for head size 64 (two passes over key tiles instead of an online rescale). Isolated matmul (1,024 rows; shapes 2048x2048, 2048x8192, 8192x2048, 2048x49152, 576x1536): f32 kernel 9.0, 8.2, 9.1, 9.3, 7.3 TFLOPS; cooperative matrices 28.0, 35.7, 26.1, 40.0, 27.8. Slice, f16 weights: 2,215 tokens/s before, 5,350 with the matmul, **7,000 to 7,020** with matmul and attention (3.2 times); perplexity 8.37288 before, 8.37286 after (3e-6 nats). One 1,024-token window: matmul 368 ms to 99 ms, attention 58 ms to 13 ms. f32 weights (8 GiB budget so they stay resident): 2,099 to 3,951 tokens/s with the staged kernel on every storage. **Go on all three criteria**: cooperative matrices are the default for f16 weight storage (and attention of head size 64) when the adapter passes a start-up probe of the kernels; every other storage keeps the exact f32 kernels unless `set_coop_matrix(true)`; `THME_GPU_COOP=0` turns it off.
+- **Parity**: f16 inputs, f32 accumulate; matmul tests against the CPU within 5e-3 relative on tile-edge shapes, attention against the tiled kernel within 5e-3 on four shapes (ragged blocks, GQA), full SmolLM2-1.7B slice within 3e-6 nats.
+- **Not done**: attention only for head size 64 (others fall back to the tiled kernel); Q8_0 and Q4_0 still use the slow staged kernel or the int8 route of THME-3088 (a pre-pass that dequantizes to f16 for the in-place kernel is the next try); activations are converted again for each of q, k, v and gate, up (about 2.5 percent); the matmul is at 26 to 40 of a measured 37 to 40 TFLOPS ceiling for this structure without staging; no full-split pass (slice only, the card reached 50 C); Metal and DX12 have no cooperative matrices in wgpu 30.
+- **Done means**: Paired before and after with device, driver, build, method and load note in committed reports; parity tests green; a quiet-machine full-split run.
+
+### [THME-3088] Packed 8-bit integer dot product for Q8_0 and Q4_0 weights
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p2 · **Area**: gpu · **Type**: perf · **Status**: in review (no-go at this tuning)
+- **Related**: THME-3086, THME-3087, `docs/benchmarks/smollm2-1.7b/gpu_tensor_core_plan.md`.
+- **Rule (pre-registered)**: adopt if at least 20 TOPS-equivalent isolated and at least 6,000 tokens per second on the slice, with the perplexity change reported.
+- **Progress** (20 November 2026, same machine and method as THME-3087): activations quantized per block of 32 to int8 on the fly, Q8_0 codes as stored and Q4_0 nibbles unpacked to int8 in the kernel, `dot4I8Packed` in integer, scaled to f32; 128 x 128 tile, 16 x 16 threads, all 64 accumulators in named registers (a first version with indexed arrays ran at 1 TOPS from spilling). Isolated: 10.5, 11.4, 10.3, 12.9, 10.1 TOPS-equivalent on the five shapes (Q8_0; Q4_0 the same), against 9 to 10 for the exact float kernel. Slice: Q8_0 2,205 to 3,028 tokens/s (with the cooperative attention), perplexity 8.3773 to 8.3914 (+0.0017 nats); Q4_0 2,219 to 3,045, 9.8701 to 9.8900 (+0.0020 nats). **No-go**: below 20 TOPS and below 6,000 tokens per second. Kept as an opt-in (`set_int8_dot(true)`, `--int8-dot`) with a parity test against the float kernel.
+- **Not done**: tuning (two blocks per staged tile, scale folding, a wider tile); checking whether the driver issues one dp4a per `dot4I8Packed`; the dequantize-to-f16 route for the in-place cooperative kernel; Q4_K and the other K-quants.
+- **Done means**: Isolated TOPS and slice tokens per second against the rule above, with the perplexity change, in committed reports. Measured; rule not met.
+
 ### [THME-3070] Incremental decoding with a KV cache
 
 - **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.1 · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: done
@@ -247,6 +282,12 @@ closes it.
 - **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: experiment · **Status**: ready
 - **Problem**: Published work reports that some layers can be removed from larger models with little loss; small models may be more fragile.
 - **Done means**: Block influence per layer computed for Pythia-14M (and SmolLM-135M late), perplexity measured against the number of removed blocks on the same token hash with a random-removal control; the rule and the stop threshold are written before the run.
+
+### [THME-3089] Device decoder with KV cache and fused quantized matrix-vector for decode
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p1 · **Area**: gpu · **Type**: perf · **Status**: ready
+- **Problem**: Decode (one token at a time) is limited by memory bandwidth, not arithmetic: about 288 GB/s on this card, so a 1.7B model at Q4_0 (1.1 GB) has a ceiling of about 260 tokens per second. We have no device KV cache and a per-operation GPT-NeoX path, so decode on the GPU is unmeasured and likely far below that ceiling.
+- **Done means**: Device-resident decode for LLaMA-family and GPT-NeoX models with a device KV cache and fused quantized matrix-vector kernels, one submit per token; tokens per second measured against the bandwidth ceiling (target at least 80 percent of it for Q4_0 and Q8_0) and against llama.cpp from THME-3085; Pythia-14M first.
 
 ### [THME-3090] Automatic weight budget for the GPU path (default is 7x slower than it should be)
 
