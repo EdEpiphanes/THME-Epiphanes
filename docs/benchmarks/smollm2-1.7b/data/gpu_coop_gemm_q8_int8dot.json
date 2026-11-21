@@ -1,0 +1,71 @@
+{
+  "build_profile": "release",
+  "coop_flag": "off",
+  "coop_matrix_ready": true,
+  "device": {
+    "backend": "Vulkan",
+    "device_type": "DiscreteGpu",
+    "driver": "NVIDIA",
+    "driver_info": "616.92",
+    "name": "NVIDIA GeForce RTX 4060 Ti"
+  },
+  "git_commit": "a8e5a93",
+  "git_dirty": true,
+  "int8_dot": true,
+  "label": "smollm2-1.7b",
+  "machine_load_note": "measured on a shared workstation, no other GPU job from this session, a watchdog and a live window running; CPU load sampled before the run",
+  "method": "compute_linear_slices on synthetic weights, device time of the compute pass from timestamp queries, median of the runs after one warm-up",
+  "old_attention_kernel": false,
+  "old_gemm_kernel": false,
+  "shader_f16": true,
+  "shapes": [
+    {
+      "in_dim": 2048,
+      "median_us": 816.32,
+      "min_us": 812.736,
+      "out_dim": 2048,
+      "rows": 1024,
+      "tflops_best": 10.569157256476887,
+      "tflops_median": 10.522754057232458
+    },
+    {
+      "in_dim": 2048,
+      "median_us": 3001.28,
+      "min_us": 2992.192,
+      "out_dim": 8192,
+      "rows": 1024,
+      "tflops_best": 11.48313288986803,
+      "tflops_median": 11.448361488431601
+    },
+    {
+      "in_dim": 8192,
+      "median_us": 3330.4,
+      "min_us": 3330.176,
+      "out_dim": 2048,
+      "rows": 1024,
+      "tflops_best": 10.31769443056463,
+      "tflops_median": 10.317000470814316
+    },
+    {
+      "in_dim": 2048,
+      "median_us": 15954.496,
+      "min_us": 15938.464,
+      "out_dim": 49152,
+      "rows": 1024,
+      "tflops_best": 12.934648546309106,
+      "tflops_median": 12.921651063624948
+    },
+    {
+      "in_dim": 576,
+      "median_us": 179.296,
+      "min_us": 177.472,
+      "out_dim": 1536,
+      "rows": 1024,
+      "tflops_best": 10.209719437432385,
+      "tflops_median": 10.105854720685345
+    }
+  ],
+  "weight_budget_gb": null,
+  "weights_requested": "q8_0",
+  "weights_used": "Q8_0"
+}

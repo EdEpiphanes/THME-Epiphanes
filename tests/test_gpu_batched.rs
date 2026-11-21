@@ -825,3 +825,163 @@ fn quantized_storage_cuts_resident_weight_bytes() {
     assert_eq!(WeightStorage::Q8_0.device_bytes(n), n / 32 * 36);
     assert_eq!(WeightStorage::Q4_0.device_bytes(n), n / 32 * 20);
 }
+
+#[test]
+fn cooperative_matrix_matmul_matches_cpu_within_f16_rounding_across_tile_edges() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    if !gpu.coop_matrix_ready() {
+        eprintln!("SKIP: no usable cooperative-matrix path on this adapter");
+        return;
+    }
+    let mut seed = 41u64;
+    let mut ran_f16_arithmetic = false;
+    for (rows, in_dim, out_dim) in [
+        (9, 16, 8),
+        (127, 48, 132),
+        (129, 64, 124),
+        (130, 576, 200),
+        (257, 20, 260),
+        (200, 1024, 128),
+    ] {
+        let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+        let w = pseudo_random(&mut seed, out_dim * in_dim, 0.5);
+        let cpu = linear(&x, &w, in_dim, out_dim);
+        gpu.set_coop_matrix(false);
+        let exact = gpu
+            .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+            .expect("f32 batched linear");
+        gpu.set_coop_matrix(true);
+        let got = gpu
+            .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+            .expect("coop batched linear");
+        // f16 inputs: about 1e-3 relative per product, so the sums stay within 5e-3 absolute.
+        assert_close(
+            &cpu,
+            &got[0],
+            5e-3,
+            &format!("rows={rows} in={in_dim} out={out_dim}"),
+        );
+        ran_f16_arithmetic |= exact[0].iter().zip(&got[0]).any(|(a, b)| a != b);
+    }
+    gpu.set_coop_matrix(false);
+    assert!(
+        ran_f16_arithmetic,
+        "outputs identical to f32: the coop kernel did not run"
+    );
+}
+
+#[test]
+fn cooperative_matrix_matmul_reads_f16_weights_in_place_and_matches_cpu() {
+    use thme::inference::gpu::WeightStorage;
+    let Some(gpu) = gpu_or_skip() else { return };
+    if !gpu.coop_matrix_ready() {
+        eprintln!("SKIP: no usable cooperative-matrix path on this adapter");
+        return;
+    }
+    gpu.set_weight_storage(WeightStorage::F16);
+    gpu.set_coop_matrix(true);
+    let mut seed = 43u64;
+    // Row counts and out_dim off the 128 tile; in_dim off the 64-deep slice.
+    for (rows, in_dim, out_dim) in [
+        (9, 16, 16),
+        (129, 64, 112),
+        (130, 576, 208),
+        (200, 1024, 128),
+        (257, 80, 272),
+    ] {
+        let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+        let w = pseudo_random(&mut seed, out_dim * in_dim, 0.5);
+        let got = gpu
+            .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+            .expect("coop f16 linear");
+        assert_close(
+            &linear(&x, &w, in_dim, out_dim),
+            &got[0],
+            5e-3,
+            &format!("f16 rows={rows} in={in_dim} out={out_dim}"),
+        );
+    }
+}
+
+#[test]
+fn cooperative_attention_matches_the_tiled_kernel_across_blocks_and_ragged_ends() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    if !gpu.coop_matrix_ready() {
+        eprintln!("SKIP: no usable cooperative-matrix path on this adapter");
+        return;
+    }
+    gpu.set_coop_matrix(true);
+    // Grouped-query, several 64-query blocks, a ragged last block, a block shorter than a tile.
+    for shape in [
+        (4, 2, 64, 150),
+        (2, 2, 64, 1000),
+        (3, 1, 64, 65),
+        (2, 2, 64, 17),
+    ] {
+        gpu.set_coop_attention(false);
+        assert_eq!(gpu.attention_kernel_name(64), "tiled");
+        let tiled = random_plan_logits(&gpu, 5, shape);
+        gpu.set_coop_attention(true);
+        assert_eq!(gpu.attention_kernel_name(64), "coop");
+        let coop = random_plan_logits(&gpu, 5, shape);
+        let worst = tiled
+            .iter()
+            .zip(&coop)
+            .map(|(a, b)| (a - b).abs() / a.abs().max(1.0))
+            .fold(0.0f32, f32::max);
+        assert!(worst < 5e-3, "{shape:?}: worst relative diff {worst}");
+        assert!(
+            worst > 0.0,
+            "{shape:?}: identical output, the kernel did not run"
+        );
+    }
+    assert_eq!(
+        gpu.attention_kernel_name(128),
+        "tiled",
+        "other head sizes fall back"
+    );
+    gpu.set_coop_matrix(false);
+    assert_eq!(gpu.attention_kernel_name(64), "tiled");
+}
+
+#[test]
+fn int8_dot_matmul_matches_the_float_kernel_up_to_activation_rounding() {
+    use thme::inference::gpu::WeightStorage;
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut seed = 47u64;
+    // Row counts and out_dim off the 128 tile, in_dim a few 32-value blocks.
+    for storage in [WeightStorage::Q8_0, WeightStorage::Q4_0] {
+        gpu.set_weight_storage(storage);
+        for (rows, in_dim, out_dim) in [
+            (9, 32, 4),
+            (129, 96, 132),
+            (130, 576, 200),
+            (257, 1024, 260),
+        ] {
+            let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+            let w = pseudo_random(&mut seed, out_dim * in_dim, 0.5);
+            gpu.set_int8_dot(false);
+            let exact = gpu
+                .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+                .expect("float kernel")
+                .remove(0);
+            gpu.set_int8_dot(true);
+            let got = gpu
+                .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+                .expect("int8 kernel")
+                .remove(0);
+            let rms = |v: &[f32]| (v.iter().map(|a| a * a).sum::<f32>() / v.len() as f32).sqrt();
+            let diff: Vec<f32> = exact.iter().zip(&got).map(|(a, b)| a - b).collect();
+            let rel = rms(&diff) / rms(&exact);
+            assert!(
+                rel < 0.02,
+                "{storage:?} rows={rows} in={in_dim} out={out_dim}: rms diff {rel}"
+            );
+            assert!(
+                rel > 0.0,
+                "{storage:?} {rows}x{in_dim}x{out_dim}: identical, int8 kernel did not run"
+            );
+        }
+    }
+    gpu.set_int8_dot(false);
+}

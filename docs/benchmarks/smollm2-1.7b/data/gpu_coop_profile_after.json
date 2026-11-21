@@ -1,0 +1,159 @@
+{
+  "build_profile": "release",
+  "coop_flag": "library default",
+  "coop_matrix_ready": true,
+  "device": {
+    "backend": "Vulkan",
+    "device_type": "DiscreteGpu",
+    "driver": "NVIDIA",
+    "driver_info": "616.92",
+    "name": "NVIDIA GeForce RTX 4060 Ti"
+  },
+  "device_ms_by_kind": {
+    "add": 2.607648,
+    "attention coop": 13.17376,
+    "convert_activations 1024x2048": 1.802208,
+    "convert_activations 1024x8192": 4.847808,
+    "convert_activations 320x2048": 0.026912,
+    "convert_activations 63x2048": 0.003552,
+    "linear (matmul)": 98.907616,
+    "nll": 1.912768,
+    "rms_norm": 1.979008,
+    "rope": 2.391296,
+    "swiglu": 9.921696
+  },
+  "device_ms_sum": 137.574272,
+  "dispatches": 541,
+  "git_commit": "a8e5a93",
+  "git_dirty": true,
+  "host_ms": {
+    "encode": 14.104,
+    "input_write": 0.8233,
+    "readback": 0.0014,
+    "submit": 0.4042,
+    "wait": 141.7976,
+    "weight_upload": 0.0
+  },
+  "int8_dot": false,
+  "kernels": [
+    {
+      "dispatches": 48,
+      "label": "linear gemm_coop_f16 1024x2048x8192",
+      "ms": 41.699264,
+      "share_of_device_time": 0.3031036500778285,
+      "tflops": 39.55147605636397
+    },
+    {
+      "dispatches": 24,
+      "label": "linear gemm_coop_f16 1024x8192x2048",
+      "ms": 26.407232,
+      "share_of_device_time": 0.19194891323866137,
+      "tflops": 31.22757132712735
+    },
+    {
+      "dispatches": 96,
+      "label": "linear gemm_coop_f16 1024x2048x2048",
+      "ms": 23.926368,
+      "share_of_device_time": 0.1739160066207728,
+      "tflops": 34.46547845590271
+    },
+    {
+      "dispatches": 24,
+      "label": "attention coop",
+      "ms": 13.17376,
+      "share_of_device_time": 0.09575743929795245,
+      "tflops": 0.0
+    },
+    {
+      "dispatches": 24,
+      "label": "swiglu",
+      "ms": 9.921696,
+      "share_of_device_time": 0.07211883338186954,
+      "tflops": 0.0
+    },
+    {
+      "dispatches": 3,
+      "label": "linear gemm_coop_f16 320x2048x49152",
+      "ms": 5.556448,
+      "share_of_device_time": 0.04038871454104442,
+      "tflops": 34.78364745247323
+    },
+    {
+      "dispatches": 24,
+      "label": "convert_activations 1024x8192",
+      "ms": 4.847808,
+      "share_of_device_time": 0.03523775143073263,
+      "tflops": 0.0
+    },
+    {
+      "dispatches": 48,
+      "label": "add",
+      "ms": 2.607648,
+      "share_of_device_time": 0.01895447427844648,
+      "tflops": 0.0
+    },
+    {
+      "dispatches": 48,
+      "label": "rope",
+      "ms": 2.391296,
+      "share_of_device_time": 0.017381854653753866,
+      "tflops": 0.0
+    },
+    {
+      "dispatches": 49,
+      "label": "rms_norm",
+      "ms": 1.979008,
+      "share_of_device_time": 0.014385015244710872,
+      "tflops": 0.0
+    },
+    {
+      "dispatches": 4,
+      "label": "nll",
+      "ms": 1.912768,
+      "share_of_device_time": 0.013903529869305795,
+      "tflops": 0.0
+    },
+    {
+      "dispatches": 144,
+      "label": "convert_activations 1024x2048",
+      "ms": 1.802208,
+      "share_of_device_time": 0.013099891235477517,
+      "tflops": 0.0
+    },
+    {
+      "dispatches": 1,
+      "label": "linear gemm_coop_f16 63x2048x49152",
+      "ms": 1.318304,
+      "share_of_device_time": 0.009582489377083529,
+      "tflops": 9.621130859043133
+    },
+    {
+      "dispatches": 3,
+      "label": "convert_activations 320x2048",
+      "ms": 0.026912,
+      "share_of_device_time": 0.00019561797136022642,
+      "tflops": 0.0
+    },
+    {
+      "dispatches": 1,
+      "label": "convert_activations 63x2048",
+      "ms": 0.003552,
+      "share_of_device_time": 0.000025818780999982323,
+      "tflops": 0.0
+    }
+  ],
+  "label": "smollm2-1.7b",
+  "machine_load_note": "measured on a shared workstation, no other GPU job from this session, a watchdog and a live window running; CPU load sampled before the run",
+  "method": "One untimed warm-up window (weight upload), then one window with every dispatch in its own compute pass with timestamp queries; wall_ms includes the per-dispatch pass overhead, so it exceeds an unprofiled window.",
+  "old_attention_kernel": false,
+  "old_gemm_kernel": false,
+  "perplexity": 6.096632336124494,
+  "shader_f16": true,
+  "submits": 1,
+  "wall_ms": 160.6027,
+  "weight_budget_gb": null,
+  "weight_uploads_during_window": 0,
+  "weights_requested": "f16",
+  "weights_used": "F16",
+  "window_tokens": 1024
+}
