@@ -189,10 +189,9 @@ impl ActivationCopy {
 }
 
 pub(super) const GEMV_MAX_ROWS: usize = 8;
-/// Default weight bytes kept resident for slice-backed linears before the cache is flushed;
+/// Default weight bytes kept resident for slice-backed linears before LRU eviction;
 /// raise it with [`GpuContext::set_weight_budget`] when the card has the memory.
-/// shortcut: flush-all, not LRU; a model larger than the budget re-uploads every pass.
-const WEIGHT_CACHE_BUDGET: usize = 4 << 30;
+const WEIGHT_CACHE_BUDGET: usize = 10 << 30;
 
 pub(super) fn storage_buffer(
     device: &wgpu::Device,
@@ -310,12 +309,15 @@ impl TimestampProbe {
 struct CachedWeight {
     fingerprint: u64,
     buffer: Arc<wgpu::Buffer>,
+    bytes: usize,
+    last_used: u64,
 }
 
 #[derive(Default)]
 struct WeightCache {
     entries: HashMap<(usize, usize, u8), CachedWeight>,
     bytes: usize,
+    tick: u64,
 }
 
 /// Cheap identity check for a weight slice: length plus 64 samples spread over it.
@@ -584,6 +586,14 @@ impl GpuContext {
         ctx.self_test()?;
         if coop_wanted {
             ctx.coop_probe();
+        }
+        match std::env::var("THME_GPU_STORAGE").ok().as_deref() {
+            Some("f16") => ctx.set_weight_storage(WeightStorage::F16),
+            Some("f32") => ctx.set_weight_storage(WeightStorage::F32),
+            _ => {}
+        }
+        if std::env::var("THME_GPU_COOP").ok().as_deref() == Some("1") && ctx.coop_matrix_ready() {
+            ctx.set_coop_matrix(true);
         }
         Ok(ctx)
     }
@@ -1159,8 +1169,11 @@ impl GpuContext {
             .weight_cache
             .lock()
             .map_err(|_| ThmeError::ExecutionFailed("GPU weight cache mutex poisoned".into()))?;
-        if let Some(hit) = cache.entries.get(&key) {
+        cache.tick = cache.tick.wrapping_add(1);
+        let tick = cache.tick;
+        if let Some(hit) = cache.entries.get_mut(&key) {
             if hit.fingerprint == print {
+                hit.last_used = tick;
                 return Ok(DeviceWeight {
                     buffer: Arc::clone(&hit.buffer),
                     storage,
@@ -1179,8 +1192,15 @@ impl GpuContext {
                 reason: format!("Tensor size {bytes} exceeds GPU limit {cap}"),
             });
         }
-        if cache.bytes + bytes > self.weight_budget.load(Ordering::Relaxed) {
-            *cache = WeightCache::default();
+        let budget = self.weight_budget.load(Ordering::Relaxed);
+        while cache.bytes + bytes > budget {
+            let Some((&oldest_key, _)) = cache.entries.iter().min_by_key(|(_, v)| v.last_used)
+            else {
+                break;
+            };
+            if let Some(removed) = cache.entries.remove(&oldest_key) {
+                cache.bytes = cache.bytes.saturating_sub(removed.bytes);
+            }
         }
         let t_up = Instant::now();
         let packed;
@@ -1203,6 +1223,8 @@ impl GpuContext {
         let entry = CachedWeight {
             fingerprint: print,
             buffer: Arc::clone(&buffer),
+            bytes,
+            last_used: tick,
         };
         if cache.entries.insert(key, entry).is_none() {
             cache.bytes += bytes;
@@ -1538,6 +1560,12 @@ pub trait GpuBackend: Send + Sync {
     fn adapter_json(&self) -> serde_json::Value {
         serde_json::json!({ "name": self.device_name() })
     }
+
+    /// Drops any cached device weight buffers to free GPU memory between models.
+    fn clear_cache(&self) {}
+
+    /// Enables cooperative-matrix Tensor Core kernels when supported and not disabled via `THME_GPU_COOP=0`.
+    fn enable_coop_if_ready(&self) {}
 }
 
 impl GpuBackend for GpuContext {
@@ -1634,6 +1662,16 @@ impl GpuBackend for GpuContext {
         targets: &[u32],
     ) -> Result<Option<Vec<f32>>, ThmeError> {
         GpuContext::score_head_nll(self, normed, head, d, vocab, targets)
+    }
+
+    fn clear_cache(&self) {
+        self.clear_weight_cache();
+    }
+
+    fn enable_coop_if_ready(&self) {
+        if self.coop_matrix_ready() && std::env::var("THME_GPU_COOP").ok().as_deref() != Some("0") {
+            self.set_coop_matrix(true);
+        }
     }
 
     fn is_format_supported(&self, dtype: QuantDtype) -> bool {

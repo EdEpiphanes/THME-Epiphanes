@@ -478,6 +478,9 @@ pub fn evaluate(args: &EvaluateArgs) -> Result<Value> {
         arch.family()
     );
     let gpu = args.device.resolve();
+    if let Some(g) = gpu.as_deref() {
+        g.enable_coop_if_ready();
+    }
     let device = device_json(args.device, gpu.as_deref());
     let cache = if args.no_baseline_cache {
         None
@@ -504,6 +507,10 @@ pub fn evaluate(args: &EvaluateArgs) -> Result<Value> {
             let baseline_model =
                 arch.load_with_gpu(&source, WeightPrecision::AsStored, gpu.clone())?;
             let report = evaluate_perplexity(&*baseline_model, &tokens, &eval, |_, _, _| {})?;
+            drop(baseline_model);
+            if let Some(gpu) = gpu.as_deref() {
+                gpu.clear_cache();
+            }
             if let Some(cache) = &cache {
                 cache.store(&report)?;
             }
