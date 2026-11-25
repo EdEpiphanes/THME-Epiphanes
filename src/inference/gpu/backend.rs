@@ -39,16 +39,32 @@ impl DeviceArg {
     pub fn resolve(self) -> Option<Arc<dyn GpuBackend>> {
         match self {
             Self::Cpu => None,
-            Self::Gpu => match GpuContext::init() {
-                Ok(ctx) => Some(Arc::new(ctx)),
-                Err(err) => {
-                    eprintln!("Warning: GPU requested but initialization failed ({err}); falling back to CPU");
-                    None
+            Self::Gpu => {
+                #[cfg(feature = "cuda")]
+                if std::env::var("THME_GPU_BACKEND").ok().as_deref() != Some("wgpu") {
+                    if let Ok(ctx) = super::cuda::CudaContext::init() {
+                        return Some(Arc::new(ctx));
+                    }
                 }
-            },
-            Self::Auto => GpuContext::init()
-                .ok()
-                .map(|ctx| Arc::new(ctx) as Arc<dyn GpuBackend>),
+                match GpuContext::init() {
+                    Ok(ctx) => Some(Arc::new(ctx)),
+                    Err(err) => {
+                        eprintln!("Warning: GPU requested but initialization failed ({err}); falling back to CPU");
+                        None
+                    }
+                }
+            }
+            Self::Auto => {
+                #[cfg(feature = "cuda")]
+                if std::env::var("THME_GPU_BACKEND").ok().as_deref() != Some("wgpu") {
+                    if let Ok(ctx) = super::cuda::CudaContext::init() {
+                        return Some(Arc::new(ctx));
+                    }
+                }
+                GpuContext::init()
+                    .ok()
+                    .map(|ctx| Arc::new(ctx) as Arc<dyn GpuBackend>)
+            }
         }
     }
 }

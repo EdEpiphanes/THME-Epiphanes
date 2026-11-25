@@ -2,6 +2,8 @@
 //! GPU acceleration pipeline for THME reference inference.
 
 pub mod backend;
+#[cfg(feature = "cuda")]
+pub mod cuda;
 pub mod decoder;
 pub mod dense;
 pub mod error;
