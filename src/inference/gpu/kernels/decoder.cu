@@ -45,6 +45,41 @@ extern "C" __global__ void rms_norm(
     }
 }
 
+extern "C" __global__ void rms_norm_f16(
+    const float* x,
+    const float* w,
+    unsigned short* out16,
+    unsigned int d,
+    float eps,
+    unsigned int x_offset
+) {
+    __shared__ float smem[256];
+    unsigned int row = blockIdx.x;
+    unsigned int tid = threadIdx.x;
+    unsigned int off = x_offset + row * d;
+
+    float ss = 0.0f;
+    for (unsigned int i = tid; i < d; i += 256) {
+        float v = x[off + i];
+        ss += v * v;
+    }
+    smem[tid] = ss;
+    __syncthreads();
+    for (unsigned int s = 128; s > 0; s >>= 1) {
+        if (tid < s) {
+            smem[tid] += smem[tid + s];
+        }
+        __syncthreads();
+    }
+    float scale = rsqrtf(smem[0] / (float)d + eps);
+    for (unsigned int i = tid; i < d; i += 256) {
+        float val = x[off + i] * scale * w[i];
+        unsigned short h;
+        asm("cvt.rn.f16.f32 %0, %1;" : "=h"(h) : "f"(val));
+        out16[row * d + i] = h;
+    }
+}
+
 extern "C" __global__ void rope(
     const float* cos_tbl,
     const float* sin_tbl,
@@ -140,6 +175,22 @@ extern "C" __global__ void swiglu(
     }
 }
 
+extern "C" __global__ void swiglu_f16(
+    const float* gate,
+    const float* up,
+    unsigned short* out16,
+    unsigned int n
+) {
+    unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < n) {
+        float g = gate[idx];
+        float val = (g / (1.0f + expf(-g))) * up[idx];
+        unsigned short h;
+        asm("cvt.rn.f16.f32 %0, %1;" : "=h"(h) : "f"(val));
+        out16[idx] = h;
+    }
+}
+
 extern "C" __global__ void add(
     const float* a,
     const float* b,
@@ -149,6 +200,70 @@ extern "C" __global__ void add(
     unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < n) {
         out[idx] = a[idx] + b[idx];
+    }
+}
+
+extern "C" __global__ void nll_f16(
+    const unsigned short* logits16,
+    const unsigned int* targets,
+    float* out,
+    unsigned int vocab,
+    unsigned int first_row
+) {
+    __shared__ float smem[8];
+    unsigned int row = blockIdx.x;
+    unsigned int tid = threadIdx.x;
+    unsigned int lane = tid & 31u;
+    unsigned int warp = tid >> 5;
+    unsigned int base = row * vocab;
+
+    float lm = -3.402823466e+38f;
+    for (unsigned int i = tid; i < vocab; i += 256u) {
+        float v;
+        asm("cvt.f32.f16 %0, %1;" : "=f"(v) : "h"(logits16[base + i]));
+        lm = fmaxf(lm, v);
+    }
+    for (int off = 16; off > 0; off >>= 1) {
+        lm = fmaxf(lm, __shfl_xor_sync(0xffffffffu, lm, off));
+    }
+    if (lane == 0u) { smem[warp] = lm; }
+    __syncthreads();
+    if (warp == 0u) {
+        float vm = (lane < 8u) ? smem[lane] : -3.402823466e+38f;
+        for (int off = 4; off > 0; off >>= 1) {
+            vm = fmaxf(vm, __shfl_xor_sync(0xffffffffu, vm, off));
+        }
+        if (lane == 0u) { smem[0] = vm; }
+    }
+    __syncthreads();
+    float m = smem[0];
+
+    float ls = 0.0f;
+    for (unsigned int i = tid; i < vocab; i += 256u) {
+        float v;
+        asm("cvt.f32.f16 %0, %1;" : "=f"(v) : "h"(logits16[base + i]));
+        ls += expf(v - m);
+    }
+    for (int off = 16; off > 0; off >>= 1) {
+        ls += __shfl_xor_sync(0xffffffffu, ls, off);
+    }
+    if (lane == 0u) { smem[warp] = ls; }
+    __syncthreads();
+    if (warp == 0u) {
+        float vs = (lane < 8u) ? smem[lane] : 0.0f;
+        for (int off = 4; off > 0; off >>= 1) {
+            vs += __shfl_xor_sync(0xffffffffu, vs, off);
+        }
+        if (lane == 0u) { smem[0] = vs; }
+    }
+    __syncthreads();
+
+    if (tid == 0u) {
+        unsigned int g = first_row + row;
+        unsigned int target_id = targets[g];
+        float vt;
+        asm("cvt.f32.f16 %0, %1;" : "=f"(vt) : "h"(logits16[base + target_id]));
+        out[g] = m + logf(smem[0]) - vt;
     }
 }
 

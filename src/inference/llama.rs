@@ -463,6 +463,9 @@ impl LlamaModel {
 
     /// Embedded rows and the rotary table for `tokens`.
     fn embed_rows(&self, tokens: &[u32]) -> (Vec<f32>, RopeTable) {
+        type RopeCacheEntry = ((usize, usize, u32), RopeTable);
+        static ROPE_CACHE: std::sync::OnceLock<std::sync::Mutex<Option<RopeCacheEntry>>> =
+            std::sync::OnceLock::new();
         let d = self.config.hidden_size;
         let head_dim = d / self.config.num_heads;
         let mut x = vec![0.0f32; tokens.len() * d];
@@ -470,7 +473,26 @@ impl LlamaModel {
             let start = token as usize * d;
             row.copy_from_slice(&self.embed[start..start + d]);
         }
-        let rope = RopeTable::new(tokens.len(), head_dim, head_dim, self.config.rope_theta);
+        let key = (tokens.len(), head_dim, self.config.rope_theta.to_bits());
+        let cache = ROPE_CACHE.get_or_init(|| std::sync::Mutex::new(None));
+        let rope = if let Ok(mut guard) = cache.lock() {
+            if let Some((k, tbl)) = guard.as_ref() {
+                if *k == key {
+                    tbl.clone()
+                } else {
+                    let tbl =
+                        RopeTable::new(tokens.len(), head_dim, head_dim, self.config.rope_theta);
+                    *guard = Some((key, tbl.clone()));
+                    tbl
+                }
+            } else {
+                let tbl = RopeTable::new(tokens.len(), head_dim, head_dim, self.config.rope_theta);
+                *guard = Some((key, tbl.clone()));
+                tbl
+            }
+        } else {
+            RopeTable::new(tokens.len(), head_dim, head_dim, self.config.rope_theta)
+        };
         (x, rope)
     }
 
@@ -1035,6 +1057,7 @@ pub(crate) fn rms_norm(x: &[f32], weight: &[f32], eps: f32, out: &mut [f32]) {
 }
 
 /// Rotary position table in the Hugging Face `rotate_half` convention.
+#[derive(Clone)]
 pub(crate) struct RopeTable {
     cos: Vec<f32>,
     sin: Vec<f32>,

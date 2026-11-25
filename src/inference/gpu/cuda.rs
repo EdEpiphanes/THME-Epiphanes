@@ -21,8 +21,8 @@ use super::tensor::{QuantDtype, QuantizedTensor};
 
 /// Default weight bytes kept resident on CUDA before LRU eviction (10 GiB).
 const WEIGHT_CACHE_BUDGET: usize = 10 << 30;
-/// Maximum logits elements buffered per NLL chunk (64 MiB).
-const NLL_CHUNK_MAX_ELEMS: usize = 16 * 1024 * 1024;
+/// Maximum logits elements buffered per NLL chunk (64 MiB in FP16).
+const NLL_CHUNK_MAX_ELEMS: usize = 32 * 1024 * 1024;
 const BLOCK_256: u32 = 256;
 
 #[derive(Clone)]
@@ -77,7 +77,6 @@ struct CudaWorkspaceKey {
 struct CudaWorkspace {
     x_a: CudaSlice<f32>,
     x_b: CudaSlice<f32>,
-    normed: CudaSlice<f32>,
     x16: CudaSlice<u16>,
     q16: CudaSlice<u16>,
     k16: CudaSlice<u16>,
@@ -91,9 +90,9 @@ struct CudaWorkspace {
     tmp: CudaSlice<f32>,
     gate: CudaSlice<f32>,
     up: CudaSlice<f32>,
-    hidden: CudaSlice<f32>,
     last: CudaSlice<f32>,
     logits: CudaSlice<f32>,
+    logits16: CudaSlice<u16>,
     scores: CudaSlice<f32>,
     targets: CudaSlice<u32>,
     cos: CudaSlice<f32>,
@@ -109,11 +108,13 @@ pub struct CudaContext {
     blas: Mutex<CudaBlas>,
     fn_f32_to_f16: CudaFunction,
     fn_rms_norm: CudaFunction,
+    fn_rms_norm_f16: CudaFunction,
     fn_rope: CudaFunction,
     fn_softmax: CudaFunction,
-    fn_swiglu: CudaFunction,
+    fn_swiglu_f16: CudaFunction,
     fn_add: CudaFunction,
     fn_nll: CudaFunction,
+    fn_nll_f16: CudaFunction,
     device_name: String,
     weight_cache: Mutex<WeightCache>,
     workspace: Mutex<Option<(CudaWorkspaceKey, CudaWorkspace)>>,
@@ -224,11 +225,13 @@ impl CudaContext {
             blas: Mutex::new(blas),
             fn_f32_to_f16: load("f32_to_f16")?,
             fn_rms_norm: load("rms_norm")?,
+            fn_rms_norm_f16: load("rms_norm_f16")?,
             fn_rope: load("rope")?,
             fn_softmax: load("causal_softmax_f16")?,
-            fn_swiglu: load("swiglu")?,
+            fn_swiglu_f16: load("swiglu_f16")?,
             fn_add: load("add")?,
             fn_nll: load("nll")?,
+            fn_nll_f16: load("nll_f16")?,
             device_name: "NVIDIA CUDA (cuBLAS Tensor Cores)".to_string(),
             weight_cache: Mutex::new(WeightCache::default()),
             workspace: Mutex::new(None),
@@ -475,10 +478,12 @@ impl CudaContext {
         let attn_scores = alloc_f32(heads * t * t, "attn_scores")?;
         let attn_probs16 = alloc_u16(heads * t * t, "attn_probs16")?;
 
+        let logits16_len = if key.nll_mode { chunk_rows * vocab } else { 1 };
+        let logits16 = alloc_u16(logits16_len, "logits16")?;
+
         Ok(CudaWorkspace {
             x_a: alloc_f32(t * d, "x_a")?,
             x_b: alloc_f32(t * d, "x_b")?,
-            normed: alloc_f32(t * d, "normed")?,
             x16,
             q16,
             k16,
@@ -492,9 +497,9 @@ impl CudaContext {
             tmp: alloc_f32(t * d, "tmp")?,
             gate: alloc_f32(t * inter, "gate")?,
             up: alloc_f32(t * inter, "up")?,
-            hidden: alloc_f32(t * inter, "hidden")?,
             last: alloc_f32(d, "last")?,
             logits: alloc_f32(logits_len, "logits")?,
+            logits16,
             scores: alloc_f32(t, "scores")?,
             targets,
             cos: alloc_f32(t * half, "cos")?,
@@ -502,6 +507,39 @@ impl CudaContext {
             cos_hash: 0,
             sin_hash: 0,
         })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn launch_rms_norm_f16(
+        &self,
+        x: &CudaSlice<f32>,
+        w: &CudaSlice<f32>,
+        out16: &mut CudaSlice<u16>,
+        rows: usize,
+        d: usize,
+        eps: f32,
+        x_offset: usize,
+    ) -> Result<(), ThmeError> {
+        let d_u32 = d as u32;
+        let off_u32 = x_offset as u32;
+        let cfg = LaunchConfig {
+            grid_dim: (rows as u32, 1, 1),
+            block_dim: (BLOCK_256, 1, 1),
+            shared_mem_bytes: 0,
+        };
+        unsafe {
+            self.stream
+                .launch_builder(&self.fn_rms_norm_f16)
+                .arg(x)
+                .arg(w)
+                .arg(out16)
+                .arg(&d_u32)
+                .arg(&eps)
+                .arg(&off_u32)
+                .launch(cfg)
+        }
+        .map_err(|e| cuda_err("rms_norm_f16 launch", e))?;
+        Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -709,24 +747,106 @@ impl CudaContext {
         Ok(())
     }
 
-    fn launch_swiglu(
+    fn launch_swiglu_f16(
         &self,
         gate: &CudaSlice<f32>,
         up: &CudaSlice<f32>,
-        out: &mut CudaSlice<f32>,
+        out16: &mut CudaSlice<u16>,
         n: usize,
     ) -> Result<(), ThmeError> {
         let n_u32 = n as u32;
         unsafe {
             self.stream
-                .launch_builder(&self.fn_swiglu)
+                .launch_builder(&self.fn_swiglu_f16)
                 .arg(gate)
                 .arg(up)
-                .arg(out)
+                .arg(out16)
                 .arg(&n_u32)
                 .launch(grid_1d(n))
         }
-        .map_err(|e| cuda_err("swiglu launch", e))?;
+        .map_err(|e| cuda_err("swiglu_f16 launch", e))?;
+        Ok(())
+    }
+
+    fn launch_nll_f16(
+        &self,
+        logits16: &CudaSlice<u16>,
+        targets: &CudaSlice<u32>,
+        out: &mut CudaSlice<f32>,
+        rows: usize,
+        vocab: usize,
+        first_row: usize,
+    ) -> Result<(), ThmeError> {
+        let vocab_u32 = vocab as u32;
+        let first_u32 = first_row as u32;
+        let cfg = LaunchConfig {
+            grid_dim: (rows as u32, 1, 1),
+            block_dim: (BLOCK_256, 1, 1),
+            shared_mem_bytes: 0,
+        };
+        unsafe {
+            self.stream
+                .launch_builder(&self.fn_nll_f16)
+                .arg(logits16)
+                .arg(targets)
+                .arg(out)
+                .arg(&vocab_u32)
+                .arg(&first_u32)
+                .launch(cfg)
+        }
+        .map_err(|e| cuda_err("nll_f16 launch", e))?;
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn gemm_f16_to_f16(
+        &self,
+        x16: &CudaSlice<u16>,
+        x_row_offset: usize,
+        w16: &CudaSlice<u16>,
+        out16: &mut CudaSlice<u16>,
+        rows: usize,
+        in_dim: usize,
+        out_dim: usize,
+    ) -> Result<(), ThmeError> {
+        let blas = self
+            .blas
+            .lock()
+            .map_err(|_| ThmeError::ExecutionFailed("cuBLAS lock poisoned".into()))?;
+        let (w_ptr, _w_guard) = w16.device_ptr(&self.stream);
+        let (x_ptr, _x_guard) = x16.device_ptr(&self.stream);
+        let (y_ptr, _y_guard) = out16.device_ptr_mut(&self.stream);
+        let x_off_bytes = (x_row_offset * in_dim * 2) as u64;
+        let alpha: f32 = 1.0;
+        let beta: f32 = 0.0;
+        let status = unsafe {
+            cublas_sys::cublasGemmEx(
+                *blas.handle(),
+                cublas_sys::cublasOperation_t::CUBLAS_OP_T,
+                cublas_sys::cublasOperation_t::CUBLAS_OP_N,
+                out_dim as i32,
+                rows as i32,
+                in_dim as i32,
+                (&alpha as *const f32).cast::<c_void>(),
+                w_ptr as *const c_void,
+                cublas_sys::cudaDataType_t::CUDA_R_16F,
+                in_dim as i32,
+                (x_ptr + x_off_bytes) as *const c_void,
+                cublas_sys::cudaDataType_t::CUDA_R_16F,
+                in_dim as i32,
+                (&beta as *const f32).cast::<c_void>(),
+                y_ptr as *mut c_void,
+                cublas_sys::cudaDataType_t::CUDA_R_16F,
+                out_dim as i32,
+                cublas_sys::cublasComputeType_t::CUBLAS_COMPUTE_32F,
+                cublas_sys::cublasGemmAlgo_t::CUBLAS_GEMM_DEFAULT_TENSOR_OP,
+            )
+        };
+        if status != cublas_sys::cublasStatus_t::CUBLAS_STATUS_SUCCESS {
+            return Err(ThmeError::ExecutionFailed(format!(
+                "cublasGemmEx f16 out failed: {status:?}"
+            )));
+        }
         Ok(())
     }
 
@@ -980,7 +1100,7 @@ impl GpuBackend for CudaContext {
                 .map_err(|_| ThmeError::ExecutionFailed("CUDA workspace lock poisoned".into()))?;
             match guard.take() {
                 Some((k, w))
-                    if k == key && (!nll_mode || w.logits.len() >= chunk_rows * plan.vocab) =>
+                    if k == key && (!nll_mode || w.logits16.len() >= chunk_rows * plan.vocab) =>
                 {
                     w
                 }
@@ -1022,8 +1142,7 @@ impl GpuBackend for CudaContext {
         let scale = 1.0 / (hd as f32).sqrt();
 
         for (attn_norm, mlp_norm, [wq, wk, wv, wo, wg, wu, wd]) in &resident {
-            self.launch_rms_norm(&ws.x_a, attn_norm, &mut ws.normed, t, d, plan.eps, 0)?;
-            self.convert_x_to_f16(ws.normed.slice(..td), &mut ws.x16, td)?;
+            self.launch_rms_norm_f16(&ws.x_a, attn_norm, &mut ws.x16, t, d, plan.eps, 0)?;
             self.gemm_f16_preconverted(&ws.x16, wq, &mut ws.q, t, d, d)?;
             self.gemm_f16_preconverted(&ws.x16, wk, &mut ws.k, t, d, kv_dim)?;
             self.gemm_f16_preconverted(&ws.x16, wv, &mut ws.v, t, d, kv_dim)?;
@@ -1035,32 +1154,22 @@ impl GpuBackend for CudaContext {
             self.linear_into(&ws.mixed, 0, &mut ws.x16, wo, &mut ws.tmp, t, d, d)?;
             self.launch_add(&ws.x_a, &ws.tmp, &mut ws.x_b, td)?;
 
-            self.launch_rms_norm(&ws.x_b, mlp_norm, &mut ws.normed, t, d, plan.eps, 0)?;
-            self.convert_x_to_f16(ws.normed.slice(..td), &mut ws.x16, td)?;
+            self.launch_rms_norm_f16(&ws.x_b, mlp_norm, &mut ws.x16, t, d, plan.eps, 0)?;
             self.gemm_f16_preconverted(&ws.x16, wg, &mut ws.gate, t, d, inter)?;
             self.gemm_f16_preconverted(&ws.x16, wu, &mut ws.up, t, d, inter)?;
-            self.launch_swiglu(&ws.gate, &ws.up, &mut ws.hidden, tint)?;
-            self.linear_into(&ws.hidden, 0, &mut ws.x16, wd, &mut ws.tmp, t, inter, d)?;
+            self.launch_swiglu_f16(&ws.gate, &ws.up, &mut ws.x16, tint)?;
+            self.gemm_f16_preconverted(&ws.x16, wd, &mut ws.tmp, t, inter, d)?;
             self.launch_add(&ws.x_b, &ws.tmp, &mut ws.x_a, td)?;
         }
 
         let mut out = if nll_mode {
-            self.launch_rms_norm(&ws.x_a, &final_norm, &mut ws.normed, t, d, plan.eps, 0)?;
+            self.launch_rms_norm_f16(&ws.x_a, &final_norm, &mut ws.x16, scored, d, plan.eps, 0)?;
             let mut first = 0;
             while first < scored {
                 let rows = chunk_rows.min(scored - first);
-                self.linear_into(
-                    &ws.normed,
-                    first,
-                    &mut ws.x16,
-                    &head,
-                    &mut ws.logits,
-                    rows,
-                    d,
-                    plan.vocab,
-                )?;
-                self.launch_nll(
-                    &ws.logits,
+                self.gemm_f16_to_f16(&ws.x16, first, &head, &mut ws.logits16, rows, d, plan.vocab)?;
+                self.launch_nll_f16(
+                    &ws.logits16,
                     &ws.targets,
                     &mut ws.scores,
                     rows,
