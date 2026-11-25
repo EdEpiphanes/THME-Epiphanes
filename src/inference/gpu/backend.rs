@@ -40,7 +40,7 @@ impl DeviceArg {
         match self {
             Self::Cpu => None,
             Self::Gpu => {
-                #[cfg(feature = "cuda")]
+                #[cfg(any(target_os = "windows", target_os = "linux"))]
                 if std::env::var("THME_GPU_BACKEND").ok().as_deref() != Some("wgpu") {
                     if let Ok(ctx) = super::cuda::CudaContext::init() {
                         return Some(Arc::new(ctx));
@@ -55,7 +55,7 @@ impl DeviceArg {
                 }
             }
             Self::Auto => {
-                #[cfg(feature = "cuda")]
+                #[cfg(any(target_os = "windows", target_os = "linux"))]
                 if std::env::var("THME_GPU_BACKEND").ok().as_deref() != Some("wgpu") {
                     if let Ok(ctx) = super::cuda::CudaContext::init() {
                         return Some(Arc::new(ctx));

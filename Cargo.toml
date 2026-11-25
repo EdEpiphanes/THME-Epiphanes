@@ -78,7 +78,7 @@ test = true
 
 [features]
 default = []
-cuda = ["dep:cudarc"]
+cuda = []
 
 [dependencies]
 clap = { workspace = true }
@@ -111,7 +111,9 @@ sysinfo = "0.40"
 tokenizers = { version = "0.22", default-features = false, features = ["fancy-regex"] }
 minijinja = { version = "3.1", features = ["json", "loop_controls", "serde"] }
 minijinja-contrib = { version = "3.1", features = ["pycompat"] }
-cudarc = { version = "0.19", optional = true, default-features = false, features = ["driver", "cublas", "nvrtc", "dynamic-loading", "fallback-latest", "cuda-12090"] }
+
+[target.'cfg(any(target_os = "windows", target_os = "linux"))'.dependencies]
+cudarc = { version = "0.19", default-features = false, features = ["driver", "cublas", "nvrtc", "dynamic-loading", "fallback-latest", "cuda-12090"] }
 
 [dev-dependencies]
 tempfile = "3.17"
