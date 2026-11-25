@@ -12,7 +12,7 @@ use cudarc::driver::{
     CudaContext as DriverContext, CudaFunction, CudaSlice, CudaStream, CudaView, DevicePtr,
     DevicePtrMut, LaunchConfig, PushKernelArg,
 };
-use cudarc::nvrtc::compile_ptx;
+use cudarc::nvrtc::Ptx;
 
 use super::backend::{check_finite, GpuBackend};
 use super::decoder::DecoderPlan;
@@ -105,7 +105,7 @@ struct CudaWorkspace {
 pub struct CudaContext {
     _ctx: Arc<DriverContext>,
     stream: Arc<CudaStream>,
-    blas: Mutex<CudaBlas>,
+    blas: Option<Mutex<CudaBlas>>,
     fn_f32_to_f16: CudaFunction,
     fn_rms_norm: CudaFunction,
     fn_rms_norm_f16: CudaFunction,
@@ -115,6 +115,8 @@ pub struct CudaContext {
     fn_add: CudaFunction,
     fn_nll: CudaFunction,
     fn_nll_f16: CudaFunction,
+    fn_gemm_f16_tiled: CudaFunction,
+    fn_attn_f32: CudaFunction,
     device_name: String,
     weight_cache: Mutex<WeightCache>,
     workspace: Mutex<Option<(CudaWorkspaceKey, CudaWorkspace)>>,
@@ -189,24 +191,26 @@ fn grid_1d(n: usize) -> LaunchConfig {
 }
 
 impl CudaContext {
-    /// Initializes CUDA on device 0, creates a cuBLAS handle, and compiles the decoder kernels.
+    /// Initializes CUDA on device 0, optionally loads cuBLAS, and loads the embedded decoder PTX.
     pub fn init() -> Result<Self, ThmeError> {
+        if !unsafe { cudarc::driver::sys::is_culib_present() } {
+            return Err(ThmeError::GpuInitFailed(
+                "CUDA driver library not found".into(),
+            ));
+        }
         let ctx = DriverContext::new(0)
             .map_err(|e| ThmeError::GpuInitFailed(format!("CUDA device 0 init failed: {e:?}")))?;
         let stream = ctx.default_stream();
-        let blas = CudaBlas::new(stream.clone())
-            .map_err(|e| ThmeError::GpuInitFailed(format!("cuBLAS init failed: {e:?}")))?;
-
-        let ptx = compile_ptx(include_str!("kernels/decoder.cu")).map_err(|e| {
-            ThmeError::ShaderCompilationFailed {
-                shader_name: "decoder.cu".into(),
-                error: format!("{e:?}"),
-            }
-        })?;
+        let blas = if unsafe { cublas_sys::is_culib_present() } {
+            CudaBlas::new(stream.clone()).ok().map(Mutex::new)
+        } else {
+            None
+        };
+        let ptx = Ptx::from_src(include_str!("kernels/decoder.ptx"));
         let module = ctx
             .load_module(ptx)
             .map_err(|e| ThmeError::ShaderCompilationFailed {
-                shader_name: "decoder.cu".into(),
+                shader_name: "decoder.ptx".into(),
                 error: format!("{e:?}"),
             })?;
 
@@ -219,10 +223,16 @@ impl CudaContext {
                 })
         };
 
+        let device_name = if blas.is_some() {
+            "NVIDIA CUDA (cuBLAS Tensor Cores, Embedded PTX)".to_string()
+        } else {
+            "NVIDIA CUDA (Pure Embedded PTX, Zero External DLLs)".to_string()
+        };
+
         Ok(Self {
             _ctx: ctx,
             stream,
-            blas: Mutex::new(blas),
+            blas,
             fn_f32_to_f16: load("f32_to_f16")?,
             fn_rms_norm: load("rms_norm")?,
             fn_rms_norm_f16: load("rms_norm_f16")?,
@@ -232,7 +242,9 @@ impl CudaContext {
             fn_add: load("add")?,
             fn_nll: load("nll")?,
             fn_nll_f16: load("nll_f16")?,
-            device_name: "NVIDIA CUDA (cuBLAS Tensor Cores)".to_string(),
+            fn_gemm_f16_tiled: load("gemm_f16_tiled")?,
+            fn_attn_f32: load("causal_attention_f32")?,
+            device_name,
             weight_cache: Mutex::new(WeightCache::default()),
             workspace: Mutex::new(None),
             scratch_x16: Mutex::new(None),
@@ -363,44 +375,72 @@ impl CudaContext {
         in_dim: usize,
         out_dim: usize,
     ) -> Result<(), ThmeError> {
-        let blas = self
-            .blas
-            .lock()
-            .map_err(|_| ThmeError::ExecutionFailed("cuBLAS lock poisoned".into()))?;
-        let (w_ptr, _w_guard) = w16.device_ptr(&self.stream);
-        let (x_ptr, _x_guard) = x16.device_ptr(&self.stream);
-        let (y_ptr, _y_guard) = out.device_ptr_mut(&self.stream);
+        if let Some(blas_mutex) = &self.blas {
+            let blas = blas_mutex
+                .lock()
+                .map_err(|_| ThmeError::ExecutionFailed("cuBLAS lock poisoned".into()))?;
+            let (w_ptr, _w_guard) = w16.device_ptr(&self.stream);
+            let (x_ptr, _x_guard) = x16.device_ptr(&self.stream);
+            let (y_ptr, _y_guard) = out.device_ptr_mut(&self.stream);
 
-        let alpha: f32 = 1.0;
-        let beta: f32 = 0.0;
-        let status = unsafe {
-            cublas_sys::cublasGemmEx(
-                *blas.handle(),
-                cublas_sys::cublasOperation_t::CUBLAS_OP_T,
-                cublas_sys::cublasOperation_t::CUBLAS_OP_N,
-                out_dim as i32,
-                rows as i32,
-                in_dim as i32,
-                (&alpha as *const f32).cast::<c_void>(),
-                w_ptr as *const c_void,
-                cublas_sys::cudaDataType_t::CUDA_R_16F,
-                in_dim as i32,
-                x_ptr as *const c_void,
-                cublas_sys::cudaDataType_t::CUDA_R_16F,
-                in_dim as i32,
-                (&beta as *const f32).cast::<c_void>(),
-                y_ptr as *mut c_void,
-                cublas_sys::cudaDataType_t::CUDA_R_32F,
-                out_dim as i32,
-                cublas_sys::cublasComputeType_t::CUBLAS_COMPUTE_32F,
-                cublas_sys::cublasGemmAlgo_t::CUBLAS_GEMM_DEFAULT_TENSOR_OP,
-            )
-        };
-        if status != cublas_sys::cublasStatus_t::CUBLAS_STATUS_SUCCESS {
-            return Err(ThmeError::ExecutionFailed(format!(
-                "cublasGemmEx failed with status {status:?}"
-            )));
+            let alpha: f32 = 1.0;
+            let beta: f32 = 0.0;
+            let status = unsafe {
+                cublas_sys::cublasGemmEx(
+                    *blas.handle(),
+                    cublas_sys::cublasOperation_t::CUBLAS_OP_T,
+                    cublas_sys::cublasOperation_t::CUBLAS_OP_N,
+                    out_dim as i32,
+                    rows as i32,
+                    in_dim as i32,
+                    (&alpha as *const f32).cast::<c_void>(),
+                    w_ptr as *const c_void,
+                    cublas_sys::cudaDataType_t::CUDA_R_16F,
+                    in_dim as i32,
+                    x_ptr as *const c_void,
+                    cublas_sys::cudaDataType_t::CUDA_R_16F,
+                    in_dim as i32,
+                    (&beta as *const f32).cast::<c_void>(),
+                    y_ptr as *mut c_void,
+                    cublas_sys::cudaDataType_t::CUDA_R_32F,
+                    out_dim as i32,
+                    cublas_sys::cublasComputeType_t::CUBLAS_COMPUTE_32F,
+                    cublas_sys::cublasGemmAlgo_t::CUBLAS_GEMM_DEFAULT_TENSOR_OP,
+                )
+            };
+            if status != cublas_sys::cublasStatus_t::CUBLAS_STATUS_SUCCESS {
+                return Err(ThmeError::ExecutionFailed(format!(
+                    "cublasGemmEx failed with status {status:?}"
+                )));
+            }
+            return Ok(());
         }
+
+        let rows_u32 = rows as u32;
+        let in_u32 = in_dim as u32;
+        let out_u32 = out_dim as u32;
+        let zero = 0u32;
+        let dummy_f16 = w16.slice(0..1);
+        let cfg = LaunchConfig {
+            grid_dim: (out_u32.div_ceil(16), rows_u32.div_ceil(16), 1),
+            block_dim: (16, 16, 1),
+            shared_mem_bytes: 0,
+        };
+        unsafe {
+            self.stream
+                .launch_builder(&self.fn_gemm_f16_tiled)
+                .arg(x16)
+                .arg(w16)
+                .arg(out)
+                .arg(&dummy_f16)
+                .arg(&rows_u32)
+                .arg(&in_u32)
+                .arg(&out_u32)
+                .arg(&zero)
+                .arg(&zero)
+                .launch(cfg)
+        }
+        .map_err(|e| cuda_err("gemm_f16_tiled launch", e))?;
         Ok(())
     }
 
@@ -617,6 +657,34 @@ impl CudaContext {
         head_dim: usize,
         scale: f32,
     ) -> Result<(), ThmeError> {
+        let Some(blas_mutex) = &self.blas else {
+            let t_u32 = t_len as u32;
+            let heads_u32 = heads as u32;
+            let kv_heads_u32 = kv_heads as u32;
+            let hd_u32 = head_dim as u32;
+            let cfg = LaunchConfig {
+                grid_dim: (heads_u32, t_u32.div_ceil(8), 1),
+                block_dim: (32, 8, 1),
+                shared_mem_bytes: 0,
+            };
+            unsafe {
+                self.stream
+                    .launch_builder(&self.fn_attn_f32)
+                    .arg(&ws.q)
+                    .arg(&ws.k)
+                    .arg(&ws.v)
+                    .arg(&mut ws.mixed)
+                    .arg(&t_u32)
+                    .arg(&heads_u32)
+                    .arg(&kv_heads_u32)
+                    .arg(&hd_u32)
+                    .arg(&scale)
+                    .launch(cfg)
+            }
+            .map_err(|e| cuda_err("causal_attention_f32 launch", e))?;
+            return Ok(());
+        };
+
         let d = heads * head_dim;
         let kv_dim = kv_heads * head_dim;
         self.convert_x_to_f16(ws.q.slice(..t_len * d), &mut ws.q16, t_len * d)?;
@@ -633,8 +701,7 @@ impl CudaContext {
         let tt = (t_len * t_len) as i64;
 
         {
-            let blas = self
-                .blas
+            let blas = blas_mutex
                 .lock()
                 .map_err(|_| ThmeError::ExecutionFailed("cuBLAS lock poisoned".into()))?;
             let (q_ptr, _qg) = ws.q16.device_ptr(&self.stream);
@@ -699,8 +766,7 @@ impl CudaContext {
         .map_err(|e| cuda_err("causal_softmax_f16 launch", e))?;
 
         {
-            let blas = self
-                .blas
+            let blas = blas_mutex
                 .lock()
                 .map_err(|_| ThmeError::ExecutionFailed("cuBLAS lock poisoned".into()))?;
             let (p_ptr, _pg) = ws.attn_probs16.device_ptr(&self.stream);
@@ -809,44 +875,80 @@ impl CudaContext {
         in_dim: usize,
         out_dim: usize,
     ) -> Result<(), ThmeError> {
-        let blas = self
-            .blas
-            .lock()
-            .map_err(|_| ThmeError::ExecutionFailed("cuBLAS lock poisoned".into()))?;
-        let (w_ptr, _w_guard) = w16.device_ptr(&self.stream);
-        let (x_ptr, _x_guard) = x16.device_ptr(&self.stream);
-        let (y_ptr, _y_guard) = out16.device_ptr_mut(&self.stream);
-        let x_off_bytes = (x_row_offset * in_dim * 2) as u64;
-        let alpha: f32 = 1.0;
-        let beta: f32 = 0.0;
-        let status = unsafe {
-            cublas_sys::cublasGemmEx(
-                *blas.handle(),
-                cublas_sys::cublasOperation_t::CUBLAS_OP_T,
-                cublas_sys::cublasOperation_t::CUBLAS_OP_N,
-                out_dim as i32,
-                rows as i32,
-                in_dim as i32,
-                (&alpha as *const f32).cast::<c_void>(),
-                w_ptr as *const c_void,
-                cublas_sys::cudaDataType_t::CUDA_R_16F,
-                in_dim as i32,
-                (x_ptr + x_off_bytes) as *const c_void,
-                cublas_sys::cudaDataType_t::CUDA_R_16F,
-                in_dim as i32,
-                (&beta as *const f32).cast::<c_void>(),
-                y_ptr as *mut c_void,
-                cublas_sys::cudaDataType_t::CUDA_R_16F,
-                out_dim as i32,
-                cublas_sys::cublasComputeType_t::CUBLAS_COMPUTE_32F,
-                cublas_sys::cublasGemmAlgo_t::CUBLAS_GEMM_DEFAULT_TENSOR_OP,
-            )
-        };
-        if status != cublas_sys::cublasStatus_t::CUBLAS_STATUS_SUCCESS {
-            return Err(ThmeError::ExecutionFailed(format!(
-                "cublasGemmEx f16 out failed: {status:?}"
-            )));
+        if let Some(blas_mutex) = &self.blas {
+            let blas = blas_mutex
+                .lock()
+                .map_err(|_| ThmeError::ExecutionFailed("cuBLAS lock poisoned".into()))?;
+            let (w_ptr, _w_guard) = w16.device_ptr(&self.stream);
+            let (x_ptr, _x_guard) = x16.device_ptr(&self.stream);
+            let (y_ptr, _y_guard) = out16.device_ptr_mut(&self.stream);
+            let x_off_bytes = (x_row_offset * in_dim * 2) as u64;
+            let alpha: f32 = 1.0;
+            let beta: f32 = 0.0;
+            let status = unsafe {
+                cublas_sys::cublasGemmEx(
+                    *blas.handle(),
+                    cublas_sys::cublasOperation_t::CUBLAS_OP_T,
+                    cublas_sys::cublasOperation_t::CUBLAS_OP_N,
+                    out_dim as i32,
+                    rows as i32,
+                    in_dim as i32,
+                    (&alpha as *const f32).cast::<c_void>(),
+                    w_ptr as *const c_void,
+                    cublas_sys::cudaDataType_t::CUDA_R_16F,
+                    in_dim as i32,
+                    (x_ptr + x_off_bytes) as *const c_void,
+                    cublas_sys::cudaDataType_t::CUDA_R_16F,
+                    in_dim as i32,
+                    (&beta as *const f32).cast::<c_void>(),
+                    y_ptr as *mut c_void,
+                    cublas_sys::cudaDataType_t::CUDA_R_16F,
+                    out_dim as i32,
+                    cublas_sys::cublasComputeType_t::CUBLAS_COMPUTE_32F,
+                    cublas_sys::cublasGemmAlgo_t::CUBLAS_GEMM_DEFAULT_TENSOR_OP,
+                )
+            };
+            if status != cublas_sys::cublasStatus_t::CUBLAS_STATUS_SUCCESS {
+                return Err(ThmeError::ExecutionFailed(format!(
+                    "cublasGemmEx f16 out failed: {status:?}"
+                )));
+            }
+            return Ok(());
         }
+
+        let rows_u32 = rows as u32;
+        let in_u32 = in_dim as u32;
+        let out_u32 = out_dim as u32;
+        let off_u32 = x_row_offset as u32;
+        let one = 1u32;
+        let mut dummy_f32 =
+            self.stream
+                .alloc_zeros::<f32>(1)
+                .map_err(|e| ThmeError::BufferAllocationFailed {
+                    name: "dummy_f32".into(),
+                    bytes: 4,
+                    reason: format!("{e:?}"),
+                })?;
+        let cfg = LaunchConfig {
+            grid_dim: (out_u32.div_ceil(16), rows_u32.div_ceil(16), 1),
+            block_dim: (16, 16, 1),
+            shared_mem_bytes: 0,
+        };
+        unsafe {
+            self.stream
+                .launch_builder(&self.fn_gemm_f16_tiled)
+                .arg(x16)
+                .arg(w16)
+                .arg(&mut dummy_f32)
+                .arg(out16)
+                .arg(&rows_u32)
+                .arg(&in_u32)
+                .arg(&out_u32)
+                .arg(&off_u32)
+                .arg(&one)
+                .launch(cfg)
+        }
+        .map_err(|e| cuda_err("gemm_f16_tiled f16 out launch", e))?;
         Ok(())
     }
 

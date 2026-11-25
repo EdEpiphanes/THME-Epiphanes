@@ -267,6 +267,116 @@ extern "C" __global__ void nll_f16(
     }
 }
 
+extern "C" __global__ void gemm_f16_tiled(
+    const unsigned short* x16,
+    const unsigned short* w16,
+    float* out_f32,
+    unsigned short* out_f16,
+    unsigned int rows,
+    unsigned int in_dim,
+    unsigned int out_dim,
+    unsigned int x_row_off,
+    unsigned int write_f16
+) {
+    __shared__ float xs[16][16];
+    __shared__ float ws[16][16];
+    unsigned int row = blockIdx.y * 16u + threadIdx.y;
+    unsigned int col = blockIdx.x * 16u + threadIdx.x;
+    float acc = 0.0f;
+
+    for (unsigned int k0 = 0u; k0 < in_dim; k0 += 16u) {
+        unsigned int xk = k0 + threadIdx.x;
+        unsigned int wk = k0 + threadIdx.y;
+        float xv = 0.0f;
+        float wv = 0.0f;
+        if (row < rows && xk < in_dim) {
+            asm("cvt.f32.f16 %0, %1;" : "=f"(xv) : "h"(x16[(x_row_off + row) * in_dim + xk]));
+        }
+        if (col < out_dim && wk < in_dim) {
+            asm("cvt.f32.f16 %0, %1;" : "=f"(wv) : "h"(w16[col * in_dim + wk]));
+        }
+        xs[threadIdx.y][threadIdx.x] = xv;
+        ws[threadIdx.y][threadIdx.x] = wv;
+        __syncthreads();
+        for (unsigned int k = 0u; k < 16u; ++k) {
+            acc += xs[threadIdx.y][k] * ws[k][threadIdx.x];
+        }
+        __syncthreads();
+    }
+
+    if (row < rows && col < out_dim) {
+        unsigned int idx = row * out_dim + col;
+        if (write_f16 != 0u) {
+            unsigned short h;
+            asm("cvt.rn.f16.f32 %0, %1;" : "=h"(h) : "f"(acc));
+            out_f16[idx] = h;
+        } else {
+            out_f32[idx] = acc;
+        }
+    }
+}
+
+extern "C" __global__ void causal_attention_f32(
+    const float* q,
+    const float* k,
+    const float* v,
+    float* out,
+    unsigned int t_len,
+    unsigned int heads,
+    unsigned int kv_heads,
+    unsigned int head_dim,
+    float scale
+) {
+    unsigned int h = blockIdx.x;
+    unsigned int t = blockIdx.y * blockDim.y + threadIdx.y;
+    unsigned int lane = threadIdx.x;
+    if (h >= heads || t >= t_len) { return; }
+
+    unsigned int d = heads * head_dim;
+    unsigned int kv_dim = kv_heads * head_dim;
+    unsigned int kv_off = (h / (heads / kv_heads)) * head_dim;
+    unsigned int q_base = t * d + h * head_dim;
+    unsigned int elems = (head_dim + 31u) >> 5;
+
+    float qr[8];
+    float acc[8];
+    for (unsigned int i = 0; i < elems; ++i) {
+        unsigned int idx = lane + i * 32u;
+        qr[i] = (idx < head_dim) ? q[q_base + idx] : 0.0f;
+        acc[i] = 0.0f;
+    }
+
+    float m = -3.402823466e+38f;
+    float l = 0.0f;
+    for (unsigned int s = 0; s <= t; ++s) {
+        unsigned int k_base = s * kv_dim + kv_off;
+        float dot = 0.0f;
+        for (unsigned int i = 0; i < elems; ++i) {
+            unsigned int idx = lane + i * 32u;
+            if (idx < head_dim) { dot += qr[i] * k[k_base + idx]; }
+        }
+        for (int off = 16; off > 0; off >>= 1) {
+            dot += __shfl_xor_sync(0xffffffffu, dot, off);
+        }
+        float sc = dot * scale;
+        float m_new = fmaxf(m, sc);
+        float alpha = (s == 0u) ? 0.0f : expf(m - m_new);
+        float beta = expf(sc - m_new);
+        l = l * alpha + beta;
+        m = m_new;
+        for (unsigned int i = 0; i < elems; ++i) {
+            unsigned int idx = lane + i * 32u;
+            if (idx < head_dim) { acc[i] = acc[i] * alpha + beta * v[k_base + idx]; }
+        }
+    }
+
+    float inv_l = 1.0f / l;
+    for (unsigned int i = 0; i < elems; ++i) {
+        unsigned int idx = lane + i * 32u;
+        if (idx < head_dim) { out[q_base + idx] = acc[i] * inv_l; }
+    }
+}
+
 extern "C" __global__ void nll(
     const float* logits,
     const unsigned int* targets,
