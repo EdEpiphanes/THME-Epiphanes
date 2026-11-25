@@ -1687,6 +1687,11 @@ impl GpuBackend for GpuContext {
     fn enable_coop_if_ready(&self) {
         if self.coop_matrix_ready() && std::env::var("THME_GPU_COOP").ok().as_deref() != Some("0") {
             self.set_coop_matrix(true);
+            if self.coop_f16_default.load(Ordering::Relaxed)
+                && std::env::var("THME_GPU_STORAGE").ok().as_deref() != Some("f32")
+            {
+                self.set_weight_storage(WeightStorage::F16);
+            }
         }
     }
 
