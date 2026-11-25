@@ -600,11 +600,10 @@ pub fn evaluate(args: &EvaluateArgs) -> Result<Value> {
             "arch": std::env::consts::ARCH,
             "logical_cpus": std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1),
             "device": device,
-            "backend": if gpu.is_some() {
-                "THME reference forward pass on the GPU (wgpu, f32 weights and activations)"
-            } else {
-                "THME reference CPU forward pass (f32, multithreaded)"
-            },
+            "backend": gpu.as_ref().map_or_else(
+                || "THME reference CPU forward pass (f32, multithreaded)".to_string(),
+                |g| g.backend_description(),
+            ),
         },
     });
     write_report(&args.report, &report)?;

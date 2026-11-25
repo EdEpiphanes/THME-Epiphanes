@@ -21,9 +21,11 @@ use super::tensor::{QuantDtype, QuantizedTensor};
 
 /// Default weight bytes kept resident on CUDA before LRU eviction (10 GiB).
 const WEIGHT_CACHE_BUDGET: usize = 10 << 30;
-/// Maximum logits elements buffered per NLL chunk (64 MiB in FP16).
-const NLL_CHUNK_MAX_ELEMS: usize = 32 * 1024 * 1024;
+/// Maximum logits elements buffered per NLL chunk (128 MiB in FP16).
+const NLL_CHUNK_MAX_ELEMS: usize = 64 * 1024 * 1024;
 const BLOCK_256: u32 = 256;
+/// Persistent cuBLAS workspace size (32 MiB) to avoid per-call allocations and unlock Ada Tensor Core algos.
+const CUBLAS_WORKSPACE_BYTES: usize = 32 << 20;
 
 #[derive(Clone)]
 enum CachedBuffer {
@@ -106,6 +108,7 @@ pub struct CudaContext {
     _ctx: Arc<DriverContext>,
     stream: Arc<CudaStream>,
     blas: Option<Mutex<CudaBlas>>,
+    _blas_workspace: Option<CudaSlice<u8>>,
     fn_f32_to_f16: CudaFunction,
     fn_rms_norm: CudaFunction,
     fn_rms_norm_f16: CudaFunction,
@@ -181,6 +184,29 @@ fn f32_to_f16_bits(val: f32) -> u16 {
     sign | (rounded + (round_bit & (sticky as u32 | lsb as u32)) as u16)
 }
 
+fn convert_f32_slice_to_f16(w: &[f32]) -> Vec<u16> {
+    const PARALLEL_THRESHOLD: usize = 65_536;
+    if w.len() < PARALLEL_THRESHOLD {
+        return w.iter().copied().map(f32_to_f16_bits).collect();
+    }
+    let threads = std::thread::available_parallelism().map_or(1, |n| n.get());
+    if threads <= 1 {
+        return w.iter().copied().map(f32_to_f16_bits).collect();
+    }
+    let chunk_size = w.len().div_ceil(threads).max(1);
+    let mut out = vec![0u16; w.len()];
+    std::thread::scope(|scope| {
+        for (src, dst) in w.chunks(chunk_size).zip(out.chunks_mut(chunk_size)) {
+            scope.spawn(move || {
+                for (s, d) in src.iter().zip(dst.iter_mut()) {
+                    *d = f32_to_f16_bits(*s);
+                }
+            });
+        }
+    });
+    out
+}
+
 fn grid_1d(n: usize) -> LaunchConfig {
     let blocks = n.div_ceil(BLOCK_256 as usize).max(1) as u32;
     LaunchConfig {
@@ -201,10 +227,35 @@ impl CudaContext {
         let ctx = DriverContext::new(0)
             .map_err(|e| ThmeError::GpuInitFailed(format!("CUDA device 0 init failed: {e:?}")))?;
         let stream = ctx.default_stream();
-        let blas = if unsafe { cublas_sys::is_culib_present() } {
-            CudaBlas::new(stream.clone()).ok().map(Mutex::new)
+        let (blas, _blas_workspace) = if unsafe { cublas_sys::is_culib_present() } {
+            match CudaBlas::new(stream.clone()) {
+                Ok(blas) => {
+                    let ws = match stream.alloc_zeros::<u8>(CUBLAS_WORKSPACE_BYTES) {
+                        Ok(mut buf) => {
+                            let status = {
+                                let (ptr, _guard) = buf.device_ptr_mut(&stream);
+                                unsafe {
+                                    cublas_sys::cublasSetWorkspace_v2(
+                                        *blas.handle(),
+                                        ptr as *mut c_void,
+                                        CUBLAS_WORKSPACE_BYTES,
+                                    )
+                                }
+                            };
+                            if status == cublas_sys::cublasStatus_t::CUBLAS_STATUS_SUCCESS {
+                                Some(buf)
+                            } else {
+                                None
+                            }
+                        }
+                        Err(_) => None,
+                    };
+                    (Some(Mutex::new(blas)), ws)
+                }
+                Err(_) => (None, None),
+            }
         } else {
-            None
+            (None, None)
         };
         let ptx = Ptx::from_src(include_str!("kernels/decoder.ptx"));
         let module = ctx
@@ -233,6 +284,7 @@ impl CudaContext {
             _ctx: ctx,
             stream,
             blas,
+            _blas_workspace,
             fn_f32_to_f16: load("f32_to_f16")?,
             fn_rms_norm: load("rms_norm")?,
             fn_rms_norm_f16: load("rms_norm_f16")?,
@@ -271,7 +323,7 @@ impl CudaContext {
             }
         }
 
-        let f16_data: Vec<u16> = w.iter().copied().map(f32_to_f16_bits).collect();
+        let f16_data = convert_f32_slice_to_f16(w);
         let buf = Arc::new(self.stream.clone_htod(&f16_data).map_err(|e| {
             ThmeError::DataTransferFailed(format!("CUDA f16 weight upload: {e:?}"))
         })?);
@@ -689,7 +741,6 @@ impl CudaContext {
         let kv_dim = kv_heads * head_dim;
         self.convert_x_to_f16(ws.q.slice(..t_len * d), &mut ws.q16, t_len * d)?;
         self.convert_x_to_f16(ws.k.slice(..t_len * kv_dim), &mut ws.k16, t_len * kv_dim)?;
-        self.convert_x_to_f16(ws.v.slice(..t_len * kv_dim), &mut ws.v16, t_len * kv_dim)?;
 
         let group = heads / kv_heads;
         let alpha: f32 = 1.0;
@@ -771,11 +822,11 @@ impl CudaContext {
                 .map_err(|_| ThmeError::ExecutionFailed("cuBLAS lock poisoned".into()))?;
             let (p_ptr, _pg) = ws.attn_probs16.device_ptr(&self.stream);
             let (v_ptr, _vg) = ws.v16.device_ptr(&self.stream);
-            let (o_ptr, _og) = ws.mixed.device_ptr_mut(&self.stream);
+            let (o_ptr, _og) = ws.x16.device_ptr_mut(&self.stream);
 
             for g in 0..group {
                 let p_off = (g * t_len * t_len) as u64 * 2;
-                let o_off = (g * head_dim) as u64 * 4;
+                let o_off = (g * head_dim) as u64 * 2;
                 let status = unsafe {
                     cublas_sys::cublasGemmStridedBatchedEx(
                         *blas.handle(),
@@ -795,7 +846,7 @@ impl CudaContext {
                         (group as i64) * tt,
                         (&beta as *const f32).cast::<c_void>(),
                         (o_ptr + o_off) as *mut c_void,
-                        cublas_sys::cudaDataType_t::CUDA_R_32F,
+                        cublas_sys::cudaDataType_t::CUDA_R_16F,
                         d_i32,
                         (group * head_dim) as i64,
                         kv_heads as i32,
@@ -1247,13 +1298,21 @@ impl GpuBackend for CudaContext {
             self.launch_rms_norm_f16(&ws.x_a, attn_norm, &mut ws.x16, t, d, plan.eps, 0)?;
             self.gemm_f16_preconverted(&ws.x16, wq, &mut ws.q, t, d, d)?;
             self.gemm_f16_preconverted(&ws.x16, wk, &mut ws.k, t, d, kv_dim)?;
-            self.gemm_f16_preconverted(&ws.x16, wv, &mut ws.v, t, d, kv_dim)?;
+            if self.blas.is_some() {
+                self.gemm_f16_to_f16(&ws.x16, 0, wv, &mut ws.v16, t, d, kv_dim)?;
+            } else {
+                self.gemm_f16_preconverted(&ws.x16, wv, &mut ws.v, t, d, kv_dim)?;
+            }
 
             self.launch_rope(&ws.cos, &ws.sin, &mut ws.q, t, d, hd, half)?;
             self.launch_rope(&ws.cos, &ws.sin, &mut ws.k, t, kv_dim, hd, half)?;
             self.launch_attention(&mut ws, t, heads, kv_heads, hd, scale)?;
 
-            self.linear_into(&ws.mixed, 0, &mut ws.x16, wo, &mut ws.tmp, t, d, d)?;
+            if self.blas.is_some() {
+                self.gemm_f16_preconverted(&ws.x16, wo, &mut ws.tmp, t, d, d)?;
+            } else {
+                self.linear_into(&ws.mixed, 0, &mut ws.x16, wo, &mut ws.tmp, t, d, d)?;
+            }
             self.launch_add(&ws.x_a, &ws.tmp, &mut ws.x_b, td)?;
 
             self.launch_rms_norm_f16(&ws.x_b, mlp_norm, &mut ws.x16, t, d, plan.eps, 0)?;
@@ -1402,6 +1461,15 @@ impl GpuBackend for CudaContext {
         &self.device_name
     }
 
+    fn backend_description(&self) -> String {
+        if self.blas.is_some() {
+            "THME reference forward pass on the GPU (CUDA + cuBLAS Tensor Cores, f16 weights)"
+                .to_string()
+        } else {
+            "THME reference forward pass on the GPU (CUDA pure PTX, f16 weights)".to_string()
+        }
+    }
+
     fn clear_cache(&self) {
         if let Ok(mut cache) = self.weight_cache.lock() {
             cache.entries.clear();
@@ -1414,5 +1482,26 @@ impl GpuBackend for CudaContext {
         if let Ok(mut scratch) = self.scratch_x16.lock() {
             *scratch = None;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parallel_f16_conversion_matches_scalar_for_small_and_large_slices() {
+        let small: Vec<f32> = (0..129)
+            .map(|i| ((i as f32) - 64.0) * 0.0625)
+            .chain([0.0, -0.0, f32::INFINITY, f32::NEG_INFINITY, 1e-8, 65536.0])
+            .collect();
+        let expected_small: Vec<u16> = small.iter().copied().map(f32_to_f16_bits).collect();
+        assert_eq!(convert_f32_slice_to_f16(&small), expected_small);
+
+        let large: Vec<f32> = (0..70_000)
+            .map(|i| (((i * 17) % 1021) as f32 - 510.0) * 0.015625)
+            .collect();
+        let expected_large: Vec<u16> = large.iter().copied().map(f32_to_f16_bits).collect();
+        assert_eq!(convert_f32_slice_to_f16(&large), expected_large);
     }
 }

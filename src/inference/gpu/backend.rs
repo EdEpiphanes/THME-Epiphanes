@@ -33,15 +33,31 @@ pub enum DeviceArg {
     Cpu,
 }
 
+#[cfg_attr(not(any(target_os = "windows", target_os = "linux")), allow(dead_code))]
+fn should_skip_cuda(val: Option<&str>) -> bool {
+    matches!(
+        val.map(|s| s.trim().to_ascii_lowercase()).as_deref(),
+        Some("wgpu" | "vulkan" | "metal" | "dx12")
+    )
+}
+
+fn wgpu_api_filter(val: Option<&str>) -> Option<String> {
+    match val.map(|s| s.trim().to_ascii_lowercase()).as_deref() {
+        None | Some("" | "wgpu" | "auto") => None,
+        Some(api) => Some(api.to_string()),
+    }
+}
+
 impl DeviceArg {
     /// Resolves the device argument into an optional GPU backend.
     /// Returns `None` for CPU or if GPU initialization fails in Auto mode.
     pub fn resolve(self) -> Option<Arc<dyn GpuBackend>> {
+        let backend_env = std::env::var("THME_GPU_BACKEND").ok();
         match self {
             Self::Cpu => None,
             Self::Gpu => {
                 #[cfg(any(target_os = "windows", target_os = "linux"))]
-                if std::env::var("THME_GPU_BACKEND").ok().as_deref() != Some("wgpu") {
+                if !should_skip_cuda(backend_env.as_deref()) {
                     if let Ok(ctx) = super::cuda::CudaContext::init() {
                         return Some(Arc::new(ctx));
                     }
@@ -56,7 +72,7 @@ impl DeviceArg {
             }
             Self::Auto => {
                 #[cfg(any(target_os = "windows", target_os = "linux"))]
-                if std::env::var("THME_GPU_BACKEND").ok().as_deref() != Some("wgpu") {
+                if !should_skip_cuda(backend_env.as_deref()) {
                     if let Ok(ctx) = super::cuda::CudaContext::init() {
                         return Some(Arc::new(ctx));
                     }
@@ -434,11 +450,9 @@ fn coop_matrix_supported(adapter: &wgpu::Adapter) -> bool {
 }
 
 /// Picks a real GPU explicitly: discrete before integrated, Vulkan before Metal before DX12.
-/// `THME_GPU_BACKEND=vulkan|metal|dx12` restricts the choice to one API.
+/// `THME_GPU_BACKEND=vulkan|metal|dx12` restricts the choice to one API (`wgpu`/`auto` selects any).
 fn select_adapter(instance: &wgpu::Instance) -> Result<wgpu::Adapter, ThmeError> {
-    let only = std::env::var("THME_GPU_BACKEND")
-        .ok()
-        .map(|v| v.to_ascii_lowercase());
+    let only = wgpu_api_filter(std::env::var("THME_GPU_BACKEND").ok().as_deref());
     pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY))
         .into_iter()
         .filter(|a| {
@@ -1572,6 +1586,14 @@ pub trait GpuBackend: Send + Sync {
     fn is_format_supported(&self, dtype: QuantDtype) -> bool;
     fn device_name(&self) -> &str;
 
+    /// Human-readable description of the active GPU backend for measured reports.
+    fn backend_description(&self) -> String {
+        format!(
+            "THME reference forward pass on the GPU ({})",
+            self.device_name()
+        )
+    }
+
     /// Adapter details for measured reports (name, graphics API, driver).
     fn adapter_json(&self) -> serde_json::Value {
         serde_json::json!({ "name": self.device_name() })
@@ -1710,6 +1732,25 @@ impl GpuBackend for GpuContext {
 
     fn device_name(&self) -> &str {
         &self.adapter_info.name
+    }
+
+    fn backend_description(&self) -> String {
+        let storage = self.weight_storage();
+        let storage_label = match storage {
+            WeightStorage::F32 => "f32",
+            WeightStorage::F16 => "f16",
+            WeightStorage::Q8_0 => "q8_0",
+            WeightStorage::Q4_0 => "q4_0",
+        };
+        let coop = if self.coop_active(storage) {
+            ", coop matrix"
+        } else {
+            ""
+        };
+        format!(
+            "THME reference forward pass on the GPU (wgpu {:?}, {storage_label} weights{coop})",
+            self.adapter_info.backend
+        )
     }
 
     fn adapter_json(&self) -> serde_json::Value {
@@ -1877,5 +1918,36 @@ pub fn score_head_from_logits(
         layers_applied,
         nll,
         top1,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn backend_env_skip_cuda_recognizes_wgpu_and_apis() {
+        assert!(!should_skip_cuda(None));
+        assert!(!should_skip_cuda(Some("")));
+        assert!(!should_skip_cuda(Some("auto")));
+        assert!(!should_skip_cuda(Some("cuda")));
+        assert!(should_skip_cuda(Some("wgpu")));
+        assert!(should_skip_cuda(Some(" WGPU ")));
+        assert!(should_skip_cuda(Some("vulkan")));
+        assert!(should_skip_cuda(Some("Metal")));
+        assert!(should_skip_cuda(Some("dx12")));
+    }
+
+    #[test]
+    fn backend_env_wgpu_filter_treats_wgpu_and_auto_as_unfiltered() {
+        assert_eq!(wgpu_api_filter(None), None);
+        assert_eq!(wgpu_api_filter(Some("")), None);
+        assert_eq!(wgpu_api_filter(Some("  ")), None);
+        assert_eq!(wgpu_api_filter(Some("wgpu")), None);
+        assert_eq!(wgpu_api_filter(Some(" WGPU ")), None);
+        assert_eq!(wgpu_api_filter(Some("auto")), None);
+        assert_eq!(wgpu_api_filter(Some("Vulkan")).as_deref(), Some("vulkan"));
+        assert_eq!(wgpu_api_filter(Some("metal")).as_deref(), Some("metal"));
+        assert_eq!(wgpu_api_filter(Some("DX12")).as_deref(), Some("dx12"));
     }
 }
