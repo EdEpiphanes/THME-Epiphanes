@@ -3,6 +3,7 @@ use anyhow::{bail, Context, Result};
 use clap::Args;
 use std::path::PathBuf;
 
+use crate::convert::{ConversionOp, ConversionPlan, ModelArchKind};
 use crate::ir::{ParadigmConversionConfig, ParadigmConverter, SpecializedModelParadigm};
 use crate::parser::ModelImporter;
 use crate::surgery::{TweakOperation, TweakRecipe};
@@ -40,6 +41,10 @@ pub struct ConvertArgs {
     /// Save declarative Teacher LLM surgery recipe JSON for this conversion
     #[arg(long, value_name = "RECIPE_FILE")]
     pub save_recipe: Option<PathBuf>,
+
+    /// Optional §7.10 structural model-type op: mha-to-gqa, dense-to-moe, deep-to-dory, streaming-to-ssm, dialect
+    #[arg(long, value_name = "ARCH_OP")]
+    pub arch_op: Option<String>,
 
     /// Output report in JSON format
     #[arg(long)]
@@ -96,6 +101,40 @@ pub fn execute(args: ConvertArgs) -> Result<()> {
     let (_converted_ir, report) = ParadigmConverter::convert(&model_ir, &config)
         .map_err(|e| anyhow::anyhow!("Paradigm conversion failed: {}", e))?;
 
+    let arch_plan = if let Some(ref op_str) = args.arch_op {
+        let (src_arch, dst_arch, op) = match op_str.to_lowercase().as_str() {
+            "mha-to-gqa" => (
+                ModelArchKind::DenseMha,
+                ModelArchKind::DenseGqa,
+                ConversionOp::MhaToGqa,
+            ),
+            "dense-to-moe" => (
+                ModelArchKind::DenseGqa,
+                ModelArchKind::SparseMoe,
+                ConversionOp::DenseToMoe,
+            ),
+            "deep-to-dory" => (
+                ModelArchKind::DenseGqa,
+                ModelArchKind::DoryLooped,
+                ConversionOp::DeepToDoryLoop,
+            ),
+            "streaming-to-ssm" => (
+                ModelArchKind::DenseGqa,
+                ModelArchKind::HybridSsm,
+                ConversionOp::StreamingAttnToSsm,
+            ),
+            "dialect" => (
+                ModelArchKind::DenseGqa,
+                ModelArchKind::DenseGqa,
+                ConversionOp::DialectPermutation,
+            ),
+            other => bail!("Unknown --arch-op '{other}'"),
+        };
+        Some(ConversionPlan::build(src_arch, dst_arch, op))
+    } else {
+        None
+    };
+
     if let Some(ref recipe_path) = args.save_recipe {
         let op = TweakOperation::ConvertParadigm {
             target_paradigm: target,
@@ -133,8 +172,18 @@ pub fn execute(args: ConvertArgs) -> Result<()> {
     }
 
     if args.json {
-        let json_str = serde_json::to_string_pretty(&report)?;
-        println!("{json_str}");
+        let mut val = serde_json::to_value(&report)?;
+        if let Some(ref plan) = arch_plan {
+            val["arch_plan"] = serde_json::json!({
+                "source_arch": format!("{:?}", plan.source_arch),
+                "target_arch": format!("{:?}", plan.target_arch),
+                "op": format!("{:?}", plan.op),
+                "pre_quant_gate_at_f16_q8": plan.pre_quant_gate_at_f16_q8,
+                "requires_bitdistill_recovery": plan.requires_bitdistill_recovery,
+                "router_pinned_q8_0": plan.router_pinned_q8_0,
+            });
+        }
+        println!("{}", serde_json::to_string_pretty(&val)?);
     } else {
         println!();
         println!("============================================================");
@@ -149,6 +198,16 @@ pub fn execute(args: ConvertArgs) -> Result<()> {
             "Key Pipeline     : {}",
             target.primary_components().join(" -> ")
         );
+        if let Some(ref plan) = arch_plan {
+            println!(
+                "§7.10 Arch Plan  : {:?} -> {:?} (pre_quant_f16_q8_gate={}, bitdistill_required={}, router_q8={})",
+                plan.source_arch,
+                plan.target_arch,
+                plan.pre_quant_gate_at_f16_q8,
+                plan.requires_bitdistill_recovery,
+                plan.router_pinned_q8_0
+            );
+        }
         println!("------------------------------------------------------------");
         println!("{}", report.format_summary());
         println!("============================================================");
