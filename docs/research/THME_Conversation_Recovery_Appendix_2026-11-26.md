@@ -18,6 +18,8 @@ Status: **superseded**. Dossier section 4.2 replaces it with the fusion-aware Si
 
 ## 3. Decisions missing from the negative-results log
 
+Both decisions below were made by Antigravity's model inside the conversation (transcript source `MODEL`). They were not made by the owner, and they were not made by the advisor or the recovery scout; the scout only found them. The owner has not signed them off, so read them as Antigravity's recommendations.
+
 | Step | Date (UTC) | Decision |
 | ---: | :--- | :--- |
 | 1758 | 2026-11-26 04:46 | Translation layers rejected for THME: ZLUDA (fragile Windows maintenance), HIP/ROCm (multi-GB SDK, weak Windows consumer support), SYCL/oneAPI (C++/DPC++ dependency). CubeCL is pure Rust with Tensor Core support, but its JIT and codegen dependencies risk the 16 MiB CLI size cap. Preferred path: `ash` with `VK_KHR_cooperative_matrix` (16x16x16 f16 to f32) beside native `cuda.rs` and the `wgpu` fallback. |
