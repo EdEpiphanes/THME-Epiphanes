@@ -16,7 +16,7 @@
 ## 2. Binary Footprint Limits (Checked & Synced)
 
 - **`AGENTS.md` (both `LLM-Tweaker` and `thme-wt/perf-gpu`):**
-  - `thme` (CLI): **`<= 16 MB`** (currently measured at **`14.75 MB`** for release `thme.exe`).
+  - `thme` (CLI): **`<= 16 MB`** (reported `14.75 MB`; `14.81 MiB` measured on the merged tree on 26 Nov 2026 for release `thme.exe`).
   - `thme-gui` (GUI): **`<= 25 MB`** (raised from 15 MB on 25 Nov 2026 for embedded PTX kernels, CUDA backend, and GPU diagnostics).
 - **CI Fix Applied:** `.github/workflows/release.yml` line 77 in `thme-wt/perf-gpu` still had the outdated `15 * 1024 * 1024` check for `thme-gui`; updated to `25 * 1024 * 1024` to match `AGENTS.md`.
 
@@ -31,7 +31,7 @@
 2. **Device-Resident Incremental KV Cache (`src/inference/kv.rs`, `src/inference/llama.rs`, `cuda.rs`):**
    - `DeviceKvHandle` + `kv_append_f16` + `kv_attention_f16` in `forward_decoder_extend` and `Llama::forward_extend` with `ROPE_CACHE` — zero per-token host KV copies during decode.
 3. **Packed `Q4_0` GPU Decode (`cuda.rs`, `decoder.cu`):**
-   - `resident_q4_0` parallelized across CPU threads with `std::thread::scope` (`0.5625` B/weight, `3.56x` smaller than `F16`).
+   - `resident_q4_0` parallelized across CPU threads with `std::thread::scope` (reported `0.5625` B/weight, reported `3.56x` smaller than `F16`).
    - Warp-cooperative `gemv_q4_0_aligned` (128-bit `uint4` coalesced loads + shared-memory `x16`) for `t == 1` decode (`THME_CUDA_Q4_DECODE=1`).
 4. **CLI & Evaluation Metrics (`src/chat.rs`, `src/cli/chat.rs`, `src/cli/evaluate.rs`):**
    - `thme chat` command with `--device`, `--max-new-tokens`, `--json`, reporting `prefill_secs`, `decode_tokens_per_sec`, `wall_secs`, and overall `tokens_per_sec`.
@@ -39,19 +39,21 @@
 
 ---
 
-## 4. Verified Checks & Measured Benchmarks (`SmolLM2-1.7B`, RTX 4060 Ti 16 GB)
+## 4. Reported Checks & Benchmarks (`SmolLM2-1.7B`, RTX 4060 Ti 16 GB)
 
-- **Code Quality & Tests (all passing on `aa8e949`):**
-  - `cargo fmt --check` — **PASS**
-  - `cargo clippy -- -D warnings` — **PASS** (zero `unwrap`/`expect`/`panic` outside tests)
-  - `cargo test --locked` — **PASS** (all unit, integration, and example test suites)
-  - `cargo build --release --bin thme` — **PASS** (`14.75 MB`)
+*(All figures below are reported from `aa8e949`; they have not been independently reproduced on the merged tree.)*
+
+- **Code Quality & Tests (reported passing on `aa8e949`):**
+  - `cargo fmt --check` — reported **PASS**
+  - `cargo clippy -- -D warnings` — reported **PASS** (zero `unwrap`/`expect`/`panic` outside tests)
+  - `cargo test --locked` — reported **PASS** (all unit, integration, and example test suites)
+  - `cargo build --release --bin thme` — reported **PASS** (reported `14.75 MB`; `14.81 MiB` measured on the merged tree on 26 Nov 2026)
 - **`thme chat --device gpu --max-new-tokens 64 --json`:**
-  - **`F16`:** `decode_tokens_per_sec` = **62.87 tok/s**, `prefill_secs` = **1.78 s**, `wall_secs` = **2.78 s** (`23.00 tok/s` overall).
-  - **`Q4_0` (`THME_CUDA_Q4_DECODE=1`):** `decode_tokens_per_sec` = **16.88 tok/s**, `prefill_secs` = **1.84 s**, `wall_secs` = **5.57 s** (`11.48 tok/s` overall — >3× faster than `17.68 s` / `3.62 tok/s` prior to parallelizing `resident_q4_0`).
+  - **`F16`:** `decode_tokens_per_sec` = reported **62.87 tok/s**, `prefill_secs` = reported **1.78 s**, `wall_secs` = reported **2.78 s** (reported `23.00 tok/s` overall).
+  - **`Q4_0` (`THME_CUDA_Q4_DECODE=1`):** `decode_tokens_per_sec` = reported **16.88 tok/s**, `prefill_secs` = reported **1.84 s**, `wall_secs` = reported **5.57 s** (reported `11.48 tok/s` overall — reported >3× faster than reported `17.68 s` / `3.62 tok/s` prior to parallelizing `resident_q4_0`).
 - **`thme evaluate --device gpu --f16-acc --no-baseline-cache --eval-max-tokens 151552` (148 windows, WikiText-2 test):**
-  - **Baseline (`F16`):** **9,152.77 tok/s** (`16.54 s`, PPL `8.9114`, `bits_per_token` `3.1557`).
-  - **Candidate (`MlpDown` L0 `Q8_0`):** **9,267.78 tok/s** (`16.34 s`, PPL `8.9126`, Δ `+0.0011`, `PASSED`).
+  - **Baseline (`F16`):** reported **9,152.77 tok/s** (reported `16.54 s`, reported PPL `8.9114`, reported `bits_per_token` `3.1557`).
+  - **Candidate (`MlpDown` L0 `Q8_0`):** reported **9,267.78 tok/s** (reported `16.34 s`, reported PPL `8.9126`, reported Δ `+0.0011`, reported `PASSED`).
 
 ---
 
@@ -64,11 +66,19 @@
 
 ---
 
-## 6. Next Priorities for Claude
+## 6. Next Priorities for next session
 
 1. **Direct `.epiph` Packed GPU Upload:** Skip CPU `Vec<f32>` expansion for `.epiph` `Q4_0` / `F16` tensors and upload packed weights straight to CUDA/wgpu (`resident_q4_0` currently quantizes from `f32` on CPU).
 2. **Decode Speed & Cross-Vendor Parity:**
-   - Profile `gemv_q4_0_aligned` (`16.88 tok/s` vs `F16` `62.87 tok/s`) and add CUDA Graph capture to `forward_decoder_extend` (`t == 1` decode path) so each decode token avoids host launch overhead.
+   - Profile `gemv_q4_0_aligned` (reported `16.88 tok/s` vs `F16` reported `62.87 tok/s`) and add CUDA Graph capture to `forward_decoder_extend` (`t == 1` decode path) so each decode token avoids host launch overhead.
    - Implement `forward_decoder_extend` and `gemv_q4_0` on `wgpu` (for AMD / Intel / Apple Silicon), plus INT8/INT4 KV cache quantization + StreamingLLM sink/window eviction.
 3. **Evaluation Suite (`v0.2.8.3`):** Add `bits_per_byte` (BPB) to `thme evaluate` and wire `src/bench/` for MMLU / ARC-Challenge / HellaSwag / GSM8K.
 4. **Release & Merge:** Build `thme-gui` to verify it stays `<= 25 MB`, then merge `feat/kv-cache-gpu-decode` -> `perf/gpu-throughput` -> `main`.
+
+---
+
+## Corrections (26 November 2026)
+- Updated `thme.exe` binary size note from `14.75 MB` to `reported 14.75 MB; 14.81 MiB measured on the merged tree` (on 26 Nov 2026).
+- Softened Section 4 heading from "Verified Checks & Measured Benchmarks" to "Reported Checks & Benchmarks", labeled every empirical/check figure `reported`, and stated that figures were not independently reproduced on the merged tree.
+- Kept Section 5 (`Known Pitfalls`) intact.
+- Changed Section 6 heading addressee from `Claude` to `next session`.
