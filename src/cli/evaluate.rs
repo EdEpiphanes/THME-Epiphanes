@@ -79,6 +79,10 @@ pub struct EvaluateArgs {
     #[arg(long, value_name = "CALIBRATION_JSON")]
     pub calibration: Option<PathBuf>,
 
+    /// Enable FP16 Tensor Core accumulation on CUDA (`THME_CUDA_F16_ACC=1`) for higher throughput
+    #[arg(long)]
+    pub f16_acc: bool,
+
     /// Execution compute device (auto, gpu, cpu). The report records the device and adapter.
     #[arg(long, value_enum, default_value_t = DeviceArg::Auto)]
     pub device: DeviceArg,
@@ -312,11 +316,13 @@ pub(crate) fn variant_json(
 ) -> Value {
     let delta = base.map(|b| report.perplexity - b.perplexity);
     let accepted = base.map(|b| judge_reports(gate, b, report).accepted);
+    let bits_per_token = report.cross_entropy_nats / std::f64::consts::LN_2;
     json!({
         "id": id,
         "description": description,
         "perplexity": report.perplexity,
         "cross_entropy_nats": report.cross_entropy_nats,
+        "bits_per_token": bits_per_token,
         "scored_tokens": report.scored_tokens,
         "corpus_tokens_used": report.corpus_tokens_used,
         "windows": report.windows,
@@ -433,6 +439,9 @@ pub fn prepare_candidate(
 
 /// Runs the evaluation and returns the report (also written to `args.report`).
 pub fn evaluate(args: &EvaluateArgs) -> Result<Value> {
+    if args.f16_acc {
+        std::env::set_var("THME_CUDA_F16_ACC", "1");
+    }
     let text = std::fs::read_to_string(&args.recipe)
         .with_context(|| format!("Failed to read recipe {:?}", args.recipe))?;
     let recipe: TweakRecipe = serde_json::from_str(&text)
@@ -775,6 +784,7 @@ pub(crate) mod tests {
             algorithms: Vec::new(),
             artifact: None,
             calibration: None,
+            f16_acc: false,
             gate: None,
             device: DeviceArg::Cpu,
             no_baseline_cache: false,

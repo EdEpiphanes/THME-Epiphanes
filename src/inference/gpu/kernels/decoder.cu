@@ -509,6 +509,28 @@ extern "C" __global__ void swiglu_f16_in(
     }
 }
 
+extern "C" __global__ void swiglu_f16_interleaved(
+    const unsigned short* gate_up16,
+    unsigned short* out16,
+    unsigned int rows,
+    unsigned int inter
+) {
+    unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int total = rows * inter;
+    if (idx < total) {
+        unsigned int row = idx / inter;
+        unsigned int col = idx % inter;
+        unsigned int base = row * (inter * 2u) + col;
+        float g, u;
+        asm("cvt.f32.f16 %0, %1;" : "=f"(g) : "h"(gate_up16[base]));
+        asm("cvt.f32.f16 %0, %1;" : "=f"(u) : "h"(gate_up16[base + inter]));
+        float val = (g / (1.0f + expf(-g))) * u;
+        unsigned short h;
+        asm("cvt.rn.f16.f32 %0, %1;" : "=h"(h) : "f"(val));
+        out16[idx] = h;
+    }
+}
+
 extern "C" __global__ void add_rms_norm_f16(
     const float* x_in,
     const unsigned short* res16,
