@@ -198,13 +198,14 @@ fn run_job(
     Ok((loaded, reply))
 }
 
-// provenance: chat-speed
 fn run_status(reply: &Reply) -> String {
     let stop = match reply.finish {
         Finish::Eos => "end of sequence",
         Finish::MaxTokens => "token limit",
+        Finish::LoopBroken => "4-gram loop broken",
         Finish::Cancelled => "cancelled",
     };
+    // provenance: chat-speed
     format!(
         "{} tokens in {:.1} s ({:.2} tok/s, {}, CPU reference forward pass); stopped: {stop}",
         reply.token_ids.len(),

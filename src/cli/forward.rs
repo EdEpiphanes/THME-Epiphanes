@@ -6,7 +6,7 @@ use clap::Args;
 use serde_json::json;
 use std::path::PathBuf;
 
-use crate::inference::gpu::DeviceArg;
+use crate::inference::gpu::{DeviceArg, GpuDispatchMode};
 use crate::inference::load_reference_model;
 use crate::inference::perplexity::read_token_file;
 
@@ -31,6 +31,10 @@ pub struct ForwardArgs {
     /// Execution compute device (auto, gpu, cpu)
     #[arg(long, value_enum, default_value_t = DeviceArg::Auto)]
     pub device: DeviceArg,
+
+    /// GPU linear dispatch mode: batched (single submission) or per-row
+    #[arg(long, value_enum, default_value_t = GpuDispatchMode::Batched)]
+    pub gpu_mode: GpuDispatchMode,
 
     /// Output results as JSON
     #[arg(long)]
@@ -59,6 +63,7 @@ pub fn execute(args: ForwardArgs) -> Result<()> {
         );
     }
 
+    args.gpu_mode.apply();
     let (model_ir, arch_cfg, runnable) = load_reference_model(&args.model, args.device)?;
 
     let full_logits = runnable.forward_logits(&tokens)?;

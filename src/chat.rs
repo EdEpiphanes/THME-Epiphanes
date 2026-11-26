@@ -10,6 +10,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
+use crate::inference::grounded_decode::NgramLoopBreaker;
 use crate::inference::CausalLm;
 use crate::text::{eos_token, has_chat_template, render_chat_template, ChatMessage, Tokenizer};
 
@@ -20,6 +21,8 @@ pub enum Finish {
     Eos,
     /// The token budget was used up.
     MaxTokens,
+    /// Repetitive 4-gram attractor loop detected by `NgramLoopBreaker`.
+    LoopBroken,
     /// The cancel flag was set.
     Cancelled,
 }
@@ -70,6 +73,7 @@ pub fn generate(
     let prompt_tokens = ids.len();
     let eos = eos_token(request.dir).and_then(|token| tokenizer.token_id(&token));
     let mut token_ids = Vec::new();
+    let mut loop_breaker = NgramLoopBreaker::new(256);
     let started = Instant::now();
     let finish = loop {
         if cancel.load(Ordering::Relaxed) {
@@ -86,6 +90,9 @@ pub fn generate(
         ids.push(next);
         token_ids.push(next);
         on_token(token_ids.len());
+        if loop_breaker.push_and_check_loop(next) {
+            break Finish::LoopBroken;
+        }
     };
     let wall_secs = started.elapsed().as_secs_f64();
     let tokens_per_sec = if wall_secs > 0.0 {

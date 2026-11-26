@@ -86,6 +86,16 @@ pub enum WeightPrecision {
     SelectedFormat,
 }
 
+pub(crate) struct ResidentLayerTensors {
+    q: super::gpu::QuantizedTensor,
+    k: super::gpu::QuantizedTensor,
+    v: super::gpu::QuantizedTensor,
+    o: super::gpu::QuantizedTensor,
+    gate: super::gpu::QuantizedTensor,
+    up: super::gpu::QuantizedTensor,
+    down: super::gpu::QuantizedTensor,
+}
+
 pub(crate) struct LlamaLayer {
     pub(crate) attn_norm: Vec<f32>,
     pub(crate) q: Vec<f32>,
@@ -96,6 +106,26 @@ pub(crate) struct LlamaLayer {
     pub(crate) gate: Vec<f32>,
     pub(crate) up: Vec<f32>,
     pub(crate) down: Vec<f32>,
+    pub(crate) gpu_cache: std::sync::OnceLock<Option<ResidentLayerTensors>>,
+}
+
+impl LlamaLayer {
+    fn resident(&self, d: usize, kv_dim: usize, inter: usize) -> Option<&ResidentLayerTensors> {
+        use super::gpu::QuantizedTensor;
+        self.gpu_cache
+            .get_or_init(|| {
+                Some(ResidentLayerTensors {
+                    q: QuantizedTensor::from_f32_slice("q", &[d, d], &self.q).ok()?,
+                    k: QuantizedTensor::from_f32_slice("k", &[kv_dim, d], &self.k).ok()?,
+                    v: QuantizedTensor::from_f32_slice("v", &[kv_dim, d], &self.v).ok()?,
+                    o: QuantizedTensor::from_f32_slice("o", &[d, d], &self.o).ok()?,
+                    gate: QuantizedTensor::from_f32_slice("gate", &[inter, d], &self.gate).ok()?,
+                    up: QuantizedTensor::from_f32_slice("up", &[inter, d], &self.up).ok()?,
+                    down: QuantizedTensor::from_f32_slice("down", &[d, inter], &self.down).ok()?,
+                })
+            })
+            .as_ref()
+    }
 }
 
 /// Predictions read out after a given number of applied layers.
@@ -119,6 +149,32 @@ pub struct LlamaModel {
     /// `None` when the output head is tied to the embedding matrix.
     pub(crate) lm_head: Option<Vec<f32>>,
     pub(crate) gpu_backend: Option<Arc<dyn GpuBackend>>,
+}
+
+/// Incremental per-layer KV cache for `O(N)` token-by-token decode.
+#[derive(Debug, Clone)]
+pub struct LlamaKvCache {
+    k_layers: Vec<Vec<f32>>,
+    v_layers: Vec<Vec<f32>>,
+    seq_len: usize,
+}
+
+impl LlamaKvCache {
+    /// Creates an empty KV cache for `num_layers`.
+    #[must_use]
+    pub fn new(num_layers: usize) -> Self {
+        Self {
+            k_layers: vec![Vec::new(); num_layers],
+            v_layers: vec![Vec::new(); num_layers],
+            seq_len: 0,
+        }
+    }
+
+    /// Number of cached token positions so far.
+    #[must_use]
+    pub const fn seq_len(&self) -> usize {
+        self.seq_len
+    }
 }
 
 pub fn find_tensor<'a>(model: &'a ModelIR, name: &str) -> Option<&'a TensorIR> {
@@ -272,6 +328,7 @@ impl LlamaModel {
                 gate: fetch("mlp.gate_proj.weight", intermediate_size * d)?,
                 up: fetch("mlp.up_proj.weight", intermediate_size * d)?,
                 down: fetch("mlp.down_proj.weight", d * intermediate_size)?,
+                gpu_cache: std::sync::OnceLock::new(),
             });
         }
 
@@ -395,6 +452,139 @@ impl LlamaModel {
         ))
     }
 
+    /// Runs a single incremental decode step for `token` using `kv` (`O(N)` per token).
+    pub fn forward_logits_step(&self, token: u32, kv: &mut LlamaKvCache) -> Result<Vec<f32>> {
+        if token as usize >= self.vocab_size {
+            bail!("Token id {token} is outside vocab_size {}", self.vocab_size);
+        }
+        if kv.k_layers.len() != self.layers.len() || kv.v_layers.len() != self.layers.len() {
+            bail!("KV cache layer count mismatch");
+        }
+        let pos = kv.seq_len;
+        let cfg = &self.config;
+        let d = cfg.hidden_size;
+        let head_dim = d / cfg.num_heads;
+        let kv_dim = head_dim * cfg.num_kv_heads;
+        let inter = self.intermediate_size;
+        let group = cfg.num_heads / cfg.num_kv_heads;
+        let inv_sqrt = 1.0_f32 / (head_dim as f32).sqrt();
+
+        let start = token as usize * d;
+        let mut x = self.embed[start..start + d].to_vec();
+        let mut normed = vec![0.0_f32; d];
+        let rope = RopeTable::new(pos + 1, head_dim, head_dim, cfg.rope_theta);
+        let gpu = self.gpu_backend.as_deref();
+
+        for (l_idx, layer) in self.layers.iter().enumerate() {
+            let resident = gpu.and_then(|_| layer.resident(d, kv_dim, inter));
+            rms_norm(&x, &layer.attn_norm, cfg.rms_norm_eps, &mut normed);
+            let (mut q, mut k, v) = if let (Some(g), Some(res)) = (gpu, resident) {
+                if let Ok(mut ys) = g.compute_linear_multi(
+                    &normed,
+                    &[(&res.q, d), (&res.k, kv_dim), (&res.v, kv_dim)],
+                    d,
+                ) {
+                    let v = ys.pop().unwrap_or_default();
+                    let k = ys.pop().unwrap_or_default();
+                    let q = ys.pop().unwrap_or_default();
+                    (q, k, v)
+                } else {
+                    (
+                        linear(&normed, &layer.q, d, d),
+                        linear(&normed, &layer.k, d, kv_dim),
+                        linear(&normed, &layer.v, d, kv_dim),
+                    )
+                }
+            } else {
+                (
+                    linear(&normed, &layer.q, d, d),
+                    linear(&normed, &layer.k, d, kv_dim),
+                    linear(&normed, &layer.v, d, kv_dim),
+                )
+            };
+            rope.apply_at(pos, &mut q);
+            rope.apply_at(pos, &mut k);
+            kv.k_layers[l_idx].extend_from_slice(&k);
+            kv.v_layers[l_idx].extend_from_slice(&v);
+
+            let k_hist = &kv.k_layers[l_idx];
+            let v_hist = &kv.v_layers[l_idx];
+            let mut mixed = vec![0.0_f32; d];
+            let total_pos = pos + 1;
+            for h in 0..cfg.num_heads {
+                let qh = &q[h * head_dim..(h + 1) * head_dim];
+                let kv_off = (h / group) * head_dim;
+                let mut scores = Vec::with_capacity(total_pos);
+                let mut max_s = f32::NEG_INFINITY;
+                for s in 0..total_pos {
+                    let ks = &k_hist[s * kv_dim + kv_off..s * kv_dim + kv_off + head_dim];
+                    let score = dot(qh, ks) * inv_sqrt;
+                    if score > max_s {
+                        max_s = score;
+                    }
+                    scores.push(score);
+                }
+                let mut denom = 0.0_f32;
+                for sc in &mut scores {
+                    *sc = (*sc - max_s).exp();
+                    denom += *sc;
+                }
+                let out_h = &mut mixed[h * head_dim..(h + 1) * head_dim];
+                for (s, &w) in scores.iter().enumerate() {
+                    let prob = w / denom;
+                    let vs = &v_hist[s * kv_dim + kv_off..s * kv_dim + kv_off + head_dim];
+                    for (dst, &val) in out_h.iter_mut().zip(vs) {
+                        *dst += prob * val;
+                    }
+                }
+            }
+
+            let attn_out = if let (Some(g), Some(res)) = (gpu, resident) {
+                super::gpu::dispatch_linear(Some(g), &mixed, &res.o, d, d)
+                    .unwrap_or_else(|_| linear(&mixed, &layer.o, d, d))
+            } else {
+                linear(&mixed, &layer.o, d, d)
+            };
+            add_in_place(&mut x, &attn_out);
+
+            rms_norm(&x, &layer.mlp_norm, cfg.rms_norm_eps, &mut normed);
+            let (mut hidden, up) = if let (Some(g), Some(res)) = (gpu, resident) {
+                if let Ok(mut ys) =
+                    g.compute_linear_multi(&normed, &[(&res.gate, inter), (&res.up, inter)], d)
+                {
+                    let up = ys.pop().unwrap_or_default();
+                    let gate = ys.pop().unwrap_or_default();
+                    (gate, up)
+                } else {
+                    (
+                        linear(&normed, &layer.gate, d, inter),
+                        linear(&normed, &layer.up, d, inter),
+                    )
+                }
+            } else {
+                (
+                    linear(&normed, &layer.gate, d, inter),
+                    linear(&normed, &layer.up, d, inter),
+                )
+            };
+            for (g, u) in hidden.iter_mut().zip(&up) {
+                *g = *g / (1.0 + (-*g).exp()) * u;
+            }
+            let mlp_out = if let (Some(g), Some(res)) = (gpu, resident) {
+                super::gpu::dispatch_linear(Some(g), &hidden, &res.down, inter, d)
+                    .unwrap_or_else(|_| linear(&hidden, &layer.down, inter, d))
+            } else {
+                linear(&hidden, &layer.down, inter, d)
+            };
+            add_in_place(&mut x, &mlp_out);
+        }
+
+        kv.seq_len += 1;
+        rms_norm(&x, &self.final_norm, cfg.rms_norm_eps, &mut normed);
+        let head = self.lm_head.as_deref().unwrap_or(&self.embed);
+        Ok(linear(&normed, head, d, self.vocab_size))
+    }
+
     fn validate(&self, tokens: &[u32], schedule: &[usize], exits: &[usize]) -> Result<()> {
         let t_len = tokens.len();
         if t_len < 2 {
@@ -494,10 +684,27 @@ impl LlamaModel {
             };
 
         let gpu = self.gpu_backend.as_deref();
+        let res = gpu.and_then(|_| layer.resident(d, kv_dim, inter));
         rms_norm(x, &layer.attn_norm, cfg.rms_norm_eps, normed);
-        let mut q = dispatch_linear_slice(gpu, normed, &layer.q, d, d);
-        let mut k = dispatch_linear_slice(gpu, normed, &layer.k, d, kv_dim);
-        let v = dispatch_linear_slice(gpu, normed, &layer.v, d, kv_dim);
+        let mut qkv = match (gpu, res) {
+            (Some(g), Some(r)) => g
+                .compute_linear_multi(normed, &[(&r.q, d), (&r.k, kv_dim), (&r.v, kv_dim)], d)
+                .unwrap_or_else(|_| {
+                    vec![
+                        linear(normed, &layer.q, d, d),
+                        linear(normed, &layer.k, d, kv_dim),
+                        linear(normed, &layer.v, d, kv_dim),
+                    ]
+                }),
+            _ => vec![
+                linear(normed, &layer.q, d, d),
+                linear(normed, &layer.k, d, kv_dim),
+                linear(normed, &layer.v, d, kv_dim),
+            ],
+        };
+        let v = qkv.pop().unwrap_or_default();
+        let mut k = qkv.pop().unwrap_or_default();
+        let mut q = qkv.pop().unwrap_or_default();
         record("q", normed, d, &q, d);
         record("k", normed, d, &k, kv_dim);
         record("v", normed, d, &v, kv_dim);
@@ -511,19 +718,41 @@ impl LlamaModel {
             num_kv_heads: cfg.num_kv_heads,
             head_dim,
         });
-        let attn_out = dispatch_linear_slice(gpu, &mixed, &layer.o, d, d);
+        let attn_out = match (gpu, res) {
+            (Some(g), Some(r)) => super::gpu::dispatch_linear(Some(g), &mixed, &r.o, d, d)
+                .unwrap_or_else(|_| linear(&mixed, &layer.o, d, d)),
+            _ => linear(&mixed, &layer.o, d, d),
+        };
         record("o", &mixed, d, &attn_out, d);
         add_in_place(x, &attn_out);
 
         rms_norm(x, &layer.mlp_norm, cfg.rms_norm_eps, normed);
-        let mut hidden = dispatch_linear_slice(gpu, normed, &layer.gate, d, inter);
-        let up = dispatch_linear_slice(gpu, normed, &layer.up, d, inter);
+        let mut gate_up = match (gpu, res) {
+            (Some(g), Some(r)) => g
+                .compute_linear_multi(normed, &[(&r.gate, inter), (&r.up, inter)], d)
+                .unwrap_or_else(|_| {
+                    vec![
+                        linear(normed, &layer.gate, d, inter),
+                        linear(normed, &layer.up, d, inter),
+                    ]
+                }),
+            _ => vec![
+                linear(normed, &layer.gate, d, inter),
+                linear(normed, &layer.up, d, inter),
+            ],
+        };
+        let up = gate_up.pop().unwrap_or_default();
+        let mut hidden = gate_up.pop().unwrap_or_default();
         record("gate", normed, d, &hidden, inter);
         record("up", normed, d, &up, inter);
         for (g, u) in hidden.iter_mut().zip(&up) {
             *g = *g / (1.0 + (-*g).exp()) * u;
         }
-        let mlp_out = dispatch_linear_slice(gpu, &hidden, &layer.down, inter, d);
+        let mlp_out = match (gpu, res) {
+            (Some(g), Some(r)) => super::gpu::dispatch_linear(Some(g), &hidden, &r.down, inter, d)
+                .unwrap_or_else(|_| linear(&hidden, &layer.down, inter, d)),
+            _ => linear(&hidden, &layer.down, inter, d),
+        };
         record("down", &hidden, inter, &mlp_out, d);
         if let Some(t) = trace {
             t.mlp_dead_fraction = dead_fraction(&hidden);
@@ -923,6 +1152,24 @@ impl RopeTable {
         }
     }
 
+    /// Rotates every head of a single position `pos` in place.
+    pub(crate) fn apply_at(&self, pos: usize, row: &mut [f32]) {
+        let half = self.rotary_dims / 2;
+        if half == 0 {
+            return;
+        }
+        let cos = &self.cos[pos * half..(pos + 1) * half];
+        let sin = &self.sin[pos * half..(pos + 1) * half];
+        for head in row.chunks_exact_mut(self.head_dim) {
+            let (first, second) = head[..self.rotary_dims].split_at_mut(half);
+            for (((a, b), c), s) in first.iter_mut().zip(second.iter_mut()).zip(cos).zip(sin) {
+                let (x1, x2) = (*a, *b);
+                *a = x1 * c - x2 * s;
+                *b = x2 * c + x1 * s;
+            }
+        }
+    }
+
     /// Rotates every head of every position in place; `x` rows are whole positions.
     pub(crate) fn apply(&self, x: &mut [f32]) {
         let half = self.rotary_dims / 2;
@@ -1082,6 +1329,7 @@ pub fn synthetic_demo(seed: u64) -> (LlamaModel, Vec<Vec<(&'static str, TensorFo
             gate: make(inter * d, &mlp),
             up: make(inter * d, &mlp),
             down: make(d * inter, &down),
+            gpu_cache: std::sync::OnceLock::new(),
         });
         composition.push(vec![
             ("q", attn.clone()),
@@ -1144,6 +1392,7 @@ pub(crate) mod tests {
                 gate: rand(inter * d),
                 up: rand(inter * d),
                 down: rand(d * inter),
+                gpu_cache: std::sync::OnceLock::new(),
             })
             .collect();
         LlamaModel {
@@ -1256,5 +1505,23 @@ pub(crate) mod tests {
         let model = tiny_model(0.1);
         assert!(model.forward_nll(&[1]).is_err());
         assert!(model.forward_nll(&[1, 40]).is_err());
+    }
+
+    #[test]
+    fn kv_cached_step_matches_full_forward_logits() {
+        let model = tiny_model(0.05);
+        let tokens = [1u32, 2, 3, 4];
+        let full = model.forward_logits(&tokens).unwrap();
+
+        let mut kv = LlamaKvCache::new(model.num_layers());
+        let mut last = Vec::new();
+        for &tok in &tokens {
+            last = model.forward_logits_step(tok, &mut kv).unwrap();
+        }
+        assert_eq!(kv.seq_len(), tokens.len());
+        assert_eq!(last.len(), full.len());
+        for (a, b) in last.iter().zip(full.iter()) {
+            assert!((a - b).abs() < 1e-4, "cached={a} full={b}");
+        }
     }
 }
