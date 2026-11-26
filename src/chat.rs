@@ -35,7 +35,9 @@ pub struct Reply {
     pub token_ids: Vec<u32>,
     pub text: String,
     pub wall_secs: f64,
+    pub prefill_secs: f64,
     pub tokens_per_sec: f64,
+    pub decode_tokens_per_sec: f64,
     pub finish: Finish,
 }
 
@@ -79,6 +81,7 @@ pub fn generate(
     let mut cache = model.new_cache();
     let mut fed = 0;
     let started = Instant::now();
+    let mut after_first: Option<Instant> = None;
     let finish = loop {
         if cancel.load(Ordering::Relaxed) {
             break Finish::Cancelled;
@@ -100,16 +103,26 @@ pub fn generate(
         }
         ids.push(next);
         token_ids.push(next);
+        if after_first.is_none() {
+            after_first = Some(Instant::now());
+        }
         on_token(token_ids.len());
         if loop_breaker.push_and_check_loop(next) {
             break Finish::LoopBroken;
         }
     };
     let wall_secs = started.elapsed().as_secs_f64();
+    let prefill_secs = after_first.map_or(wall_secs, |t| t.duration_since(started).as_secs_f64());
+    let decode_secs = (wall_secs - prefill_secs).max(0.0);
     let tokens_per_sec = if wall_secs > 0.0 {
         token_ids.len() as f64 / wall_secs
     } else {
         0.0
+    };
+    let decode_tokens_per_sec = if token_ids.len() > 1 && decode_secs > 0.0 {
+        (token_ids.len() - 1) as f64 / decode_secs
+    } else {
+        tokens_per_sec
     };
     let text = tokenizer.decode(&token_ids)?;
     Ok(Reply {
@@ -118,7 +131,9 @@ pub fn generate(
         token_ids,
         text,
         wall_secs,
+        prefill_secs,
         tokens_per_sec,
+        decode_tokens_per_sec,
         finish,
     })
 }

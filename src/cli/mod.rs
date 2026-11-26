@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pub mod bench;
 pub mod calibrate;
+pub mod chat;
 pub mod chat_template;
 pub mod cluster;
 pub mod co_surgery;
@@ -69,6 +70,9 @@ pub enum Commands {
     /// Run authentic reference forward pass on token sequence and output logits
     #[command(alias = "logits")]
     Forward(forward::ForwardArgs),
+
+    /// Chat with a model using incremental KV-cached greedy decoding
+    Chat(chat::ChatArgs),
 
     /// Search for a mixed-precision recipe from measured costs under a size budget
     Search(search::SearchArgs),
@@ -154,6 +158,7 @@ pub fn run() -> Result<()> {
         Commands::Plan(args) => plan::execute(args),
         Commands::Evaluate(args) => evaluate::execute(args),
         Commands::Forward(args) => forward::execute(args),
+        Commands::Chat(args) => chat::execute(args),
         Commands::Search(args) => search::execute(args),
         Commands::Calibrate(args) => calibrate::execute(args),
         Commands::Validate(args) => validate::execute(args),

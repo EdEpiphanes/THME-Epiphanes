@@ -611,6 +611,7 @@ impl LiveView {
             algorithms: optional_path(&self.algorithms_path).into_iter().collect(),
             artifact: None,
             calibration: None,
+            f16_acc: false,
             gate: None,
             device: crate::inference::DeviceArg::Cpu,
             no_baseline_cache: true,

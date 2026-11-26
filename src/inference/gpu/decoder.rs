@@ -6,7 +6,9 @@
 //! position's logits. This keeps the GPU busy (idle gaps between small submissions let
 //! the driver drop clocks) and removes every per-layer host round trip.
 
+use std::hash::{Hash, Hasher};
 use std::sync::atomic::Ordering;
+use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
 use super::backend::{
@@ -536,6 +538,109 @@ impl GpuContext {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct WorkspaceKey {
+    device_ptr: usize,
+    t: usize,
+    d: usize,
+    kv_dim: usize,
+    inter: usize,
+    vocab: usize,
+    layers: usize,
+    nll_mode: bool,
+    head_dim: usize,
+}
+
+struct DecoderWorkspace {
+    x_a: wgpu::Buffer,
+    x_b: wgpu::Buffer,
+    normed: wgpu::Buffer,
+    q: wgpu::Buffer,
+    k: wgpu::Buffer,
+    v: wgpu::Buffer,
+    mixed: wgpu::Buffer,
+    tmp: wgpu::Buffer,
+    gate: wgpu::Buffer,
+    up: wgpu::Buffer,
+    hidden: wgpu::Buffer,
+    last: wgpu::Buffer,
+    logits: wgpu::Buffer,
+    scores: wgpu::Buffer,
+    target_buf: wgpu::Buffer,
+    dummy: wgpu::Buffer,
+    logits_staging: wgpu::Buffer,
+    cos: wgpu::Buffer,
+    sin: wgpu::Buffer,
+    cos_hash: u64,
+    sin_hash: u64,
+    params: wgpu::Buffer,
+}
+
+static WORKSPACE: OnceLock<Mutex<Option<(WorkspaceKey, DecoderWorkspace)>>> = OnceLock::new();
+
+fn slice_hash(data: &[f32]) -> u64 {
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    let bytes: &[u8] = bytemuck::cast_slice(data);
+    bytes.hash(&mut h);
+    h.finish()
+}
+
+impl DecoderWorkspace {
+    fn new(
+        dev: &wgpu::Device,
+        key: WorkspaceKey,
+        chunk_rows: usize,
+        out_len: usize,
+        slots: usize,
+    ) -> Self {
+        let io = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST;
+        let src = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC;
+        let f32s = |n: usize| (n * 4).max(16);
+        let act = |label: &str, n: usize| storage_buffer(dev, label, f32s(n), io);
+        let (t, d, kv_dim, inter, vocab, hd) =
+            (key.t, key.d, key.kv_dim, key.inter, key.vocab, key.head_dim);
+        let half = hd / 2;
+        Self {
+            x_a: storage_buffer(dev, "x_a", f32s(t * d), io),
+            x_b: act("x_b", t * d),
+            normed: act("normed", t * d),
+            q: act("q", t * d),
+            k: act("k", t * kv_dim),
+            v: act("v", t * kv_dim),
+            mixed: act("mixed", t * d),
+            tmp: act("tmp", t * d),
+            gate: act("gate", t * inter),
+            up: act("up", t * inter),
+            hidden: act("hidden", t * inter),
+            last: act("last_normed", d),
+            logits: storage_buffer(
+                dev,
+                "logits",
+                f32s(if key.nll_mode {
+                    chunk_rows * vocab
+                } else {
+                    vocab
+                }),
+                src,
+            ),
+            scores: storage_buffer(dev, "nll", f32s(t), src),
+            target_buf: storage_buffer(dev, "targets", f32s(t.max(4)), io),
+            dummy: act("dummy", 4),
+            logits_staging: storage_buffer(
+                dev,
+                "logits_staging",
+                f32s(out_len),
+                wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            ),
+            cos: storage_buffer(dev, "rope_cos", f32s(t * half), io),
+            sin: storage_buffer(dev, "rope_sin", f32s(t * half), io),
+            cos_hash: 0,
+            sin_hash: 0,
+            params: storage_buffer(dev, "decoder_params", slots * PARAM_STRIDE, io),
+        }
+    }
+}
+
 impl GpuContext {
     /// Runs the full decoder stack on the device for `x0` (embedded rows `[t, hidden]`) and
     /// returns the last position's logits `[vocab]`.
@@ -601,63 +706,55 @@ impl GpuContext {
         let head = lin(plan.head, d, plan.vocab)?;
 
         let dev = &self.device;
-        let io = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST;
-        let f32s = |n: usize| (n * 4).max(16);
-        let act = |label: &str, n: usize| storage_buffer(dev, label, f32s(n), io);
-        let x_a = storage_buffer(dev, "x_a", f32s(t * d), io);
-        let x_b = act("x_b", t * d);
-        let normed = act("normed", t * d);
-        let q = act("q", t * d);
-        let k = act("k", t * kv_dim);
-        let v = act("v", t * kv_dim);
-        let mixed = act("mixed", t * d);
-        let tmp = act("tmp", t * d);
-        let gate = act("gate", t * plan.inter);
-        let up = act("up", t * plan.inter);
-        let hidden = act("hidden", t * plan.inter);
-        let last = act("last_normed", d);
-        let src = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC;
-        let logits = storage_buffer(
-            dev,
-            "logits",
-            f32s(if nll_mode {
-                chunk_rows * plan.vocab
-            } else {
-                plan.vocab
-            }),
-            src,
-        );
-        let scores = storage_buffer(dev, "nll", f32s(t), src);
-        let mut target_ids = plan.targets.unwrap_or(&[]).to_vec();
-        target_ids.resize(t.max(4), 0);
-        let target_buf = dev.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("targets"),
-            contents: bytemuck::cast_slice(&target_ids),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
-        let dummy = act("dummy", 4);
-        let logits_staging = storage_buffer(
-            dev,
-            "logits_staging",
-            f32s(out_len),
-            wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-        );
         let half = hd / 2;
-        let cos = dev.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("rope_cos"),
-            contents: bytemuck::cast_slice(&plan.rope_cos[..t * half]),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
-        let sin = dev.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("rope_sin"),
-            contents: bytemuck::cast_slice(&plan.rope_sin[..t * half]),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
         let slots = 16 * plan.layers.len() + 4 + 2 * (t.div_ceil(64) + 1);
-        let params = storage_buffer(dev, "decoder_params", slots * PARAM_STRIDE, io);
+        let key = WorkspaceKey {
+            device_ptr: std::sync::Arc::as_ptr(dev) as usize,
+            t,
+            d,
+            kv_dim,
+            inter,
+            vocab: plan.vocab,
+            layers: plan.layers.len(),
+            nll_mode,
+            head_dim: hd,
+        };
+        let mut ws = {
+            let mut guard = WORKSPACE
+                .get_or_init(|| Mutex::new(None))
+                .lock()
+                .map_err(|_| {
+                    ThmeError::ExecutionFailed("decoder workspace lock poisoned".into())
+                })?;
+            match guard.take() {
+                Some((k, w)) if k == key => w,
+                _ => DecoderWorkspace::new(dev, key, chunk_rows, out_len, slots),
+            }
+        };
 
         let t_in = Instant::now();
-        self.queue.write_buffer(&x_a, 0, bytemuck::cast_slice(x0));
+        self.queue
+            .write_buffer(&ws.x_a, 0, bytemuck::cast_slice(x0));
+        if nll_mode {
+            let mut target_ids = plan.targets.unwrap_or(&[]).to_vec();
+            target_ids.resize(t.max(4), 0);
+            self.queue
+                .write_buffer(&ws.target_buf, 0, bytemuck::cast_slice(&target_ids));
+        }
+        let cos_slice = &plan.rope_cos[..t * half];
+        let sin_slice = &plan.rope_sin[..t * half];
+        let cos_hash = slice_hash(cos_slice);
+        if cos_hash != ws.cos_hash {
+            self.queue
+                .write_buffer(&ws.cos, 0, bytemuck::cast_slice(cos_slice));
+            ws.cos_hash = cos_hash;
+        }
+        let sin_hash = slice_hash(sin_slice);
+        if sin_hash != ws.sin_hash {
+            self.queue
+                .write_buffer(&ws.sin, 0, bytemuck::cast_slice(sin_slice));
+            ws.sin_hash = sin_hash;
+        }
         bump(&self.counters.input_write_ns, t_in);
 
         let t_enc = Instant::now();
@@ -683,7 +780,7 @@ impl GpuContext {
                     }),
                     labels: Vec::new(),
                 }),
-                params: &params,
+                params: &ws.params,
                 param_bytes: Vec::with_capacity(slots * PARAM_STRIDE),
                 dispatches: 0,
             };
@@ -704,18 +801,18 @@ impl GpuContext {
                     "rms_norm",
                     &kx.rms_norm,
                     words(&[t as u32, d as u32, eps, 0]),
-                    [&x_a, attn_norm, &dummy, &normed],
+                    [&ws.x_a, attn_norm, &ws.dummy, &ws.normed],
                     (t as u32, 1, 1),
                     lay,
                 )?;
-                rec.linear(&normed, 0, wq, &q, t, d, d)?;
-                rec.linear(&normed, 0, wk, &k, t, d, kv_dim)?;
-                rec.linear(&normed, 0, wv, &v, t, d, kv_dim)?;
+                rec.linear(&ws.normed, 0, wq, &ws.q, t, d, d)?;
+                rec.linear(&ws.normed, 0, wk, &ws.k, t, d, kv_dim)?;
+                rec.linear(&ws.normed, 0, wv, &ws.v, t, d, kv_dim)?;
                 rec.op(
                     "rope",
                     &kx.rope,
                     words(&[t as u32, d as u32, hd as u32, half as u32]),
-                    [&cos, &sin, &dummy, &q],
+                    [&ws.cos, &ws.sin, &ws.dummy, &ws.q],
                     grid(t * (d / hd) * half),
                     lay,
                 )?;
@@ -723,7 +820,7 @@ impl GpuContext {
                     "rope",
                     &kx.rope,
                     words(&[t as u32, kv_dim as u32, hd as u32, half as u32]),
-                    [&cos, &sin, &dummy, &k],
+                    [&ws.cos, &ws.sin, &ws.dummy, &ws.k],
                     grid(t * kv_heads * half),
                     lay,
                 )?;
@@ -736,7 +833,7 @@ impl GpuContext {
                         },
                         tiled,
                         words(&[t as u32, heads as u32, kv_heads as u32, hd as u32, scale]),
-                        [&q, &k, &v, &mixed],
+                        [&ws.q, &ws.k, &ws.v, &ws.mixed],
                         (t.div_ceil(64) as u32, heads as u32, 1),
                         lay,
                     )?,
@@ -744,17 +841,17 @@ impl GpuContext {
                         "attention",
                         &kx.attention,
                         words(&[t as u32, heads as u32, kv_heads as u32, hd as u32, scale]),
-                        [&q, &k, &v, &mixed],
+                        [&ws.q, &ws.k, &ws.v, &ws.mixed],
                         (heads as u32, t as u32, 1),
                         lay,
                     )?,
                 }
-                rec.linear(&mixed, 0, wo, &tmp, t, d, d)?;
+                rec.linear(&ws.mixed, 0, wo, &ws.tmp, t, d, d)?;
                 rec.op(
                     "add",
                     &kx.add,
                     words(&[td as u32]),
-                    [&x_a, &tmp, &dummy, &x_b],
+                    [&ws.x_a, &ws.tmp, &ws.dummy, &ws.x_b],
                     grid(td),
                     lay,
                 )?;
@@ -762,26 +859,26 @@ impl GpuContext {
                     "rms_norm",
                     &kx.rms_norm,
                     words(&[t as u32, d as u32, eps, 0]),
-                    [&x_b, mlp_norm, &dummy, &normed],
+                    [&ws.x_b, mlp_norm, &ws.dummy, &ws.normed],
                     (t as u32, 1, 1),
                     lay,
                 )?;
-                rec.linear(&normed, 0, wg, &gate, t, d, plan.inter)?;
-                rec.linear(&normed, 0, wu, &up, t, d, plan.inter)?;
+                rec.linear(&ws.normed, 0, wg, &ws.gate, t, d, plan.inter)?;
+                rec.linear(&ws.normed, 0, wu, &ws.up, t, d, plan.inter)?;
                 rec.op(
                     "swiglu",
                     &kx.swiglu,
                     words(&[tint as u32]),
-                    [&gate, &up, &dummy, &hidden],
+                    [&ws.gate, &ws.up, &ws.dummy, &ws.hidden],
                     grid(tint),
                     lay,
                 )?;
-                rec.linear(&hidden, 0, wd, &tmp, t, plan.inter, d)?;
+                rec.linear(&ws.hidden, 0, wd, &ws.tmp, t, plan.inter, d)?;
                 rec.op(
                     "add",
                     &kx.add,
                     words(&[td as u32]),
-                    [&x_b, &tmp, &dummy, &x_a],
+                    [&ws.x_b, &ws.tmp, &ws.dummy, &ws.x_a],
                     grid(td),
                     lay,
                 )?;
@@ -791,19 +888,19 @@ impl GpuContext {
                     "rms_norm",
                     &kx.rms_norm,
                     words(&[t as u32, d as u32, eps, 0]),
-                    [&x_a, &final_norm, &dummy, &normed],
+                    [&ws.x_a, &final_norm, &ws.dummy, &ws.normed],
                     (t as u32, 1, 1),
                     lay,
                 )?;
                 let mut first = 0;
                 while first < scored {
                     let rows = chunk_rows.min(scored - first);
-                    rec.linear(&normed, first, &head, &logits, rows, d, plan.vocab)?;
+                    rec.linear(&ws.normed, first, &head, &ws.logits, rows, d, plan.vocab)?;
                     rec.op(
                         "nll",
                         &kx.nll,
                         words(&[rows as u32, plan.vocab as u32, first as u32, 0]),
-                        [&logits, &target_buf, &dummy, &scores],
+                        [&ws.logits, &ws.target_buf, &ws.dummy, &ws.scores],
                         (rows as u32, 1, 1),
                         lay,
                     )?;
@@ -815,17 +912,17 @@ impl GpuContext {
                     "rms_norm",
                     &kx.rms_norm,
                     words(&[1, d as u32, eps, ((t - 1) * d) as u32]),
-                    [&x_a, &final_norm, &dummy, &last],
+                    [&ws.x_a, &final_norm, &ws.dummy, &ws.last],
                     (1, 1, 1),
                     lay,
                 )?;
-                rec.linear(&last, 0, &head, &logits, 1, d, plan.vocab)?;
+                rec.linear(&ws.last, 0, &head, &ws.logits, 1, d, plan.vocab)?;
             }
             rec.finish()
         };
         let logit_bytes = (out_len * 4) as u64;
-        let result = if nll_mode { &scores } else { &logits };
-        encoder.copy_buffer_to_buffer(result, 0, &logits_staging, 0, logit_bytes);
+        let result = if nll_mode { &ws.scores } else { &ws.logits };
+        encoder.copy_buffer_to_buffer(result, 0, &ws.logits_staging, 0, logit_bytes);
         let op_readback = profile.as_ref().map(|prof| {
             let n = prof.labels.len() as u32 * 2;
             let bytes = u64::from(n) * 8;
@@ -857,7 +954,7 @@ impl GpuContext {
         self.counters.submits.fetch_add(1, Ordering::Relaxed);
 
         let t_in = Instant::now();
-        self.queue.write_buffer(&params, 0, &param_bytes);
+        self.queue.write_buffer(&ws.params, 0, &param_bytes);
         bump(&self.counters.input_write_ns, t_in);
 
         let t_sub = Instant::now();
@@ -865,7 +962,7 @@ impl GpuContext {
         bump(&self.counters.submit_ns, t_sub);
 
         let t_wait = Instant::now();
-        let slice = logits_staging.slice(..logit_bytes);
+        let slice = ws.logits_staging.slice(..logit_bytes);
         let (tx, rx) = std::sync::mpsc::channel();
         slice.map_async(wgpu::MapMode::Read, move |res| {
             let _ = tx.send(res);
@@ -891,7 +988,10 @@ impl GpuContext {
             out.truncate(scored);
         }
         drop(data);
-        logits_staging.unmap();
+        ws.logits_staging.unmap();
+        if let Ok(mut guard) = WORKSPACE.get_or_init(|| Mutex::new(None)).lock() {
+            *guard = Some((key, ws));
+        }
         bump(&self.counters.readback_ns, t_read);
         drop(resident);
         check_finite(&out, "decoder logits")?;
