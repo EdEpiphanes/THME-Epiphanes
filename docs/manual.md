@@ -41,11 +41,13 @@ thme <SUBCOMMAND> [OPTIONS]
 ## 3. Desktop Studio GUI Guide
 
 Launch with:
+
 ```bash
 thme gui
 ```
 
 The GUI consists of 10 specialized workspaces:
+
 - **Tab 0: Master Dashboard**: Global cockpit consolidating memory savings, perplexity deltas, and token simulation.
 - **Tab 1: Models & Weights**: Ingestion wizard supporting drag-and-drop GGUF/SafeTensors and architecture rebuilder.
 - **Tab 2: Layer Tweaker**: Fine-grained deconstruction of layer attention, MLPs, reaching profiles, and alpha/beta mixing.
@@ -89,6 +91,7 @@ Surgery recipes are structured declarative JSON documents:
 ## 5. Security & Verification
 
 Verify release asset integrity using:
+
 ```bash
 sha256sum -c SHA256SUMS.txt
 ```

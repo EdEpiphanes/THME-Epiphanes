@@ -380,7 +380,6 @@ closes it.
 - **Problem**: `ActivationAware` reads statistics from a JSON string in tensor metadata and needs a special case in `apply_selected_format`; each new data-needing rule would add another.
 - **Done means**: A rule receives an apply context (calibration statistics, row width) at one seam; the metadata side channel and special case are gone; AWQ tests unchanged.
 
-
 ### [THME-3011] Measured bits per weight from the written artifact (placeholder)
 
 - **Milestone**: v0.2.6 · **Roadmap**: none · **Priority**: p3 · **Area**: exporter · **Type**: feature · **Status**: triage
@@ -643,6 +642,7 @@ closes it.
 - **Progress** (20 November 2026): trust model documented in `tutorials/mcp_copilot_setup.md`, memory-map limit in `SECURITY.md`, example configs point at `target/release/thme`. Allowed roots are documented as planned, not implemented (every tool reads its own path argument, so the check needs a shared helper and tests). Status stays ready for that part.
 - **Problem**: Any connected MCP client can make the server open and parse any readable path (read-only and scan-gated, no writes or process spawning found), and the configs start it through `cargo run`, which runs build scripts (L3). The parsers use `unsafe Mmap::map` on user files, so truncation by another process while in use can crash the process (L11).
 - **Done means**: The MCP trust model is documented with optional allowed roots; configs point at a built binary; SECURITY.md states the memory-map limit.
+
 ### [THME-3067] precision_sweep: random_matched seeds 2 and 3 gave identical perplexity on Pythia-14M
 
 - **Milestone**: v0.2.0 · **Roadmap**: v0.2.0.9 · **Priority**: p2 · **Area**: research · **Type**: bug · **Status**: triage
@@ -671,7 +671,7 @@ closes it.
 
 ---
 
-# Archive
+## Archive
 
 Tickets below are the original sprint ledger. Sprints 1 to 9 are completed or superseded by the
 active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later (see ROADMAP.md).
