@@ -26,6 +26,7 @@ fn main(
     @builtin(local_invocation_id) lid: vec3<u32>
 ) {
     let row = wid.x;
+    let batch_row = wid.y;
     if (row >= params.out_dim) {
         return;
     }
@@ -34,10 +35,11 @@ fn main(
 
     // Each IQ4_XS super-block is 136 bytes = 34 u32 words
     let row_word_base = row * params.num_blocks_per_row * 34u;
+    let x_batch_base = batch_row * params.in_dim;
 
     for (var b = 0u; b < params.num_blocks_per_row; b++) {
         let b_base = row_word_base + b * 34u;
-        let x_base = b * 256u;
+        let x_base = x_batch_base + b * 256u;
 
         // Word 0: d (f16 in bits 0..15), scales_h (u16 in bits 16..31)
         let w0 = weights[b_base];
@@ -90,6 +92,6 @@ fn main(
     workgroupBarrier();
 
     if (tid == 0u) {
-        output_y[row] = sdata[0];
+        output_y[batch_row * params.out_dim + row] = sdata[0];
     }
 }

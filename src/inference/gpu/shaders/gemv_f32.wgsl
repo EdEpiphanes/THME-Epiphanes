@@ -21,15 +21,17 @@ fn main(
     @builtin(local_invocation_id) lid: vec3<u32>
 ) {
     let row = wid.x;
+    let batch_row = wid.y;
     if (row >= params.out_dim) {
         return;
     }
     let tid = lid.x;
     var acc: f32 = 0.0;
     let row_base = row * params.in_dim;
+    let x_base = batch_row * params.in_dim;
 
     for (var k = tid; k < params.in_dim; k += 32u) {
-        acc += weights[row_base + k] * input_x[k];
+        acc += weights[row_base + k] * input_x[x_base + k];
     }
 
     sdata[tid] = acc;
@@ -47,6 +49,6 @@ fn main(
     workgroupBarrier();
 
     if (tid == 0u) {
-        output_y[row] = sdata[0];
+        output_y[batch_row * params.out_dim + row] = sdata[0];
     }
 }

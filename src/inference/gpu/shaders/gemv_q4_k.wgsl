@@ -46,6 +46,7 @@ fn main(
     @builtin(local_invocation_id) lid: vec3<u32>
 ) {
     let row = wid.x;
+    let batch_row = wid.y;
     if (row >= params.out_dim) {
         return;
     }
@@ -54,10 +55,11 @@ fn main(
 
     // Each Q4_K super-block is 144 bytes = 36 u32 words
     let row_word_base = row * params.num_blocks_per_row * 36u;
+    let x_batch_base = batch_row * params.in_dim;
 
     for (var b = 0u; b < params.num_blocks_per_row; b++) {
         let b_base = row_word_base + b * 36u;
-        let x_base = b * 256u;
+        let x_base = x_batch_base + b * 256u;
 
         // Word 0 holds f16 d and dmin
         let d_dmin = unpack2x16float(weights[b_base]);
@@ -112,6 +114,6 @@ fn main(
     workgroupBarrier();
 
     if (tid == 0u) {
-        output_y[row] = sdata[0];
+        output_y[batch_row * params.out_dim + row] = sdata[0];
     }
 }
