@@ -90,8 +90,11 @@ struct CudaWorkspace {
     v: CudaSlice<f32>,
     mixed: CudaSlice<f32>,
     tmp: CudaSlice<f32>,
+    tmp16: CudaSlice<u16>,
     gate: CudaSlice<f32>,
+    gate16: CudaSlice<u16>,
     up: CudaSlice<f32>,
+    up16: CudaSlice<u16>,
     last: CudaSlice<f32>,
     logits: CudaSlice<f32>,
     logits16: CudaSlice<u16>,
@@ -113,13 +116,17 @@ pub struct CudaContext {
     fn_rms_norm: CudaFunction,
     fn_rms_norm_f16: CudaFunction,
     fn_rope: CudaFunction,
+    fn_rope_qk_f16: CudaFunction,
     fn_softmax: CudaFunction,
     fn_swiglu_f16: CudaFunction,
+    fn_swiglu_f16_in: CudaFunction,
     fn_add: CudaFunction,
+    fn_add_rms_norm_f16: CudaFunction,
     fn_nll: CudaFunction,
     fn_nll_f16: CudaFunction,
     fn_gemm_f16_tiled: CudaFunction,
     fn_attn_f32: CudaFunction,
+    fn_flash_attn_f16: CudaFunction,
     device_name: String,
     weight_cache: Mutex<WeightCache>,
     workspace: Mutex<Option<(CudaWorkspaceKey, CudaWorkspace)>>,
@@ -289,13 +296,17 @@ impl CudaContext {
             fn_rms_norm: load("rms_norm")?,
             fn_rms_norm_f16: load("rms_norm_f16")?,
             fn_rope: load("rope")?,
+            fn_rope_qk_f16: load("rope_qk_f16")?,
             fn_softmax: load("causal_softmax_f16")?,
             fn_swiglu_f16: load("swiglu_f16")?,
+            fn_swiglu_f16_in: load("swiglu_f16_in")?,
             fn_add: load("add")?,
+            fn_add_rms_norm_f16: load("add_rms_norm_f16")?,
             fn_nll: load("nll")?,
             fn_nll_f16: load("nll_f16")?,
             fn_gemm_f16_tiled: load("gemm_f16_tiled")?,
             fn_attn_f32: load("causal_attention_f32")?,
+            fn_flash_attn_f16: load("flash_attention_f16")?,
             device_name,
             weight_cache: Mutex::new(WeightCache::default()),
             workspace: Mutex::new(None),
@@ -587,8 +598,11 @@ impl CudaContext {
             v: alloc_f32(t * kv_dim, "v")?,
             mixed: alloc_f32(t * d, "mixed")?,
             tmp: alloc_f32(t * d, "tmp")?,
+            tmp16: alloc_u16(t * d, "tmp16")?,
             gate: alloc_f32(t * inter, "gate")?,
+            gate16: alloc_u16(t * inter, "gate16")?,
             up: alloc_f32(t * inter, "up")?,
+            up16: alloc_u16(t * inter, "up16")?,
             last: alloc_f32(d, "last")?,
             logits: alloc_f32(logits_len, "logits")?,
             logits16,
@@ -700,6 +714,136 @@ impl CudaContext {
     }
 
     #[allow(clippy::too_many_arguments)]
+    fn launch_rope_qk_f16(
+        &self,
+        cos: &CudaSlice<f32>,
+        sin: &CudaSlice<f32>,
+        q16: &mut CudaSlice<u16>,
+        k16: &mut CudaSlice<u16>,
+        rows: usize,
+        q_dim: usize,
+        kv_dim: usize,
+        head_dim: usize,
+        half: usize,
+    ) -> Result<(), ThmeError> {
+        let rows_u32 = rows as u32;
+        let q_dim_u32 = q_dim as u32;
+        let kv_dim_u32 = kv_dim as u32;
+        let hd_u32 = head_dim as u32;
+        let half_u32 = half as u32;
+        let total = rows * ((q_dim + kv_dim) / head_dim) * half;
+        unsafe {
+            self.stream
+                .launch_builder(&self.fn_rope_qk_f16)
+                .arg(cos)
+                .arg(sin)
+                .arg(q16)
+                .arg(k16)
+                .arg(&rows_u32)
+                .arg(&q_dim_u32)
+                .arg(&kv_dim_u32)
+                .arg(&hd_u32)
+                .arg(&half_u32)
+                .launch(grid_1d(total))
+        }
+        .map_err(|e| cuda_err("rope_qk_f16 launch", e))?;
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn launch_add_rms_norm_f16(
+        &self,
+        x_in: &CudaSlice<f32>,
+        res16: &CudaSlice<u16>,
+        w: &CudaSlice<f32>,
+        x_out: &mut CudaSlice<f32>,
+        out16: &mut CudaSlice<u16>,
+        rows: usize,
+        d: usize,
+        eps: f32,
+    ) -> Result<(), ThmeError> {
+        let d_u32 = d as u32;
+        let cfg = LaunchConfig {
+            grid_dim: (rows as u32, 1, 1),
+            block_dim: (BLOCK_256, 1, 1),
+            shared_mem_bytes: 0,
+        };
+        unsafe {
+            self.stream
+                .launch_builder(&self.fn_add_rms_norm_f16)
+                .arg(x_in)
+                .arg(res16)
+                .arg(w)
+                .arg(x_out)
+                .arg(out16)
+                .arg(&d_u32)
+                .arg(&eps)
+                .launch(cfg)
+        }
+        .map_err(|e| cuda_err("add_rms_norm_f16 launch", e))?;
+        Ok(())
+    }
+
+    fn launch_swiglu_f16_in(
+        &self,
+        gate16: &CudaSlice<u16>,
+        up16: &CudaSlice<u16>,
+        out16: &mut CudaSlice<u16>,
+        n: usize,
+    ) -> Result<(), ThmeError> {
+        let n_u32 = n as u32;
+        unsafe {
+            self.stream
+                .launch_builder(&self.fn_swiglu_f16_in)
+                .arg(gate16)
+                .arg(up16)
+                .arg(out16)
+                .arg(&n_u32)
+                .launch(grid_1d(n))
+        }
+        .map_err(|e| cuda_err("swiglu_f16_in launch", e))?;
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn launch_flash_attention_f16(
+        &self,
+        ws: &mut CudaWorkspace,
+        t_len: usize,
+        heads: usize,
+        kv_heads: usize,
+        head_dim: usize,
+        scale: f32,
+    ) -> Result<(), ThmeError> {
+        let t_u32 = t_len as u32;
+        let heads_u32 = heads as u32;
+        let kv_heads_u32 = kv_heads as u32;
+        let hd_u32 = head_dim as u32;
+        let smem_bytes = (32 * head_dim * 2 * 2) as u32;
+        let cfg = LaunchConfig {
+            grid_dim: (heads_u32, t_u32.div_ceil(8), 1),
+            block_dim: (32, 8, 1),
+            shared_mem_bytes: smem_bytes,
+        };
+        unsafe {
+            self.stream
+                .launch_builder(&self.fn_flash_attn_f16)
+                .arg(&ws.q16)
+                .arg(&ws.k16)
+                .arg(&ws.v16)
+                .arg(&mut ws.x16)
+                .arg(&t_u32)
+                .arg(&heads_u32)
+                .arg(&kv_heads_u32)
+                .arg(&hd_u32)
+                .arg(&scale)
+                .launch(cfg)
+        }
+        .map_err(|e| cuda_err("flash_attention_f16 launch", e))?;
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
     fn launch_attention(
         &self,
         ws: &mut CudaWorkspace,
@@ -709,7 +853,7 @@ impl CudaContext {
         head_dim: usize,
         scale: f32,
     ) -> Result<(), ThmeError> {
-        let Some(blas_mutex) = &self.blas else {
+        let Some(_blas_mutex) = &self.blas else {
             let t_u32 = t_len as u32;
             let heads_u32 = heads as u32;
             let kv_heads_u32 = kv_heads as u32;
@@ -741,6 +885,24 @@ impl CudaContext {
         let kv_dim = kv_heads * head_dim;
         self.convert_x_to_f16(ws.q.slice(..t_len * d), &mut ws.q16, t_len * d)?;
         self.convert_x_to_f16(ws.k.slice(..t_len * kv_dim), &mut ws.k16, t_len * kv_dim)?;
+        self.launch_attention_qkv16(ws, t_len, heads, kv_heads, head_dim, scale)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn launch_attention_qkv16(
+        &self,
+        ws: &mut CudaWorkspace,
+        t_len: usize,
+        heads: usize,
+        kv_heads: usize,
+        head_dim: usize,
+        scale: f32,
+    ) -> Result<(), ThmeError> {
+        let Some(blas_mutex) = &self.blas else {
+            return Err(ThmeError::ExecutionFailed("cuBLAS unavailable".into()));
+        };
+        let d = heads * head_dim;
+        let kv_dim = kv_heads * head_dim;
 
         let group = heads / kv_heads;
         let alpha: f32 = 1.0;
@@ -934,8 +1096,24 @@ impl CudaContext {
             let (x_ptr, _x_guard) = x16.device_ptr(&self.stream);
             let (y_ptr, _y_guard) = out16.device_ptr_mut(&self.stream);
             let x_off_bytes = (x_row_offset * in_dim * 2) as u64;
-            let alpha: f32 = 1.0;
-            let beta: f32 = 0.0;
+            let f16_acc = std::env::var("THME_CUDA_F16_ACC").as_deref() == Ok("1");
+            let alpha_f32: f32 = 1.0;
+            let beta_f32: f32 = 0.0;
+            let alpha_f16: u16 = 0x3c00;
+            let beta_f16: u16 = 0x0000;
+            let (alpha_ptr, beta_ptr, compute) = if f16_acc {
+                (
+                    (&alpha_f16 as *const u16).cast::<c_void>(),
+                    (&beta_f16 as *const u16).cast::<c_void>(),
+                    cublas_sys::cublasComputeType_t::CUBLAS_COMPUTE_16F,
+                )
+            } else {
+                (
+                    (&alpha_f32 as *const f32).cast::<c_void>(),
+                    (&beta_f32 as *const f32).cast::<c_void>(),
+                    cublas_sys::cublasComputeType_t::CUBLAS_COMPUTE_32F,
+                )
+            };
             let status = unsafe {
                 cublas_sys::cublasGemmEx(
                     *blas.handle(),
@@ -944,18 +1122,18 @@ impl CudaContext {
                     out_dim as i32,
                     rows as i32,
                     in_dim as i32,
-                    (&alpha as *const f32).cast::<c_void>(),
+                    alpha_ptr,
                     w_ptr as *const c_void,
                     cublas_sys::cudaDataType_t::CUDA_R_16F,
                     in_dim as i32,
                     (x_ptr + x_off_bytes) as *const c_void,
                     cublas_sys::cudaDataType_t::CUDA_R_16F,
                     in_dim as i32,
-                    (&beta as *const f32).cast::<c_void>(),
+                    beta_ptr,
                     y_ptr as *mut c_void,
                     cublas_sys::cudaDataType_t::CUDA_R_16F,
                     out_dim as i32,
-                    cublas_sys::cublasComputeType_t::CUBLAS_COMPUTE_32F,
+                    compute,
                     cublas_sys::cublasGemmAlgo_t::CUBLAS_GEMM_DEFAULT_TENSOR_OP,
                 )
             };
@@ -1293,38 +1471,102 @@ impl GpuBackend for CudaContext {
         let td = t * d;
         let tint = t * inter;
         let scale = 1.0 / (hd as f32).sqrt();
+        let use_flash = std::env::var("THME_CUDA_FLASH_ATTN").as_deref() == Ok("1");
 
-        for (attn_norm, mlp_norm, [wq, wk, wv, wo, wg, wu, wd]) in &resident {
-            self.launch_rms_norm_f16(&ws.x_a, attn_norm, &mut ws.x16, t, d, plan.eps, 0)?;
-            self.gemm_f16_preconverted(&ws.x16, wq, &mut ws.q, t, d, d)?;
-            self.gemm_f16_preconverted(&ws.x16, wk, &mut ws.k, t, d, kv_dim)?;
-            if self.blas.is_some() {
+        if self.blas.is_some() {
+            self.launch_rms_norm_f16(&ws.x_a, &resident[0].0, &mut ws.x16, t, d, plan.eps, 0)?;
+            for (idx, (_attn_norm, mlp_norm, [wq, wk, wv, wo, wg, wu, wd])) in
+                resident.iter().enumerate()
+            {
+                self.gemm_f16_to_f16(&ws.x16, 0, wq, &mut ws.q16, t, d, d)?;
+                self.gemm_f16_to_f16(&ws.x16, 0, wk, &mut ws.k16, t, d, kv_dim)?;
                 self.gemm_f16_to_f16(&ws.x16, 0, wv, &mut ws.v16, t, d, kv_dim)?;
-            } else {
+
+                self.launch_rope_qk_f16(
+                    &ws.cos,
+                    &ws.sin,
+                    &mut ws.q16,
+                    &mut ws.k16,
+                    t,
+                    d,
+                    kv_dim,
+                    hd,
+                    half,
+                )?;
+                if use_flash {
+                    self.launch_flash_attention_f16(&mut ws, t, heads, kv_heads, hd, scale)?;
+                } else {
+                    self.launch_attention_qkv16(&mut ws, t, heads, kv_heads, hd, scale)?;
+                }
+
+                self.gemm_f16_to_f16(&ws.x16, 0, wo, &mut ws.tmp16, t, d, d)?;
+                self.launch_add_rms_norm_f16(
+                    &ws.x_a,
+                    &ws.tmp16,
+                    mlp_norm,
+                    &mut ws.x_b,
+                    &mut ws.x16,
+                    t,
+                    d,
+                    plan.eps,
+                )?;
+
+                self.gemm_f16_to_f16(&ws.x16, 0, wg, &mut ws.gate16, t, d, inter)?;
+                self.gemm_f16_to_f16(&ws.x16, 0, wu, &mut ws.up16, t, d, inter)?;
+                self.launch_swiglu_f16_in(&ws.gate16, &ws.up16, &mut ws.x16, tint)?;
+                self.gemm_f16_to_f16(&ws.x16, 0, wd, &mut ws.tmp16, t, inter, d)?;
+
+                let next_norm = if idx + 1 < resident.len() {
+                    &resident[idx + 1].0
+                } else {
+                    &final_norm
+                };
+                self.launch_add_rms_norm_f16(
+                    &ws.x_b,
+                    &ws.tmp16,
+                    next_norm,
+                    &mut ws.x_a,
+                    &mut ws.x16,
+                    t,
+                    d,
+                    plan.eps,
+                )?;
+            }
+        } else {
+            for (attn_norm, mlp_norm, [wq, wk, wv, wo, wg, wu, wd]) in &resident {
+                self.launch_rms_norm_f16(&ws.x_a, attn_norm, &mut ws.x16, t, d, plan.eps, 0)?;
+                self.gemm_f16_preconverted(&ws.x16, wq, &mut ws.q, t, d, d)?;
+                self.gemm_f16_preconverted(&ws.x16, wk, &mut ws.k, t, d, kv_dim)?;
                 self.gemm_f16_preconverted(&ws.x16, wv, &mut ws.v, t, d, kv_dim)?;
-            }
 
-            self.launch_rope(&ws.cos, &ws.sin, &mut ws.q, t, d, hd, half)?;
-            self.launch_rope(&ws.cos, &ws.sin, &mut ws.k, t, kv_dim, hd, half)?;
-            self.launch_attention(&mut ws, t, heads, kv_heads, hd, scale)?;
+                self.launch_rope(&ws.cos, &ws.sin, &mut ws.q, t, d, hd, half)?;
+                self.launch_rope(&ws.cos, &ws.sin, &mut ws.k, t, kv_dim, hd, half)?;
+                self.launch_attention(&mut ws, t, heads, kv_heads, hd, scale)?;
 
-            if self.blas.is_some() {
-                self.gemm_f16_preconverted(&ws.x16, wo, &mut ws.tmp, t, d, d)?;
-            } else {
                 self.linear_into(&ws.mixed, 0, &mut ws.x16, wo, &mut ws.tmp, t, d, d)?;
-            }
-            self.launch_add(&ws.x_a, &ws.tmp, &mut ws.x_b, td)?;
+                self.launch_add(&ws.x_a, &ws.tmp, &mut ws.x_b, td)?;
 
-            self.launch_rms_norm_f16(&ws.x_b, mlp_norm, &mut ws.x16, t, d, plan.eps, 0)?;
-            self.gemm_f16_preconverted(&ws.x16, wg, &mut ws.gate, t, d, inter)?;
-            self.gemm_f16_preconverted(&ws.x16, wu, &mut ws.up, t, d, inter)?;
-            self.launch_swiglu_f16(&ws.gate, &ws.up, &mut ws.x16, tint)?;
-            self.gemm_f16_preconverted(&ws.x16, wd, &mut ws.tmp, t, inter, d)?;
-            self.launch_add(&ws.x_b, &ws.tmp, &mut ws.x_a, td)?;
+                self.launch_rms_norm_f16(&ws.x_b, mlp_norm, &mut ws.x16, t, d, plan.eps, 0)?;
+                self.gemm_f16_preconverted(&ws.x16, wg, &mut ws.gate, t, d, inter)?;
+                self.gemm_f16_preconverted(&ws.x16, wu, &mut ws.up, t, d, inter)?;
+                self.launch_swiglu_f16(&ws.gate, &ws.up, &mut ws.x16, tint)?;
+                self.gemm_f16_preconverted(&ws.x16, wd, &mut ws.tmp, t, inter, d)?;
+                self.launch_add(&ws.x_b, &ws.tmp, &mut ws.x_a, td)?;
+            }
         }
 
         let mut out = if nll_mode {
-            self.launch_rms_norm_f16(&ws.x_a, &final_norm, &mut ws.x16, scored, d, plan.eps, 0)?;
+            if self.blas.is_none() {
+                self.launch_rms_norm_f16(
+                    &ws.x_a,
+                    &final_norm,
+                    &mut ws.x16,
+                    scored,
+                    d,
+                    plan.eps,
+                    0,
+                )?;
+            }
             let mut first = 0;
             while first < scored {
                 let rows = chunk_rows.min(scored - first);
