@@ -103,16 +103,71 @@ fn variant(
     }
 }
 
-/// Deterministic Fisher-Yates shuffle (64-bit LCG), so placements are reproducible.
-fn shuffled(mut items: Vec<usize>, seed: u64) -> Vec<usize> {
-    let mut state = seed
-        .wrapping_mul(6364136223846793005)
-        .wrapping_add(1442695040888963407);
+/// Number of distinct placements of `k` identical-format tensors drawn from a
+/// pool of `n` (n choose k). When the pool is exactly the targets (k == n) this
+/// is 1, so every seed lands on the same placement (THME-3067 duplicate seeds).
+fn count_placements(n: usize, k: usize) -> usize {
+    assert!(k <= n);
+    let k = k.min(n - k);
+    (1..=k).fold(1, |acc, i| acc * (n - i + 1) / i)
+}
+
+/// Counter-based permutation of a pool by permutation index (Lehmer-code
+/// unranking, factorial number system). When the pool is large enough to
+/// distinguish every requested seed (n! >= seeds) this guarantees distinct
+/// permutations for distinct seeds. Falls back to a full-state PRNG for pools
+/// so large that n! does not fit in u64.
+fn shuffled(items: Vec<usize>, seed: u64) -> Vec<usize> {
+    let n = items.len();
+    if n <= 1 {
+        return items;
+    }
+    // Number of permutations of the pool = n! (u64-safe for n <= 20).
+    let mut n_fact: u64 = 1;
+    for i in 1..=n {
+        n_fact *= i as u64;
+    }
+    if n_fact > u64::MAX / 2 {
+        // Pool too large for the factorial-indexed path; use a full-state PRNG.
+        return shuffled_prng(items, seed);
+    }
+    // seed % n! maps every seed to a permutation index; the mapping is
+    // injective for distinct seeds below n!.
+    let index = seed % n_fact;
+    permutation_at(n, index as usize)
+}
+
+/// Unrank the `index`-th permutation (0-indexed) of the pool 0..n, using the
+/// factorial number system. `index` must be < n!.
+fn permutation_at(n: usize, mut index: usize) -> Vec<usize> {
+    let mut nums: Vec<usize> = (0..n).collect();
+    let mut perm = Vec::with_capacity(n);
+    // fact = (n-1)! at the start.
+    let mut fact: usize = 1;
+    for i in 1..n {
+        fact *= i;
+    }
+    for pos in 0..n {
+        let idx = index / fact;
+        index %= fact;
+        perm.push(nums.remove(idx));
+        if pos < n - 1 {
+            fact /= n - pos - 1;
+        }
+    }
+    perm
+}
+
+/// Full-state SplitMix64 fallback used for pools too large for the
+/// factorial-indexed path. Distinct seeds give distinct permutations in
+/// practice for realistic seed counts.
+fn shuffled_prng(mut items: Vec<usize>, seed: u64) -> Vec<usize> {
+    let mut state = seed;
     for i in (1..items.len()).rev() {
         state = state
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
-        let j = ((state >> 33) as usize) % (i + 1);
+            .wrapping_add(0x9E37_79B9_7F4A_7C15)
+            .wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        let j = ((state ^ (state >> 32)) % (i as u64 + 1)) as usize;
         items.swap(i, j);
     }
     items
@@ -223,15 +278,30 @@ fn build_variants(model: &ModelIR, args: &Args) -> Vec<Variant> {
     };
     let (ternary_count, ternary_pool) = pool_for(&TensorFormat::Ternary);
     let (q8_count, q8_pool) = pool_for(&TensorFormat::Q8_0);
-    for seed in 1..=args.seeds {
+
+    // Placement space of the random control. When the pool is exactly the targets
+    // (k == n) C(n,k)==1, so every seed collapses onto the same placement - the
+    // THME-3067 duplicate-seed symptom. Report the space and cap seeds to it.
+    let tern_places = count_placements(ternary_pool.len(), ternary_count);
+    let q8_places = count_placements(q8_pool.len(), q8_count);
+    let total_places = tern_places * q8_places;
+    let run_seeds = total_places.min(args.seeds as usize);
+    if run_seeds < args.seeds as usize {
+        eprintln!(
+            "only {total_places} distinct placement(s) exist for the recipe's shapes (requested {}), capped to",
+            args.seeds
+        );
+    }
+
+    for seed in 1..=run_seeds {
         let mut formats: Vec<Option<TensorFormat>> = vec![None; model.tensors.len()];
-        for &i in shuffled(ternary_pool.clone(), seed)
+        for &i in shuffled(ternary_pool.clone(), seed as u64)
             .iter()
             .take(ternary_count)
         {
             formats[i] = Some(TensorFormat::Ternary);
         }
-        for &i in shuffled(q8_pool.clone(), seed ^ 0x5eed)
+        for &i in shuffled(q8_pool.clone(), (seed ^ 0x5eed) as u64)
             .iter()
             .take(q8_count)
         {
@@ -371,4 +441,81 @@ fn main() -> Result<()> {
     .with_context(|| format!("Failed to write {:?}", args.report_json))?;
     println!("Results written to {:?}", args.report_json);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn shuffled_distinguishes_seeds_permutations_when_possible() {
+        // The counter-based generator maps seed % n! to a permutation index, so
+        // for every pool where n! >= seeds, distinct seeds give distinct
+        // permutations. Assert full distinctness for pools small enough that
+        // n! fits in u64.
+        for n in 2usize..7 {
+            let max: usize = (1..=n).product();
+            for seeds in 1usize..=max.min(16) {
+                let mut perms: std::collections::HashSet<Vec<usize>> =
+                    std::collections::HashSet::new();
+                for seed in 1usize..=seeds {
+                    let items: Vec<usize> = (0..n).collect();
+                    let perm = super::shuffled(items, seed as u64);
+                    perms.insert(perm);
+                }
+                assert_eq!(
+                    perms.len(),
+                    seeds,
+                    "pool n={n}: seeds={seeds} gave {} distinct permutations",
+                    perms.len()
+                );
+            }
+        }
+        // Larger pool (n=7, 5040 permutations) with 8 seeds: distinct seeds
+        // must yield distinct permutations.
+        let mut perms: std::collections::HashSet<Vec<usize>> = std::collections::HashSet::new();
+        for seed in 1usize..=8 {
+            let items: Vec<usize> = (0..7).collect();
+            perms.insert(super::shuffled(items, seed as u64));
+        }
+        assert_eq!(
+            perms.len(),
+            8,
+            "distinct seeds collapsed on a 7-element pool"
+        );
+    }
+
+    #[test]
+    fn count_placements_uses_combinations() {
+        assert_eq!(super::count_placements(1, 1), 1);
+        assert_eq!(super::count_placements(2, 1), 2);
+        assert_eq!(super::count_placements(2, 2), 1); // pool == targets → 1 placement
+        assert_eq!(super::count_placements(3, 3), 1); // all same-shape targets
+        assert_eq!(super::count_placements(4, 2), 6);
+        assert_eq!(super::count_placements(5, 2), 10);
+    }
+
+    #[test]
+    fn small_pool_collapses_seeds() {
+        // Pool exactly the targets (k == n) → C(n,k)==1 distinct placement.
+        // With 3 seeds requested but only 1 placement, seeds 2 and 3 are
+        // redundant — the THME-3067 duplicate-seed symptom.
+        let n = 3;
+        let k = n;
+        let places = super::count_placements(n, k);
+        assert_eq!(places, 1);
+        assert!(places < 3, "only 1 placement but 3 seeds requested");
+        assert_eq!(places.min(3), 1);
+    }
+
+    #[test]
+    fn reports_placement_limit_when_seeds_exceed() {
+        // When seeds exceed the number of distinct placements, report the limit
+        // and cap to it.
+        let n = 2;
+        let k = n;
+        let places = super::count_placements(n, k);
+        let seeds = 3usize;
+        assert!(places < seeds);
+        let run = places.min(seeds);
+        assert_eq!(run, places);
+    }
 }
