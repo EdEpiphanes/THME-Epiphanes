@@ -2,10 +2,13 @@
 //! GPU acceleration pipeline for THME reference inference.
 
 pub mod backend;
+#[cfg(any(target_os = "windows", target_os = "linux"))]
+pub mod cuda;
 pub mod decoder;
 pub mod dense;
 pub mod error;
 pub mod features;
+pub mod ptx_kernels;
 pub mod tensor;
 
 pub use backend::{

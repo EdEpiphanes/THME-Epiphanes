@@ -6,6 +6,8 @@
 > and timing to be decided). Model runs are paused, so work that needs a measurement on a real
 > model is built and tested but marked *measurement pending*. Every claim stays measured, or
 > labelled as not measured.
+>
+> 26 November 2026: research sprint code landed (Epiphanes quality gate, DC-CCCP allocator, BitCOS, architecture conversion, cluster planner, Polar KV, grounded decode, offload policy) and merged with the CUDA, KV-cache and Q4_0 decode work; built and unit-tested. GPU throughput numbers are *reported* in docs/benchmarks handoffs (raw reports not committed); quality-gate and allocator results on real models are *measurement pending*.
 
 ---
 

@@ -34,10 +34,18 @@ impl KvLayer {
     }
 }
 
+/// Opaque device-resident KV cache state (e.g., CUDA `CudaSlice<u16>` buffers).
+pub(crate) struct DeviceKvHandle {
+    pub(crate) len: usize,
+    pub(crate) bytes: usize,
+    pub(crate) state: Box<dyn std::any::Any + Send + Sync>,
+}
+
 /// The cached keys and values of every layer for one sequence.
 pub struct KvCache {
     kv_dim: usize,
     layers: Vec<KvLayer>,
+    device: Option<DeviceKvHandle>,
 }
 
 impl KvCache {
@@ -52,11 +60,15 @@ impl KvCache {
                     values: Vec::new(),
                 })
                 .collect(),
+            device: None,
         }
     }
 
     /// Number of positions (tokens) cached so far.
     pub fn len(&self) -> usize {
+        if let Some(dev) = &self.device {
+            return dev.len;
+        }
         self.layers.first().map_or(0, KvLayer::len)
     }
 
@@ -75,7 +87,35 @@ impl KvCache {
 
     /// Bytes of key and value storage held right now, for measured KV-cache reports.
     pub fn bytes(&self) -> usize {
+        if let Some(dev) = &self.device {
+            return dev.bytes;
+        }
         2 * self.num_layers() * self.len() * self.kv_dim * std::mem::size_of::<f32>()
+    }
+
+    pub(crate) fn has_device_state(&self) -> bool {
+        self.device.is_some()
+    }
+
+    pub(crate) fn device_state_mut<T: 'static>(
+        &mut self,
+    ) -> Option<(&mut T, &mut usize, &mut usize)> {
+        let dev = self.device.as_mut()?;
+        let state = dev.state.downcast_mut::<T>()?;
+        Some((state, &mut dev.len, &mut dev.bytes))
+    }
+
+    pub(crate) fn set_device_state<T: Send + Sync + 'static>(
+        &mut self,
+        state: T,
+        len: usize,
+        bytes: usize,
+    ) {
+        self.device = Some(DeviceKvHandle {
+            len,
+            bytes,
+            state: Box::new(state),
+        });
     }
 
     pub(crate) fn layer_mut(&mut self, index: usize) -> Result<&mut KvLayer> {

@@ -10,6 +10,8 @@
 @group(0) @binding(4) var<storage, read_write> out: array<f32>;
 
 var<workgroup> red: array<f32, 64>;
+var<workgroup> smax256: array<f32, 256>;
+var<workgroup> ssum256: array<f32, 256>;
 var<workgroup> scores: array<f32, 2048>;
 
 fn reduce_sum(tid: u32, v: f32) -> f32 {
@@ -32,6 +34,30 @@ fn reduce_max(tid: u32, v: f32) -> f32 {
         workgroupBarrier();
     }
     let r = red[0];
+    workgroupBarrier();
+    return r;
+}
+
+fn reduce_sum_256(tid: u32, v: f32) -> f32 {
+    ssum256[tid] = v;
+    workgroupBarrier();
+    for (var s = 128u; s > 0u; s >>= 1u) {
+        if (tid < s) { ssum256[tid] += ssum256[tid + s]; }
+        workgroupBarrier();
+    }
+    let r = ssum256[0];
+    workgroupBarrier();
+    return r;
+}
+
+fn reduce_max_256(tid: u32, v: f32) -> f32 {
+    smax256[tid] = v;
+    workgroupBarrier();
+    for (var s = 128u; s > 0u; s >>= 1u) {
+        if (tid < s) { smax256[tid] = max(smax256[tid], smax256[tid + s]); }
+        workgroupBarrier();
+    }
+    let r = smax256[0];
     workgroupBarrier();
     return r;
 }
@@ -141,18 +167,18 @@ fn swiglu(@builtin(workgroup_id) wid: vec3<u32>, @builtin(local_invocation_id) l
 // Negative log-likelihood of the next token. params: rows, vocab, first row index.
 // in_a = logits [rows, vocab], in_b = target ids (u32 bits) indexed by global row,
 // out[global row] = logsumexp(logits) - logits[target].
-@compute @workgroup_size(64)
+@compute @workgroup_size(256)
 fn nll(@builtin(workgroup_id) wid: vec3<u32>, @builtin(local_invocation_id) lid: vec3<u32>) {
     let vocab = p[1];
     let row = wid.x;
     let base = row * vocab;
     let tid = lid.x;
     var lm = -3.0e38;
-    for (var i = tid; i < vocab; i += 64u) { lm = max(lm, in_a[base + i]); }
-    let m = reduce_max(tid, lm);
+    for (var i = tid; i < vocab; i += 256u) { lm = max(lm, in_a[base + i]); }
+    let m = reduce_max_256(tid, lm);
     var ls = 0.0;
-    for (var i = tid; i < vocab; i += 64u) { ls += exp(in_a[base + i] - m); }
-    let total = reduce_sum(tid, ls);
+    for (var i = tid; i < vocab; i += 256u) { ls += exp(in_a[base + i] - m); }
+    let total = reduce_sum_256(tid, ls);
     if (tid == 0u) {
         let g = p[2] + row;
         let target_id = bitcast<u32>(in_b[g]);

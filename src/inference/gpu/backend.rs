@@ -33,22 +33,54 @@ pub enum DeviceArg {
     Cpu,
 }
 
+#[cfg_attr(not(any(target_os = "windows", target_os = "linux")), allow(dead_code))]
+fn should_skip_cuda(val: Option<&str>) -> bool {
+    matches!(
+        val.map(|s| s.trim().to_ascii_lowercase()).as_deref(),
+        Some("wgpu" | "vulkan" | "metal" | "dx12")
+    )
+}
+
+fn wgpu_api_filter(val: Option<&str>) -> Option<String> {
+    match val.map(|s| s.trim().to_ascii_lowercase()).as_deref() {
+        None | Some("" | "wgpu" | "auto") => None,
+        Some(api) => Some(api.to_string()),
+    }
+}
+
 impl DeviceArg {
     /// Resolves the device argument into an optional GPU backend.
     /// Returns `None` for CPU or if GPU initialization fails in Auto mode.
     pub fn resolve(self) -> Option<Arc<dyn GpuBackend>> {
+        let backend_env = std::env::var("THME_GPU_BACKEND").ok();
         match self {
             Self::Cpu => None,
-            Self::Gpu => match GpuContext::init() {
-                Ok(ctx) => Some(Arc::new(ctx)),
-                Err(err) => {
-                    eprintln!("Warning: GPU requested but initialization failed ({err}); falling back to CPU");
-                    None
+            Self::Gpu => {
+                #[cfg(any(target_os = "windows", target_os = "linux"))]
+                if !should_skip_cuda(backend_env.as_deref()) {
+                    if let Ok(ctx) = super::cuda::CudaContext::init() {
+                        return Some(Arc::new(ctx));
+                    }
                 }
-            },
-            Self::Auto => GpuContext::init()
-                .ok()
-                .map(|ctx| Arc::new(ctx) as Arc<dyn GpuBackend>),
+                match GpuContext::init() {
+                    Ok(ctx) => Some(Arc::new(ctx)),
+                    Err(err) => {
+                        eprintln!("Warning: GPU requested but initialization failed ({err}); falling back to CPU");
+                        None
+                    }
+                }
+            }
+            Self::Auto => {
+                #[cfg(any(target_os = "windows", target_os = "linux"))]
+                if !should_skip_cuda(backend_env.as_deref()) {
+                    if let Ok(ctx) = super::cuda::CudaContext::init() {
+                        return Some(Arc::new(ctx));
+                    }
+                }
+                GpuContext::init()
+                    .ok()
+                    .map(|ctx| Arc::new(ctx) as Arc<dyn GpuBackend>)
+            }
         }
     }
 }
@@ -59,6 +91,7 @@ pub enum ShaderKind {
     Q4_K,
     Q5_K,
     IQ4_XS,
+    Bitcos,
     F32,
 }
 
@@ -189,10 +222,9 @@ impl ActivationCopy {
 }
 
 pub(super) const GEMV_MAX_ROWS: usize = 8;
-/// Default weight bytes kept resident for slice-backed linears before the cache is flushed;
+/// Default weight bytes kept resident for slice-backed linears before LRU eviction;
 /// raise it with [`GpuContext::set_weight_budget`] when the card has the memory.
-/// shortcut: flush-all, not LRU; a model larger than the budget re-uploads every pass.
-const WEIGHT_CACHE_BUDGET: usize = 4 << 30;
+const WEIGHT_CACHE_BUDGET: usize = 10 << 30;
 
 pub(super) fn storage_buffer(
     device: &wgpu::Device,
@@ -310,12 +342,15 @@ impl TimestampProbe {
 struct CachedWeight {
     fingerprint: u64,
     buffer: Arc<wgpu::Buffer>,
+    bytes: usize,
+    last_used: u64,
 }
 
 #[derive(Default)]
 struct WeightCache {
     entries: HashMap<(usize, usize, u8), CachedWeight>,
     bytes: usize,
+    tick: u64,
 }
 
 /// Cheap identity check for a weight slice: length plus 64 samples spread over it.
@@ -416,11 +451,9 @@ fn coop_matrix_supported(adapter: &wgpu::Adapter) -> bool {
 }
 
 /// Picks a real GPU explicitly: discrete before integrated, Vulkan before Metal before DX12.
-/// `THME_GPU_BACKEND=vulkan|metal|dx12` restricts the choice to one API.
+/// `THME_GPU_BACKEND=vulkan|metal|dx12` restricts the choice to one API (`wgpu`/`auto` selects any).
 fn select_adapter(instance: &wgpu::Instance) -> Result<wgpu::Adapter, ThmeError> {
-    let only = std::env::var("THME_GPU_BACKEND")
-        .ok()
-        .map(|v| v.to_ascii_lowercase());
+    let only = wgpu_api_filter(std::env::var("THME_GPU_BACKEND").ok().as_deref());
     pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY))
         .into_iter()
         .filter(|a| {
@@ -533,6 +566,10 @@ impl GpuContext {
                 build("IQ4_XS", include_str!("shaders/gemv_iq4_xs.wgsl")),
             ),
             (
+                ShaderKind::Bitcos,
+                build("Bitcos", include_str!("shaders/gemv_bitcos.wgsl")),
+            ),
+            (
                 ShaderKind::F32,
                 build("F32", include_str!("shaders/gemv_f32.wgsl")),
             ),
@@ -584,6 +621,14 @@ impl GpuContext {
         ctx.self_test()?;
         if coop_wanted {
             ctx.coop_probe();
+        }
+        match std::env::var("THME_GPU_STORAGE").ok().as_deref() {
+            Some("f16") => ctx.set_weight_storage(WeightStorage::F16),
+            Some("f32") => ctx.set_weight_storage(WeightStorage::F32),
+            _ => {}
+        }
+        if std::env::var("THME_GPU_COOP").ok().as_deref() == Some("1") && ctx.coop_matrix_ready() {
+            ctx.set_coop_matrix(true);
         }
         Ok(ctx)
     }
@@ -1159,8 +1204,11 @@ impl GpuContext {
             .weight_cache
             .lock()
             .map_err(|_| ThmeError::ExecutionFailed("GPU weight cache mutex poisoned".into()))?;
-        if let Some(hit) = cache.entries.get(&key) {
+        cache.tick = cache.tick.wrapping_add(1);
+        let tick = cache.tick;
+        if let Some(hit) = cache.entries.get_mut(&key) {
             if hit.fingerprint == print {
+                hit.last_used = tick;
                 return Ok(DeviceWeight {
                     buffer: Arc::clone(&hit.buffer),
                     storage,
@@ -1179,8 +1227,15 @@ impl GpuContext {
                 reason: format!("Tensor size {bytes} exceeds GPU limit {cap}"),
             });
         }
-        if cache.bytes + bytes > self.weight_budget.load(Ordering::Relaxed) {
-            *cache = WeightCache::default();
+        let budget = self.weight_budget.load(Ordering::Relaxed);
+        while cache.bytes + bytes > budget {
+            let Some((&oldest_key, _)) = cache.entries.iter().min_by_key(|(_, v)| v.last_used)
+            else {
+                break;
+            };
+            if let Some(removed) = cache.entries.remove(&oldest_key) {
+                cache.bytes = cache.bytes.saturating_sub(removed.bytes);
+            }
         }
         let t_up = Instant::now();
         let packed;
@@ -1203,6 +1258,8 @@ impl GpuContext {
         let entry = CachedWeight {
             fingerprint: print,
             buffer: Arc::clone(&buffer),
+            bytes,
+            last_used: tick,
         };
         if cache.entries.insert(key, entry).is_none() {
             cache.bytes += bytes;
@@ -1337,12 +1394,7 @@ impl GpuContext {
                             ))
                         })?
                         .clone();
-                    let out = op.out_dim as u32;
-                    // Output rows spread over x then y; token rows ride on z.
-                    (
-                        p,
-                        [out.min(MAX_GROUPS), out.div_ceil(MAX_GROUPS), rows as u32],
-                    )
+                    (p, gemv_groups(op.out_dim, rows))
                 };
                 if let Some(kind) = copy.filter(|k| converted.as_ref().is_none_or(|c| c.0 != *k)) {
                     converted = Some((
@@ -1442,12 +1494,19 @@ impl GpuContext {
     }
 }
 
+/// Workgroup grid of a quantized GEMV: output rows spread over x then y; token rows ride on z.
+fn gemv_groups(out_dim: usize, rows: usize) -> [u32; 3] {
+    let out = out_dim as u32;
+    [out.min(MAX_GROUPS), out.div_ceil(MAX_GROUPS), rows as u32]
+}
+
 /// Kernel family and weight storage a tensor of this dtype runs with.
 fn shader_kind(dtype: QuantDtype) -> Result<(ShaderKind, WeightStorage), ThmeError> {
     match dtype {
         QuantDtype::Q4_K => Ok((ShaderKind::Q4_K, WeightStorage::F32)),
         QuantDtype::Q5_K => Ok((ShaderKind::Q5_K, WeightStorage::F32)),
         QuantDtype::IQ4_XS => Ok((ShaderKind::IQ4_XS, WeightStorage::F32)),
+        QuantDtype::Bitcos => Ok((ShaderKind::Bitcos, WeightStorage::F32)),
         QuantDtype::F32 => Ok((ShaderKind::F32, WeightStorage::F32)),
         QuantDtype::F16 => Ok((ShaderKind::F32, WeightStorage::F16)),
         QuantDtype::Q8_0 => Ok((ShaderKind::F32, WeightStorage::Q8_0)),
@@ -1517,6 +1576,17 @@ pub trait GpuBackend: Send + Sync {
         Ok(None)
     }
 
+    /// Incremental KV-cached decoder forward pass on the device. Appends `embedded` (`t_len * d`)
+    /// after `cache.len()` and returns the last position's logits. `Ok(None)` falls back to CPU.
+    fn forward_decoder_extend(
+        &self,
+        _plan: &DecoderPlan<'_>,
+        _embedded: &[f32],
+        _cache: &mut crate::inference::KvCache,
+    ) -> Result<Option<Vec<f32>>, ThmeError> {
+        Ok(None)
+    }
+
     /// Output head plus negative log-likelihood on the device for already normalized rows:
     /// returns one score per row but the last (`targets[r]` is row `r`'s next token) and reads
     /// back only those scores. `Ok(None)` means unsupported; use the per-op path.
@@ -1534,10 +1604,24 @@ pub trait GpuBackend: Send + Sync {
     fn is_format_supported(&self, dtype: QuantDtype) -> bool;
     fn device_name(&self) -> &str;
 
+    /// Human-readable description of the active GPU backend for measured reports.
+    fn backend_description(&self) -> String {
+        format!(
+            "THME reference forward pass on the GPU ({})",
+            self.device_name()
+        )
+    }
+
     /// Adapter details for measured reports (name, graphics API, driver).
     fn adapter_json(&self) -> serde_json::Value {
         serde_json::json!({ "name": self.device_name() })
     }
+
+    /// Drops any cached device weight buffers to free GPU memory between models.
+    fn clear_cache(&self) {}
+
+    /// Enables cooperative-matrix Tensor Core kernels when supported and not disabled via `THME_GPU_COOP=0`.
+    fn enable_coop_if_ready(&self) {}
 }
 
 impl GpuBackend for GpuContext {
@@ -1636,12 +1720,28 @@ impl GpuBackend for GpuContext {
         GpuContext::score_head_nll(self, normed, head, d, vocab, targets)
     }
 
+    fn clear_cache(&self) {
+        self.clear_weight_cache();
+    }
+
+    fn enable_coop_if_ready(&self) {
+        if self.coop_matrix_ready() && std::env::var("THME_GPU_COOP").ok().as_deref() != Some("0") {
+            self.set_coop_matrix(true);
+            if self.coop_f16_default.load(Ordering::Relaxed)
+                && std::env::var("THME_GPU_STORAGE").ok().as_deref() != Some("f32")
+            {
+                self.set_weight_storage(WeightStorage::F16);
+            }
+        }
+    }
+
     fn is_format_supported(&self, dtype: QuantDtype) -> bool {
         matches!(
             dtype,
             QuantDtype::Q4_K
                 | QuantDtype::Q5_K
                 | QuantDtype::IQ4_XS
+                | QuantDtype::Bitcos
                 | QuantDtype::F32
                 | QuantDtype::F16
                 | QuantDtype::Q8_0
@@ -1651,6 +1751,25 @@ impl GpuBackend for GpuContext {
 
     fn device_name(&self) -> &str {
         &self.adapter_info.name
+    }
+
+    fn backend_description(&self) -> String {
+        let storage = self.weight_storage();
+        let storage_label = match storage {
+            WeightStorage::F32 => "f32",
+            WeightStorage::F16 => "f16",
+            WeightStorage::Q8_0 => "q8_0",
+            WeightStorage::Q4_0 => "q4_0",
+        };
+        let coop = if self.coop_active(storage) {
+            ", coop matrix"
+        } else {
+            ""
+        };
+        format!(
+            "THME reference forward pass on the GPU (wgpu {:?}, {storage_label} weights{coop})",
+            self.adapter_info.backend
+        )
     }
 
     fn adapter_json(&self) -> serde_json::Value {
@@ -1818,5 +1937,47 @@ pub fn score_head_from_logits(
         layers_applied,
         nll,
         top1,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn backend_env_skip_cuda_recognizes_wgpu_and_apis() {
+        assert!(!should_skip_cuda(None));
+        assert!(!should_skip_cuda(Some("")));
+        assert!(!should_skip_cuda(Some("auto")));
+        assert!(!should_skip_cuda(Some("cuda")));
+        assert!(should_skip_cuda(Some("wgpu")));
+        assert!(should_skip_cuda(Some(" WGPU ")));
+        assert!(should_skip_cuda(Some("vulkan")));
+        assert!(should_skip_cuda(Some("Metal")));
+        assert!(should_skip_cuda(Some("dx12")));
+    }
+
+    #[test]
+    fn backend_env_wgpu_filter_treats_wgpu_and_auto_as_unfiltered() {
+        assert_eq!(wgpu_api_filter(None), None);
+        assert_eq!(wgpu_api_filter(Some("")), None);
+        assert_eq!(wgpu_api_filter(Some("  ")), None);
+        assert_eq!(wgpu_api_filter(Some("wgpu")), None);
+        assert_eq!(wgpu_api_filter(Some(" WGPU ")), None);
+        assert_eq!(wgpu_api_filter(Some("auto")), None);
+        assert_eq!(wgpu_api_filter(Some("Vulkan")).as_deref(), Some("vulkan"));
+        assert_eq!(wgpu_api_filter(Some("metal")).as_deref(), Some("metal"));
+        assert_eq!(wgpu_api_filter(Some("DX12")).as_deref(), Some("dx12"));
+    }
+
+    #[test]
+    fn bitcos_maps_to_its_own_kernel_with_z_batched_grid() {
+        assert_eq!(
+            shader_kind(QuantDtype::Bitcos).ok(),
+            Some((ShaderKind::Bitcos, WeightStorage::F32))
+        );
+        assert_eq!(gemv_groups(3, 2), [3, 1, 2]);
+        let m = MAX_GROUPS as usize;
+        assert_eq!(gemv_groups(m + 1, 5), [MAX_GROUPS, 2, 5]);
     }
 }

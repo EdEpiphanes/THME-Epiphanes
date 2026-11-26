@@ -54,6 +54,119 @@ pub fn walsh_hadamard(data: &mut [f32]) -> EngineResult<()> {
     walsh_hadamard_blocks(data, data.len())
 }
 
+/// Computes diagonal column-side Sinkhorn equilibrium scales `S` for row-major
+/// `w` (`rows x cols`) preserving zero entries (`w_ij == 0 => (W*S)_ij == 0`)
+/// for the `BITCOS` sparse ternary branch (`ADR-0002`).
+pub fn sinkhorn_column_scales(
+    w: &[f32],
+    rows: usize,
+    cols: usize,
+    iters: usize,
+) -> EngineResult<Vec<f32>> {
+    if rows == 0 || cols == 0 || w.len() != rows * cols {
+        return Err(EngineError::InvalidInput(format!(
+            "sinkhorn shape mismatch: len={} for {rows}x{cols}",
+            w.len()
+        )));
+    }
+    let mut r_scale = vec![1.0_f32; rows];
+    let mut c_scale = vec![1.0_f32; cols];
+    let eps = 1e-6_f32;
+
+    for _ in 0..iters.max(1) {
+        for r in 0..rows {
+            let row = &w[r * cols..(r + 1) * cols];
+            let mut acc = 0.0_f32;
+            for (c, &val) in row.iter().enumerate() {
+                let v = (val * c_scale[c]).abs();
+                acc += v * v;
+            }
+            r_scale[r] = 1.0 / (acc / (cols as f32) + eps).sqrt();
+        }
+        for c in 0..cols {
+            let mut acc = 0.0_f32;
+            for r in 0..rows {
+                let v = (w[r * cols + c] * r_scale[r]).abs();
+                acc += v * v;
+            }
+            c_scale[c] = 1.0 / (acc / (rows as f32) + eps).sqrt();
+        }
+    }
+    // Normalize geometric mean of column scales to 1.0 for numerical stability.
+    let log_mean: f64 = c_scale
+        .iter()
+        .map(|&s| f64::from(s.max(eps)).ln())
+        .sum::<f64>()
+        / (cols as f64);
+    let norm = (-log_mean).exp() as f32;
+    for s in &mut c_scale {
+        *s *= norm;
+    }
+    Ok(c_scale)
+}
+
+/// Applies a 3-factor Kronecker preconditioner `(P1 x P2 x P3)` in-place to a
+/// vector `x` of length `d1 * d2 * d3` (supporting non-power-of-2 FFN widths
+/// such as `5632 = 32 * 16 * 11`).
+pub fn kronecker_3factor_apply(
+    x: &mut [f32],
+    p1: &[f32],
+    p2: &[f32],
+    p3: &[f32],
+    dims: (usize, usize, usize),
+) -> EngineResult<()> {
+    let (d1, d2, d3) = dims;
+    if d1 == 0 || d2 == 0 || d3 == 0 || x.len() != d1 * d2 * d3 {
+        return Err(EngineError::InvalidInput(format!(
+            "kronecker_3factor_apply length {} != {d1}*{d2}*{d3}",
+            x.len()
+        )));
+    }
+    if p1.len() != d1 * d1 || p2.len() != d2 * d2 || p3.len() != d3 * d3 {
+        return Err(EngineError::InvalidInput(
+            "kronecker factor matrix dimension mismatch".to_string(),
+        ));
+    }
+
+    let mut tmp = vec![0.0_f32; x.len()];
+    // Mode-3: multiply each d3-fiber by P3.
+    for i in 0..(d1 * d2) {
+        let off = i * d3;
+        for r in 0..d3 {
+            let mut sum = 0.0_f32;
+            for c in 0..d3 {
+                sum += p3[r * d3 + c] * x[off + c];
+            }
+            tmp[off + r] = sum;
+        }
+    }
+    // Mode-2: multiply along d2.
+    x.copy_from_slice(&tmp);
+    for i1 in 0..d1 {
+        for i3 in 0..d3 {
+            for r in 0..d2 {
+                let mut sum = 0.0_f32;
+                for c in 0..d2 {
+                    sum += p2[r * d2 + c] * tmp[(i1 * d2 + c) * d3 + i3];
+                }
+                x[(i1 * d2 + r) * d3 + i3] = sum;
+            }
+        }
+    }
+    // Mode-1: multiply along d1.
+    tmp.copy_from_slice(x);
+    for i23 in 0..(d2 * d3) {
+        for r in 0..d1 {
+            let mut sum = 0.0_f32;
+            for c in 0..d1 {
+                sum += p1[r * d1 + c] * tmp[c * (d2 * d3) + i23];
+            }
+            x[r * (d2 * d3) + i23] = sum;
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -137,5 +250,70 @@ mod tests {
         assert!(walsh_hadamard_blocks(&mut [0.0; 8], 0).is_err());
         assert!(walsh_hadamard(&mut [0.0; 3]).is_err());
         assert!(walsh_hadamard(&mut []).is_ok());
+    }
+
+    #[test]
+    fn sinkhorn_preserves_zeros_and_balances_columns() {
+        let w = [
+            10.0_f32, 0.0, 0.1, //
+            0.0, 5.0, 0.0, //
+            10.0, 0.0, 0.1,
+        ];
+        let s = sinkhorn_column_scales(&w, 3, 3, 8).unwrap();
+        assert_eq!(s.len(), 3);
+        // Zero entries remain exactly zero after column scaling W * S.
+        for r in 0..3 {
+            for c in 0..3 {
+                let scaled = w[r * 3 + c] * s[c];
+                if w[r * 3 + c] == 0.0 {
+                    assert_eq!(scaled, 0.0);
+                }
+            }
+        }
+        // Column 2 (small entries 0.1) receives a larger scale than column 0 (10.0).
+        assert!(s[2] > s[0]);
+    }
+
+    #[test]
+    fn kronecker_3factor_matches_explicit_product() {
+        let (d1, d2, d3) = (2, 3, 2);
+        let p1 = [1.0_f32, 0.5, -0.5, 2.0];
+        let p2 = [
+            1.0_f32, 0.0, 0.2, //
+            0.1, 1.5, 0.0, //
+            0.0, -0.3, 1.0,
+        ];
+        let p3 = [0.8_f32, 0.6, -0.6, 0.8];
+        let x: Vec<f32> = (0..(d1 * d2 * d3))
+            .map(|i| (i as f32) * 0.25 - 1.0)
+            .collect();
+
+        let mut got = x.clone();
+        kronecker_3factor_apply(&mut got, &p1, &p2, &p3, (d1, d2, d3)).unwrap();
+
+        // Explicit Kronecker matrix-vector oracle.
+        let n = d1 * d2 * d3;
+        let mut want = vec![0.0_f32; n];
+        for r1 in 0..d1 {
+            for r2 in 0..d2 {
+                for r3 in 0..d3 {
+                    let row = (r1 * d2 + r2) * d3 + r3;
+                    let mut sum = 0.0_f32;
+                    for c1 in 0..d1 {
+                        for c2 in 0..d2 {
+                            for c3 in 0..d3 {
+                                let col = (c1 * d2 + c2) * d3 + c3;
+                                let k = p1[r1 * d1 + c1] * p2[r2 * d2 + c2] * p3[r3 * d3 + c3];
+                                sum += k * x[col];
+                            }
+                        }
+                    }
+                    want[row] = sum;
+                }
+            }
+        }
+        for (a, b) in got.iter().zip(want.iter()) {
+            assert!((a - b).abs() < 1e-5, "got={a} want={b}");
+        }
     }
 }
