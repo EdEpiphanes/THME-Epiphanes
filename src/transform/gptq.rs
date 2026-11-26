@@ -319,6 +319,68 @@ pub fn second_order_round(
     Ok(error)
 }
 
+/// Fast O(numel) diagonal-Hessian fallback (`H_ii = rms_i^2`) when full `X X^T` second
+/// moments are unavailable. Fits each 32-weight block's scale to minimize activation-weighted
+/// squared error `sum rms_j^2 (w_j - Q(w_j, s))^2`.
+pub fn second_order_round_diagonal(
+    values: &mut [f32],
+    in_dim: usize,
+    stats: &ChannelStats,
+    format: &str,
+) -> Result<f64> {
+    let grid = Grid::parse(format)?;
+    if in_dim == 0 || !in_dim.is_multiple_of(GROUP) || !values.len().is_multiple_of(in_dim) {
+        bail!(
+            "Weights of length {} are not whole rows of {in_dim} inputs (a multiple of {GROUP})",
+            values.len()
+        );
+    }
+    if stats.rms.len() != in_dim {
+        bail!(
+            "Calibration statistics cover {} channels, the tensor has {in_dim} inputs",
+            stats.rms.len()
+        );
+    }
+    const ALPHAS: [f32; 5] = [0.85, 0.90, 0.94, 0.97, 1.00];
+    let mut total_err = 0.0f64;
+    for row in values.chunks_exact_mut(in_dim) {
+        for (g_idx, block) in row.as_chunks_mut::<GROUP>().0.iter_mut().enumerate() {
+            let base_col = g_idx * GROUP;
+            let (base_scale, base_stored) = grid.fit(block)?;
+            if base_scale == 0.0 {
+                continue;
+            }
+            let mut best_params = (base_scale, base_stored);
+            let mut best_werr = f64::INFINITY;
+            for &alpha in &ALPHAS {
+                let s = base_scale * alpha;
+                let half = crate::exporter::conversion::f32_to_f16(s);
+                let stored = crate::profiling::f16_to_f32(half);
+                if !stored.is_finite() || (s != 0.0 && half & 0x7fff == 0) {
+                    continue;
+                }
+                let params = (s, stored);
+                let mut werr = 0.0f64;
+                for (k, &v) in block.iter().enumerate() {
+                    let q = grid.round(v, params);
+                    let d = f64::from(v) - f64::from(q);
+                    let r = f64::from(stats.rms[base_col + k]);
+                    werr += r * r * d * d;
+                }
+                if werr < best_werr {
+                    best_werr = werr;
+                    best_params = params;
+                }
+            }
+            for v in block.iter_mut() {
+                *v = grid.round(*v, best_params);
+            }
+            total_err += best_werr;
+        }
+    }
+    Ok(total_err)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -430,5 +492,50 @@ mod tests {
         let mut short = stats.clone();
         short.mean_abs.truncate(63);
         assert!(second_order_round(&mut weights, 64, &short, &hessian, "Q4_0", 1.0).is_err());
+    }
+
+    #[test]
+    fn diagonal_fallback_is_on_the_grid_and_never_worse_than_plain_rounding() {
+        let (weights, stats, _hessian) = salient();
+        let mut diag = weights.clone();
+        let err = second_order_round_diagonal(&mut diag, 64, &stats, "Q4_0").unwrap();
+        let mut again = diag.clone();
+        fake_quantize(&mut again, &TensorFormat::Q4_0).unwrap();
+        assert_eq!(diag, again, "output is not on the Q4_0 grid");
+        let mut plain = weights.clone();
+        fake_quantize(&mut plain, &TensorFormat::Q4_0).unwrap();
+        let weighted = |q: &[f32]| -> f64 {
+            weights
+                .iter()
+                .zip(q)
+                .enumerate()
+                .map(|(i, (w, q))| {
+                    let r = f64::from(stats.rms[i % 64]);
+                    let d = f64::from(*w) - f64::from(*q);
+                    r * r * d * d
+                })
+                .sum()
+        };
+        // The unscaled candidate (alpha 1.0) is plain rounding, so the search cannot lose.
+        assert!(weighted(&diag) <= weighted(&plain) + 1e-9);
+        assert!((weighted(&diag) - err).abs() <= 1e-6 * (1.0 + err));
+    }
+
+    #[test]
+    fn diagonal_fallback_leaves_zero_blocks_and_rejects_bad_inputs() {
+        let (weights, stats, _hessian) = salient();
+        let mut zeros = vec![0.0f32; 64];
+        assert_eq!(
+            second_order_round_diagonal(&mut zeros, 64, &stats, "Q4_0").unwrap(),
+            0.0
+        );
+        assert!(zeros.iter().all(|&v| v == 0.0));
+        let mut w = weights.clone();
+        assert!(second_order_round_diagonal(&mut w[..250], 64, &stats, "Q4_0").is_err());
+        assert!(second_order_round_diagonal(&mut w, 60, &stats, "Q4_0").is_err());
+        assert!(second_order_round_diagonal(&mut w, 64, &stats, "Q4_K").is_err());
+        let mut short = stats.clone();
+        short.rms.truncate(63);
+        assert!(second_order_round_diagonal(&mut w, 64, &short, "Q4_0").is_err());
     }
 }
