@@ -9,8 +9,8 @@ use std::sync::{Arc, Mutex};
 use cudarc::cublas::sys as cublas_sys;
 use cudarc::cublas::CudaBlas;
 use cudarc::driver::{
-    CudaContext as DriverContext, CudaFunction, CudaSlice, CudaStream, CudaView, DevicePtr,
-    DevicePtrMut, LaunchConfig, PushKernelArg,
+    sys as driver_sys, CudaContext as DriverContext, CudaFunction, CudaGraph, CudaSlice,
+    CudaStream, CudaView, DevicePtr, DevicePtrMut, LaunchConfig, PushKernelArg,
 };
 use cudarc::nvrtc::Ptx;
 
@@ -82,6 +82,11 @@ struct CudaWorkspaceKey {
     head_dim: usize,
 }
 
+struct SendCudaGraph(CudaGraph);
+// SAFETY: `CudaGraph` is only accessed while holding `CudaContext::workspace` and launched on `self.stream`.
+unsafe impl Send for SendCudaGraph {}
+unsafe impl Sync for SendCudaGraph {}
+
 struct CudaWorkspace {
     x_a: CudaSlice<f32>,
     x_b: CudaSlice<f32>,
@@ -110,6 +115,7 @@ struct CudaWorkspace {
     sin: CudaSlice<f32>,
     cos_hash: u64,
     sin_hash: u64,
+    graph: Option<(u64, SendCudaGraph)>,
 }
 
 /// CUDA + cuBLAS compute backend implementing [`GpuBackend`].
@@ -397,24 +403,65 @@ impl CudaContext {
         let nb = w.len() / 32;
         let mut scales_host = vec![0u16; nb];
         let mut qs_host = vec![0u32; nb * 4];
-        for (b, chunk) in w.chunks_exact(32).enumerate() {
+        let quant_block = |b: usize, chunk: &[f32], s_out: &mut u16, q_out: &mut [u32]| {
             let mut amax = 0.0f32;
             for &v in chunk {
                 amax = amax.max(v.abs());
             }
             let d = amax / 7.0f32;
             let inv_d = if amax > 0.0 { 7.0f32 / amax } else { 0.0f32 };
-            scales_host[b] = f32_to_f16_bits(d);
-            let q_base = b * 4;
-            for word_idx in 0..4 {
+            *s_out = f32_to_f16_bits(d);
+            for (word_idx, dst_word) in q_out.iter_mut().enumerate() {
                 let mut word = 0u32;
                 for k in 0..8 {
                     let v = chunk[word_idx * 8 + k];
                     let q = ((v * inv_d).round().clamp(-8.0, 7.0) as i32 + 8) as u32;
                     word |= (q & 0xf) << (k * 4);
                 }
-                qs_host[q_base + word_idx] = word;
+                *dst_word = word;
             }
+            let _ = b;
+        };
+
+        let threads = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1)
+            .min(12);
+        if nb < 4096 || threads <= 1 {
+            for (b, chunk) in w.chunks_exact(32).enumerate() {
+                quant_block(
+                    b,
+                    chunk,
+                    &mut scales_host[b],
+                    &mut qs_host[b * 4..(b + 1) * 4],
+                );
+            }
+        } else {
+            let blocks_per_thread = nb.div_ceil(threads);
+            std::thread::scope(|scope| {
+                let mut s_rem = scales_host.as_mut_slice();
+                let mut q_rem = qs_host.as_mut_slice();
+                let mut w_rem = w;
+                while !s_rem.is_empty() {
+                    let take_b = blocks_per_thread.min(s_rem.len());
+                    let (s_chunk, s_rest) = s_rem.split_at_mut(take_b);
+                    let (q_chunk, q_rest) = q_rem.split_at_mut(take_b * 4);
+                    let (w_chunk, w_rest) = w_rem.split_at(take_b * 32);
+                    s_rem = s_rest;
+                    q_rem = q_rest;
+                    w_rem = w_rest;
+                    scope.spawn(move || {
+                        for (i, chunk) in w_chunk.chunks_exact(32).enumerate() {
+                            quant_block(
+                                i,
+                                chunk,
+                                &mut s_chunk[i],
+                                &mut q_chunk[i * 4..(i + 1) * 4],
+                            );
+                        }
+                    });
+                }
+            });
         }
 
         let scales = Arc::new(self.stream.clone_htod(&scales_host).map_err(|e| {
@@ -701,6 +748,7 @@ impl CudaContext {
             sin: alloc_f32(t * half, "sin")?,
             cos_hash: 0,
             sin_hash: 0,
+            graph: None,
         })
     }
 
@@ -1667,115 +1715,243 @@ impl GpuBackend for CudaContext {
         let tint = t * inter;
         let scale = 1.0 / (hd as f32).sqrt();
         let use_flash = std::env::var("THME_CUDA_FLASH_ATTN").as_deref() == Ok("1");
+        let use_graph =
+            self.blas.is_some() && std::env::var("THME_CUDA_GRAPH").as_deref() != Ok("0");
 
-        if self.blas.is_some() {
-            self.launch_rms_norm_f16(&ws.x_a, &resident[0].0, &mut ws.x16, t, d, plan.eps, 0)?;
-            for (idx, (_attn_norm, mlp_norm, [wq, wk, wv, wo, wg, wu, wd])) in
-                resident.iter().enumerate()
-            {
-                self.gemm_f16_to_f16(&ws.x16, 0, wq, &mut ws.q16, t, d, d)?;
-                self.gemm_f16_to_f16(&ws.x16, 0, wk, &mut ws.k16, t, d, kv_dim)?;
-                self.gemm_f16_to_f16(&ws.x16, 0, wv, &mut ws.v16, t, d, kv_dim)?;
+        let graph_key = if use_graph {
+            use std::hash::{Hash, Hasher};
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            (std::sync::Arc::as_ptr(&final_norm) as usize).hash(&mut h);
+            (std::sync::Arc::as_ptr(&head) as usize).hash(&mut h);
+            for (an, mn, ws_arr) in &resident {
+                (std::sync::Arc::as_ptr(an) as usize).hash(&mut h);
+                (std::sync::Arc::as_ptr(mn) as usize).hash(&mut h);
+                for w in ws_arr {
+                    (std::sync::Arc::as_ptr(w) as usize).hash(&mut h);
+                }
+            }
+            use_flash.hash(&mut h);
+            (std::env::var("THME_CUDA_F16_ACC").as_deref() == Ok("1")).hash(&mut h);
+            scored.hash(&mut h);
+            chunk_rows.hash(&mut h);
+            plan.eps.to_bits().hash(&mut h);
+            h.finish()
+        } else {
+            0
+        };
 
-                self.launch_rope_qk_f16(
-                    &ws.cos,
-                    &ws.sin,
-                    &mut ws.q16,
-                    &mut ws.k16,
-                    t,
-                    d,
-                    kv_dim,
-                    hd,
-                    half,
-                )?;
-                if use_flash {
-                    self.launch_flash_attention_f16(&mut ws, t, heads, kv_heads, hd, scale)?;
+        let mut replayed = false;
+        if use_graph {
+            if let Some((gk, ref graph)) = ws.graph {
+                if gk == graph_key {
+                    graph.0.launch().map_err(|e| {
+                        ThmeError::ExecutionFailed(format!("CUDA graph launch: {e:?}"))
+                    })?;
+                    replayed = true;
+                }
+            }
+        }
+
+        if !replayed {
+            let capturing = use_graph
+                && self
+                    .stream
+                    .begin_capture(
+                        driver_sys::CUstreamCaptureMode::CU_STREAM_CAPTURE_MODE_THREAD_LOCAL,
+                    )
+                    .is_ok();
+
+            let body_res: Result<(), ThmeError> = (|| {
+                if self.blas.is_some() {
+                    self.launch_rms_norm_f16(
+                        &ws.x_a,
+                        &resident[0].0,
+                        &mut ws.x16,
+                        t,
+                        d,
+                        plan.eps,
+                        0,
+                    )?;
+                    for (idx, (_attn_norm, mlp_norm, [wq, wk, wv, wo, wg, wu, wd])) in
+                        resident.iter().enumerate()
+                    {
+                        self.gemm_f16_to_f16(&ws.x16, 0, wq, &mut ws.q16, t, d, d)?;
+                        self.gemm_f16_to_f16(&ws.x16, 0, wk, &mut ws.k16, t, d, kv_dim)?;
+                        self.gemm_f16_to_f16(&ws.x16, 0, wv, &mut ws.v16, t, d, kv_dim)?;
+
+                        self.launch_rope_qk_f16(
+                            &ws.cos,
+                            &ws.sin,
+                            &mut ws.q16,
+                            &mut ws.k16,
+                            t,
+                            d,
+                            kv_dim,
+                            hd,
+                            half,
+                        )?;
+                        if use_flash {
+                            self.launch_flash_attention_f16(
+                                &mut ws, t, heads, kv_heads, hd, scale,
+                            )?;
+                        } else {
+                            self.launch_attention_qkv16(&mut ws, t, heads, kv_heads, hd, scale)?;
+                        }
+
+                        self.gemm_f16_to_f16(&ws.x16, 0, wo, &mut ws.tmp16, t, d, d)?;
+                        self.launch_add_rms_norm_f16(
+                            &ws.x_a,
+                            &ws.tmp16,
+                            mlp_norm,
+                            &mut ws.x_b,
+                            &mut ws.x16,
+                            t,
+                            d,
+                            plan.eps,
+                        )?;
+
+                        self.gemm_f16_to_f16(&ws.x16, 0, wg, &mut ws.gate16, t, d, inter)?;
+                        self.gemm_f16_to_f16(&ws.x16, 0, wu, &mut ws.up16, t, d, inter)?;
+                        self.launch_swiglu_f16_in(&ws.gate16, &ws.up16, &mut ws.x16, tint)?;
+                        self.gemm_f16_to_f16(&ws.x16, 0, wd, &mut ws.tmp16, t, inter, d)?;
+
+                        let next_norm = if idx + 1 < resident.len() {
+                            &resident[idx + 1].0
+                        } else {
+                            &final_norm
+                        };
+                        self.launch_add_rms_norm_f16(
+                            &ws.x_b,
+                            &ws.tmp16,
+                            next_norm,
+                            &mut ws.x_a,
+                            &mut ws.x16,
+                            t,
+                            d,
+                            plan.eps,
+                        )?;
+                    }
                 } else {
-                    self.launch_attention_qkv16(&mut ws, t, heads, kv_heads, hd, scale)?;
+                    for (attn_norm, mlp_norm, [wq, wk, wv, wo, wg, wu, wd]) in &resident {
+                        self.launch_rms_norm_f16(
+                            &ws.x_a,
+                            attn_norm,
+                            &mut ws.x16,
+                            t,
+                            d,
+                            plan.eps,
+                            0,
+                        )?;
+                        self.gemm_f16_preconverted(&ws.x16, wq, &mut ws.q, t, d, d)?;
+                        self.gemm_f16_preconverted(&ws.x16, wk, &mut ws.k, t, d, kv_dim)?;
+                        self.gemm_f16_preconverted(&ws.x16, wv, &mut ws.v, t, d, kv_dim)?;
+
+                        self.launch_rope(&ws.cos, &ws.sin, &mut ws.q, t, d, hd, half)?;
+                        self.launch_rope(&ws.cos, &ws.sin, &mut ws.k, t, kv_dim, hd, half)?;
+                        self.launch_attention(&mut ws, t, heads, kv_heads, hd, scale)?;
+
+                        self.linear_into(&ws.mixed, 0, &mut ws.x16, wo, &mut ws.tmp, t, d, d)?;
+                        self.launch_add(&ws.x_a, &ws.tmp, &mut ws.x_b, td)?;
+
+                        self.launch_rms_norm_f16(
+                            &ws.x_b,
+                            mlp_norm,
+                            &mut ws.x16,
+                            t,
+                            d,
+                            plan.eps,
+                            0,
+                        )?;
+                        self.gemm_f16_preconverted(&ws.x16, wg, &mut ws.gate, t, d, inter)?;
+                        self.gemm_f16_preconverted(&ws.x16, wu, &mut ws.up, t, d, inter)?;
+                        self.launch_swiglu_f16(&ws.gate, &ws.up, &mut ws.x16, tint)?;
+                        self.gemm_f16_preconverted(&ws.x16, wd, &mut ws.tmp, t, inter, d)?;
+                        self.launch_add(&ws.x_b, &ws.tmp, &mut ws.x_a, td)?;
+                    }
                 }
 
-                self.gemm_f16_to_f16(&ws.x16, 0, wo, &mut ws.tmp16, t, d, d)?;
-                self.launch_add_rms_norm_f16(
-                    &ws.x_a,
-                    &ws.tmp16,
-                    mlp_norm,
-                    &mut ws.x_b,
-                    &mut ws.x16,
-                    t,
-                    d,
-                    plan.eps,
-                )?;
-
-                self.gemm_f16_to_f16(&ws.x16, 0, wg, &mut ws.gate16, t, d, inter)?;
-                self.gemm_f16_to_f16(&ws.x16, 0, wu, &mut ws.up16, t, d, inter)?;
-                self.launch_swiglu_f16_in(&ws.gate16, &ws.up16, &mut ws.x16, tint)?;
-                self.gemm_f16_to_f16(&ws.x16, 0, wd, &mut ws.tmp16, t, inter, d)?;
-
-                let next_norm = if idx + 1 < resident.len() {
-                    &resident[idx + 1].0
+                if nll_mode {
+                    if self.blas.is_none() {
+                        self.launch_rms_norm_f16(
+                            &ws.x_a,
+                            &final_norm,
+                            &mut ws.x16,
+                            scored,
+                            d,
+                            plan.eps,
+                            0,
+                        )?;
+                    }
+                    let mut first = 0;
+                    while first < scored {
+                        let rows = chunk_rows.min(scored - first);
+                        self.gemm_f16_to_f16(
+                            &ws.x16,
+                            first,
+                            &head,
+                            &mut ws.logits16,
+                            rows,
+                            d,
+                            plan.vocab,
+                        )?;
+                        self.launch_nll_f16(
+                            &ws.logits16,
+                            &ws.targets,
+                            &mut ws.scores,
+                            rows,
+                            plan.vocab,
+                            first,
+                        )?;
+                        first += rows;
+                    }
                 } else {
-                    &final_norm
-                };
-                self.launch_add_rms_norm_f16(
-                    &ws.x_b,
-                    &ws.tmp16,
-                    next_norm,
-                    &mut ws.x_a,
-                    &mut ws.x16,
-                    t,
-                    d,
-                    plan.eps,
-                )?;
-            }
-        } else {
-            for (attn_norm, mlp_norm, [wq, wk, wv, wo, wg, wu, wd]) in &resident {
-                self.launch_rms_norm_f16(&ws.x_a, attn_norm, &mut ws.x16, t, d, plan.eps, 0)?;
-                self.gemm_f16_preconverted(&ws.x16, wq, &mut ws.q, t, d, d)?;
-                self.gemm_f16_preconverted(&ws.x16, wk, &mut ws.k, t, d, kv_dim)?;
-                self.gemm_f16_preconverted(&ws.x16, wv, &mut ws.v, t, d, kv_dim)?;
+                    self.launch_rms_norm(
+                        &ws.x_a,
+                        &final_norm,
+                        &mut ws.last,
+                        1,
+                        d,
+                        plan.eps,
+                        (t - 1) * d,
+                    )?;
+                    self.linear_into(
+                        &ws.last,
+                        0,
+                        &mut ws.x16,
+                        &head,
+                        &mut ws.logits,
+                        1,
+                        d,
+                        plan.vocab,
+                    )?;
+                }
+                Ok(())
+            })();
 
-                self.launch_rope(&ws.cos, &ws.sin, &mut ws.q, t, d, hd, half)?;
-                self.launch_rope(&ws.cos, &ws.sin, &mut ws.k, t, kv_dim, hd, half)?;
-                self.launch_attention(&mut ws, t, heads, kv_heads, hd, scale)?;
-
-                self.linear_into(&ws.mixed, 0, &mut ws.x16, wo, &mut ws.tmp, t, d, d)?;
-                self.launch_add(&ws.x_a, &ws.tmp, &mut ws.x_b, td)?;
-
-                self.launch_rms_norm_f16(&ws.x_b, mlp_norm, &mut ws.x16, t, d, plan.eps, 0)?;
-                self.gemm_f16_preconverted(&ws.x16, wg, &mut ws.gate, t, d, inter)?;
-                self.gemm_f16_preconverted(&ws.x16, wu, &mut ws.up, t, d, inter)?;
-                self.launch_swiglu_f16(&ws.gate, &ws.up, &mut ws.x16, tint)?;
-                self.gemm_f16_preconverted(&ws.x16, wd, &mut ws.tmp, t, inter, d)?;
-                self.launch_add(&ws.x_b, &ws.tmp, &mut ws.x_a, td)?;
+            if capturing {
+                let cap_res = self
+                    .stream
+                    .end_capture(driver_sys::CUgraphInstantiate_flags(0));
+                body_res?;
+                match cap_res {
+                    Ok(Some(graph)) => {
+                        graph.launch().map_err(|e| {
+                            ThmeError::ExecutionFailed(format!("CUDA graph launch: {e:?}"))
+                        })?;
+                        ws.graph = Some((graph_key, SendCudaGraph(graph)));
+                    }
+                    _ => {
+                        return Err(ThmeError::ExecutionFailed(
+                            "CUDA stream capture did not produce a graph".into(),
+                        ));
+                    }
+                }
+            } else {
+                body_res?;
             }
         }
 
         let mut out = if nll_mode {
-            if self.blas.is_none() {
-                self.launch_rms_norm_f16(
-                    &ws.x_a,
-                    &final_norm,
-                    &mut ws.x16,
-                    scored,
-                    d,
-                    plan.eps,
-                    0,
-                )?;
-            }
-            let mut first = 0;
-            while first < scored {
-                let rows = chunk_rows.min(scored - first);
-                self.gemm_f16_to_f16(&ws.x16, first, &head, &mut ws.logits16, rows, d, plan.vocab)?;
-                self.launch_nll_f16(
-                    &ws.logits16,
-                    &ws.targets,
-                    &mut ws.scores,
-                    rows,
-                    plan.vocab,
-                    first,
-                )?;
-                first += rows;
-            }
             let mut scores = self
                 .stream
                 .clone_dtoh(&ws.scores)
@@ -1783,25 +1959,6 @@ impl GpuBackend for CudaContext {
             scores.truncate(scored);
             scores
         } else {
-            self.launch_rms_norm(
-                &ws.x_a,
-                &final_norm,
-                &mut ws.last,
-                1,
-                d,
-                plan.eps,
-                (t - 1) * d,
-            )?;
-            self.linear_into(
-                &ws.last,
-                0,
-                &mut ws.x16,
-                &head,
-                &mut ws.logits,
-                1,
-                d,
-                plan.vocab,
-            )?;
             self.stream.clone_dtoh(&ws.logits).map_err(|e| {
                 ThmeError::DataTransferFailed(format!("CUDA logits readback: {e:?}"))
             })?

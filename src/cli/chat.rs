@@ -92,7 +92,9 @@ pub fn execute(args: ChatArgs) -> Result<()> {
             "prompt_tokens": reply.prompt_tokens,
             "generated_tokens": reply.token_ids.len(),
             "wall_secs": reply.wall_secs,
+            "prefill_secs": reply.prefill_secs,
             "tokens_per_sec": reply.tokens_per_sec,
+            "decode_tokens_per_sec": reply.decode_tokens_per_sec,
             "finish": finish_str,
             "text": reply.text,
         });
@@ -104,11 +106,13 @@ pub fn execute(args: ChatArgs) -> Result<()> {
             arch_cfg.family()
         );
         println!(
-            "Prompt: {} tok | Generated: {} tok | Wall: {:.3}s | Speed: {:.2} tok/s | Stop: {}",
+            "Prompt: {} tok | Generated: {} tok | Wall: {:.3}s (prefill {:.3}s) | Total: {:.2} tok/s | Decode: {:.2} tok/s | Stop: {}",
             reply.prompt_tokens,
             reply.token_ids.len(),
             reply.wall_secs,
+            reply.prefill_secs,
             reply.tokens_per_sec,
+            reply.decode_tokens_per_sec,
             finish_str
         );
         println!("---");
