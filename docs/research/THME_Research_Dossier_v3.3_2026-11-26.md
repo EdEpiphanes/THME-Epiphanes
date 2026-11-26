@@ -139,6 +139,8 @@ flowchart TB
 
 ### 1.4 `.epiph` Zero-Copy Epiphanes Model File Layout `[Specification]`
 
+> **Alignment note:** `src/epiph/mod.rs` keeps `ALIGN = 64` for standard `.epiph` payloads. The 4096-byte sector padding applies only to the `O_DIRECT` Tier-3 off-load page writer (§7.8); the container format is unchanged.
+
 ```mermaid
 flowchart LR
     B0["64B Magic + Header (Version, Arch Hash, Minisign Ed25519)"] --> B1["JSON/CBOR Topology & Selected Format Map"]
