@@ -187,6 +187,37 @@ impl GateSpec {
         crate::exporter::compute_sha256(&bytes)
     }
 
+    /// Evaluates anytime-valid `[L_t, U_t]` bounds via Epiphanes Math
+    /// (`hedged_epiphanes_bounds`) on block-wise normalized drifts and judges
+    /// the result through [`GateSpec::judge`].
+    pub fn judge_epiphanes_drifts(
+        &self,
+        metric: &str,
+        baseline_mean: f64,
+        candidate_mean: f64,
+        block_drifts: &[f64],
+        eta: f64,
+    ) -> Result<GateVerdict> {
+        let tau_ra = self
+            .criteria
+            .iter()
+            .find(|c| c.metric == metric)
+            .and_then(|c| c.max_rel.or(c.max_abs))
+            .unwrap_or(0.05);
+        let (low_rel, high_rel, _) =
+            crate::quality::epiphanes::hedged_epiphanes_bounds(block_drifts, eta, tau_ra)
+                .map_err(|e| anyhow::anyhow!("{e}"))?;
+        let scale = baseline_mean.abs().max(1e-12);
+        let measure = Measure::with_interval(
+            metric,
+            baseline_mean,
+            candidate_mean,
+            low_rel * scale,
+            high_rel * scale,
+        );
+        Ok(self.judge(&[measure]))
+    }
+
     /// Judges a candidate on the measured metrics. Every criterion must pass. A criterion with a
     /// degradation interval passes when the whole interval is within its margin, fails when the
     /// whole interval is beyond it, and is inconclusive otherwise; a point measurement is the
