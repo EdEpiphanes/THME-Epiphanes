@@ -4,13 +4,36 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { spawn } from 'child_process';
 import { inspectArgs, planArgs, tweakArgs, validateArgs, run } from './thme';
+import {
+    LoadState,
+    ModelData,
+    copilotRows,
+    decisionRows,
+    modelRows,
+    parseInspectJson,
+    parsePlanJson,
+    parseProfileJson,
+    telemetryRows,
+    TreeRow,
+} from './treeData';
 
 let outputChannel: vscode.OutputChannel;
 let statusBarItem: vscode.StatusBarItem;
 
+// The sidebar shows no made-up numbers: every value comes from the CLI's own output for
+// the model the user selected, or the tree says "no model selected".
+let selectedModel: string | undefined;
+let modelData: ModelData = { state: "none" };
+let dataDir = "";
+let modelProvider: ThmeTreeProvider;
+let decisionProvider: ThmeTreeProvider;
+let telemetryProvider: ThmeTreeProvider;
+
 export function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel("THME Engine");
     outputChannel.appendLine("[THME] Extension activated. Initializing AI & Copilot bridge...");
+    dataDir = context.globalStorageUri.fsPath;
+    fs.mkdirSync(dataDir, { recursive: true });
 
     // 1. Status Bar Item
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -21,18 +44,21 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(statusBarItem);
 
     // 2. Sidebar Tree Views
-    const modelProvider = new ThmeModelTreeProvider();
-    const decisionProvider = new ThmeDecisionTreeProvider();
-    const telemetryProvider = new ThmeTelemetryTreeProvider();
-    const copilotProvider = new ThmeCopilotToolsTreeProvider();
+    modelProvider = new ThmeTreeProvider(() => modelRows(modelData));
+    decisionProvider = new ThmeTreeProvider(() => decisionRows(modelData));
+    telemetryProvider = new ThmeTreeProvider(() => telemetryRows(modelData));
+    const copilotProvider = new ThmeTreeProvider(() => copilotRows());
 
     vscode.window.registerTreeDataProvider("thme-models", modelProvider);
     vscode.window.registerTreeDataProvider("thme-decisions", decisionProvider);
     vscode.window.registerTreeDataProvider("thme-telemetry", telemetryProvider);
     vscode.window.registerTreeDataProvider("thme-copilot", copilotProvider);
+    context.subscriptions.push(modelProvider, decisionProvider, telemetryProvider, copilotProvider);
 
     // 3. Register Commands
     context.subscriptions.push(
+        vscode.commands.registerCommand("thme.selectModel", () => selectModel()),
+        vscode.commands.registerCommand("thme.refreshSidebar", () => refreshModelData()),
         vscode.commands.registerCommand("thme.launchStudio", () => launchStudio(context)),
         vscode.commands.registerCommand("thme.inspectModel", () => inspectModel(context)),
         vscode.commands.registerCommand("thme.autoDecide", () => autoDecide(context)),
@@ -88,11 +114,67 @@ function resolveBinaryPath(preferredBinary: string = "thme"): string {
 /**
  * Executes a CLI command (no shell, raw argument array) and streams output to channel
  */
-function runThmeCommand(args: string[]): Promise<string> {
+function runThmeCommand(args: string[], opts: { reveal?: boolean } = {}): Promise<string> {
     const bin = resolveBinaryPath();
     outputChannel.appendLine(`[THME CMD] ${bin} ${JSON.stringify(args)}`);
-    outputChannel.show(true);
+    if (opts.reveal !== false) {
+        outputChannel.show(true);
+    }
     return run(bin, args, (s) => outputChannel.append(s));
+}
+
+/** Runs a CLI command without stealing focus; null when it fails. */
+async function tryThmeCommand(args: string[]): Promise<string | null> {
+    try {
+        return await runThmeCommand(args, { reveal: false });
+    } catch (err: any) {
+        outputChannel.appendLine(`[THME] ${args[0]} failed: ${err.message}`);
+        return null;
+    }
+}
+
+function readTextFile(p: string): string | null {
+    try {
+        return fs.readFileSync(p, "utf8");
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Reads the selected model through the CLI. Every sidebar number comes from these three
+ * commands; nothing here is a constant.
+ */
+async function loadModelData(model: string): Promise<ModelData> {
+    const planPath = path.join(dataDir, "optimization_plan.json");
+    const profilePath = path.join(dataDir, "profile.json");
+
+    const inspectText = await tryThmeCommand(["inspect", model, "--json"]);
+    const planRan = await tryThmeCommand(["plan", model, "--output", planPath]);
+    const profileRan = await tryThmeCommand(["profile", model, "--output", profilePath]);
+
+    const inspect = inspectText === null ? null : parseInspectJson(inspectText);
+    const plan = planRan === null ? null : parsePlanJson(readTextFile(planPath) ?? "");
+    const profile = profileRan === null ? null : parseProfileJson(readTextFile(profilePath) ?? "");
+
+    const state: LoadState = inspect !== null || plan !== null || profile !== null ? "ok" : "failed";
+    return { state, inspect: inspect ?? undefined, plan: plan ?? undefined, profile: profile ?? undefined };
+}
+
+async function refreshModelData(): Promise<void> {
+    modelData = selectedModel === undefined ? { state: "none" } : await loadModelData(selectedModel);
+    modelProvider.refresh();
+    decisionProvider.refresh();
+    telemetryProvider.refresh();
+}
+
+async function selectModel(): Promise<void> {
+    const picked = await pickFile("Select Model", ["safetensors", "gguf"]);
+    if (!picked) {
+        return;
+    }
+    selectedModel = picked;
+    await refreshModelData();
 }
 
 async function pickFile(label: string, ext: string[]): Promise<string | undefined> {
@@ -110,12 +192,10 @@ function launchStudio(context: vscode.ExtensionContext) {
 async function inspectModel(context: vscode.ExtensionContext) {
     const model = await pickFile("Inspect Model", ["safetensors", "gguf"]);
     if (!model) { return; }
-    try {
-        await runThmeCommand(inspectArgs(model));
-        vscode.window.showInformationMessage("thme inspect exited 0. See THME Engine output.");
-    } catch (err: any) {
-        vscode.window.showErrorMessage(`Inspection failed: ${err.message}`);
-    }
+    selectedModel = model;
+    await refreshModelData();
+    outputChannel.show(true);
+    vscode.window.showInformationMessage("thme inspect, plan and profile ran for the selected model. See THME Engine output and the sidebar.");
 }
 
 async function autoDecide(context: vscode.ExtensionContext) {
@@ -234,64 +314,31 @@ function registerCopilotTools(context: vscode.ExtensionContext) {
 // Sidebar Tree Data Providers
 // ========================
 
-class ThmeModelTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
-    getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
-        return element;
-    }
-
-    getChildren(): Thenable<vscode.TreeItem[]> {
-        return Promise.resolve([
-            new ThmeItem("Model: thme-hybrid-12l", "Architecture: Hybrid DeltaNet + Attention", vscode.TreeItemCollapsibleState.Expanded),
-            new ThmeItem("Layers: 12 (Hidden Dim: 2048)", "603.9M Parameters", vscode.TreeItemCollapsibleState.None),
-            new ThmeItem("Early-Exit Checkpoint: Layer 4", "80% Exit Fraction", vscode.TreeItemCollapsibleState.None),
-            new ThmeItem("Surface Mix: Binary (XNOR) + Ternary (BitNet)", "q_l = 1.0", vscode.TreeItemCollapsibleState.None),
-            new ThmeItem("Deep Mix: Phase Recurrence + DeltaNet", "q_l = 0.20", vscode.TreeItemCollapsibleState.None)
-        ]);
-    }
+function toItems(rows: TreeRow[]): vscode.TreeItem[] {
+    return rows.map((r) => new ThmeItem(r.label, r.description, vscode.TreeItemCollapsibleState.None));
 }
 
-class ThmeDecisionTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
+/** One provider per view; the rows come from treeData, which reads the CLI's own output. */
+class ThmeTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
+    private readonly emitter = new vscode.EventEmitter<void>();
+    readonly onDidChangeTreeData: vscode.Event<void> = this.emitter.event;
+
+    constructor(private readonly rows: () => TreeRow[]) { }
+
+    refresh(): void {
+        this.emitter.fire();
+    }
+
+    dispose(): void {
+        this.emitter.dispose();
+    }
+
     getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
         return element;
     }
 
     getChildren(): Thenable<vscode.TreeItem[]> {
-        return Promise.resolve([
-            new ThmeItem("Attention Q/K/V: BitNet b1.58 Ternary", "2.0 bits | Outlier preserved", vscode.TreeItemCollapsibleState.None),
-            new ThmeItem("Attention Out: Walsh-Hadamard Rotation", "Energy dispersed | 16-bit", vscode.TreeItemCollapsibleState.None),
-            new ThmeItem("MLP Gate/Up: 2:4 Structured Sparsity", "50% Compute Pruned", vscode.TreeItemCollapsibleState.None),
-            new ThmeItem("MLP Down: SmoothQuant Outlier Clamping", "8.0 bits | alpha=0.85", vscode.TreeItemCollapsibleState.None)
-        ]);
-    }
-}
-
-class ThmeTelemetryTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
-    getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
-        return element;
-    }
-
-    getChildren(): Thenable<vscode.TreeItem[]> {
-        return Promise.resolve([
-            new ThmeItem("REA-LLM Depth Fraction: 44.0%", "f_bar = 0.44", vscode.TreeItemCollapsibleState.None),
-            new ThmeItem("Memory Traffic: 1.25 MB/tok", "Saved: 56.0%", vscode.TreeItemCollapsibleState.None),
-            new ThmeItem("Energy Consumption: 1.84 mJ/tok", "Saved: 58.2%", vscode.TreeItemCollapsibleState.None),
-            new ThmeItem("Throughput: 620 tok/sec", "Latency: 1.61 ms/token", vscode.TreeItemCollapsibleState.None)
-        ]);
-    }
-}
-
-class ThmeCopilotToolsTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
-    getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
-        return element;
-    }
-
-    getChildren(): Thenable<vscode.TreeItem[]> {
-        return Promise.resolve([
-            new ThmeItem("thme_copilot_inspect", "Inspect model tensors zero-copy", vscode.TreeItemCollapsibleState.None),
-            new ThmeItem("thme_copilot_surgery", "Dispatch real-time surgery recipe", vscode.TreeItemCollapsibleState.None),
-            new ThmeItem("thme_copilot_validate", "Assert perplexity delta <= epsilon", vscode.TreeItemCollapsibleState.None),
-            new ThmeItem("MCP Server: Running on stdin/stdout", "Protocol: 2024-11-05", vscode.TreeItemCollapsibleState.None)
-        ]);
+        return Promise.resolve(toItems(this.rows()));
     }
 }
 

@@ -14,11 +14,11 @@
 2. **Universal Model Context Protocol (MCP) Server**:
    - Connects any AI assistant (VS Code Copilot, Claude Desktop, Cursor, Windsurf, Antigravity) to THME via standard JSON-RPC (`thme mcp`).
 
-3. **Interactive Sidebar Views**:
-   - **Active Model & Layer Anatomy**: Inspect layers, sub-blocks (RMSNorm, QKV, MLP, Residuals), and early-exit checkpoints.
-   - **Pareto Precision Plan**: Live algorithm assignments (BitNet b1.58, Hadamard WHT, SmoothQuant, 2:4 Sparsity).
-   - **REA-LLM & EWHA Telemetry**: Depth fraction $\bar{f}$, memory traffic, and energy consumption projections.
-   - **Copilot Live Tools**: Real-time status of registered AI tools.
+3. **Interactive Sidebar Views** (every value is read from the CLI's own output for the model you pick with **THME: Select Model**; with no model selected each tree says so, and the tool list is labelled as an example — no made-up numbers):
+   - **Active Model & Layer Anatomy**: `thme inspect --json` — name, architecture, parameters, layers, hidden size, heads, vocabulary, context, tensor count, raw size.
+   - **Pareto Precision Plan**: `thme plan` — original and planned size, compression ratio, quality retention, per-layer formats.
+   - **REA-LLM & EWHA Telemetry**: `thme profile` — layer sensitivity and the KV-cache projection.
+   - **Copilot Live Tools**: the extension's own registered tools, labelled as an example.
 
 4. **1-Click Native Studio GUI**:
    - Status bar item `$(circuit-board) THME: 60 FPS` launches the native GPU-accelerated desktop cockpit directly from your IDE.

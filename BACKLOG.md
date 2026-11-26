@@ -250,8 +250,9 @@ closes it.
 
 ### [THME-3076] VS Code sidebar shows fixed example text as if it were live data
 
-- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p2 · **Area**: security · **Type**: bug · **Status**: ready
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p2 · **Area**: security · **Type**: bug · **Status**: done
 - **Problem**: The extension's sidebar trees show static example text (a model name such as "thme-hybrid-12l" and a throughput such as "620 tok/sec") that THME never measured, which breaks the rule that no unmeasured number is presented as a result (found by the THME-3048 fix).
+- **Progress** (21 November 2026): the four trees are data-driven. `thme-models` reads `thme inspect --json`; `thme-decisions` reads the file `thme plan` writes; `thme-telemetry` reads the file `thme profile` writes (layer sensitivity and the KV-cache projection — the old REA-LLM/EWHA figures had no CLI command, so they are gone rather than left as examples); `thme-copilot` is labelled as an example and carries no numbers. With no model selected, each tree says "no model selected". New commands `THME: Select Model` and `THME: Refresh Sidebar from the CLI` drive it, and `THME: Inspect Model` selects as well. `editors/vscode/src/treeData.ts` builds every row and `src/treeData.test.ts` lists every string the trees can show and fails if a row carries a number the CLI output does not contain; `npm test` passes 11 tests. The fixtures under `src/fixtures/` are real CLI output captured on `examples/mock_llama` (inspect trimmed to two tensors). Not done: the view is still named "REA-LLM & EWHA Telemetry" while showing `thme profile` numbers; renaming it is a product decision.
 - **Done means**: Each sidebar value is read from the CLI's own output for the selected model, or the tree says "no model selected" or is labelled as an example; a test lists every string the tree can show and checks none is a made-up number.
 
 ### [THME-3077] Quality gate v2: a margin that fits the model's perplexity (two regimes)
