@@ -91,6 +91,7 @@ pub enum ShaderKind {
     Q4_K,
     Q5_K,
     IQ4_XS,
+    Bitcos,
     F32,
 }
 
@@ -563,6 +564,10 @@ impl GpuContext {
             (
                 ShaderKind::IQ4_XS,
                 build("IQ4_XS", include_str!("shaders/gemv_iq4_xs.wgsl")),
+            ),
+            (
+                ShaderKind::Bitcos,
+                build("Bitcos", include_str!("shaders/gemv_bitcos.wgsl")),
             ),
             (
                 ShaderKind::F32,
@@ -1389,12 +1394,7 @@ impl GpuContext {
                             ))
                         })?
                         .clone();
-                    let out = op.out_dim as u32;
-                    // Output rows spread over x then y; token rows ride on z.
-                    (
-                        p,
-                        [out.min(MAX_GROUPS), out.div_ceil(MAX_GROUPS), rows as u32],
-                    )
+                    (p, gemv_groups(op.out_dim, rows))
                 };
                 if let Some(kind) = copy.filter(|k| converted.as_ref().is_none_or(|c| c.0 != *k)) {
                     converted = Some((
@@ -1494,12 +1494,19 @@ impl GpuContext {
     }
 }
 
+/// Workgroup grid of a quantized GEMV: output rows spread over x then y; token rows ride on z.
+fn gemv_groups(out_dim: usize, rows: usize) -> [u32; 3] {
+    let out = out_dim as u32;
+    [out.min(MAX_GROUPS), out.div_ceil(MAX_GROUPS), rows as u32]
+}
+
 /// Kernel family and weight storage a tensor of this dtype runs with.
 fn shader_kind(dtype: QuantDtype) -> Result<(ShaderKind, WeightStorage), ThmeError> {
     match dtype {
         QuantDtype::Q4_K => Ok((ShaderKind::Q4_K, WeightStorage::F32)),
         QuantDtype::Q5_K => Ok((ShaderKind::Q5_K, WeightStorage::F32)),
         QuantDtype::IQ4_XS => Ok((ShaderKind::IQ4_XS, WeightStorage::F32)),
+        QuantDtype::Bitcos => Ok((ShaderKind::Bitcos, WeightStorage::F32)),
         QuantDtype::F32 => Ok((ShaderKind::F32, WeightStorage::F32)),
         QuantDtype::F16 => Ok((ShaderKind::F32, WeightStorage::F16)),
         QuantDtype::Q8_0 => Ok((ShaderKind::F32, WeightStorage::Q8_0)),
@@ -1734,6 +1741,7 @@ impl GpuBackend for GpuContext {
             QuantDtype::Q4_K
                 | QuantDtype::Q5_K
                 | QuantDtype::IQ4_XS
+                | QuantDtype::Bitcos
                 | QuantDtype::F32
                 | QuantDtype::F16
                 | QuantDtype::Q8_0
@@ -1960,5 +1968,16 @@ mod tests {
         assert_eq!(wgpu_api_filter(Some("Vulkan")).as_deref(), Some("vulkan"));
         assert_eq!(wgpu_api_filter(Some("metal")).as_deref(), Some("metal"));
         assert_eq!(wgpu_api_filter(Some("DX12")).as_deref(), Some("dx12"));
+    }
+
+    #[test]
+    fn bitcos_maps_to_its_own_kernel_with_z_batched_grid() {
+        assert_eq!(
+            shader_kind(QuantDtype::Bitcos).ok(),
+            Some((ShaderKind::Bitcos, WeightStorage::F32))
+        );
+        assert_eq!(gemv_groups(3, 2), [3, 1, 2]);
+        let m = MAX_GROUPS as usize;
+        assert_eq!(gemv_groups(m + 1, 5), [MAX_GROUPS, 2, 5]);
     }
 }

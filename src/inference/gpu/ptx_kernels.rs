@@ -134,8 +134,9 @@ mod tests {
         assert!(PTX_BITCOS_GEMV.contains("min.u32"));
         assert!(PTX_BITCOS_GEMV.contains("popc.b32"));
         assert!(PTX_POLAR_GEMV.contains("ptx_polar_gemv"));
-        assert!(WGSL_GEMV_BITCOS.contains("superblock_nz_cap"));
-        assert!(WGSL_GEMV_BITCOS.contains("min(k, max_idx)"));
+        // WGSL reads are already bounded by `k < in_dim`; it follows main's z-batched layout.
+        assert!(WGSL_GEMV_BITCOS.contains("k < params.in_dim"));
+        assert!(WGSL_GEMV_BITCOS.contains("wid.z"));
     }
 
     #[test]

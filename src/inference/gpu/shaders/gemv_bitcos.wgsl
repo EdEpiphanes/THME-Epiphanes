@@ -5,7 +5,8 @@ struct GemvParams {
     in_dim: u32,
     out_dim: u32,
     num_blocks_per_row: u32,
-    superblock_nz_cap: u32,
+    rows: u32,
+    out_offset: u32,
 };
 
 @group(0) @binding(0) var<storage, read> params: GemvParams;
@@ -20,16 +21,15 @@ fn main(
     @builtin(workgroup_id) wid: vec3<u32>,
     @builtin(local_invocation_id) lid: vec3<u32>
 ) {
-    let row = wid.x;
-    let batch_row = wid.y;
+    let row = wid.y * 65535u + wid.x;
+    let tok = wid.z;
     if (row >= params.out_dim) {
         return;
     }
     let tid = lid.x;
     let words_per_row = (params.in_dim + 15u) / 16u;
     let row_word_base = row * words_per_row;
-    let x_base = batch_row * params.in_dim;
-    let max_idx = max(params.superblock_nz_cap, 1u) - 1u;
+    let x_base = tok * params.in_dim;
 
     var acc: f32 = 0.0;
     for (var w = tid; w < words_per_row; w += 32u) {
@@ -39,11 +39,10 @@ fn main(
             let k = base_k + j;
             if (k < params.in_dim) {
                 let code = (word >> (j * 2u)) & 0x3u;
-                let clamped_k = min(k, max_idx);
                 if (code == 1u) {
-                    acc += input_x[x_base + clamped_k];
+                    acc += input_x[x_base + k];
                 } else if (code == 2u) {
-                    acc -= input_x[x_base + clamped_k];
+                    acc -= input_x[x_base + k];
                 }
             }
         }
@@ -60,6 +59,6 @@ fn main(
     if (tid < 2u)  { sdata[tid] += sdata[tid + 2u]; }
     workgroupBarrier();
     if (tid == 0u) {
-        output_y[batch_row * params.out_dim + row] = sdata[0] + sdata[1];
+        output_y[params.out_offset + tok * params.out_dim + row] = sdata[0] + sdata[1];
     }
 }
