@@ -9,7 +9,9 @@ use anyhow::{bail, Context, Result};
 use std::path::Path;
 use std::sync::Arc;
 
-use super::gpu::{dispatch_linear_slice, dispatch_score_head_slice, GpuBackend};
+use super::gpu::{
+    dispatch_linear_array, dispatch_linear_slice, dispatch_score_head_slice, GpuBackend,
+};
 use super::llama::{
     add_in_place, attention, load_tensor, rms_norm, AttentionInputs, DepthExit, RopeTable,
     WeightPrecision,
@@ -625,9 +627,16 @@ impl GemmaModel {
         let gpu = self.gpu_backend.as_deref();
 
         // 2. Q, K, V Projections
-        let mut q = dispatch_linear_slice(gpu, normed, &layer.q, d, q_dim);
-        let mut k = dispatch_linear_slice(gpu, normed, &layer.k, d, kv_dim);
-        let v = dispatch_linear_slice(gpu, normed, &layer.v, d, kv_dim);
+        let [mut q, mut k, v] = dispatch_linear_array(
+            gpu,
+            normed,
+            [
+                (&layer.q[..], q_dim),
+                (&layer.k[..], kv_dim),
+                (&layer.v[..], kv_dim),
+            ],
+            d,
+        );
 
         record("q", normed, d, &q, q_dim);
         record("k", normed, d, &k, kv_dim);
@@ -649,6 +658,7 @@ impl GemmaModel {
             num_heads: cfg.num_heads,
             num_kv_heads: cfg.num_kv_heads,
             head_dim,
+            pos_offset: 0,
         });
 
         // 6. Attention Out projection
@@ -669,8 +679,12 @@ impl GemmaModel {
         rms_norm(x, &layer.ffn_norm, cfg.rms_norm_eps, normed);
 
         // 9. GeGLU Feedforward: gate * gelu_approx(gate) * up
-        let mut gate = dispatch_linear_slice(gpu, normed, &layer.gate, d, inter);
-        let up = dispatch_linear_slice(gpu, normed, &layer.up, d, inter);
+        let [mut gate, up] = dispatch_linear_array(
+            gpu,
+            normed,
+            [(&layer.gate[..], inter), (&layer.up[..], inter)],
+            d,
+        );
         record("gate", normed, d, &gate, inter);
         record("up", normed, d, &up, inter);
 

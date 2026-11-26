@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { spawn } from 'child_process';
+import { inspectArgs, planArgs, tweakArgs, validateArgs, run } from './thme';
 
 let outputChannel: vscode.OutputChannel;
 let statusBarItem: vscode.StatusBarItem;
@@ -85,123 +86,86 @@ function resolveBinaryPath(preferredBinary: string = "thme"): string {
 }
 
 /**
- * Executes a CLI command and streams output to channel
+ * Executes a CLI command (no shell, raw argument array) and streams output to channel
  */
 function runThmeCommand(args: string[]): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const bin = resolveBinaryPath();
-        outputChannel.appendLine(`[THME CMD] ${bin} ${args.join(" ")}`);
-        outputChannel.show(true);
+    const bin = resolveBinaryPath();
+    outputChannel.appendLine(`[THME CMD] ${bin} ${JSON.stringify(args)}`);
+    outputChannel.show(true);
+    return run(bin, args, (s) => outputChannel.append(s));
+}
 
-        const child = spawn(bin, args, { shell: true });
-        let stdout = "";
-        let stderr = "";
-
-        child.stdout.on("data", (data) => {
-            const str = data.toString();
-            stdout += str;
-            outputChannel.append(str);
-        });
-
-        child.stderr.on("data", (data) => {
-            const str = data.toString();
-            stderr += str;
-            outputChannel.append(str);
-        });
-
-        child.on("close", (code) => {
-            if (code === 0) {
-                resolve(stdout);
-            } else {
-                reject(new Error(stderr || `Process exited with code ${code}`));
-            }
-        });
-
-        child.on("error", (err) => {
-            reject(err);
-        });
-    });
+async function pickFile(label: string, ext: string[]): Promise<string | undefined> {
+    const u = await vscode.window.showOpenDialog({ canSelectMany: false, openLabel: label, filters: { Files: ext } });
+    return u?.[0]?.fsPath;
 }
 
 function launchStudio(context: vscode.ExtensionContext) {
     const guiBin = resolveBinaryPath("thme-gui");
     outputChannel.appendLine(`[THME] Launching Native Desktop Studio GUI: ${guiBin}`);
     vscode.window.showInformationMessage("Launching THME Native Studio GUI (60 FPS)...");
-    spawn(guiBin, [], { detached: true, stdio: "ignore", shell: true }).unref();
+    spawn(guiBin, [], { detached: true, stdio: "ignore", shell: false }).unref();
 }
 
 async function inspectModel(context: vscode.ExtensionContext) {
-    const fileUri = await vscode.window.showOpenDialog({
-        canSelectMany: false,
-        openLabel: "Inspect Model",
-        filters: {
-            "Model Files": ["safetensors", "gguf"]
-        }
-    });
-
-    if (fileUri && fileUri[0]) {
-        try {
-            await runThmeCommand(["inspect", "--model", `"${fileUri[0].fsPath}"`]);
-            vscode.window.showInformationMessage("Model inspection completed. See THME Engine output.");
-        } catch (err: any) {
-            vscode.window.showErrorMessage(`Inspection failed: ${err.message}`);
-        }
+    const model = await pickFile("Inspect Model", ["safetensors", "gguf"]);
+    if (!model) { return; }
+    try {
+        await runThmeCommand(inspectArgs(model));
+        vscode.window.showInformationMessage("thme inspect exited 0. See THME Engine output.");
+    } catch (err: any) {
+        vscode.window.showErrorMessage(`Inspection failed: ${err.message}`);
     }
 }
 
 async function autoDecide(context: vscode.ExtensionContext) {
+    const model = await pickFile("Plan Model", ["safetensors", "gguf"]);
+    if (!model) { return; }
     try {
-        await runThmeCommand(["plan", "--tolerance", "0.025"]);
-        vscode.window.showInformationMessage("Pareto AutoDecider analysis complete. Plan generated.");
+        await runThmeCommand(planArgs(model, 2.0));
+        vscode.window.showInformationMessage("thme plan exited 0. See THME Engine output and optimization_plan.json.");
     } catch (err: any) {
         vscode.window.showErrorMessage(`Plan generation failed: ${err.message}`);
     }
 }
 
+async function askNumber(prompt: string): Promise<number | undefined> {
+    const v = await vscode.window.showInputBox({ prompt, validateInput: (t) => (t.trim() !== "" && Number.isFinite(Number(t)) && Number(t) > 0 ? undefined : "Enter a positive number") });
+    return v === undefined ? undefined : Number(v);
+}
+
 async function validateQuality(context: vscode.ExtensionContext) {
+    // Perplexities must come from a real measurement; the CLI's own exit status is the verdict.
+    const baseline = await askNumber("Measured baseline perplexity");
+    if (baseline === undefined) { return; }
+    const candidate = await askNumber("Measured candidate perplexity");
+    if (candidate === undefined) { return; }
     try {
-        await runThmeCommand(["validate", "--baseline-ppl", "6.50", "--candidate-ppl", "6.65", "--max-ppl-delta", "0.25"]);
-        vscode.window.showInformationMessage("Empirical quality gate: PASSED (Delta PPL <= 0.25).");
+        await runThmeCommand(validateArgs(baseline, candidate));
+        vscode.window.showInformationMessage("thme validate exited 0: the CLI reports the quality gate as passed for the values you entered.");
     } catch (err: any) {
-        vscode.window.showErrorMessage(`Quality gate failed: ${err.message}`);
+        vscode.window.showErrorMessage(`thme validate reported a failure: ${err.message}`);
     }
 }
 
 async function applySurgery(context: vscode.ExtensionContext) {
-    const activeEditor = vscode.window.activeTextEditor;
-    let recipePath: string | undefined;
-
-    if (activeEditor && (activeEditor.document.fileName.endsWith(".json") || activeEditor.document.fileName.includes("recipe"))) {
-        recipePath = activeEditor.document.fileName;
-    } else {
-        const fileUri = await vscode.window.showOpenDialog({
-            canSelectMany: false,
-            openLabel: "Select Surgery Recipe",
-            filters: {
-                "JSON Recipes": ["json"]
-            }
-        });
-        if (fileUri && fileUri[0]) {
-            recipePath = fileUri[0].fsPath;
-        }
-    }
-
-    if (recipePath) {
-        try {
-            await runThmeCommand(["tweak", "--recipe", `"${recipePath}"`]);
-            vscode.window.showInformationMessage("Surgery recipe applied successfully with atomic rollback checkpoint.");
-        } catch (err: any) {
-            vscode.window.showErrorMessage(`Surgery failed: ${err.message}`);
-        }
+    const model = await pickFile("Select Model", ["safetensors", "gguf"]);
+    if (!model) { return; }
+    const recipe = await pickFile("Select Surgery Recipe", ["json"]);
+    if (!recipe) { return; }
+    try {
+        await runThmeCommand(tweakArgs(model, recipe));
+        vscode.window.showInformationMessage("thme tweak exited 0. See THME Engine output for what it did.");
+    } catch (err: any) {
+        vscode.window.showErrorMessage(`Surgery failed: ${err.message}`);
     }
 }
 
 function startMcpServer(context: vscode.ExtensionContext) {
     const bin = resolveBinaryPath();
-    const terminal = vscode.window.createTerminal("THME MCP Daemon");
-    terminal.sendText(`& "${bin}" mcp`);
+    const terminal = vscode.window.createTerminal({ name: "THME MCP Daemon", shellPath: bin, shellArgs: ["mcp"] });
     terminal.show();
-    vscode.window.showInformationMessage("THME MCP Server running on stdin/stdout for AI assistants.");
+    vscode.window.showInformationMessage("Started `thme mcp` in a terminal (stdin/stdout JSON-RPC).");
 }
 
 /**
@@ -219,9 +183,7 @@ function registerCopilotTools(context: vscode.ExtensionContext) {
         context.subscriptions.push(
             lm.registerTool("thme_copilot_inspect", {
                 invoke: async (options: any) => {
-                    const modelPath = options.input?.modelPath;
-                    const args = modelPath ? ["inspect", "--model", `"${modelPath}"`] : ["inspect"];
-                    const result = await runThmeCommand(args);
+                    const result = await runThmeCommand(inspectArgs(options.input?.modelPath));
                     return {
                         content: [{ type: "text", value: result }]
                     };
@@ -240,7 +202,8 @@ function registerCopilotTools(context: vscode.ExtensionContext) {
                     const tmpFile = path.join(context.globalStorageUri.fsPath, "copilot_surgery.json");
                     fs.mkdirSync(context.globalStorageUri.fsPath, { recursive: true });
                     fs.writeFileSync(tmpFile, recipeJson, "utf8");
-                    const result = await runThmeCommand(["tweak", "--recipe", `"${tmpFile}"`]);
+                    const modelPath = options.input?.modelPath;
+                    const result = await runThmeCommand(tweakArgs(modelPath, tmpFile));
                     return {
                         content: [{ type: "text", value: result }]
                     };
@@ -253,14 +216,7 @@ function registerCopilotTools(context: vscode.ExtensionContext) {
             lm.registerTool("thme_copilot_validate", {
                 invoke: async (options: any) => {
                     const { baselinePpl, candidatePpl, maxDeltaPpl = 0.25 } = options.input || {};
-                    const args = [
-                        "validate",
-                        "--baseline-ppl", String(baselinePpl),
-                        "--candidate-ppl", String(candidatePpl),
-                        "--max-ppl-delta", String(maxDeltaPpl),
-                        "--json"
-                    ];
-                    const result = await runThmeCommand(args);
+                    const result = await runThmeCommand([...validateArgs(baselinePpl, candidatePpl, maxDeltaPpl), "--json"]);
                     return {
                         content: [{ type: "text", value: result }]
                     };

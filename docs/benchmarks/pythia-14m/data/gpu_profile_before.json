@@ -1,0 +1,134 @@
+{
+  "adapter_init_ms": 519.934,
+  "build_profile": "release",
+  "device": {
+    "backend": "Vulkan",
+    "device_type": "DiscreteGpu",
+    "driver": "NVIDIA",
+    "driver_info": "616.92",
+    "name": "NVIDIA GeForce RTX 4060 Ti",
+    "timestamp_query_used": false
+  },
+  "git_commit": "4d7b439",
+  "git_dirty": true,
+  "label": "pythia-14m",
+  "machine_load_note": "before change; another job (AWQ evaluation, CPU) loading the machine, total CPU about 70 percent during run",
+  "method": "CPU and GPU forward_logits interleaved per shape after one warm-up pass each; wall clock; synthetic token ids (timing only). Breakdown fields are host-side waits, not kernel time; wait_ms bounds kernel time from above.",
+  "phases": [
+    {
+      "cpu_ms": {
+        "max": 35.3981,
+        "median": 32.6751,
+        "min": 28.9599,
+        "samples": [
+          34.5892,
+          31.1739,
+          31.7152,
+          35.3981,
+          35.0077,
+          28.9599,
+          32.6751
+        ]
+      },
+      "gpu_first_run_breakdown": {
+        "dispatches": 0,
+        "encode_ms": 0.0,
+        "input_write_ms": 0.0,
+        "readback_ms": 0.0,
+        "submit_ms": 0.0,
+        "submits": 0,
+        "wait_ms": 0.0,
+        "weight_upload_ms": 0.0,
+        "weight_uploads": 0
+      },
+      "gpu_first_run_ms": 30.6834,
+      "gpu_median_breakdown": {
+        "dispatches": 0,
+        "encode_ms": 0.0,
+        "input_write_ms": 0.0,
+        "readback_ms": 0.0,
+        "submit_ms": 0.0,
+        "submits": 0,
+        "wait_ms": 0.0,
+        "weight_upload_ms": 0.0,
+        "weight_uploads": 0
+      },
+      "gpu_ms": {
+        "max": 38.392,
+        "median": 33.4168,
+        "min": 29.3206,
+        "samples": [
+          37.5263,
+          30.5956,
+          33.4168,
+          38.0565,
+          29.3206,
+          30.1297,
+          38.392
+        ]
+      },
+      "max_abs_logit_diff_gpu_vs_cpu": 0.0,
+      "name": "prefill_128",
+      "tokens": 128
+    },
+    {
+      "cpu_ms": {
+        "max": 9.8265,
+        "median": 7.9402,
+        "min": 5.7838,
+        "samples": [
+          9.8265,
+          7.9402,
+          8.7553,
+          8.3627,
+          5.7838,
+          5.8856,
+          6.8855
+        ]
+      },
+      "gpu_first_run_breakdown": {
+        "dispatches": 0,
+        "encode_ms": 0.0,
+        "input_write_ms": 0.0,
+        "readback_ms": 0.0,
+        "submit_ms": 0.0,
+        "submits": 0,
+        "wait_ms": 0.0,
+        "weight_upload_ms": 0.0,
+        "weight_uploads": 0
+      },
+      "gpu_first_run_ms": 7.9704,
+      "gpu_median_breakdown": {
+        "dispatches": 0,
+        "encode_ms": 0.0,
+        "input_write_ms": 0.0,
+        "readback_ms": 0.0,
+        "submit_ms": 0.0,
+        "submits": 0,
+        "wait_ms": 0.0,
+        "weight_upload_ms": 0.0,
+        "weight_uploads": 0
+      },
+      "gpu_ms": {
+        "max": 9.8226,
+        "median": 7.9268,
+        "min": 5.6685,
+        "samples": [
+          9.8226,
+          7.9268,
+          8.8853,
+          7.9522,
+          6.501,
+          6.3976,
+          5.6685
+        ]
+      },
+      "max_abs_logit_diff_gpu_vs_cpu": 0.0,
+      "name": "short_pass_2",
+      "tokens": 2
+    }
+  ],
+  "runs": 7,
+  "schema": 1,
+  "threads": 12
+}

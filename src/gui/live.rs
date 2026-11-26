@@ -612,6 +612,9 @@ impl LiveView {
             artifact: None,
             calibration: None,
             gate: None,
+            device: crate::inference::DeviceArg::Cpu,
+            no_baseline_cache: true,
+            baseline_cache_dir: None,
         };
         let (tx, rx) = mpsc::channel();
         let ctx = ctx.clone();

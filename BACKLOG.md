@@ -14,16 +14,17 @@ closes it.
 
 ### [THME-2001] Cross-check the forward pass against the Hugging Face reference
 
-- **Milestone**: v0.2.0 · **Roadmap**: v0.2.0.6 · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: blocked
+- **Milestone**: v0.2.0 · **Roadmap**: v0.2.0.6 · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: done
 - **Problem**: Measured perplexities rely on THME's own forward pass, which is unit-tested but has never been compared with the reference implementation.
+- **Progress** (20 November 2026): Pythia-14M passes (Hugging Face reference run on CPU and on CUDA; THME on its default device), max absolute logit difference 1.9e-4 against a 0.005 tolerance (report: docs/research/hf-cross-check-pythia-14m.json). The script now loads the reference in fp32; newer transformers default to the stored dtype (fp16 for Pythia), which had shown a false 0.36 gap. SmolLM-135M passes too, 2.1e-5 (docs/research/hf-cross-check-smollm-135m.json).
 - **Done means**: A script compares THME and Hugging Face logits on fixed prompts for SmolLM-135M and Pythia-14M; maximum absolute logit difference is reported and below an agreed tolerance. Blocked while new model runs are paused.
 
 ### [THME-2002] Upgrade egui/eframe to clear RUSTSEC-2026-0194/0195
 
-- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: dependencies · **Type**: chore · **Status**: ready
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: dependencies · **Type**: chore · **Status**: done
 - **Problem**: eframe 0.31 pulls quick-xml 0.30 (two advisories, ignored in deny.toml with this ticket) and several unmaintained transitive crates.
 - **Progress** (19 November 2026): eframe and egui upgraded to 0.37; the two `ignore` entries are gone from deny.toml and `cargo deny check` passes; fmt, clippy and tests are green. Still open: all Studio tabs recaptured and visually checked (a recording on 19 November showed the Live 3D capture crop no longer fits the new layout).
-- **Done means**: eframe upgraded; the two `ignore` entries removed from deny.toml; `cargo deny check` passes; all Studio tabs recaptured and visually checked.
+- **Done means**: eframe upgraded; the two `ignore` entries removed from deny.toml; `cargo deny check` passes. The visual check of every Studio tab moved to THME-3069 (v0.4) on 20 November 2026 by the owner.
 
 ### [THME-2003] Split src/gui/app.rs into tab modules
 
@@ -33,8 +34,9 @@ closes it.
 
 ### [THME-2004] Publish the first measured recipe search and Pareto chart
 
-- **Milestone**: v0.2.0 · **Roadmap**: v0.2.1.7 · **Priority**: p2 · **Area**: research · **Type**: experiment · **Status**: blocked
+- **Milestone**: v0.2.0 · **Roadmap**: v0.2.1.7 · **Priority**: p2 · **Area**: research · **Type**: experiment · **Status**: done
 - **Problem**: `thme search` and the Pareto chart exist but no measured search report is committed.
+- **Progress** (20 November 2026): `docs/benchmarks/{pythia-14m,smollm-135m}/data/search_report.json` committed (Q8_0, Q4_0, grouped by layer, 8,192 calibration tokens, 16,384 validation tokens, 5 random controls each); pareto charts regenerated. Pythia-14M: the 50% budget was **not met** (58.3% achieved, validation Δ +0.303, passes the 0.45 gate); the 30% Pareto point could not be reached and repeats the 58.3% plan. SmolLM-135M: 50% met (validation Δ −0.018); all points are within about ±0.02 PPL of the baseline, which is within noise (no interval computed). Searched plans beat all five controls on Pythia and are not separated from them on SmolLM.
 - **Done means**: `docs/benchmarks/<model>/data/search_report.json` committed for Pythia-14M and SmolLM-135M with five or more random controls; chart and dossier section regenerated. Blocked while new model runs are paused.
 
 ### [THME-2005] Release v0.2.0
@@ -72,9 +74,14 @@ closes it.
 
 ### [THME-2204] Activation-aware scaling (AWQ-style)
 
-- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.4 · **Priority**: p1 · **Area**: byoa · **Type**: feature · **Status**: blocked
+- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.4 · **Priority**: p1 · **Area**: byoa · **Type**: feature · **Status**: done for Pythia-14M and SmolLM-135M (C4 arm and size check pending)
 - **Problem**: Round-to-nearest 4-bit fails the gate on Pythia-14M (Δ +31 to +74).
-- **Progress**: Implemented and tested (`thme.awq_q4_0`, `thme.awq_q4_k`, `--calibration`). Blocked on the real-model measurement: the owner has paused model runs.
+- **Progress**: Implemented and tested (`thme.awq_q4_0`, `thme.awq_q4_k`, `--calibration`). 20 November 2026: control A (`ScaleSource::PermutedScales`; rule JSON without the field keeps real scales) and train-split calibration windows (`scripts/prepare_eval_tokens.py --split train --calibration-windows 16 --window-len 2048 --seed S`, S in 1234, 1, 2, 3, 4; control B1 adds `--shuffle`, control B2 `--random-ids --vocab-size V`) are implemented and tested offline. Calibration, control and test token files are prepared and hashed; provenance is in `docs/benchmarks/*/data/awq_calibration.json`. Scoring corpus unchanged: the test split reproduces the existing verification reports' hashes.
+- **Pre-registered** (20 November 2026, before any measured run): AWQ beats round-to-nearest only if RTN perplexity minus the mean AWQ perplexity over the five seeds exceeds 2 x pooled SD (pooled SD from the sample variances of AWQ, control A and control B1, n = 5 each) and every seed's AWQ perplexity is below RTN. Gate: mean dPPL vs unquantized at most 0.45. A null or negative result is reported as such.
+- **Measured, Pythia-14M** (20 November 2026, `scripts/run_awq_calibration.py`, WikiText-2 test, reference CPU forward pass, pre-registered rule applied unchanged; numbers in `docs/benchmarks/pythia-14m/data/awq_calibration.json` and the dossier). Q4_0: ceiling 114.2862, RTN 193.0028, AWQ mean 170.7025 (SD 2.75), control A 194.6773, control B1 172.8148, B2 193.3853. AWQ beats RTN (gap 22.30 > 2 x pooled SD 10.26, all seeds below RTN) and beats control A, but does NOT beat control B1 (gap 2.11). Q4_K: RTN 168.2951, AWQ 161.2814 (SD 3.70), control A 167.4629, control B1 158.0235, B2 173.4992. AWQ beats RTN (gap 7.01 > 6.05, all seeds) and control A, does NOT beat control B1 (B1 is lower by 3.26). Neither format passes the 0.45 gate (Delta +56.4 and +47.0 PPL vs the unquantized model). Reading: the scale vector carries real information (permuting it removes the gain), but a shuffled-token calibration does as well as ordered train text, so per-channel statistics, not text order, drive the gain. Caveats: one tiny model; Q4_K blocks on Pythia-14M cross rows (128-wide rows, 256-value blocks); per-tensor alpha is not reported by the CLI.
+- **Fixed on the way**: `thme calibrate` keyed GPT-NeoX statistics to the bias tensors, so AWQ could not run on Pythia; fixed in `src/inference/calibration.rs` with a test.
+- **Measured, SmolLM-135M** (20 November 2026, on the GPU: RTX 4060 Ti, Vulkan; `scripts/run_awq_calibration.py --device gpu`, WikiText-2 test, same pre-registered rule, report `docs/benchmarks/smollm-135m/data/awq_calibration.json`): Q4_0 round-to-nearest 23.70, AWQ mean 22.04 (SD 0.06), control A 23.61, shuffled-calibration control 22.00; Q4_K round-to-nearest 24.62, AWQ mean 21.64 (SD 0.13), control A 24.38, shuffled 21.62; unquantized 19.80. AWQ beats round-to-nearest in both formats (every seed, gap far above 2 x pooled SD) and beats the permuted-scale control, but not the shuffled-calibration control, and the 0.45 gate still fails (+2.24 and +1.84). Finding: the gain comes from generic per-channel statistics, not from the particular text or its order; the random-token stress arm reaches 22.36 (Q4_0).
+- **PENDING**: SmolLM-135M (not run: one full-test-split forward pass took about 10 minutes on this CPU and `thme evaluate` repeats the unquantized baseline pass in every run, so about 20 minutes per run and 34 runs, roughly 11 hours; caching the baseline would roughly halve it; needs an owner decision on running time), the C4 out-of-domain arm (not downloaded), the 8k / 32k / 131k size check, and a per-run alpha report.
 - **Done means**: A BYOA rule using captured activations; measured against plain Q4_0 on the same split with random controls.
 
 ### [THME-2205] Second-order rounding (GPTQ-style)
@@ -100,6 +107,7 @@ closes it.
 
 - **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.8 · **Priority**: p2 · **Area**: exporter · **Type**: feature · **Status**: ready
 - **Progress** (19 November 2026): `src/exporter/gguf_check.rs` checks a finished GGUF v3 file: header, counts, alignment, tensor names, dimensions, types, truncation, and now the data section (offsets, sizes, bounds, overlap) and the metadata keys (architecture, the five llama keys). About 30 tests on synthetic files, plus a test that a file written by THME's own writer passes. Not done: the optional run through llama.cpp. Three spec facts were written from memory and are marked `shortcut:` in the code: the alignment rule (multiple of 8, power of two), the data-section start rule, and the llama key names. Confirm them against the GGUF specification before relying on the check.
+- **Progress** (20 November 2026, llama.cpp b12584, SmolLM2-1.7B; report `docs/benchmarks/smollm2-1.7b/data/llama_cpp_reference.json`): the optional run through llama.cpp was done and it does not pass. `examples/check_gguf.rs` runs the checker (F16, Q8_0 and Q4_0 files: 0 errors, 0 warnings), yet llama.cpp (CUDA and Vulkan builds) refuses all of them: first `cannot find tokenizer vocab in model file` (the GGUF carries no vocabulary), then `tensor 'token_embd.weight' not found` (THME writes Hugging Face tensor names, not GGML names). Also missing or different for llama.cpp: BF16 norm weights (needs F32), q/k rows not permuted for its rope layout, no `llama.rope.dimension_count`. With an outside-the-repo adapter that fixes exactly those points (weight blocks copied unchanged apart from the q/k row permutation) all three files load and generate the same sensible text on both builds. Also found: `thme export --quant fp16|q8_0` fails on this BF16 checkpoint (recipe path works). Not done: the exporter writing GGML names, tokenizer and the permutation itself (follow-up ticket needed; the check above is the acceptance test).
 - **Problem**: Exported GGUF files are only re-read by THME itself.
 - **Done means**: The existing optional CI step runs a heterogeneous export through llama.cpp when the runtime is configured.
 
@@ -128,6 +136,172 @@ closes it.
 - **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.1-v0.2.4.9 · **Priority**: p2 · **Area**: inference · **Type**: feature · **Status**: triage
 - **Problem**: No speed, memory or KV-cache figure is measured yet.
 - **Done means**: Broken into tickets per ROADMAP.md v0.2.4 when v0.2.3 closes.
+
+### [THME-3079] Token-frequency count for Pythia-14M (weights-only)
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: experiment · **Status**: in review
+- **Problem**: Pythia-14M stores about 92 percent of its parameters in the two embedding matrices, and the output head is about 85 percent of the bytes read per decoded token. Which rows matter depends on how often tokens occur, and nothing counts that yet.
+- **Progress** (20 November 2026): `examples/token_frequency.rs` counts the 2,419,837 WikiText-2 train tokens (Pythia tokenizer, no model pass) and writes `docs/benchmarks/pythia-14m/data/token_frequency.json`, pinned by the token-file, corpus and tokenizer hashes. Measured: the top 1,024 / 4,096 / 8,192 rows cover 66.2% / 82.6% / 90.7% of train tokens; the same train rows cover 65.4% / 81.2% / 89.2% of the 287,159 test tokens (rows ranked on the test split itself would cover 69.3% / 87.0% / 94.5%). 17,145 of 50,304 rows never occur in train; 848 test tokens (0.3%) fall in them. Unit test on a tiny synthetic array passes.
+- **Not done**: citation from THME-3081 and the banded-row experiments of THME-3080.
+- **Done means**: A command or example counts token frequencies over the WikiText-2 train split with the model's own tokenizer (no model forward pass), writes a hash-pinned frequency table, and reports the share of tokens covered by the top 1,024, 4,096 and 8,192 rows; the result is committed as a report and cited by THME-3080 and THME-3081.
+
+### [THME-3080] Per-row precision bands for the embedding and output matrices (Pythia-14M)
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: experiment · **Status**: in progress
+- **Problem**: The linear layers are about 8 percent of Pythia-14M, so uniform quantisation of them barely changes its size; the embedding rows are the lever. Rare tokens may tolerate fewer bits than frequent ones.
+- **Progress** (20 November 2026): first question measured (rule written in the report before the first run; `docs/benchmarks/pythia-14m/data/embedding_vs_linear.json`, GPU, RTX 4060 Ti, full test split, default gate). At Q8_0 the perplexity rise over the 114.286 baseline is +0.083 for embeddings and head alone (passes), +0.666 for the linear layers alone (fails the 0.45 margin), +0.744 for both (fails); by the rule the linear layers are the cause. At Q4_0 the rises are +12.4, +78.7 and +102.1, all failing. The written GGUF is 16.07 MB (embeddings Q8_0), 27.04 MB (linears Q8_0), 14.96 MB (both) at Q8_0, and 9.63, 26.45 and 7.93 MB at Q4_0. The reproduction check missed: both-at-Q8_0 gives +0.744, the committed uniform Q8_0 report says +0.834 (limit 0.02); CPU gives the same +0.744, so the device is not the cause. Untested guess: the committed path also quantises norms and biases.
+- **Not done**: frequency-banded rows with shuffled-band controls, the uniform-lower-bit comparison at equal bytes, the `.epiph` byte counts, the 0.83 gap explained, SmolLM-135M.
+- **Done means**: Measured on Pythia-14M with the existing quality gate and a pre-registered rule written in the report before the run: bytes of the written `.epiph` and perplexity on the WikiText-2 test split for uniform Q8_0, uniform lower-bit, and frequency-banded rows (bands from THME-3079), each with a shuffled-band control; also reports whether the Q8_0 gate failure on Pythia comes from the embeddings or the linear layers. A positive result is the condition for the per-row-band codec of THME-3078.
+
+### [THME-3072] GPU path faster than CPU on the small models
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p1 · **Area**: gpu · **Type**: perf · **Status**: in review
+- **Related**: THME-3016 (placement plan, no runtime reads it yet), THME-3038 (Studio device selector, GPU labelled experimental), THME-3061 (GPU probe and CPU-wins rule), THME-3045/3046 (GPU unlock, unrelated to compute).
+- **Problem**: The GPU path ran one matrix-vector product per prompt row with a submit and a wait each (26,881 submits per 128-token pass on SmolLM-135M), re-uploaded every weight tensor on every pass (211 uploads, 774 ms), and ran only the linear layers on the device. Measured before: 7,680 ms (GPU) vs 372 ms (CPU) for 128 tokens (`docs/benchmarks/smollm-135m/data/gpu_profile_before.json`).
+- **Progress** (20 November 2026): batched tiled matrix-matrix kernel (one dispatch for all rows), linears sharing one command buffer with one read-back, slice weights resident on the device, explicit adapter choice over Vulkan, Metal and DX12, and a device-resident LLaMA-style decoder (norms, RoPE, causal attention, SwiGLU, residuals, head) in a single submit. Measured after (RTX 4060 Ti, Vulkan, release build, 11 interleaved pairs, CPU job loading the machine at 60 to 90 percent, so CPU timings are biased against the CPU): SmolLM-135M 128-token pass GPU 102 ms vs CPU 552 ms, 2-token pass 7.7 vs 120.8 ms; Pythia-14M 128-token pass 17.7 vs 36.6 ms, 2-token pass 9.6 vs 14.7 ms (GPU faster in 9 of 11 pairs). Report: `docs/benchmarks/*/data/gpu_profile.json`; GPU vs CPU logits within 5e-3 (worst observed 3.7e-3 on Pythia-14M, 1.6e-5 on SmolLM-135M).
+- **Not done**: Pythia-14M (GPT-NeoX) still uses the per-operation GPU path (25 submits per pass) because the device-resident decoder covers LLaMA-style layers only; `forward_nll`, scheduled, traced and exit-readout passes use the per-operation path; the "decode" figure is a 2-token pass, not an incremental decode step (no KV cache on the device, owned by the incremental-decoding work); contexts above 2048 tokens fall back; f16 and subgroup kernels not tried; attention kernel is simple (about 97 ms of the 102 ms SmolLM prefill is device time, GEMM about 1 to 2 TFLOPS); the CPU comparison is not clean while the other job runs; Metal and DX12 were not run (no such hardware or run here).
+- **Done means**: GPU beats CPU on paired, interleaved runs for both small models at 128-token prefill and decode steps on a quiet machine; parity tests green; a committed report with device, build and method.
+
+### [THME-3084] GPU speed round 2: profile, matmul, attention, resident weights, f16 and quantized weights
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p1 · **Area**: gpu · **Type**: perf · **Status**: in review
+- **Related**: THME-3072 (round 1), THME-3073 (GPU perplexity), THME-3070 (KV cache), `docs/research/gpu-backends.md` (Compute Bridge).
+- **Problem**: A full WikiText-2 test pass of SmolLM2-1.7B on the GPU took about 23 minutes (4.46 ms per token, 224 tokens per second, about 0.75 TFLOPS against a card peak of about 22 TFLOPS for f32). Nobody had profiled it per kernel.
+- **Profile** (RTX 4060 Ti, Vulkan, driver 616.92, one 1,024-token window, per-dispatch timestamp queries, `docs/benchmarks/smollm2-1.7b/data/gpu_speed_round2.json`): of 4,641 ms wall, 2,737 ms was weights re-uploaded because the 4 GiB resident budget flushed a 6.9 GB model every window (218 uploads), and of 1,665 ms device time attention took 818 ms (49 percent) and the matmuls 830 ms (50 percent, about 4 TFLOPS each). Norms, RoPE, residual adds, SwiGLU and the loss together were under 1 percent.
+- **Progress** (20 November 2026), 16,384-token slice, GPU only, same binary with flags, one change at a time: baseline 73.0 s (224 tokens/s); register-blocked 128 x 128 matmul (8 x 8 outputs per thread, vec4 loads, padded shared stride) 65.1 s (the re-upload dominates); weights kept resident (`set_weight_budget`) 19.3 s; tiled causal attention with online softmax 7.7 s (2,113 tokens/s, 9.4 times the baseline). Matmul alone, per shape: 4.0 to 4.6 TFLOPS before, 7.3 to 9.1 after (8.8 to 9.5 on the large shapes in the in-model profile); target of 5 reached. Full test split (303,118 scored tokens, 297 windows): **145.5 s** (2,084 tokens/s) f32 and 139.9 s f16, against an extrapolated 1,352 s (22.5 minutes) for the baseline; the machine was loaded by other sessions (CPU mean 32 percent, so not the quiet run the plan asked for; treat as an upper bound). SmolLM-135M full split 97.8 s to 30.0 s (3.3 times); Pythia-14M unchanged (34.4 s to 31.5 s, within noise) because it runs the per-operation path with CPU attention.
+- **Weight storage** (`GpuContext::set_weight_storage`, f32 accumulation everywhere): f16 (packed two per word, no shader-f16 feature needed), Q8_0 and Q4_0 (scales plus codes, dequantized in the kernel, GGML block semantics), for batched matmul and few-row matrix-vector kernels, and for quantized `QuantizedTensor` (Q8_0, Q4_0, F16) so a quantized model stays quantized on the card. Resident bytes per weight: 4, 2, 1.125, 0.625. Parity on the 16,384-token slice: f32 paths within 4.1e-8 nats of the baseline (tolerance 1e-4); f16 7.1e-8 (lossless for bf16 and fp16 checkpoints); Q8_0 +5.2e-4 nats (perplexity 8.377 against 8.373); Q4_0 +0.165 nats (9.870), the real quality cost. Q8_0 and Q4_0 kernels match the CPU block decoders in tests. Speed on this card is the same as f32 (7.4 s against 7.7 s): prefill is compute-bound, so the gain is memory (SmolLM2-1.7B 6.9 GB to 3.4, 1.9 or 1.1 GB) and decode bytes per token, not prefill time.
+- **Not done / did not help**: Pythia-14M (GPT-NeoX) has no device-resident decoder (null result above); a 32-query attention block was tried and was not faster (reverted); f16 arithmetic was not tried because this GeForce runs fp16 ALU at the f32 rate and wgpu exposes no tensor-core path, so f16 saves bytes, not time; the matmul is at about 9.5 of about 22 TFLOPS (double buffering, 8 x 8 bank swizzle and subgroup operations untried); attention is at about 1.2 TFLOPS (further tiling untried); no incremental decode on the device (no device KV cache); a model larger than the weight budget still re-uploads every pass (flush-all, no LRU); Metal and DX12 not run.
+- **Compute Bridge notes**: the per-dispatch profile (`set_op_profile`) and the paired old/new flags (`--old-gemm`, `--old-attention`) are the tools to compare any new backend against; all kernels are original WGSL from the public WebGPU specification and the tiling ideas in `docs/research/gpu-backends.md`, no code from other engines. The weight budget is a setting because wgpu does not report VRAM: a future run planner (`thme pathfinder`) should set it from the adapter and from `nvidia-smi` style probes, and pick the storage format from the free memory.
+- **Done means**: Paired before and after per step on SmolLM2-1.7B, SmolLM-135M and Pythia-14M with device, driver, build, method and load note in a committed report; parity tests green; a full-split time on a quiet machine (the committed one was taken under load, repeat when quiet).
+
+### [THME-3085] Reference comparison against llama.cpp on this machine
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p1 · **Area**: gpu · **Type**: perf · **Status**: ready
+- **Problem**: The only outside numbers we have (community scoreboards: about 3,400 prompt tokens per second for a 7B model at Q4_0 on an RTX 4060 Ti with CUDA; reported, mixed builds) are not measured on our hardware, so the gap to mature engines is unknown.
+- **Progress** (20 November 2026): measured on this machine with llama.cpp b12584 (CUDA 12.4 and Vulkan builds, official release, digests verified; reference report and compatibility findings on branch `feat/llama-cpp-reference`, pull request pending): prompt processing at 1,024 tokens 11,348 to 14,348 tokens per second and generation 74 (F16), 131 (Q8_0), 221 to 225 (Q4_0) for SmolLM2-1.7B; THME at that time 2,090 to 2,170 tokens per second for the full pass, after THME-3087 about 7,000 on a 16,384-token slice with f16 weights (different measurement shapes: see the report).
+- **Done means**: llama.cpp (MIT, prebuilt binaries downloaded into a separate folder, never bundled) run through its own benchmark tool on the same SmolLM2-1.7B file in its CUDA and Vulkan builds: prompt processing and token generation tokens per second, build number, flags, driver and load recorded in a committed report; our passes compared to those rows with the same token counts; the result sets the real target for THME-3086 to 3089.
+
+### [THME-3086] GPU feature audit: what the adapter really exposes, with checked kernels
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p1 · **Area**: gpu · **Type**: feature · **Status**: in review
+- **Related**: THME-3084 (speed round 2), THME-3087, THME-3088, `docs/benchmarks/_adapters/rtx-4060-ti_features.json`.
+- **Problem**: Round 2 assumed "wgpu exposes no tensor-core path" and "fp16 ALU runs at the f32 rate". Nobody had asked the adapter.
+- **Progress** (20 November 2026): `thme::inference::gpu::features::audit` and `examples/gpu_features.rs` request every optional feature the adapter lists and run one tiny kernel per feature whose output is compared with a CPU result (a listed feature with a failing kernel is reported as failed). RTX 4060 Ti, Vulkan, driver NVIDIA 616.92, wgpu 30.0.2: SHADER_F16 present and checked; SUBGROUP present, subgroup size 32 (min and max), checked; EXPERIMENTAL_COOPERATIVE_MATRIX present, shapes 16x16x16, 16x8x16 and 16x8x8 with f16 inputs and f16 or f32 accumulate (no f32 inputs, no integer shapes), the 16x16x16 f16/f32 and f16/f16 kernels checked; packed 4x8 integer dot product (`dot4I8Packed`) compiles, runs and gives the right numbers (the report does not say whether the driver runs it as a single instruction). The DX12 adapter of the same card exposes none of f16, subgroups or cooperative matrices in wgpu 30. naga 30 accepts only square 8x8 and 16x16 cooperative matrices, so the 16x8 shapes the card lists are not reachable from WGSL.
+- **Not done**: `thme doctor` does not call the audit (not cheap: it needs the device with experimental features); Metal and Windows-on-ARM not run.
+- **Done means**: A committed per-adapter JSON with device, driver, backend, each feature present or absent, the matrix shapes, and a passed or failed kernel check per feature. Met for the RTX 4060 Ti.
+
+### [THME-3087] Cooperative-matrix (tensor-core) matmul and attention
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p1 · **Area**: gpu · **Type**: perf · **Status**: in review
+- **Related**: THME-3086, THME-3084, `docs/benchmarks/smollm2-1.7b/gpu_tensor_core_plan.md` (rules written before the runs), `docs/benchmarks/smollm2-1.7b/data/gpu_coop_*.json`.
+- **Rule (pre-registered)**: adopt if at least 25 TFLOPS isolated on large shapes, at least 6,000 tokens per second on the 16,384-token slice, and perplexity within 0.01 nats of the f32 path.
+- **Progress** (20 November 2026, RTX 4060 Ti, Vulkan, driver 616.92, release build, GPU only, SmolLM2-1.7B, 16,384-token slice, two runs per arm; shared machine, no other GPU job from this session): original WGSL from the Vulkan cooperative-matrix and wgpu documentation (clean room, no other engine read). Kernels: 128 x 128 tile, four subgroups each owning 64 x 64 (sixteen 16 x 16 f32 accumulators), f16 weights and f16 activations read in place (activations converted once per matmul by a small pass), row tiles scheduled fastest so the workgroups in flight share each weight tile in L2 (the head matmul went from 12 to 40 TFLOPS with that one change); a staged variant converts f32, Q8_0 and Q4_0 weights in workgroup memory (slower, 10 to 20 TFLOPS); a flash-style attention for head size 64 (two passes over key tiles instead of an online rescale). Isolated matmul (1,024 rows; shapes 2048x2048, 2048x8192, 8192x2048, 2048x49152, 576x1536): f32 kernel 9.0, 8.2, 9.1, 9.3, 7.3 TFLOPS; cooperative matrices 28.0, 35.7, 26.1, 40.0, 27.8. Slice, f16 weights: 2,215 tokens/s before, 5,350 with the matmul, **7,000 to 7,020** with matmul and attention (3.2 times); perplexity 8.37288 before, 8.37286 after (3e-6 nats). One 1,024-token window: matmul 368 ms to 99 ms, attention 58 ms to 13 ms. f32 weights (8 GiB budget so they stay resident): 2,099 to 3,951 tokens/s with the staged kernel on every storage. **Go on all three criteria**: cooperative matrices are the default for f16 weight storage (and attention of head size 64) when the adapter passes a start-up probe of the kernels; every other storage keeps the exact f32 kernels unless `set_coop_matrix(true)`; `THME_GPU_COOP=0` turns it off.
+- **Parity**: f16 inputs, f32 accumulate; matmul tests against the CPU within 5e-3 relative on tile-edge shapes, attention against the tiled kernel within 5e-3 on four shapes (ragged blocks, GQA), full SmolLM2-1.7B slice within 3e-6 nats.
+- **Not done**: attention only for head size 64 (others fall back to the tiled kernel); Q8_0 and Q4_0 still use the slow staged kernel or the int8 route of THME-3088 (a pre-pass that dequantizes to f16 for the in-place kernel is the next try); activations are converted again for each of q, k, v and gate, up (about 2.5 percent); the matmul is at 26 to 40 of a measured 37 to 40 TFLOPS ceiling for this structure without staging; no full-split pass (slice only, the card reached 50 C); Metal and DX12 have no cooperative matrices in wgpu 30.
+- **Done means**: Paired before and after with device, driver, build, method and load note in committed reports; parity tests green; a quiet-machine full-split run.
+
+### [THME-3088] Packed 8-bit integer dot product for Q8_0 and Q4_0 weights
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p2 · **Area**: gpu · **Type**: perf · **Status**: in review (no-go at this tuning)
+- **Related**: THME-3086, THME-3087, `docs/benchmarks/smollm2-1.7b/gpu_tensor_core_plan.md`.
+- **Rule (pre-registered)**: adopt if at least 20 TOPS-equivalent isolated and at least 6,000 tokens per second on the slice, with the perplexity change reported.
+- **Progress** (20 November 2026, same machine and method as THME-3087): activations quantized per block of 32 to int8 on the fly, Q8_0 codes as stored and Q4_0 nibbles unpacked to int8 in the kernel, `dot4I8Packed` in integer, scaled to f32; 128 x 128 tile, 16 x 16 threads, all 64 accumulators in named registers (a first version with indexed arrays ran at 1 TOPS from spilling). Isolated: 10.5, 11.4, 10.3, 12.9, 10.1 TOPS-equivalent on the five shapes (Q8_0; Q4_0 the same), against 9 to 10 for the exact float kernel. Slice: Q8_0 2,205 to 3,028 tokens/s (with the cooperative attention), perplexity 8.3773 to 8.3914 (+0.0017 nats); Q4_0 2,219 to 3,045, 9.8701 to 9.8900 (+0.0020 nats). **No-go**: below 20 TOPS and below 6,000 tokens per second. Kept as an opt-in (`set_int8_dot(true)`, `--int8-dot`) with a parity test against the float kernel.
+- **Not done**: tuning (two blocks per staged tile, scale folding, a wider tile); checking whether the driver issues one dp4a per `dot4I8Packed`; the dequantize-to-f16 route for the in-place cooperative kernel; Q4_K and the other K-quants.
+- **Done means**: Isolated TOPS and slice tokens per second against the rule above, with the perplexity change, in committed reports. Measured; rule not met.
+
+### [THME-3070] Incremental decoding with a KV cache
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.1 · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: done
+- **Progress** (20 November 2026): `KvCache` and `forward_extend` for LLaMA and GPT-NeoX behind `CausalLm`; the Studio chat reply loop prefills once and steps the cache (Gemma keeps the whole-sequence loop). Incremental logits equal full-sequence logits at every position: 0 on Pythia-14M and SmolLM-135M (24 tokens, real models, `THME_REAL_MODEL_TESTS=1`) and at most 7.6e-6 on a 96-token synthetic LLaMA (tolerance 1e-4). KV bytes equal `KvCacheEstimator` exactly. Measured paired old-vs-cached decode speed is in `docs/benchmarks/<model>/data/decode_speed.json` (shared machine; see the folder README). Not done: GPU path not measured; threads and matmul kernels unchanged (separate tickets).
+- **Problem**: `chat::generate` calls `forward_logits` on the whole growing sequence for every new token, so each token costs a full pass over all tokens so far. Research note `docs/research/token-speed-budget-devices.md` (section 4) ranks this as the largest single loss for decode.
+- **Done means**: A KV cache for the LLaMA and GPT-NeoX reference models behind `CausalLm` (`forward_logits` unchanged for the perplexity path). Incremental logits equal full-sequence logits at every position within a stated tolerance on a synthetic model, and on Pythia-14M and SmolLM-135M behind `THME_REAL_MODEL_TESTS=1`. Studio chat and the reply loop use prefill then one-token steps. `examples/decode_speed.rs` gives paired, interleaved old-vs-new decode tokens/s with spread, committed under `docs/benchmarks/<model>/data/decode_speed.json` with machine facts; KV bytes vs context checked against `src/profiling/kv_cache.rs`. Threads and matmul kernels are not changed here.
+
+### [THME-3069] Visual check of every Studio tab, then recapture screenshots
+
+- **Milestone**: v0.4 · **Roadmap**: none · **Priority**: p2 · **Area**: gui · **Type**: chore · **Status**: ready
+- **Problem**: Nobody has looked at the Studio window since the eframe 0.37 upgrade: tabs, the Chat tab with its device selector, the Welcome panel and labels are untested by eye, and the Live 3D capture crop no longer fits the new layout (THME-2002).
+- **Done means**: The owner opens each tab and records what is wrong; layout fixes land; all Studio screenshots and recordings are recaptured from the real window.
+
+### [THME-3071] Provenance ledger: record where every part of the code and data came from
+
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: legal · **Type**: chore · **Status**: ready
+- **Problem**: Dependencies and licence headers are checked, but nothing records who or what wrote each part of the code (the owner, an AI tool and when, a third-party source) or which datasets and models a report used. The owner wants every part of what is written and released to have clear rights.
+- **Done means**: A ledger file in the repository lists each area (directory or file group) with its origin, licence and date; CI fails when a new top-level area has no entry; agents are told in AGENTS.md to add code only from the repository itself or from sources the licence audit approved; the contributor agreement and counsel review are tracked privately.
+>
+### [THME-3074] Benchmark runner in Rust: one process, model loaded once, progress
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: bench · **Type**: perf · **Status**: ready
+- **Problem**: `scripts/run_awq_calibration.py` starts a new `thme` process for each of the 34 or so arms per model, so every arm re-reads and re-decodes the weights and repeats the unquantized baseline pass. The Python driver itself is not the slow part; the repeated work is. The driver also hard-codes a CPU hardware string in the provenance.
+- **Done means**: A Rust `thme` subcommand (or example) runs all arms of a pre-registered protocol in one process: model loaded once, baseline and calibration statistics shared, device chosen by `--device` and recorded with adapter and driver, resumable, prints `[done/total pct, elapsed, ETA]`; produces the same JSON as the Python driver (compare on Pythia-14M); the dataset download and tokenisation may stay in Python until a Rust equivalent exists.
+
+### [THME-3075] Run metrics and progress for every long command, in Rust
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p1 · **Area**: bench · **Type**: feature · **Status**: ready
+- **Problem**: Long runs (`evaluate`, `calibrate`, `search`, the examples, the benchmark runner of THME-3074) print little while they work and record few facts about the run, so nobody can see how far along a run is, how fast it goes or what hardware produced a number. Each script invents its own counters.
+- **Done means**: One small Rust module used by every long command: (1) progress events `done/total`, percent, elapsed, ETA from measured pace, items per second (tokens per second for model passes); (2) a human line on stderr and, with `--progress json`, one JSON line per event that Studio and the live window can read; (3) a `run` block in every report: start and end time, wall time and time per phase, device, adapter and driver, threads, sampled CPU and GPU load, peak memory and VRAM, cache hits (for example the cached baseline pass), seed, thme version and git commit, exit status; (4) the block has a schema under `docs/schemas/` and the dossier generator reads it instead of hard-coded strings; (5) unit tests with an injected clock; (6) the Python collector's progress line becomes a thin reader of the JSON events until THME-3074 replaces it.
+
+### [THME-3073] Perplexity on the GPU, device in every report, baseline cache
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p1 · **Area**: gpu · **Type**: perf · **Status**: done
+- **Problem**: Benchmarks (full WikiText-2 test split perplexity) ran only on the slow CPU path, and `thme evaluate` repeated the unquantized baseline pass in every run.
+- **Progress** (20 November 2026): `forward_nll` runs on the device-resident decoder for LLaMA-family models (one submit per window, only the per-token losses read back); GPT-NeoX keeps per-operation layers with a fused GPU head and loss. `thme evaluate` and `thme calibrate` take `--device`; reports record requested and used device, adapter, backend and driver; the baseline pass is cached (keyed on model hash, token hash, context, max tokens, device and version). Every GPU wait has a timeout that becomes an error. Measured, full test split, RTX 4060 Ti (Vulkan), 3 paired runs each, report `docs/benchmarks/<model>/data/gpu_perplexity.json`: SmolLM-135M CPU 504.7 s, GPU 98.1 s (5.14x, range 4.91 to 5.20, perplexity 19.79846 vs 19.79842, quiet machine in all pairs); Pythia-14M CPU 51.1 s, GPU 31.7 s (1.53x, range 1.52 to 1.70, perplexity 114.28621 vs 114.28600; first two pairs not quiet).
+- **Not done**: a device-resident GPT-NeoX decoder (Pythia gain is modest), device KV cache, f16 and subgroup kernels, Metal and DX12 timings.
+- **Done means**: Perplexity over the full test split on GPU matches CPU within 1e-4 nats per window and is faster on both small models; the report records the device.
+
+### [THME-3076] VS Code sidebar shows fixed example text as if it were live data
+
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p2 · **Area**: security · **Type**: bug · **Status**: ready
+- **Problem**: The extension's sidebar trees show static example text (a model name such as "thme-hybrid-12l" and a throughput such as "620 tok/sec") that THME never measured, which breaks the rule that no unmeasured number is presented as a result (found by the THME-3048 fix).
+- **Done means**: Each sidebar value is read from the CLI's own output for the selected model, or the tree says "no model selected" or is labelled as an example; a test lists every string the tree can show and checks none is a made-up number.
+
+### [THME-3077] Quality gate v2: a margin that fits the model's perplexity (two regimes)
+
+- **Milestone**: v0.2.8 · **Roadmap**: none · **Priority**: p1 · **Area**: quality · **Type**: feature · **Status**: ready
+- **Problem**: The default gate (`thme-perplexity-v1`) is one absolute limit of 0.45 perplexity. That fits models whose perplexity is in the single digits, but Pythia-14M has a baseline of 114, where even a uniform Q8_0 export (+0.83, 0.73 percent) fails. An accuracy rule from emissions monitoring (a relative limit when the level is high, an absolute limit when it is low, because a relative limit misbehaves near zero) is the model: the owner's recollection, not yet checked against the standard's text.
+- **Done means**: A versioned gate `thme-perplexity-v2` whose criterion applies a relative margin when the baseline is above a stated threshold and an absolute margin when it is below, with the threshold, margins and the rule written in the gate file and covered by its hash; both regimes documented in `docs/quality-gate.md` with the reasoning and a table of what each committed report would have been under v1 and v2; old reports keep their v1 verdicts; the decision rule is stated before it is applied to any new run; unit tests on both sides of the threshold.
+
+### [THME-3078] `.epiph` flexible encodings: any tensor layout, safely extensible
+
+- **Milestone**: v0.2.6 · **Roadmap**: none · **Priority**: p2 · **Area**: format · **Type**: feature · **Status**: triage
+- **Progress** (20 November 2026): chain `.epiph` to GGUF measured on SmolLM2-1.7B: `thme epiph pack` (218 tensors, 7 attachments, 3,426,560,087 bytes), `thme epiph verify` OK (no signature), `thme export` of the `.epiph` with a Q8_0 recipe gives a GGUF byte-identical to the one exported from the checkpoint directory (same sha256), so tensor payloads survive losslessly; the GGUF carries no tokenizer or attachments and no signature. Details in `docs/benchmarks/smollm2-1.7b/data/llama_cpp_reference.json` (`epiph_chain`).
+- **Problem**: Each tensor today has one storage format. The memory work needs layouts inside a tensor (for example embedding rows split into precision bands by token frequency, factorised or codebook tensors, row-sparse blocks). The format should accept new layouts without breaking readers, and stay readable by tools that do not know them.
+- **Done means**: A design and a spec section (`docs/formats/epiph-v1.md`, a minor version): a tensor entry carries an `encoding` description (codec id, parameters, optional row bands with a band map) from an open registry; each codec is marked critical (a reader that does not know it refuses with an exact message and the way to convert) or optional (a reader may skip it when a canonical copy is present); every non-canonical encoding can be written together with, or converted to, a canonical block-format copy; the manifest lists the features used so a reader can tell before reading tensors; unknown optional manifest fields and attachment kinds are ignored; tests for old reader and new file, new reader and old file, unknown critical codec, band map round trip, and the golden-hash portability test extended to the new encodings. The first codec (per-row-band precision) is added only if experiment A1 of the unified concept note shows a measured gain in bytes at an acceptable perplexity change on Pythia-14M.
+
+### [THME-3081] Frequent-row draft pass for the output head (Pythia-14M)
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: experiment · **Status**: ready
+- **Problem**: Decode reads the whole output head for every token. If the greedy token is almost always among the most frequent rows, a draft over those rows plus an exact verification step could cut the bytes read without changing the output.
+- **Done means**: One pass measures how often the greedy token lies in the top 1,024, 4,096 and 8,192 frequent rows (rows from THME-3079) over the test split; a decision rule fixed in the report before the run says whether to build the verified draft; if built, the output must be identical to normal greedy decoding and tokens per second are measured paired against it.
+
+### [THME-3082] KV cache in int8 and int4 per group, counted in the placement budget
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: experiment · **Status**: ready
+- **Problem**: The KV cache is now real (THME-3070): 12.6 MB at 2,048 context for Pythia-14M, more for larger models. Lower-precision KV could cut it, mainly for models at SmolLM size and above.
+- **Done means**: KV stored in int8 and int4 per group behind the existing cache type; cache bytes, perplexity at 1k and 4k context and decode tokens per second measured against the f32 cache on Pythia-14M, with SmolLM-135M as the late confirmation; the placement budget (THME-3016) counts the real KV bytes.
+
+### [THME-3083] Layer-removal check on the small models
+
+- **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: experiment · **Status**: ready
+- **Problem**: Published work reports that some layers can be removed from larger models with little loss; small models may be more fragile.
+- **Done means**: Block influence per layer computed for Pythia-14M (and SmolLM-135M late), perplexity measured against the number of removed blocks on the same token hash with a random-removal control; the rule and the stop threshold are written before the run.
+
+### [THME-3089] Device decoder with KV cache and fused quantized matrix-vector for decode
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p1 · **Area**: gpu · **Type**: perf · **Status**: ready
+- **Problem**: Decode (one token at a time) is limited by memory bandwidth, not arithmetic: about 288 GB/s on this card, so a 1.7B model at Q4_0 (1.1 GB) has a ceiling of about 260 tokens per second. We have no device KV cache and a per-operation GPT-NeoX path, so decode on the GPU is unmeasured and likely far below that ceiling.
+- **Done means**: Device-resident decode for LLaMA-family and GPT-NeoX models with a device KV cache and fused quantized matrix-vector kernels, one submit per token; tokens per second measured against the bandwidth ceiling (target at least 80 percent of it for Q4_0 and Q8_0) and against llama.cpp from THME-3085; Pythia-14M first.
+
+### [THME-3090] Automatic weight budget for the GPU path (default is 7x slower than it should be)
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p1 · **Area**: gpu · **Type**: bug · **Status**: ready
+- **Problem**: The GPU path keeps weights resident only up to a budget that defaults to 4 GiB. A model larger than the budget is flushed and re-uploaded for every window. Measured on SmolLM2-1.7B (6.9 GB in f32), RTX 4060 Ti, full test split, same build: 1,016 s with the default budget and 145 s with a 12 GiB budget (same perplexity, 9.1091), so a user who runs the engine with defaults loses a factor of seven. wgpu does not report VRAM, so the right default is unknown.
+- **Done means**: The budget is chosen automatically (adapter limits, a probe allocation with an out-of-memory fallback, or `thme pathfinder`) and never smaller than needed when memory allows; a model that does not fit falls back to f16 or a quantized device format before it falls back to re-uploading; the report states the budget used; a test with a fake backend covers the fallback order.
+
+### [THME-3091] GGUF export that llama.cpp loads (names, tokenizer, rope layout, norms, flags)
+
+- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.8 · **Priority**: p1 · **Area**: exporter · **Type**: bug · **Status**: ready
+- **Problem**: GGUF files from `thme export` pass THME's own checker but do not load in llama.cpp (measured 20 November 2026 with b12584): no tokenizer vocabulary in the file, Hugging Face tensor names instead of GGML names, BF16 norm weights where F32 is required, q/k rows not permuted for llama.cpp's rope layout, and no rope dimension key. `thme export --quant fp16` and `--quant q8_0` fail on checkpoints with a BF16 embedding (only per-tensor recipes work). A small adapter outside the repository made all three files load and generate identical text, so the gaps are known and fixable.
+- **Done means**: `thme export` writes, from the public GGUF specification (ggml docs/gguf.md) and the documented tensor-name conventions and not from llama.cpp source: the tokenizer (vocabulary, merges, special tokens) from the model's tokenizer files, GGML tensor names, F32 norms, the rope key and layout needed for the architecture, and the `--quant` flags work for BF16 sources; THME's checker gains the consumer's requirements (vocabulary present, names recognised, norm types); a test loads the exported file in llama.cpp when a llama.cpp build is configured (CI step off by default) and compares 20 greedy tokens against the adapter-free export; the `.epiph` to GGUF chain keeps its byte-identical payloads.
 
 ## Engine, format, security and quality tracks (v0.2.5 to v0.2.9)
 
@@ -332,8 +506,9 @@ closes it.
 
 ### [THME-3023] Re-measure reports affected by the FP16 rounding fix
 
-- **Milestone**: v0.2.2 · **Roadmap**: none · **Priority**: p1 · **Area**: research · **Type**: chore · **Status**: blocked
+- **Milestone**: v0.2.2 · **Roadmap**: none · **Priority**: p1 · **Area**: research · **Type**: chore · **Status**: done
 - **Progress** (19 November 2026): the stale committed reports, charts and dossier were removed instead of re-run for now; results will be re-measured and published with their method.
+- **Progress** (20 November 2026): verification, precision-sweep, depth-probe and search reports re-run with the fixed code for both models and committed; the dossier caveat is replaced by a note that the reports come from the fixed code. Gate results as measured: Pythia-14M exported Q8_0 Δ +0.834 (FAILED, gate 0.45); recipe Δ +504.2 (FAILED). SmolLM-135M exported Q8_0 Δ +0.034 (PASSED); recipe Δ +28.9 (FAILED).
 - **Problem**: Until 13 November 2026, f32-to-f16 conversion lost the rounding carry for values just below a power of two, so about 1 in 2,000 Q8_0, Q4_0 and TQ1_0 block scales (and FP16 values) were stored at half their size. Committed reports were measured with that code.
 - **Done means**: The verification, precision-sweep and depth-probe reports for both models are re-run with the fixed code and committed; the dossier caveat is removed. Blocked while model runs are paused.
 
@@ -368,6 +543,7 @@ closes it.
 
 - **Milestone**: v0.3.0 · **Roadmap**: v0.3.0.4 · **Priority**: p3 · **Area**: gui · **Type**: feature · **Status**: ready
 - **Progress** (19 November 2026): the Studio has a Chat tab. `src/chat.rs` renders the model's own chat template, encodes, and decodes greedily on a background thread with Cancel, a max-new-tokens slider and a status line (tokens, seconds, tokens per second, labelled Measured on this machine). A banner says replies come from the slow CPU reference forward pass, and that the mock model's text is meaningless. 9 tests on the mock model with a fixture tokenizer. Not done: the live window was never opened, so layout and look are unchecked by eye; there is no KV cache, so long replies are slow; chat needs a model loaded from a file (the synthetic demo model has no folder). No real model was used.
+- **Progress** (20 November 2026): device selector added (CPU default, GPU and CPU + GPU marked experimental with a tooltip). The loaded-model cache is keyed by device, so a change reloads. GPU was slower when this was written: 4.3 s vs 1.1 s for a 128-token pass on SmolLM-135M (RTX 4060 Ti); see THME-3072 for the fix and the new paired numbers. Not done: resolved GPU device name in the reply stats; CPU + GPU not measured; no live window check.
 - **Problem**: Users cannot talk to or test a loaded model inside the Studio.
 - **Done means**: A tab that sends a prompt through the reference forward pass and shows the reply, labelled with the measured speed. Depends on THME-3037.
 
@@ -389,6 +565,7 @@ closes it.
 
 - **Milestone**: v0.3.0 · **Roadmap**: v0.3.0.2 · **Priority**: p2 · **Area**: onboarding · **Type**: feature · **Status**: done
 - **Progress** (19 November 2026): `thme doctor [--json]` reports operating system, memory, disk, CPU threads, GPU adapters found through wgpu and the models `thme discover` finds, each marked checked or assumed, then prints a short Next list. 9 tests on a `HostFacts` struct, none depending on this machine. Not done: the Studio first-start summary.
+- **Progress** (19 November 2026, later): the Studio shows the doctor summary and the discover list in a Welcome panel when no model is loaded (`src/gui/app/welcome.rs`); checks run on a background thread, Open runs the safety scan first, at most 10 rows with the total. 12 state-machine tests. The live window was not opened.
 - **Problem**: People come from different backgrounds and tools. They need one command that says what works on their machine and what to do next.
 - **Done means**: `thme doctor` reports operating system, memory, disk, GPU adapter found through wgpu, and the models `thme discover` finds, then prints the next command to try. The Studio shows the same summary on first start. Every line states what was checked and what was only assumed.
 
@@ -407,8 +584,9 @@ closes it.
 
 ### [THME-3044] Re-measure on Pythia-14M with the corrected code
 
-- **Milestone**: v0.2.0 · **Roadmap**: v0.2.0.9 · **Priority**: p1 · **Area**: research · **Type**: chore · **Status**: ready
+- **Milestone**: v0.2.0 · **Roadmap**: v0.2.0.9 · **Priority**: p1 · **Area**: research · **Type**: chore · **Status**: done
 - **Problem**: The earlier reports were measured before the FP16 rounding fix and have been removed. Pythia-14M (Apache-2.0, 14,067,712 parameters, 6 layers) is downloaded for local testing and loads in `thme inspect`.
+- **Progress** (20 November 2026): `docs/benchmarks/pythia-14m/data/verification_report.json` (source perplexity 114.2862 on the full WikiText-2 test split, 286,878 scored tokens), `precision_sweep.json` (`--layer-scan`), `depth_probe.json`, and `search_report.json` committed; charts and dossier regenerated with `scripts/generate_dossier.py` and `scripts/generate_charts.py`. The tokenizer was read from a local `tokenizer.json`, not downloaded for this run; its hash is in the report but was not compared with the hub copy (unverified).
 - **Done means**: Perplexity of the source model, the Q8_0 round trip and a precision sweep are re-run with the fixed code, committed as reports under `docs/benchmarks/` with their method, and charts regenerate from them. Results are published as they come, with the method beside them.
 
 ### [THME-3047] Clean public repository from a clean export
@@ -420,12 +598,14 @@ closes it.
 ### [THME-3048] VS Code extension: no shell injection, honest commands
 
 - **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: security · **Type**: bug · **Status**: ready
+- **Progress** (20 November 2026): done on branch `fix/vscode-and-mcp-docs`. Commands run with `shell: false` and raw argument arrays (`editors/vscode/src/thme.ts`); numbers and paths validated; `validate` asks for measured perplexities and reports the CLI's exit status; surgery and the other commands pass the arguments the CLI really takes (they were wrong before: `inspect --model`, `plan --tolerance`, `tweak` without `--model`); the MCP terminal starts the binary without a shell string; manifest has `capabilities.untrustedWorkspaces.supported: false`. `npm test` in `editors/vscode` runs 5 tests (quote-and-ampersand path, validation, no-shell). Not done: the extension was not run inside VS Code; the sidebar trees still show static example text.
 - **Problem**: `editors/vscode/src/extension.ts` runs commands through `spawn(..., { shell: true })` and pastes Copilot tool input into quoted arguments, so a prompt-injected tool call can run shell commands (audit H3). `validateQuality` runs the gate on hard-coded perplexities and reports PASSED, and the surgery message claims a rollback checkpoint it does not check (M5). The binary is resolved from the workspace before PATH, and the manifest does not declare untrusted-workspace support (L5).
 - **Done means**: `shell: false` with raw argument arrays, numeric inputs validated, `modelPath` checked to be an existing file, a unit test with a quote-and-ampersand path; validate asks for real inputs or is labelled a demo and reports the CLI's own verdict; surgery states only what it checked; the manifest declares `capabilities.untrustedWorkspaces: { supported: false }`.
 
 ### [THME-3049] Release pipeline hardening
 
 - **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: ci · **Type**: chore · **Status**: ready
+- **Progress** (20 November 2026): archives now ship `LICENSES/` and `LICENSING.md`; every action in `ci.yml`, `release.yml` and `clean_machine_test.yml` is pinned by full commit SHA with a version comment (SHAs read from the action repositories through the GitHub API); the three workflows default to `contents: read`, only `publish` gets `contents: write`; `MINISIGN_KEY` is visible to the signing step only; publish fails when the key is missing and `scripts/sign_artifacts.sh` no longer skips; a verify step runs `minisign -V` against `minisign.pub` for each archive and `SHA256SUMS.txt`. Release builds pass `--remap-path-prefix` through `RUSTFLAGS`. Not done: no release was triggered, so the workflow changes are unrun; `Swatinem/rust-cache`, `softprops/action-gh-release` and `EmbarkStudios/cargo-deny-action` are pinned to the commit behind their moving `v2`/`v3` tag (the API showed no exact release tag on that commit), so they need a deliberate bump to move.
 - **Problem**: Release archives omit the anatomy-kit MIT notice for the compiled `iso.rs` port (M1). Actions are pinned by moving tags (M6). `contents: write` covers every job and `ci.yml` has no `permissions:` block, and `MINISIGN_KEY` is readable by every step of the publish job (M7). Signing is skipped silently when the key is missing although SECURITY.md promises signed archives (M8).
 - **Done means**: Each archive ships `LICENSES/` and `LICENSING.md`; every action is pinned by full commit SHA with a version comment; both workflows default to `contents: read` and only `publish` gets write access, with the key passed only to the signing step; publish fails when the key is missing and a verify step checks signatures against `minisign.pub`.
 
@@ -438,26 +618,42 @@ closes it.
 ### [THME-3051] Drop the hard-coded model fallback from MCP and tests
 
 - **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: inference · **Type**: bug · **Status**: ready
+- **Progress** (20 November 2026): the MCP server no longer reads a MedGemma path from `%LOCALAPPDATA%` (six places in `src/cli/mcp.rs`; `THME_MODEL` or an explicit argument only). The real-model tests use Pythia-14M and SmolLM-135M from `THME_TEST_MODELS_DIR` behind `THME_REAL_MODEL_TESTS=1` and print a SKIP reason when they do not run; no test reads a model from a user folder. Not done: the gated tests were not run on the real models (no model runs in this change), so they are unverified until someone runs them with the variables set.
 - **Problem**: `src/cli/mcp.rs` (six places), `tests/test_mcp.rs`, `tests/test_gpu_acceleration.rs` and `tests/test_medgemma_inference.rs` fall back to `%LOCALAPPDATA%/hermes/models/medgemma-...gguf`, which exposes the local agent setup and silently loads a file from a user-writable place (M3).
 - **Done means**: The MCP server loads a model only from `THME_MODEL` or an explicit argument; tests that need a real model are gated behind `THME_REAL_MODEL_TESTS=1` and never search a fixed location.
 
 ### [THME-3052] Repository hygiene sweep
 
 - **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p2 · **Area**: ci · **Type**: chore · **Status**: ready
+- **Progress** (20 November 2026): `.gitignore` has `.claude/` and `.mcp.json`; the CI path guard also rejects Windows user-folder paths with either slash, macOS `/Users/` and `AppData` paths, and a new CI step rejects tracked `.claude/`, `.agents/`, `.mcp.json` and `*.local.md`; `deny.toml` lost the five licences the lockfile never meets (`cargo deny check advisories bans licenses sources` passes with no warnings); AGENTS.md sizes and MSRV were already correct, and the stale 10 MiB comment in `Cargo.toml` and MSRV 1.89 in ROADMAP are fixed. The committed `.cargo/config.toml` holds only `strip=symbols` (machine-local job limits live in the global config). Path remapping cannot be written in a committed Cargo config (it needs machine-specific prefixes and `trim-paths` is unstable on 1.100), so the release workflow passes it through `RUSTFLAGS`; AGENTS.md rule 1 says so. Not done: the guard does not yet name the five tracked agent notes (`.claude_handover.md`, `TASKS.md`, `TEST_READY.md`, `TEST_INFRA.md`, `PROJECT.md`) because THME-3050 still has to remove them, so add them to the guard in that change; the `models/SmolLM-135M/config.json` register row and the mascot and logo art origins (L7) need the owner's facts and are open.
 - **Problem**: `.gitignore` lacks `.claude/` and `.mcp.json` (M9). `.cargo/config.toml` has no path remapping although AGENTS.md rule 1 says it stays active (L1). The CI path guard misses `C:/Users/`, macOS `/Users/` and `AppData` (L10). AGENTS.md still says CLI <= 10 MB and MSRV 1.89 (L6). `deny.toml` allows licences it never meets (L12). `models/SmolLM-135M/config.json` has no register row and the mascot and logo art have no recorded origin (L7).
 - **Done means**: Each item fixed or recorded; the path guard also rejects agent-note filenames.
 
 ### [THME-3053] Enforce the teacher subprocess timeout; delete dead code
 
 - **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: bug · **Status**: ready
+- **Progress** (20 November 2026): `AgentBridge::request_recipe` now runs the subprocess through `run_with_deadline` (pipes serviced on threads, poll, then kill at `timeout_secs`); test `subprocess_is_killed_at_the_timeout` uses the test binary itself as the sleeping child, so it needs no shell or OS-specific command. `evaluate_external` is removed (it had no timeout field and no callers). Open: `thme co-surgery` still builds an `AgentBridgeConfig` (30 s) that nothing invokes, so no agent runs there yet; the timeout applies as soon as the bridge is wired in.
 - **Problem**: `timeout_secs` is ignored in `src/surgery/agent_bridge.rs`, `src/cli/co_surgery.rs` and `src/quality/evaluator.rs`, so a teacher subprocess can hang forever; `evaluate_external` has no callers (L4).
 - **Done means**: The timeout is enforced (wait with a deadline, then kill) with a test using a sleeping child; `evaluate_external` is removed.
 
 ### [THME-3054] Document the MCP trust model and the memory-map limit
 
 - **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p3 · **Area**: security · **Type**: chore · **Status**: ready
+- **Progress** (20 November 2026): trust model documented in `tutorials/mcp_copilot_setup.md`, memory-map limit in `SECURITY.md`, example configs point at `target/release/thme`. Allowed roots are documented as planned, not implemented (every tool reads its own path argument, so the check needs a shared helper and tests). Status stays ready for that part.
 - **Problem**: Any connected MCP client can make the server open and parse any readable path (read-only and scan-gated, no writes or process spawning found), and the configs start it through `cargo run`, which runs build scripts (L3). The parsers use `unsafe Mmap::map` on user files, so truncation by another process while in use can crash the process (L11).
 - **Done means**: The MCP trust model is documented with optional allowed roots; configs point at a built binary; SECURITY.md states the memory-map limit.
+### [THME-3067] precision_sweep: random_matched seeds 2 and 3 gave identical perplexity on Pythia-14M
+
+- **Milestone**: v0.2.0 · **Roadmap**: v0.2.0.9 · **Priority**: p2 · **Area**: research · **Type**: bug · **Status**: triage
+- **Problem**: On Pythia-14M, `examples/precision_sweep` `random_matched_seed2` and `random_matched_seed3` printed the same perplexity. The likely cause is that the pool of same-shape tensors is too small, so shuffling by seed picks the same placement (unverified; not reproduced in this ticket).
+- **Done means**: Either the seeds are shown to yield different placements (log the chosen tensor indices per seed in the report) and the perplexity differs, or the sweep refuses to report random controls that repeat a placement. Checked on Pythia-14M with a short token file.
+
+### [THME-3068] llama.cpp compatibility test needs a configured runtime
+
+- **Milestone**: v0.2.9 · **Roadmap**: v0.2.9.6 · **Priority**: p2 · **Area**: ci · **Type**: chore · **Status**: triage
+- **Problem**: `tests/test_exporter_compatibility.rs` (`exported_gguf_runs_in_configured_llama_cpp_and_ollama`) returns early unless `THME_LLAMA_CPP`, `THME_OLLAMA` and a model source are set. The `test` job in `.github/workflows/ci.yml` runs it with `THME_REQUIRE_RUNTIME_COMPAT=1` only when the repository variables `THME_COMPAT_MODEL`, `THME_LLAMA_CPP` and `THME_OLLAMA` are all set; otherwise the step is skipped and the run passes without loading the file in any runtime. Whether those variables are set on the repository was not checked here (unverified).
+- **Done means**: A CI job or a documented local run sets `THME_REQUIRE_RUNTIME_COMPAT=1` with a pinned llama.cpp build, and the run output records which runtime loaded the exported GGUF. Until then the README and BACKLOG say the runtime check was not run.
+
 ### [THME-3045] Remove GPL-2.0 derived GPU-unlock code; plan an original Rust unlock engine
 
 - **Milestone**: v0.2.7 · **Roadmap**: none · **Priority**: p1 · **Area**: legal · **Type**: chore · **Status**: done
@@ -478,6 +674,90 @@ closes it.
 
 Tickets below are the original sprint ledger. Sprints 1 to 9 are completed or superseded by the
 active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later (see ROADMAP.md).
+
+### [THME-3055] VRAM and adapter facts in `HostFacts`
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p1 · **Area**: doctor · **Type**: feature · **Status**: triage
+- **Problem**: only an adapter name is reported.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: `Fact<u64>` dedicated VRAM total/free per adapter, device type (discrete, integrated, CPU), shared-budget field, physical core count; unit tests with fake data; JSON schema updated; unknown stays `Unknown`.
+
+### [THME-3056] Memory model for a run
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: placement counts weights only.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: pure function from header + context + KV type to weights, KV and scratch bytes; table test against hand-computed LLaMA and GPT-NeoX shapes; no model read.
+
+### [THME-3057] `RunPlan` type and decision order, CPU-only
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p1 · **Area**: cli · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: `thme pathfinder --model X` prints the plan for a header, with basis labels, using only `predicted`; golden-file test for a mock model (`examples/generate_mock_model.rs`).
+
+### [THME-3058] Shrink loop
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: property test: for any budget the result fits or errors; context never below the floor except by explicit user value; fixed flags unchanged.
+
+### [THME-3059] Roofline decode estimate per device
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p2 · **Area**: profiling · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: predicted decode tok/s from bandwidth and bytes per token for CPU and GPU, GPU dispatch-overhead term; unit tests; output labelled predicted; no claim in docs.
+
+### [THME-3060] CPU probe
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: threads sweep on synthetic matvec under 1 s; deterministic test using an injected clock; result struct with raw samples.
+
+### [THME-3061] GPU probe and CPU-wins rule
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p1 · **Area**: gpu · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: probe uses the real dispatch pattern, 2 s timeout, returns an error instead of hanging; with a fake backend the plan picks CPU when the GPU is slower; on a real machine, a report under `docs/benchmarks/` records probe vs real tokens/s (pending hardware run; mark pending, no LLM run by agents).
+
+### [THME-3062] Hybrid placement through `epiph::placement`
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: plan feeds budget after KV, scratch and margin; partial offload accepted only when the probe says it beats CPU.
+
+### [THME-3063] Plan cache
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: key and TTL tests, corrupt file ignored, `--no-cache`, `--reprobe`.
+
+### [THME-3064] Wire `DeviceArg::Auto` and Studio selector to the plan
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: Auto no longer means "GPU if init works"; Studio shows the recommended device and reason; test with a stubbed plan.
+
+### [THME-3065] `--verify` predicted vs measured report
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: JSON report with error percentages per field; schema in `docs/schemas/`; becomes the source for any published number.
+
+### [THME-3066] Windows shared-memory guard
+
+- **Milestone**: v0.3.0 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: feature · **Status**: triage
+- **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
+- **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
+- **Done means**: plan counts dedicated VRAM only; warns when the driver reports shared memory spill; documented in the manual.
 
 ## Sprint 1: Format Correctness & Fuzzing (Milestone v0.1.2) [COMPLETED]
 

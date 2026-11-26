@@ -1,0 +1,149 @@
+{
+  "build_profile": "release",
+  "context_len": 1024,
+  "corpus_tokens": 303415,
+  "cpu_secs": {
+    "max": 509.5986016,
+    "median": 504.6680306,
+    "min": 481.9184791,
+    "samples": [
+      509.5986016,
+      481.9184791,
+      504.6680306
+    ]
+  },
+  "device": {
+    "backend": "Vulkan",
+    "device_type": "DiscreteGpu",
+    "driver": "NVIDIA",
+    "driver_info": "616.92",
+    "name": "NVIDIA GeForce RTX 4060 Ti"
+  },
+  "git_commit": "49b91c2",
+  "git_dirty": false,
+  "gpu_secs": {
+    "max": 98.2164901,
+    "median": 98.101784,
+    "min": 98.0926266,
+    "samples": [
+      98.0926266,
+      98.101784,
+      98.2164901
+    ]
+  },
+  "label": "smollm-135m",
+  "machine_load_note": "All three pairs started on a quiet machine (CPU samples below 15 percent before each; see the pairs list). The watchdog and live monitor windows were open, which add a small load.",
+  "method": "One untimed GPU warm-up (2 windows), then per repeat one full CPU pass and one full GPU pass over the whole token file in a random order, wall clock, after a quiet-machine check (5 one-second samples of total CPU, all below the threshold, else the wait limit is recorded). Perplexity is the same measured pass on both devices.",
+  "pairs": [
+    {
+      "cpu": {
+        "cross_entropy_nats": 2.985604180176718,
+        "elapsed_secs": 509.5986016,
+        "perplexity": 19.798460460885472,
+        "scored_tokens": 303118,
+        "windows": 297
+      },
+      "cpu_percent_samples_before": [
+        12.743446350097656,
+        11.966537475585938,
+        10.592254638671875,
+        9.697257995605469,
+        13.2757568359375
+      ],
+      "gpu": {
+        "cross_entropy_nats": 2.9856022325613836,
+        "elapsed_secs": 98.0926266,
+        "perplexity": 19.798421901137832,
+        "scored_tokens": 303118,
+        "windows": 297
+      },
+      "order": [
+        "cpu",
+        "gpu"
+      ],
+      "perplexity_diff_gpu_minus_cpu": -3.8559747640221076e-05,
+      "quiet_before": true,
+      "repeat": 0,
+      "waited_secs": 5.1829923
+    },
+    {
+      "cpu": {
+        "cross_entropy_nats": 2.985604180176718,
+        "elapsed_secs": 481.9184791,
+        "perplexity": 19.798460460885472,
+        "scored_tokens": 303118,
+        "windows": 297
+      },
+      "cpu_percent_samples_before": [
+        10.892105102539062,
+        9.195388793945312,
+        9.173721313476562,
+        9.92266845703125,
+        9.406646728515625
+      ],
+      "gpu": {
+        "cross_entropy_nats": 2.9856022325613836,
+        "elapsed_secs": 98.101784,
+        "perplexity": 19.798421901137832,
+        "scored_tokens": 303118,
+        "windows": 297
+      },
+      "order": [
+        "gpu",
+        "cpu"
+      ],
+      "perplexity_diff_gpu_minus_cpu": -3.8559747640221076e-05,
+      "quiet_before": true,
+      "repeat": 1,
+      "waited_secs": 5.0032453
+    },
+    {
+      "cpu": {
+        "cross_entropy_nats": 2.985604180176718,
+        "elapsed_secs": 504.6680306,
+        "perplexity": 19.798460460885472,
+        "scored_tokens": 303118,
+        "windows": 297
+      },
+      "cpu_percent_samples_before": [
+        9.647842407226562,
+        9.7706298828125,
+        9.807373046875,
+        9.890922546386719,
+        9.217613220214844
+      ],
+      "gpu": {
+        "cross_entropy_nats": 2.9856022325613836,
+        "elapsed_secs": 98.2164901,
+        "perplexity": 19.798421901137832,
+        "scored_tokens": 303118,
+        "windows": 297
+      },
+      "order": [
+        "gpu",
+        "cpu"
+      ],
+      "perplexity_diff_gpu_minus_cpu": -3.8559747640221076e-05,
+      "quiet_before": true,
+      "repeat": 2,
+      "waited_secs": 30.0088006
+    }
+  ],
+  "perplexity_cpu": 19.798460460885472,
+  "perplexity_diff_gpu_minus_cpu": -3.8559747640221076e-05,
+  "perplexity_gpu": 19.798421901137832,
+  "quiet_threshold_cpu_percent": 15.0,
+  "runs": 3,
+  "schema": 1,
+  "speedup_cpu_over_gpu": {
+    "max": 5.195075504278524,
+    "median": 5.138322801865224,
+    "min": 4.912433387551852,
+    "samples": [
+      5.195075504278524,
+      4.912433387551852,
+      5.138322801865224
+    ]
+  },
+  "threads": 12
+}

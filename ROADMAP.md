@@ -58,6 +58,13 @@ flowchart LR
 
 | Item | What shipped | Evidence |
 | :--- | :--- | :--- |
+| Measured baselines (THME-3044, 3023, 2004) | Verification, precision sweep, depth probe and searched-recipe reports for Pythia-14M and SmolLM-135M after the FP16 fix; 8 committed reports at the time | Regenerated dossier and charts; `docs/benchmarks/<model>/data/` |
+| HF cross-check (THME-2001) | THME logits match the fp32 reference: largest difference 1.9e-4 (Pythia-14M) and 2.1e-5 (SmolLM-135M), tolerance 0.005 | `docs/research/hf-cross-check-*.json` |
+| KV cache and incremental decoding (THME-3070) | KV cache for LLaMA and GPT-NeoX; chat reply loop prefills once | Paired runs: median speedup 6.0x to 12.3x (Pythia-14M) and 4.1x to 10.6x (SmolLM-135M) at 16, 64 and 256 tokens; shared machine; `decode_speed.json` |
+| GPU path (THME-3072, 3073) | Batched matrix kernel, resident weights, device-resident LLaMA decoder, perplexity on the GPU, device in every report, baseline cache, adapter self-test | SmolLM-135M full-split perplexity 98.1 s GPU against 504.7 s CPU (5.14x), Pythia-14M 31.7 s against 51.1 s (1.53x); `gpu_perplexity.json` |
+| GPU speed round 2 (THME-3084) | Per-dispatch profile, register-blocked matmul, tiled attention, resident weights, f16, Q8_0 and Q4_0 device weights | SmolLM2-1.7B full split 145.5 s on the RTX 4060 Ti (about 22.5 minutes before; loaded machine), SmolLM-135M 30.0 s against 97.8 s, Pythia-14M unchanged; `gpu_speed_round2.json` |
+| AWQ-style scaling (THME-2204) | Pre-registered comparison on both models with permuted-scale and shuffled-calibration controls | Beats round-to-nearest in Q4_0 and Q4_K; permuted scales remove the gain; shuffled calibration matches AWQ; the 0.45 gate still fails; `awq_calibration.json` |
+| Audit blockers (THME-3048, 3049, 3052, 3053, 3054) | VS Code extension without shell injection, release pipeline hardening, hygiene sweep, subprocess timeout, MCP trust model documented | Tests; the release workflow steps have not run on GitHub yet |
 | Engine core (THME-3001, 3004) | `src/engine`: error type, one shared Walsh-Hadamard transform (three copies removed) | Tested against the explicit Hadamard matrix; bit-identical to the old copies |
 | Exact allocator (THME-3002) | `thme search --solver dp` beside greedy and the threshold allocator | Tested against exhaustive search; real-model comparison pending |
 | Shared ternary quantizer (THME-3006, part) | One absmean-ternary implementation; BYOA zero-band bug fixed | Tested against round-and-clamp |
@@ -85,7 +92,7 @@ flowchart LR
 | Metrics library (THME-3027) | `bench::metrics`: answer extraction, exact and normalized match, numeric tolerance, likelihood choice with ties scored as misses, unbiased pass@k; `TaskSpec::score_output` | Tested: dossier Table R3 pass@k values, pass@k against enumeration for n <= 10, hand-computed cases |
 | Sandbox design (THME-3020, design part) | [docs/sandbox.md](docs/sandbox.md): threat model, one fail-closed interface, layers per OS, 13 escape tests, dependency proposal | Design only; nothing built |
 | No-panic rule, GUI split, glossary | Compiler-enforced; Studio tabs as modules; `CONTEXT.md` | Tested |
-| Toolchain 1.100.0 | Pinned compiler bumped to 1.100.0 (`rust-toolchain.toml`); MSRV stays 1.89 | fmt, clippy and tests green on 1.100.0 |
+| Toolchain 1.100.0 | Pinned compiler bumped to 1.100.0 (`rust-toolchain.toml`); MSRV is 1.95 | fmt, clippy and tests green on 1.100.0 |
 | Scanner: deflate pickles and NumPy object arrays (THME-3022, parts 1-2) | `thme scan`: deflate-compressed pickles in zip containers; `.npy`/`.npz` object arrays | Tested: 16 scan tests |
 | Scanner: Keras, ONNX and oversize pickles (THME-3022, parts 3-5) | `thme scan`: Keras Lambda and custom layers in `.keras`; ONNX external-data path traversal and custom domains; the first 256 MiB of an oversize pickle is still judged | Tested: scan fixtures for each rule |
 | ODE steppers (dossier WP6, ROADMAP v0.2.5.6) | `src/engine/ode.rs`: `FixedMethod::Rk4`, the Dormand-Prince 5(4) pair `dopri5_step` with step control and the adaptive `integrate_adaptive` driver; Euler, RK4 and Dormand-Prince steppers are error-order tested on the decay and oscillator equations | Tested: ratios 2 and 16, step control lands on t1; no measured figure |
@@ -98,7 +105,9 @@ flowchart LR
 | Formats and calibration | **GPTQ-style rounding** (THME-2205): second-order rounding with a full-Hessian calibration step | Implemented for Q4_0 and Q8_0, tested on synthetic matrices; real-model measurement pending, K-quants not supported | Calibration |
 | Formats and calibration | **llama.cpp compatibility check** (THME-2208) on synthetic exported files; the runtime check runs only when a tool is configured | Not started | Exporter |
 | Security | **Scanner coverage** (THME-3022, v0.2.7.2): legacy HDF5 `.h5` Keras files | Done in part: `.h5` is searched for Lambda and custom layers; compressed or fragmented attributes can be missed | Scanner v1 |
-| Quality and evidence | **Benchmark runner, native and bridged modes** (v0.2.8.3): produce outputs with THME's forward pass or an external tool; resume and cache | Blocked | Model runs paused |
+| Quality and evidence | **Benchmark runner, native and bridged modes** (v0.2.8.3, THME-3074 and 3075): one Rust process, model loaded once, progress and run metrics in every report | Not started | GPU perplexity path (done), run metrics |
+| Quality and evidence | **Quality gate v2** (THME-3077): relative margin for high-perplexity models, absolute for low | Not started | Gate versioning |
+| Memory and speed | **Memory experiments on Pythia-14M** (unified concept note, private): token-frequency count, per-row-band precision, vocabulary-subset drafting, int8 KV | Not started | KV cache (done), `.epiph` encodings (THME-3078) |
 | Plug and play workspace | **v0.3.0** (THME-3037 to 3042): discover, doctor and tokenizer are done, tested on fixtures; Studio chat, Hub download, bridges, first-run guide, notebook bridge and installs are open | Partly done | Reference forward pass |
 
 ### Next: planned
@@ -107,6 +116,7 @@ flowchart LR
 | :--- | :--- | :--- |
 | Epiphanes model format | `.epiph` GPU/CPU placement plan from the exact allocator (THME-3016) | Exact allocator |
 | Epiphanes model format | `.epiph` lossless payload compression with `flate2` (THME-3015) | Signature over compressed payloads |
+| Epiphanes model format | `.epiph` flexible encodings, critical and optional codecs (THME-3078) | Experiment on per-row-band precision |
 
 ### Later: direction
 
@@ -121,14 +131,17 @@ flowchart LR
 | Runtime | GPU backends, measured speed, memory and KV cache (v0.2.4, v0.3) |
 | Release | Commercial release after the open-source foundations are complete; version to be decided. Reserved for it: the developer sandbox implementation (THME-3020; design public in [docs/sandbox.md](docs/sandbox.md)) and sandboxed `code` benchmark tasks |
 
-### Blocked: needs real-model runs (paused)
+### Pending measurement
+
+Model runs are allowed on Pythia-14M and SmolLM-135M only, by decision, until results are stable.
 
 | Item | What is ready | What is pending |
 | :--- | :--- | :--- |
-| AWQ-style scaling (v0.2.2.4) | Implemented and tested | Measurement against plain Q4_0 |
+| AWQ-style scaling (v0.2.2.4) | Measured on both models with controls (see Done this week) | C4 out-of-domain arm and the 8k and 131k size check |
 | Exact versus greedy allocation (THME-3002) | Implemented and tested | Comparison on real cost tables |
 | Hadamard rotation (v0.2.2.6) | Rule implemented | Measurement with and without rotation |
-| Searched recipe report (THME-2004), HF cross-check (THME-2001) | Tools ready | Runs |
+| GPTQ-style rounding (THME-2205) | Implemented for Q4_0 and Q8_0 | Measurement against AWQ with the same controls |
+| Searched recipe report (THME-2004) | Done for both models; Pythia missed its 50 percent size budget | At least 5 placement seeds, fitted exit heads |
 
 ### Out of scope
 
@@ -138,14 +151,24 @@ flowchart LR
 
 ### Risks
 
-- **Measurement backlog.** Several items wait on paused model runs; the tools stay testable
-  without them, but no new quality figure can be published until runs resume.
+- **Measurement scope.** All measured results come from two tiny models (14M and 135M parameters);
+  effects may differ at larger scale, and the 0.45 perplexity gate is unfair to a model whose
+  perplexity is 114 (THME-3077).
 - **Dependencies to approve.** Signing, compression and compressed-pickle scanning each need a
   pure-Rust crate; each is proposed with its licence and binary-size cost before it is added.
 - **Legal review.** Format-name trademark (THME-3017) and the commercial licence wording need a
   lawyer before any announcement.
 
-### Changes this update (19 November 2026)
+### Changes this update (20 November 2026)
+
+- Done and measured: HF cross-check, KV cache decode speedups, GPU path and GPU perplexity, AWQ comparison on both models with controls, baseline re-measurement after the FP16 fix (details in Done this week). Every figure comes from a committed report; the CPU timings of the GPU comparison were taken on a shared machine and the reports say so.
+- Done (audit): VS Code extension, release pipeline, hygiene and subprocess timeout fixes (THME-3048 to 3054, part); allowed roots for MCP are documented as planned.
+- Corrected: the Hugging Face cross-check report run names now say that the reference, not THME, ran on CPU or CUDA; the README and dossier no longer describe the cross-check as open or paused; the mixed-format average in the owner's v2.1 draft is 3.05 bits per parameter, not 2.45 (private log).
+- Added to the backlog: run planner tickets THME-3055 to 3066 (Pathfinder), provenance ledger (3071), Rust benchmark runner and run metrics (3074, 3075), sidebar example text (3076), quality gate v2 (3077), flexible `.epiph` encodings (3078).
+- Decision: training uses a PyTorch bridge first and a Rust backward pass later; benchmarks move to the GPU once it is faster than the CPU (it now is, on both small models).
+- Not done: Studio visual check (moved to v0.4, THME-3069), the C4 arm, Hadamard and GPTQ measurements, release of v0.2.0.
+
+### Changes in the previous update (19 November 2026)
 
 - Done: build repaired for eframe and egui 0.37, wgpu 30 and sysinfo 0.40 (fmt, clippy and the test suite green; `cargo deny check` passes without the two advisory ignores); GPTQ rounding rewritten to the reference algorithm and tested on synthetic matrices; wgpu GPU kernels pass their eight tests on one RTX 4060 Ti (no speed figure claimed).
 - Corrected: the scanner ticket (THME-3022) is back to *ready*, because legacy `.h5` files are flagged, not inspected; the Studio no longer loads a model from a developer-machine path at startup.
@@ -245,13 +268,13 @@ user-facing path.
 | :--- | :--- | :--- |
 | v0.2.0.1 | Reference CPU forward pass: LLaMA family and GPT-NeoX (`src/inference/`) | **Done**: measured on SmolLM-135M and Pythia-14M |
 | v0.2.0.2 | WikiText-2 tokenization with provenance and hashes (`scripts/prepare_eval_tokens.py`) | **Done** |
-| v0.2.0.3 | Measured quality gate: source vs exported GGUF vs recipe (`examples/production_verification.rs`) | Implemented, re-measure pending (THME-3044) |
-| v0.2.0.4 | Dossier and charts generated only from reports (`scripts/generate_dossier.py`, `scripts/generate_charts.py`) | **Done** (reports removed 19 November 2026, to be re-measured) |
-| v0.2.0.5 | Measured experiments: precision sweep with random-placement control, depth probe | Implemented, re-measure pending (THME-3044) |
-| v0.2.0.6 | Cross-check the forward pass against the Hugging Face reference (logit agreement on fixed prompts) | Open; paused while no new model runs are being made |
+| v0.2.0.3 | Measured quality gate: source vs exported GGUF vs recipe (`examples/production_verification.rs`) | **Done**: re-measured on both models after the FP16 fix (20 November 2026, `verification_report.json`) |
+| v0.2.0.4 | Dossier and charts generated only from reports (`scripts/generate_dossier.py`, `scripts/generate_charts.py`) | **Done**: reports removed 19 November 2026 and regenerated 20 November 2026 |
+| v0.2.0.5 | Measured experiments: precision sweep with random-placement control, depth probe | **Done**: precision sweep and depth probe re-measured on both models (20 November 2026) |
+| v0.2.0.6 | Cross-check the forward pass against the Hugging Face reference (logit agreement on fixed prompts) | **Done**: largest logit difference 1.9e-4 (Pythia-14M) and 2.1e-5 (SmolLM-135M) against the fp32 reference, tolerance 0.005 (`docs/research/hf-cross-check-*.json`) |
 | v0.2.0.7 | Retire the analytic proxy from `thme validate`, the MCP quality tool and the co-surgery loop; route them through the measured gate | **Done**: `thme validate --report` gates measured reports; `thme co-surgery MODEL --tokens` scores candidates with the forward pass (`QualityEvaluator`, `MeasuredEvaluator`); supplied-value and proxy paths are labelled, including the Studio Co-Surgery tab |
 | v0.2.0.8 | Real Studio screenshots (`scripts/capture_studio.ps1`); fix missing-glyph labels and overlapping text in the Layer Tweaker dataflow row; show measured reports in the Studio | **Done** except showing measured reports in the Studio (moved to v0.2.1.9) |
-| v0.2.0.9 | Release engineering: LTO binaries, Minisign/GPG signing, SHA-256 manifest, clean-machine test, manual and man page | Implemented in v0.1.x workflows; to be re-verified at tag time |
+| v0.2.0.9 | Release engineering: LTO binaries, Minisign/GPG signing, SHA-256 manifest, clean-machine test, manual and man page | Implemented in v0.1.x workflows and hardened on 20 November 2026 (THME-3049); the release and verify steps have not run on GitHub yet; to be re-verified at tag time |
 
 ## v0.2.1 — Recipe and BYOA lab
 
@@ -291,7 +314,7 @@ SmolLM-135M, measured from the written file.
 | v0.2.2.1 | Per-tensor formats in the GGUF writer, so the recipe and the artifact are the same thing. **Done**: `thme export --recipe` writes each tensor in its assigned format (FP16, Q8_0, Q4_0, Q4_K, Q5_K, Q6_K, TQ1_0; FP32 and 1-D tensors as stored); a test re-imports the file and reproduces `thme evaluate`'s perplexity, with bit-identical weights. Norm epsilon and RoPE base now travel through GGUF metadata instead of fixed defaults |
 | v0.2.2.2 | Q4_K, Q5_K and Q6_K encoders with round-trip tests against the decoders. **Done**: GGML-layout codecs (`src/exporter/kquant.rs`) checked against hand-built blocks; the forward pass reads K-quant tensors; `q4_k`, `q5_k`, `q6_k` usable in recipes, `thme evaluate` and `thme search --formats` |
 | v0.2.2.3 | Calibration activations captured from the forward pass. **Done**: the probe records per-input-channel mean \|x\|, rms and max \|x\| for every linear tensor; `thme calibrate` merges them over calibration windows and saves them keyed by tensor name (`inference::calibration`) |
-| v0.2.2.4 | Activation-aware scaling (AWQ-style). Implemented: `thme.awq_q4_0` and `thme.awq_q4_k` BYOA rules (`inference::awq`) choose a per-channel scale exponent by activation-weighted error, using `thme evaluate --calibration`; tested on synthetic weights and the synthetic model. Measurement on a real model against plain Q4_0 is pending (no model runs) |
+| v0.2.2.4 | Activation-aware scaling (AWQ-style). **Done**: measured on Pythia-14M and SmolLM-135M with controls (20 November 2026). Implemented: `thme.awq_q4_0` and `thme.awq_q4_k` BYOA rules (`inference::awq`) choose a per-channel scale exponent by activation-weighted error, using `thme evaluate --calibration`; tested on synthetic weights and the synthetic model. Measurement on a real model against plain Q4_0 is pending (no model runs) |
 | v0.2.2.5 | Second-order rounding (GPTQ-style) | Implemented: Q4_0 and Q8_0 rounding follows the reference algorithm; tested on synthetic matrices, not measured on a real model |
 | v0.2.2.6 | Randomized Hadamard rotation of weight inputs (QuaRot-style), measured with and without |
 | v0.2.2.7 | SmoothQuant-style scale migration for activation outliers. **Done**: `inference::smoothing` folds per-channel scales (from calibration max \|x\|) into the preceding RMSNorm or LayerNorm and the linears that read it, for LLaMA and GPT-NeoX; tests confirm unchanged outputs before quantization. Its effect after quantization is not measured |
@@ -324,9 +347,9 @@ hardware for the source and for a passing heterogeneous candidate.
 
 | # | Item |
 | :--- | :--- |
-| v0.2.4.1 | Incremental decoding with a KV cache in the reference runtime |
-| v0.2.4.2 | KV-cache bytes measured across a context-length sweep |
-| v0.2.4.3 | Prefill and decode throughput measured on CPU |
+| v0.2.4.1 | Incremental decoding with a KV cache in the reference runtime. **Done** (THME-3070): paired speedups 4x to 12x on the two small models, cache bytes match the estimate |
+| v0.2.4.2 | KV-cache bytes measured across a context-length sweep. **In progress**: measured at 23, 71 and 263 tokens; the full sweep to 2,048 is open |
+| v0.2.4.3 | Prefill and decode throughput measured on CPU. **In progress**: measured on CPU and GPU (`decode_speed.json`, `gpu_profile.json`, `gpu_perplexity.json`) |
 | v0.2.4.4 | Quantized kernels that compute directly on Q8_0 and Q4 blocks |
 | v0.2.4.5 | Peak resident memory measured per run |
 | v0.2.4.6 | KV-cache quantization, measured against long-context quality |
@@ -442,10 +465,10 @@ chat without moving files; each bridge lists what was tested and what was not.
 | v0.3.0.1 | `thme discover`: list models already on the machine from the Hugging Face cache, Ollama, LM Studio, llama.cpp and any folder (THME-3040) | **Done**: tested on fake folder layouts only |
 | v0.3.0.2 | `thme doctor`: what works on this machine and what to try next (THME-3041) | **Done**: tested on a facts struct; the Studio first-start summary is open (see v0.3.0.7) |
 | v0.3.0.3 | Tokenizer and chat templates: `thme tokenize`, `thme chat-template` (THME-3037) | **Done**: tested on fixtures; no real model template checked |
-| v0.3.0.4 | Studio chat tab on the reference forward pass (THME-3038) | Open |
-| v0.3.0.5 | Model download from the Hugging Face hub with checksum verification and scan on import (THME-3042, part 1) | Open |
+| v0.3.0.4 | Studio chat tab on the reference forward pass (THME-3038) | **Done**: tested on the mock model with a fixture tokenizer; never opened in a running window, and no real model was used |
+| v0.3.0.5 | Model download from the Hugging Face hub with checksum verification and scan on import (THME-3042, part 1) | **Done**: tested with a fake fetcher only; no real hub request has been made |
 | v0.3.0.6 | Bridges to Ollama, LM Studio and llama.cpp: read their model folders (done by discover), export GGUF they load (checks in THME-2208), documented MCP setup for editors and agents (THME-3042, part 2) | Open |
-| v0.3.0.7 | First-run guide in the Studio: the doctor summary and the discover list on first start | Open |
+| v0.3.0.7 | First-run guide in the Studio: the doctor summary and the discover list on first start | **Done**: the Welcome panel's state machine is tested; the window was not opened, so the look is unchecked by eye |
 | v0.3.0.8 | Notebook and Python bridge: documented JSON output of every command, with a small example | Open |
 | v0.3.0.9 | Install and docs for each background (analyst, engineer, scientist): one-command install, short guides, clean-machine test | Open |
 

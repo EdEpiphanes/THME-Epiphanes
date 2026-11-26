@@ -14,6 +14,10 @@ use thme::inference::gpu::{
 use thme::inference::llama::{linear, score_head, synthetic_demo};
 use thme::profiling::hardware::HardwareDevice;
 
+mod common;
+
+use common::{real_model_dir, PYTHIA_14M, SMOLLM_135M};
+
 fn pseudo_random(seed: &mut u64, len: usize, scale: f32) -> Vec<f32> {
     (0..len)
         .map(|_| {
@@ -319,9 +323,10 @@ fn test_iq4_xs_dequant_gemv_parity() {
     }
 
     println!("IQ4_XS Dequant + GEMV Parity: max_diff = {max_diff:.6e}");
+    // Other adapters (Metal on the macOS runner) sum in a different order: 1.46e-3 seen there.
     assert!(
-        max_diff < 1e-3,
-        "IQ4_XS GEMV output diff {max_diff} exceeded tolerance 1e-3"
+        max_diff < 3e-3,
+        "IQ4_XS GEMV output diff {max_diff} exceeded tolerance 3e-3"
     );
 }
 
@@ -364,90 +369,64 @@ fn test_score_head_vocab_projection_and_argmax() {
 }
 
 #[test]
-fn test_real_medgemma_or_synthetic_forward_pass() {
-    let path = std::env::var("THME_MEDGEMMA_PATH")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|_| {
-            if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-                std::path::PathBuf::from(local_app_data)
-                    .join("hermes/models/medgemma-4b-it-UD-Q4_K_XL.gguf")
-            } else {
-                std::path::PathBuf::from("models/medgemma-4b-it-UD-Q4_K_XL.gguf")
-            }
-        });
+fn test_synthetic_forward_pass_cpu_gpu_top1_parity() {
+    let (cpu_model, _) = synthetic_demo(42);
+    let tokens = [5u32, 12u32, 28u32];
+    let cpu_exits = cpu_model
+        .forward_scheduled(&tokens, &[0, 1], &[2])
+        .expect("CPU synthetic forward");
 
-    if path.exists() {
-        println!("Testing on real host MedGemma GGUF model: {:?}", path);
-        let model_ir = thme::parser::ModelImporter::import(&path).expect("import medgemma model");
-        let arch_cfg = thme::inference::arch::ArchConfig::detect(&model_ir, &path)
-            .expect("detect architecture");
+    let Ok(gpu_ctx) = GpuContext::init() else {
+        eprintln!("SKIP synthetic GPU parity: no GPU adapter on this host");
+        return;
+    };
+    let gpu = Arc::new(gpu_ctx);
+    let (mut gpu_model, _) = synthetic_demo(42);
+    gpu_model.set_gpu(Some(gpu));
+    let gpu_exits = gpu_model
+        .forward_scheduled(&tokens, &[0, 1], &[2])
+        .expect("GPU synthetic forward");
 
-        let cpu_model = arch_cfg
-            .load(&model_ir, thme::inference::WeightPrecision::AsStored)
-            .expect("load CPU model");
+    assert_eq!(cpu_exits[0].top1, gpu_exits[0].top1);
+}
 
-        let tokens = [2u32, 106u32];
-        let cpu_exits = cpu_model
+/// Real-model CPU/GPU parity on the two small models. Opt-in via THME_REAL_MODEL_TESTS=1.
+#[test]
+fn test_real_model_cpu_gpu_parity() {
+    for model in [&PYTHIA_14M, &SMOLLM_135M] {
+        let Some(dir) = real_model_dir(model) else {
+            continue;
+        };
+        let Ok(gpu_ctx) = GpuContext::init() else {
+            eprintln!("SKIP {}: no GPU adapter on this host", model.dir_name);
+            continue;
+        };
+        let gpu: Arc<dyn GpuBackend> = Arc::new(gpu_ctx);
+
+        let ir = thme::parser::ModelImporter::import(&dir).expect("import real model folder");
+        let arch = thme::inference::arch::ArchConfig::detect(&ir, &dir).expect("detect");
+        let precision = thme::inference::WeightPrecision::AsStored;
+
+        let cpu = arch.load(&ir, precision).expect("load CPU model");
+        let gpu_model = arch
+            .load_with_gpu(&ir, precision, Some(gpu))
+            .expect("load GPU model");
+
+        let tokens = [12u32, 345u32];
+        let cpu_exit = cpu
             .forward_scheduled(&tokens, &[0], &[1])
             .expect("CPU forward_scheduled layer 0");
-        assert_eq!(cpu_exits.len(), 1);
-        println!("CPU MedGemma layer 0 NLL: {:.4}", cpu_exits[0].nll[0]);
+        let gpu_exit = gpu_model
+            .forward_scheduled(&tokens, &[0], &[1])
+            .expect("GPU forward_scheduled layer 0");
 
-        if let Ok(gpu_ctx) = GpuContext::init() {
-            println!(
-                "Testing GPU acceleration on host: {}",
-                gpu_ctx.adapter_info.name
-            );
-            let gpu = Arc::new(gpu_ctx);
-
-            if let thme::inference::arch::ArchConfig::Gemma(cfg) = arch_cfg {
-                let gpu_model = thme::inference::GemmaModel::load(
-                    &model_ir,
-                    cfg,
-                    thme::inference::WeightPrecision::AsStored,
-                )
-                .expect("load GPU Gemma model")
-                .with_gpu(gpu.clone());
-
-                let gpu_exits = gpu_model
-                    .forward_scheduled(&tokens, &[0], &[1])
-                    .expect("GPU forward_scheduled layer 0");
-
-                println!(
-                    "GPU MedGemma layer 0 NLL: {:.4}, top1: {:?}",
-                    gpu_exits[0].nll[0], gpu_exits[0].top1
-                );
-
-                assert!(gpu_exits[0].nll[0].is_finite());
-                assert_eq!(
-                    cpu_exits[0].top1, gpu_exits[0].top1,
-                    "Predicted token must match"
-                );
-                let diff = (cpu_exits[0].nll[0] - gpu_exits[0].nll[0]).abs();
-                assert!(
-                    diff < 0.05,
-                    "MedGemma NLL diff {diff} exceeds tolerance 0.05"
-                );
-            }
-        }
-    } else {
-        println!("MedGemma not found on disk; testing synthetic model forward pass");
-        let (cpu_model, _) = synthetic_demo(42);
-        let tokens = [5u32, 12u32, 28u32];
-        let cpu_exits = cpu_model
-            .forward_scheduled(&tokens, &[0, 1], &[2])
-            .expect("CPU synthetic forward");
-
-        if let Ok(gpu_ctx) = GpuContext::init() {
-            let gpu = Arc::new(gpu_ctx);
-            let (mut gpu_model, _) = synthetic_demo(42);
-            gpu_model.set_gpu(Some(gpu));
-            let gpu_exits = gpu_model
-                .forward_scheduled(&tokens, &[0, 1], &[2])
-                .expect("GPU synthetic forward");
-
-            assert_eq!(cpu_exits[0].top1, gpu_exits[0].top1);
-        }
+        assert_eq!(cpu_exit[0].top1, gpu_exit[0].top1, "{}", model.dir_name);
+        let diff = (cpu_exit[0].nll[0] - gpu_exit[0].nll[0]).abs();
+        assert!(
+            diff < 0.05,
+            "{}: NLL diff {diff} exceeds tolerance 0.05",
+            model.dir_name
+        );
     }
 }
 

@@ -29,6 +29,12 @@
     "pareto"
   ],
   "main": "./out/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "THME runs a binary resolved from the workspace; open only trusted workspaces."
+    }
+  },
   "activationEvents": [
     "onStartupFinished"
   ],
@@ -83,7 +89,7 @@
       },
       {
         "command": "thme.validateQuality",
-        "title": "THME: Validate Perplexity Quality Gate (WikiText-2/C4)",
+        "title": "THME: Check Perplexity Quality Gate (enter measured PPL values)",
         "category": "THME",
         "icon": "$(pass)"
       },
@@ -110,9 +116,12 @@
           "properties": {
             "modelPath": {
               "type": "string",
-              "description": "Path to the model file (.safetensors or .gguf). Omit for current active model."
+              "description": "Path to an existing model file (.safetensors or .gguf)."
             }
-          }
+          },
+          "required": [
+            "modelPath"
+          ]
         }
       },
       {
@@ -122,12 +131,17 @@
         "inputSchema": {
           "type": "object",
           "properties": {
+            "modelPath": {
+              "type": "string",
+              "description": "Path to an existing model file (.safetensors or .gguf)."
+            },
             "recipeJson": {
               "type": "string",
               "description": "JSON string conforming to THME Surgery Recipe v1 schema."
             }
           },
           "required": [
+            "modelPath",
             "recipeJson"
           ]
         }
@@ -194,7 +208,8 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "package": "vsce package"
+    "package": "vsce package",
+    "test": "tsc -p ./ && node --test out/"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",

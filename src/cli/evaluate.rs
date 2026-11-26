@@ -17,6 +17,7 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use crate::inference::gpu::DeviceArg;
 use crate::inference::{
     evaluate_perplexity, read_token_file, ArchConfig, PerplexityConfig, PerplexityReport,
     WeightPrecision, BYOA_METADATA_KEY,
@@ -77,6 +78,96 @@ pub struct EvaluateArgs {
     /// such as `thme.awq_q4_0`. Collect them on tokens outside the evaluation split.
     #[arg(long, value_name = "CALIBRATION_JSON")]
     pub calibration: Option<PathBuf>,
+
+    /// Execution compute device (auto, gpu, cpu). The report records the device and adapter.
+    #[arg(long, value_enum, default_value_t = DeviceArg::Auto)]
+    pub device: DeviceArg,
+
+    /// Do not reuse or store the unquantized baseline pass
+    #[arg(long)]
+    pub no_baseline_cache: bool,
+
+    /// Folder for the baseline cache (default: `baseline-cache` beside the report)
+    #[arg(long, value_name = "DIR")]
+    pub baseline_cache_dir: Option<PathBuf>,
+}
+
+/// Device record for reports: what was asked for, what ran, and the adapter details.
+pub fn device_json(requested: DeviceArg, gpu: Option<&dyn crate::inference::GpuBackend>) -> Value {
+    json!({
+        "requested": format!("{requested:?}").to_lowercase(),
+        "used": if gpu.is_some() { "gpu" } else { "cpu" },
+        "adapter": gpu.map(|g| g.adapter_json()),
+    })
+}
+
+/// Hash of every weight file the model reads, in sorted path order.
+fn model_files_hash(model: &ModelIR) -> Result<String> {
+    use sha2::{Digest, Sha256};
+    let mut paths: Vec<&Path> = model
+        .tensors
+        .iter()
+        .filter_map(|t| t.source.as_ref().map(|s| s.path.as_path()))
+        .collect();
+    paths.sort();
+    paths.dedup();
+    let mut hasher = Sha256::new();
+    for path in paths {
+        hasher.update(crate::exporter::compute_file_sha256(path)?.as_bytes());
+    }
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+/// The unquantized baseline pass, stored beside the report so repeated recipe runs on the same
+/// model, tokens, eval context and device do not recompute it.
+struct BaselineCache {
+    file: PathBuf,
+    key: String,
+}
+
+impl BaselineCache {
+    fn new(
+        dir: PathBuf,
+        model: &ModelIR,
+        tokens: &Path,
+        eval: &PerplexityConfig,
+        device: &Value,
+    ) -> Result<Self> {
+        use sha2::{Digest, Sha256};
+        let identity = format!(
+            "thme-baseline-v1|{}|{}|{}|{}|{:?}|{}",
+            env!("CARGO_PKG_VERSION"),
+            model_files_hash(model)?,
+            crate::exporter::compute_file_sha256(tokens)?,
+            eval.context_len,
+            eval.max_tokens,
+            device
+        );
+        let key = format!("{:x}", Sha256::digest(identity.as_bytes()));
+        Ok(Self {
+            file: dir.join(format!("baseline-{}.json", &key[..16])),
+            key,
+        })
+    }
+
+    fn load(&self) -> Option<PerplexityReport> {
+        let value: Value = serde_json::from_str(&std::fs::read_to_string(&self.file).ok()?).ok()?;
+        (value["key"] == json!(self.key))
+            .then(|| serde_json::from_value(value["report"].clone()).ok())?
+    }
+
+    fn store(&self, report: &PerplexityReport) -> Result<()> {
+        write_report(&self.file, &json!({ "key": self.key, "report": report }))
+    }
+
+    fn to_json(&self, cached: bool) -> Value {
+        json!({
+            "enabled": true,
+            "cached": cached,
+            "key": self.key,
+            "file": self.file.file_name().map(|n| n.to_string_lossy().into_owned()),
+        })
+    }
 }
 
 /// Attaches each tensor's calibration statistics as metadata; returns how many were attached.
@@ -386,11 +477,46 @@ pub fn evaluate(args: &EvaluateArgs) -> Result<Value> {
         source.name,
         arch.family()
     );
-    let baseline_model = arch.load(&source, WeightPrecision::AsStored)?;
-    let baseline = evaluate_perplexity(&*baseline_model, &tokens, &eval, |_, _, _| {})?;
-    drop(baseline_model);
-    println!("  source     PPL {:.4}", baseline.perplexity);
-    let candidate_model = arch.load(&candidate, WeightPrecision::SelectedFormat)?;
+    let gpu = args.device.resolve();
+    let device = device_json(args.device, gpu.as_deref());
+    let cache = if args.no_baseline_cache {
+        None
+    } else {
+        let dir = args.baseline_cache_dir.clone().unwrap_or_else(|| {
+            args.report
+                .parent()
+                .unwrap_or_else(|| Path::new(""))
+                .join("baseline-cache")
+        });
+        Some(BaselineCache::new(
+            dir,
+            &source,
+            &args.tokens,
+            &eval,
+            &device,
+        )?)
+    };
+    let cached = cache.as_ref().and_then(BaselineCache::load);
+    let baseline_hit = cached.is_some();
+    let baseline = match cached {
+        Some(report) => report,
+        None => {
+            let baseline_model =
+                arch.load_with_gpu(&source, WeightPrecision::AsStored, gpu.clone())?;
+            let report = evaluate_perplexity(&*baseline_model, &tokens, &eval, |_, _, _| {})?;
+            if let Some(cache) = &cache {
+                cache.store(&report)?;
+            }
+            report
+        }
+    };
+    println!(
+        "  source     PPL {:.4}{}",
+        baseline.perplexity,
+        if baseline_hit { "  (cached)" } else { "" }
+    );
+    let candidate_model =
+        arch.load_with_gpu(&candidate, WeightPrecision::SelectedFormat, gpu.clone())?;
     let measured = evaluate_perplexity(&*candidate_model, &tokens, &eval, |_, _, _| {})?;
     let delta = measured.perplexity - baseline.perplexity;
     let verdict = judge_reports(&gate, &baseline, &measured);
@@ -443,6 +569,10 @@ pub fn evaluate(args: &EvaluateArgs) -> Result<Value> {
             "corpus": corpus,
             "context_len": args.eval_context,
             "max_tokens": args.eval_max_tokens,
+            "baseline_cache": cache.as_ref().map_or(
+                json!({"enabled": false, "cached": false}),
+                |c| c.to_json(baseline_hit),
+            ),
             "max_ppl_delta": gate.max_ppl_delta(),
             "gate": gate.to_report(),
             "gate_verdict": verdict,
@@ -462,7 +592,12 @@ pub fn evaluate(args: &EvaluateArgs) -> Result<Value> {
             "os": std::env::consts::OS,
             "arch": std::env::consts::ARCH,
             "logical_cpus": std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1),
-            "backend": "THME reference CPU forward pass (f32, multithreaded)",
+            "device": device,
+            "backend": if gpu.is_some() {
+                "THME reference forward pass on the GPU (wgpu, f32 weights and activations)"
+            } else {
+                "THME reference CPU forward pass (f32, multithreaded)"
+            },
         },
     });
     write_report(&args.report, &report)?;
@@ -635,6 +770,9 @@ pub(crate) mod tests {
             artifact: None,
             calibration: None,
             gate: None,
+            device: DeviceArg::Cpu,
+            no_baseline_cache: false,
+            baseline_cache_dir: None,
         }
     }
 
@@ -862,5 +1000,59 @@ pub(crate) mod tests {
             report["recipe"]["format_counts"]["BYOA user.nope"],
             json!(2)
         );
+    }
+
+    #[test]
+    fn baseline_pass_is_cached_and_reused_across_recipe_runs() {
+        let dir = tempfile::tempdir().unwrap();
+        let (model, tokens) = synthetic_checkpoint(dir.path());
+        let recipe = write_recipe(dir.path(), false);
+        let out = dir.path().join("report.json");
+        let run = |ctx: usize, no_cache: bool| {
+            let mut a = args(
+                model.clone(),
+                recipe.clone(),
+                tokens.clone(),
+                out.clone(),
+                false,
+            );
+            a.eval_context = ctx;
+            a.no_baseline_cache = no_cache;
+            evaluate(&a).unwrap()
+        };
+        let first = run(64, false);
+        assert_eq!(
+            first["evaluation"]["baseline_cache"]["cached"],
+            json!(false)
+        );
+        assert!(dir.path().join("baseline-cache").is_dir());
+        let second = run(64, false);
+        assert_eq!(
+            second["evaluation"]["baseline_cache"]["cached"],
+            json!(true)
+        );
+        assert_eq!(
+            first["evaluation"]["variants"][0]["perplexity"],
+            second["evaluation"]["variants"][0]["perplexity"]
+        );
+        // A different eval context is a different key, and the cache can be switched off.
+        assert_eq!(
+            run(32, false)["evaluation"]["baseline_cache"]["cached"],
+            json!(false)
+        );
+        let off = run(64, true);
+        assert_eq!(off["evaluation"]["baseline_cache"]["enabled"], json!(false));
+    }
+
+    #[test]
+    fn report_records_the_device_that_ran() {
+        let dir = tempfile::tempdir().unwrap();
+        let (model, tokens) = synthetic_checkpoint(dir.path());
+        let recipe = write_recipe(dir.path(), false);
+        let out = dir.path().join("report.json");
+        let report = evaluate(&args(model, recipe, tokens, out, false)).unwrap();
+        assert_eq!(report["host"]["device"]["requested"], json!("cpu"));
+        assert_eq!(report["host"]["device"]["used"], json!("cpu"));
+        assert!(report["host"]["device"]["adapter"].is_null());
     }
 }

@@ -1,0 +1,845 @@
+{
+  "report": "awq_calibration",
+  "report_version": 1,
+  "status": "measured",
+  "status_note": "Every arm was measured on the full WikiText-2 test split by the reference CPU forward pass. The decision rule was applied as pre-registered.",
+  "model_name": "pythia-14m",
+  "model_repo": "EleutherAI/pythia-14m",
+  "model_config": {
+    "architectures": [
+      "GPTNeoXForCausalLM"
+    ],
+    "vocab_size": 50304,
+    "max_position_embeddings": 2048,
+    "hidden_size": 128,
+    "num_hidden_layers": 6,
+    "torch_dtype": "float16"
+  },
+  "formats": [
+    "Q4_0",
+    "Q4_K"
+  ],
+  "evaluation": {
+    "benchmark": {
+      "id": "wikitext2-raw",
+      "version": "1",
+      "split": "test"
+    },
+    "context_len": 1024,
+    "corpus_sha256": "173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08",
+    "token_count": 287159,
+    "token_file_sha256": "973595d9c7c580360a39eedde7297ec050f362a521940f7527eca4a00ea85278",
+    "tokenizer_sha256": "870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+    "scoring_note": "Full test split in consecutive windows of 1024 (thme evaluate defaults), same protocol as the verification reports."
+  },
+  "calibration": {
+    "benchmark": {
+      "id": "wikitext2-raw",
+      "version": "1",
+      "split": "train"
+    },
+    "windows": 16,
+    "window_len": 2048,
+    "tokens": 32768,
+    "seeds": [
+      1234,
+      1,
+      2,
+      3,
+      4
+    ],
+    "files": [
+      {
+        "seed": 1234,
+        "corpus_sha256": "6707892fa3788b5ab9ed78ab5ff37d9fe825f6011a2ad4fcd6a6d467f0e7da57",
+        "corpus_bytes": 10940747,
+        "token_count": 32768,
+        "token_file_sha256": "9df21e5b5cb0e6a1b283d4b0325ba557b01b350b5eda040da37a3aac0eb0ebe4",
+        "tokenizer_sha256": "870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+        "split_token_count": 2419837,
+        "order": "window",
+        "offsets": [
+          112142,
+          144014,
+          289680,
+          334895,
+          370812,
+          374223,
+          510388,
+          660467,
+          821681,
+          853976,
+          965311,
+          1023479,
+          1239672,
+          1463298,
+          1475129,
+          1605338
+        ]
+      },
+      {
+        "seed": 1,
+        "corpus_sha256": "6707892fa3788b5ab9ed78ab5ff37d9fe825f6011a2ad4fcd6a6d467f0e7da57",
+        "corpus_bytes": 10940747,
+        "token_count": 32768,
+        "token_file_sha256": "f12a5aec839737892331cfa24468563d3e4ac87350dc244cad2968af3c180950",
+        "tokenizer_sha256": "870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+        "split_token_count": 2419837,
+        "order": "window",
+        "offsets": [
+          22363,
+          174125,
+          261399,
+          277241,
+          316364,
+          403605,
+          505660,
+          808495,
+          1003428,
+          1460357,
+          1534497,
+          1834211,
+          1913019,
+          1939214,
+          2047357,
+          2066562
+        ]
+      },
+      {
+        "seed": 2,
+        "corpus_sha256": "6707892fa3788b5ab9ed78ab5ff37d9fe825f6011a2ad4fcd6a6d467f0e7da57",
+        "corpus_bytes": 10940747,
+        "token_count": 32768,
+        "token_file_sha256": "67a605b56856563d4121c27956f35122b1f0d6902c36cd7ec01e6b3e617bf3d7",
+        "tokenizer_sha256": "870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+        "split_token_count": 2419837,
+        "order": "window",
+        "offsets": [
+          243647,
+          461806,
+          574089,
+          620925,
+          706772,
+          776197,
+          1013855,
+          1086051,
+          1176205,
+          1195881,
+          1240382,
+          1370497,
+          1512262,
+          1622404,
+          2205021,
+          2238292
+        ]
+      },
+      {
+        "seed": 3,
+        "corpus_sha256": "6707892fa3788b5ab9ed78ab5ff37d9fe825f6011a2ad4fcd6a6d467f0e7da57",
+        "corpus_bytes": 10940747,
+        "token_count": 32768,
+        "token_file_sha256": "fc75372054fc65e7e64e3cd5c3fcf12e6464f97868c5a0ab77b4e71e70240113",
+        "tokenizer_sha256": "870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+        "split_token_count": 2419837,
+        "order": "window",
+        "offsets": [
+          441629,
+          462312,
+          515536,
+          539595,
+          603066,
+          726855,
+          859190,
+          935934,
+          1194578,
+          1202887,
+          1345256,
+          1534357,
+          2053729,
+          2180491,
+          2197252,
+          2233107
+        ]
+      },
+      {
+        "seed": 4,
+        "corpus_sha256": "6707892fa3788b5ab9ed78ab5ff37d9fe825f6011a2ad4fcd6a6d467f0e7da57",
+        "corpus_bytes": 10940747,
+        "token_count": 32768,
+        "token_file_sha256": "b025ca7f7396366f713739e7b08556135ceccc7c56e414802f3bfb46eb46dcae",
+        "tokenizer_sha256": "870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+        "split_token_count": 2419837,
+        "order": "window",
+        "offsets": [
+          228935,
+          357217,
+          403311,
+          411993,
+          600386,
+          700222,
+          719878,
+          809812,
+          1044749,
+          1779680,
+          1834288,
+          1862903,
+          2070525,
+          2129322,
+          2151261,
+          2282430
+        ]
+      }
+    ],
+    "shuffled_files": [
+      {
+        "seed": 1234,
+        "corpus_sha256": "6707892fa3788b5ab9ed78ab5ff37d9fe825f6011a2ad4fcd6a6d467f0e7da57",
+        "corpus_bytes": 10940747,
+        "token_count": 32768,
+        "token_file_sha256": "2dcb5020c2d1e7e2772828d62ae57506c88ba5e5e000f2009c3bc11c1beab733",
+        "tokenizer_sha256": "870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+        "split_token_count": 2419837,
+        "order": "shuffled",
+        "offsets": [
+          112142,
+          144014,
+          289680,
+          334895,
+          370812,
+          374223,
+          510388,
+          660467,
+          821681,
+          853976,
+          965311,
+          1023479,
+          1239672,
+          1463298,
+          1475129,
+          1605338
+        ]
+      },
+      {
+        "seed": 1,
+        "corpus_sha256": "6707892fa3788b5ab9ed78ab5ff37d9fe825f6011a2ad4fcd6a6d467f0e7da57",
+        "corpus_bytes": 10940747,
+        "token_count": 32768,
+        "token_file_sha256": "1addbe4ff2223286be4f2e04144e77cb140ecc317d912bc0b3bc1d0a3eaffaf9",
+        "tokenizer_sha256": "870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+        "split_token_count": 2419837,
+        "order": "shuffled",
+        "offsets": [
+          22363,
+          174125,
+          261399,
+          277241,
+          316364,
+          403605,
+          505660,
+          808495,
+          1003428,
+          1460357,
+          1534497,
+          1834211,
+          1913019,
+          1939214,
+          2047357,
+          2066562
+        ]
+      },
+      {
+        "seed": 2,
+        "corpus_sha256": "6707892fa3788b5ab9ed78ab5ff37d9fe825f6011a2ad4fcd6a6d467f0e7da57",
+        "corpus_bytes": 10940747,
+        "token_count": 32768,
+        "token_file_sha256": "864cab9e9f3e16add63f8afd583f0a68e4e1a67a8b72dd535f8beb709913c360",
+        "tokenizer_sha256": "870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+        "split_token_count": 2419837,
+        "order": "shuffled",
+        "offsets": [
+          243647,
+          461806,
+          574089,
+          620925,
+          706772,
+          776197,
+          1013855,
+          1086051,
+          1176205,
+          1195881,
+          1240382,
+          1370497,
+          1512262,
+          1622404,
+          2205021,
+          2238292
+        ]
+      },
+      {
+        "seed": 3,
+        "corpus_sha256": "6707892fa3788b5ab9ed78ab5ff37d9fe825f6011a2ad4fcd6a6d467f0e7da57",
+        "corpus_bytes": 10940747,
+        "token_count": 32768,
+        "token_file_sha256": "e21be38caa4731e42e24111807c3647789a6ffd30e1de6b334f455ae85c775c3",
+        "tokenizer_sha256": "870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+        "split_token_count": 2419837,
+        "order": "shuffled",
+        "offsets": [
+          441629,
+          462312,
+          515536,
+          539595,
+          603066,
+          726855,
+          859190,
+          935934,
+          1194578,
+          1202887,
+          1345256,
+          1534357,
+          2053729,
+          2180491,
+          2197252,
+          2233107
+        ]
+      },
+      {
+        "seed": 4,
+        "corpus_sha256": "6707892fa3788b5ab9ed78ab5ff37d9fe825f6011a2ad4fcd6a6d467f0e7da57",
+        "corpus_bytes": 10940747,
+        "token_count": 32768,
+        "token_file_sha256": "7e8e544edbbdc97c03ee429fca48fddedaeb2b345f1b45b18a6bd8b70894b27b",
+        "tokenizer_sha256": "870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+        "split_token_count": 2419837,
+        "order": "shuffled",
+        "offsets": [
+          228935,
+          357217,
+          403311,
+          411993,
+          600386,
+          700222,
+          719878,
+          809812,
+          1044749,
+          1779680,
+          1834288,
+          1862903,
+          2070525,
+          2129322,
+          2151261,
+          2282430
+        ]
+      }
+    ],
+    "random_ids": {
+      "seed": 1234,
+      "corpus_sha256": "6707892fa3788b5ab9ed78ab5ff37d9fe825f6011a2ad4fcd6a6d467f0e7da57",
+      "corpus_bytes": 10940747,
+      "token_count": 32768,
+      "token_file_sha256": "d62939bb2e94dd6eed7e7b0821b71bf75fe3b371e75036058461d77885282ce3",
+      "tokenizer_sha256": "870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+      "split_token_count": 2419837,
+      "order": "window",
+      "offsets": [
+        112142,
+        144014,
+        289680,
+        334895,
+        370812,
+        374223,
+        510388,
+        660467,
+        821681,
+        853976,
+        965311,
+        1023479,
+        1239672,
+        1463298,
+        1475129,
+        1605338
+      ],
+      "random_ids": {
+        "seed": 1234,
+        "vocab_size": 50304
+      }
+    },
+    "out_of_domain": {
+      "status": "pending",
+      "corpus": "C4 train (not downloaded: large corpus)"
+    }
+  },
+  "size_check": {
+    "status": "pending",
+    "calibration_tokens": [
+      8192,
+      32768,
+      131072
+    ],
+    "seed": 1234,
+    "note": "Reported descriptively. The primary size stays 32,768 whatever the check shows."
+  },
+  "arms": [
+    {
+      "id": "ceiling",
+      "description": "Unquantized weights (f32 reference forward pass). No seed."
+    },
+    {
+      "id": "rtn",
+      "description": "Round-to-nearest in the format, no scaling (floor). No seed."
+    },
+    {
+      "id": "awq",
+      "description": "AWQ-style scaling (thme.awq_<format>); calibration statistics from each seed's 16 train windows x 2048 tokens.",
+      "seeds": [
+        1234,
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "id": "control_a",
+      "description": "Control A: the seed-1234 real per-channel scale vectors permuted across input channels (ScaleSource::PermutedScales), same quantizer and grid.",
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "id": "control_b1",
+      "description": "Control B1: the same train tokens as each AWQ seed with their order shuffled; same pipeline.",
+      "seeds": [
+        1234,
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "id": "control_b2",
+      "description": "Control B2 (stress arm, not a baseline): uniform random token ids below the model vocab_size as calibration input; one seed.",
+      "seeds": [
+        1234
+      ]
+    },
+    {
+      "id": "out_of_domain_c4",
+      "description": "Second calibration source (C4 train), out-of-domain arm.",
+      "status": "pending"
+    }
+  ],
+  "preregistration": {
+    "date": "2026-11-20",
+    "registered_before": "any measured perplexity for this comparison",
+    "alpha_grid": [
+      0.0,
+      0.1,
+      0.2,
+      0.3,
+      0.4,
+      0.5,
+      0.6,
+      0.7,
+      0.8,
+      0.9,
+      1.0
+    ],
+    "decision_rule": [
+      "AWQ beats round-to-nearest (RTN) only if RTN perplexity minus the mean AWQ perplexity over the five calibration seeds is greater than 2 x the pooled SD, AND every calibration seed gives an AWQ perplexity below RTN.",
+      "Pooled SD = sqrt(mean of the sample variances of three seeded arms: AWQ (5 seeds), control A (5 permutation seeds) and control B1 (5 seeds)). Each arm has n = 5, so the mean of the variances is the pooled variance. RTN and the ceiling are deterministic and add no variance.",
+      "Sample SD uses n - 1. Mean, SD, min and max are over the five seeds of each arm.",
+      "Control A and control B1 are beaten by AWQ only by the same test: mean gap greater than 2 x pooled SD AND AWQ below the control on every seed position (seed i of AWQ paired with seed i of the control).",
+      "Gate (repo default): a format passes if mean AWQ perplexity minus the ceiling is at most 0.45. Per-seed deltas are reported too.",
+      "Control B2 (uniform random ids) is a stress arm: one seed, reported, not used in any verdict above.",
+      "A null or negative result is a valid result and is reported as one. Alpha grid, seeds, window count and length, offsets policy, pooling and threshold are fixed here and are not changed after any measured result is seen."
+    ],
+    "result_format": "Single arms (ceiling, rtn): {status, perplexity, benchmark_id, benchmark_version, split}. Seeded arms: {status, benchmark_id, benchmark_version, split, runs: [{seed, perplexity, alpha}]}."
+  },
+  "results": {
+    "Q4_0": {
+      "ceiling": {
+        "status": "measured",
+        "perplexity": 114.28620839585075,
+        "benchmark_id": "wikitext2-raw",
+        "benchmark_version": "1",
+        "split": "test"
+      },
+      "rtn": {
+        "status": "measured",
+        "perplexity": 193.00280711915582,
+        "benchmark_id": "wikitext2-raw",
+        "benchmark_version": "1",
+        "split": "test"
+      },
+      "awq": {
+        "status": "measured",
+        "benchmark_id": "wikitext2-raw",
+        "benchmark_version": "1",
+        "split": "test",
+        "seeds": [
+          1234,
+          1,
+          2,
+          3,
+          4
+        ],
+        "runs": [
+          {
+            "seed": 1234,
+            "perplexity": 172.72876575620236,
+            "alpha": null,
+            "delta_ppl": 58.442557360351614,
+            "gate_accepted": false
+          },
+          {
+            "seed": 1,
+            "perplexity": 168.00413748950712,
+            "alpha": null,
+            "delta_ppl": 53.717929093656366,
+            "gate_accepted": false
+          },
+          {
+            "seed": 2,
+            "perplexity": 173.571877513255,
+            "alpha": null,
+            "delta_ppl": 59.285669117404254,
+            "gate_accepted": false
+          },
+          {
+            "seed": 3,
+            "perplexity": 171.64176998309856,
+            "alpha": null,
+            "delta_ppl": 57.355561587247806,
+            "gate_accepted": false
+          },
+          {
+            "seed": 4,
+            "perplexity": 167.5658710929535,
+            "alpha": null,
+            "delta_ppl": 53.27966269710275,
+            "gate_accepted": false
+          }
+        ]
+      },
+      "control_a": {
+        "status": "measured",
+        "benchmark_id": "wikitext2-raw",
+        "benchmark_version": "1",
+        "split": "test",
+        "seeds": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "runs": [
+          {
+            "seed": 1,
+            "perplexity": 191.24273926669647,
+            "alpha": null,
+            "delta_ppl": 76.95653087084573,
+            "gate_accepted": false
+          },
+          {
+            "seed": 2,
+            "perplexity": 192.31582882060505,
+            "alpha": null,
+            "delta_ppl": 78.0296204247543,
+            "gate_accepted": false
+          },
+          {
+            "seed": 3,
+            "perplexity": 186.73031472424933,
+            "alpha": null,
+            "delta_ppl": 72.44410632839858,
+            "gate_accepted": false
+          },
+          {
+            "seed": 4,
+            "perplexity": 202.50587850198934,
+            "alpha": null,
+            "delta_ppl": 88.2196701061386,
+            "gate_accepted": false
+          },
+          {
+            "seed": 5,
+            "perplexity": 200.59178813433212,
+            "alpha": null,
+            "delta_ppl": 86.30557973848137,
+            "gate_accepted": false
+          }
+        ]
+      },
+      "control_b1": {
+        "status": "measured",
+        "benchmark_id": "wikitext2-raw",
+        "benchmark_version": "1",
+        "split": "test",
+        "seeds": [
+          1234,
+          1,
+          2,
+          3,
+          4
+        ],
+        "runs": [
+          {
+            "seed": 1234,
+            "perplexity": 176.0354586246293,
+            "alpha": null,
+            "delta_ppl": 61.749250228778564,
+            "gate_accepted": false
+          },
+          {
+            "seed": 1,
+            "perplexity": 170.00835272011287,
+            "alpha": null,
+            "delta_ppl": 55.72214432426212,
+            "gate_accepted": false
+          },
+          {
+            "seed": 2,
+            "perplexity": 179.5281093221278,
+            "alpha": null,
+            "delta_ppl": 65.24190092627704,
+            "gate_accepted": false
+          },
+          {
+            "seed": 3,
+            "perplexity": 172.4324427303286,
+            "alpha": null,
+            "delta_ppl": 58.14623433447785,
+            "gate_accepted": false
+          },
+          {
+            "seed": 4,
+            "perplexity": 166.06961295927962,
+            "alpha": null,
+            "delta_ppl": 51.783404563428874,
+            "gate_accepted": false
+          }
+        ]
+      },
+      "control_b2": {
+        "status": "measured",
+        "benchmark_id": "wikitext2-raw",
+        "benchmark_version": "1",
+        "split": "test",
+        "seeds": [
+          1234
+        ],
+        "runs": [
+          {
+            "seed": 1234,
+            "perplexity": 193.38530078116364,
+            "alpha": null,
+            "delta_ppl": 79.09909238531289,
+            "gate_accepted": false
+          }
+        ]
+      }
+    },
+    "Q4_K": {
+      "ceiling": {
+        "status": "measured",
+        "perplexity": 114.28620839585075,
+        "benchmark_id": "wikitext2-raw",
+        "benchmark_version": "1",
+        "split": "test"
+      },
+      "rtn": {
+        "status": "measured",
+        "perplexity": 168.29505677562258,
+        "benchmark_id": "wikitext2-raw",
+        "benchmark_version": "1",
+        "split": "test"
+      },
+      "awq": {
+        "status": "measured",
+        "benchmark_id": "wikitext2-raw",
+        "benchmark_version": "1",
+        "split": "test",
+        "seeds": [
+          1234,
+          1,
+          2,
+          3,
+          4
+        ],
+        "runs": [
+          {
+            "seed": 1234,
+            "perplexity": 166.85063711236538,
+            "alpha": null,
+            "delta_ppl": 52.56442871651463,
+            "gate_accepted": false
+          },
+          {
+            "seed": 1,
+            "perplexity": 162.87813505781105,
+            "alpha": null,
+            "delta_ppl": 48.5919266619603,
+            "gate_accepted": false
+          },
+          {
+            "seed": 2,
+            "perplexity": 158.1648153032218,
+            "alpha": null,
+            "delta_ppl": 43.87860690737104,
+            "gate_accepted": false
+          },
+          {
+            "seed": 3,
+            "perplexity": 157.96771427379153,
+            "alpha": null,
+            "delta_ppl": 43.68150587794078,
+            "gate_accepted": false
+          },
+          {
+            "seed": 4,
+            "perplexity": 160.54550462534507,
+            "alpha": null,
+            "delta_ppl": 46.259296229494325,
+            "gate_accepted": false
+          }
+        ]
+      },
+      "control_a": {
+        "status": "measured",
+        "benchmark_id": "wikitext2-raw",
+        "benchmark_version": "1",
+        "split": "test",
+        "seeds": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "runs": [
+          {
+            "seed": 1,
+            "perplexity": 167.8830173263912,
+            "alpha": null,
+            "delta_ppl": 53.59680893054046,
+            "gate_accepted": false
+          },
+          {
+            "seed": 2,
+            "perplexity": 165.0078186476167,
+            "alpha": null,
+            "delta_ppl": 50.72161025176594,
+            "gate_accepted": false
+          },
+          {
+            "seed": 3,
+            "perplexity": 165.38558818140095,
+            "alpha": null,
+            "delta_ppl": 51.0993797855502,
+            "gate_accepted": false
+          },
+          {
+            "seed": 4,
+            "perplexity": 170.59480526056154,
+            "alpha": null,
+            "delta_ppl": 56.30859686471079,
+            "gate_accepted": false
+          },
+          {
+            "seed": 5,
+            "perplexity": 168.4432572024451,
+            "alpha": null,
+            "delta_ppl": 54.15704880659435,
+            "gate_accepted": false
+          }
+        ]
+      },
+      "control_b1": {
+        "status": "measured",
+        "benchmark_id": "wikitext2-raw",
+        "benchmark_version": "1",
+        "split": "test",
+        "seeds": [
+          1234,
+          1,
+          2,
+          3,
+          4
+        ],
+        "runs": [
+          {
+            "seed": 1234,
+            "perplexity": 155.2277901696374,
+            "alpha": null,
+            "delta_ppl": 40.94158177378664,
+            "gate_accepted": false
+          },
+          {
+            "seed": 1,
+            "perplexity": 159.32370012948428,
+            "alpha": null,
+            "delta_ppl": 45.03749173363353,
+            "gate_accepted": false
+          },
+          {
+            "seed": 2,
+            "perplexity": 162.38227501590174,
+            "alpha": null,
+            "delta_ppl": 48.09606662005099,
+            "gate_accepted": false
+          },
+          {
+            "seed": 3,
+            "perplexity": 157.28077372102928,
+            "alpha": null,
+            "delta_ppl": 42.99456532517853,
+            "gate_accepted": false
+          },
+          {
+            "seed": 4,
+            "perplexity": 155.90298616746043,
+            "alpha": null,
+            "delta_ppl": 41.61677777160968,
+            "gate_accepted": false
+          }
+        ]
+      },
+      "control_b2": {
+        "status": "measured",
+        "benchmark_id": "wikitext2-raw",
+        "benchmark_version": "1",
+        "split": "test",
+        "seeds": [
+          1234
+        ],
+        "runs": [
+          {
+            "seed": 1234,
+            "perplexity": 173.49918998935973,
+            "alpha": null,
+            "delta_ppl": 59.212981593508985,
+            "gate_accepted": false
+          }
+        ]
+      }
+    }
+  },
+  "pending": [
+    "Out-of-domain calibration arm (C4): not downloaded.",
+    "Size check at 8,192 / 32,768 / 131,072 calibration tokens: runtime not yet assessed."
+  ],
+  "provenance": {
+    "thme_version": "0.1.9",
+    "git_commit": "d07a7f992f2668fc621c2c2d3a0a9d3a9e6aa88d",
+    "threads": 12,
+    "hardware": "Windows AMD64, Intel64 Family 6 Model 151 Stepping 2, GenuineIntel; THME reference CPU forward pass (f32)",
+    "note": "Recorded by scripts/run_awq_calibration.py. Alpha is chosen per tensor inside the CLI and is not reported. The binary was built from this commit's sources."
+  }
+}

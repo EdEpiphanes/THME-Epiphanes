@@ -16,7 +16,9 @@ import argparse
 import glob
 import csv
 import json
+import math
 import os
+import statistics
 import sys
 import time
 
@@ -193,6 +195,8 @@ def search_section(report, heading):
         spread = (f"{min(controls):+.3f} / {sum(controls) / len(controls):+.3f} / {max(controls):+.3f}"
                   if controls else "none distinct")
         verdict = "PASSED" if p["validation_delta"] <= ev["max_ppl_delta"] else "FAILED"
+        if p["achieved_fraction"] > p["budget"] + 1e-9:
+            verdict += " (BUDGET NOT MET)"
         lines.append(
             f"| {100 * p['budget']:.0f}% | {100 * p['achieved_fraction']:.1f}% | {p['validation_delta']:+.4f} | "
             f"{spread} | {verdict} |"
@@ -204,7 +208,159 @@ def search_section(report, heading):
     lines += ["Sizes are nominal (bits per weight of the linear tensors), not measured artifact sizes.", ""]
     return lines
 
-def generate_markdown(reports, output_md, sweep=None, probe=None, searches=None):
+AWQ_SEEDS = 5
+AWQ_GATE_DELTA = 0.45
+AWQ_RULE_FACTOR = 2.0
+AWQ_RESULT_ARMS = ["ceiling", "rtn", "awq", "control_a", "control_b1", "control_b2"]
+
+
+def awq_stats(values):
+    values = [float(v) for v in values]
+    return {
+        "n": len(values),
+        "mean": statistics.fmean(values),
+        "sd": statistics.stdev(values) if len(values) > 1 else 0.0,
+        "min": min(values),
+        "max": max(values),
+    }
+
+
+def awq_is_measured(report):
+    """False while the report is pending; refuses a report that is only partly measured."""
+    if report.get("status") == "pending":
+        return False
+    if report.get("status") != "measured":
+        raise ValueError(f"awq report status must be 'pending' or 'measured', not {report.get('status')!r}")
+    for fmt in report["formats"]:
+        for arm in AWQ_RESULT_ARMS:
+            if report["results"][fmt][arm].get("status") != "measured":
+                raise ValueError(f"awq report is marked measured but {fmt} {arm} is not measured")
+    return True
+
+
+def awq_runs(arm):
+    return [r["perplexity"] for r in arm["runs"]]
+
+
+def awq_evaluate(block, ceiling, rtn):
+    """Applies the pre-registered rule (report preregistration.decision_rule) to one format."""
+    awq = awq_runs(block["awq"])
+    seeded = {"control_a": awq_runs(block["control_a"]), "control_b1": awq_runs(block["control_b1"])}
+    if any(len(values) != AWQ_SEEDS for values in [awq, *seeded.values()]):
+        raise ValueError(f"the pre-registered rule needs {AWQ_SEEDS} runs in every seeded arm")
+    pooled_sd = math.sqrt(statistics.fmean([statistics.variance(v) for v in [awq, *seeded.values()]]))
+    mean_awq = statistics.fmean(awq)
+    threshold = AWQ_RULE_FACTOR * pooled_sd
+    all_below = all(p < rtn for p in awq)
+    controls = {}
+    for name, values in seeded.items():
+        gap = statistics.fmean(values) - mean_awq
+        paired = all(c > a for a, c in zip(awq, values))
+        controls[name] = {
+            "mean": statistics.fmean(values),
+            "gap": gap,
+            "awq_beats_control": gap > threshold and paired,
+        }
+    return {
+        "awq_mean": mean_awq,
+        "pooled_sd": pooled_sd,
+        "gap": rtn - mean_awq,
+        "threshold": threshold,
+        "all_seeds_below_rtn": all_below,
+        "awq_wins": (rtn - mean_awq) > threshold and all_below,
+        "gate_pass": (mean_awq - ceiling) <= AWQ_GATE_DELTA,
+        "controls": controls,
+    }
+
+
+def awq_section(report, heading):
+    """Renders the calibration-aware (AWQ-style) comparison; pending until measured."""
+    measured = awq_is_measured(report)
+    ev = report["evaluation"]
+    cal = report["calibration"]
+    lines = [
+        heading,
+        "",
+        f"Model: {report['model_name']} ({report['model_repo']}). Formats {', '.join(report['formats'])}. "
+        f"Scored on WikiText-2 test ({ev['token_count']:,} tokens, context {ev['context_len']}). "
+        f"Calibration statistics come from WikiText-2 train: {cal['windows']} windows of {cal['window_len']} tokens "
+        f"({cal['tokens']:,} tokens) per calibration seed {', '.join(str(s) for s in cal['seeds'])}. "
+        "Calibration never reads the scoring split.",
+        "",
+        "Arms: ceiling (unquantized); round-to-nearest without scaling (floor); AWQ-style scaling; control A "
+        "(each layer's real per-channel scales permuted across input channels); control B1 (the same train "
+        "tokens with their order shuffled); control B2 (uniform random token ids, a stress arm and not a "
+        "baseline). Every result carries its benchmark id and version.",
+        "",
+    ]
+    if not measured:
+        lines += [
+            f"**Status: PENDING.** {report['status_note']}",
+            "",
+            "Pre-registered decision rule, fixed before any measured run and applied unchanged to whatever is measured:",
+            "",
+        ]
+        lines += [f"- {rule}" for rule in report["preregistration"]["decision_rule"]]
+        lines += ["", "Still pending:", ""]
+        lines += [f"- {item}" for item in report["pending"]]
+        lines.append("")
+        return lines
+
+    for fmt in report["formats"]:
+        block = report["results"][fmt]
+        ceiling = block["ceiling"]["perplexity"]
+        rtn = block["rtn"]["perplexity"]
+        result = awq_evaluate(block, ceiling, rtn)
+        lines += [
+            f"**{fmt}**",
+            "",
+            "| Arm | n | Mean PPL | Sample SD | Min | Max | Δ vs RTN | Δ vs ceiling |",
+            "| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+        rows = [
+            ("Ceiling (unquantized)", [ceiling]),
+            ("Round-to-nearest (floor)", [rtn]),
+            ("AWQ-style, 5 calibration seeds", awq_runs(block["awq"])),
+            ("Control A, 5 permutation seeds", awq_runs(block["control_a"])),
+            ("Control B1, 5 shuffle seeds", awq_runs(block["control_b1"])),
+            ("Control B2 (stress arm, not a baseline)", awq_runs(block["control_b2"])),
+        ]
+        for label, values in rows:
+            s = awq_stats(values)
+            sd = f"{s['sd']:.4f}" if s["n"] > 1 else "n/a"
+            lines.append(
+                f"| {label} | {s['n']} | {s['mean']:.4f} | {sd} | {s['min']:.4f} | {s['max']:.4f} | "
+                f"{s['mean'] - rtn:+.4f} | {s['mean'] - ceiling:+.4f} |"
+            )
+        grid = f"{report['preregistration']['alpha_grid'][0]} to {report['preregistration']['alpha_grid'][-1]}"
+        alphas = ", ".join(f"seed {r['seed']}: {r['alpha']}" for r in block["awq"]["runs"] if r.get("alpha") is not None)
+        lines += [
+            "",
+            f"Chosen alpha per calibration seed (grid {grid}): {alphas}." if alphas else
+            f"Alpha (grid {grid}) is chosen per tensor inside the CLI and is not reported per run.",
+            "",
+            f"AWQ beats round-to-nearest: {'yes' if result['awq_wins'] else 'no'}. Gap RTN minus AWQ mean "
+            f"{result['gap']:+.4f} against 2 x pooled SD {result['threshold']:.4f} (pooled SD "
+            f"{result['pooled_sd']:.4f}); every seed below RTN: {'yes' if result['all_seeds_below_rtn'] else 'no'}.",
+            "",
+            f"Control A: {'AWQ beats it' if result['controls']['control_a']['awq_beats_control'] else 'not beaten'} "
+            f"(mean gap {result['controls']['control_a']['gap']:+.4f}). Control B1: "
+            f"{'AWQ beats it' if result['controls']['control_b1']['awq_beats_control'] else 'not beaten'} "
+            f"(mean gap {result['controls']['control_b1']['gap']:+.4f}).",
+            "",
+            f"Gate (mean dPPL vs unquantized at most {AWQ_GATE_DELTA}): "
+            f"{'pass' if result['gate_pass'] else 'fail'} at {result['awq_mean'] - ceiling:+.4f}.",
+            "",
+        ]
+    lines += [
+        "Null and negative results stand as reported. Each arm is measured on the same scoring split as the "
+        "quantization gate above.",
+        "",
+    ]
+    return lines
+
+
+def generate_markdown(reports, output_md, sweep=None, probe=None, searches=None, awq=None):
     section = iter(range(1, 100))
 
     def h(title):
@@ -217,13 +373,8 @@ def generate_markdown(reports, output_md, sweep=None, probe=None, searches=None)
         "> Every number below was produced by a real forward pass on the host listed under Provenance.",
         "> Nothing in this document is simulated, projected, or estimated unless the row says so.",
         "",
-        "> **Known issue in the code that produced these reports (fixed 13 November 2026, THME-3023).**",
-        "> THME's float32-to-float16 conversion lost the rounding carry for values just below a",
-        "> power of two (about 1 value in 2,000), storing them at half their size. Block formats",
-        "> store their scale in float16, so in Q8_0, Q4_0 and ternary (TQ1_0) results, and in FP16",
-        "> results, roughly 1 block in 2,000 was decoded at half its true value. The numbers below",
-        "> are what that code measured; they likely overstate the quality loss of those formats",
-        "> slightly. They will be re-measured when model runs resume.",
+        "> These reports were measured with the code after the FP16 rounding fix (THME-3023, 13 November",
+        "> 2026). Reports measured before that fix were removed and re-run, not patched.",
         "",
         h("Perplexity Quality Gate"),
         "",
@@ -263,6 +414,8 @@ def generate_markdown(reports, output_md, sweep=None, probe=None, searches=None)
         lines.extend(search_section(r, h(f"Measured Recipe Search: {r['model_name']}")))
     for d in probe or []:
         lines.extend(depth_section(d, h(f"Measured Depth Behaviour: {d['model_name']}")))
+    for a in awq or []:
+        lines.extend(awq_section(a, h(f"Activation-Aware Scaling (AWQ-style): {a['model_name']}")))
 
     lines.extend([h("Sizes"), ""])
     for report in reports:
@@ -295,8 +448,9 @@ def generate_markdown(reports, output_md, sweep=None, probe=None, searches=None)
         "- The corpus is tokenized once with the model's own tokenizer, without special tokens",
         "  (`scripts/prepare_eval_tokens.py`), then cut into consecutive non-overlapping windows.",
         "- Supported architectures: LLaMA family and GPT-NeoX (Pythia). The forward pass is unit-tested",
-        "  (causality, kernels, format round trips) but has not yet been cross-checked against the",
-        "  Hugging Face reference implementation; that check is an open roadmap item.",
+        "  (causality, kernels, format round trips) and has been cross-checked against the Hugging Face",
+        "  fp32 reference on fixed prompts for Pythia-14M and SmolLM-135M (largest logit difference 1.9e-4",
+        "  and 2.1e-5; reports `docs/research/hf-cross-check-*.json`, THME-2001).",
         "- Every token except the first of each window is scored given the earlier tokens of that window.",
         "  Perplexity is exp(mean negative log-likelihood) over all scored tokens.",
         "- This differs from overlapping sliding-window protocols, which give each token more context",
@@ -347,6 +501,7 @@ def generate_markdown(reports, output_md, sweep=None, probe=None, searches=None)
         "```bash",
         "pip install tokenizers",
         "python scripts/prepare_eval_tokens.py",
+        "python scripts/prepare_eval_tokens.py --split train --calibration-windows 16 --window-len 2048 --seed 1234",
         "cargo run --release --example production_verification -- \\",
         "    --model-path models/SmolLM-135M \\",
         "    --tokens target/eval/wikitext2_test.SmolLM-135M.u32",
@@ -405,6 +560,8 @@ def main():
                         help="Depth probe JSON from depth_probe (included when the file exists)")
     parser.add_argument("--search", nargs="*", default=None,
                         help="thme search reports (default: docs/benchmarks/*/data/search_report.json)")
+    parser.add_argument("--awq", nargs="*", default=None,
+                        help="AWQ calibration reports (default: docs/benchmarks/*/data/awq_calibration.json)")
     parser.add_argument("--output-md", default="docs/benchmark_dossier.md", help="Output Markdown file")
     parser.add_argument("--output-csv", default="docs/benchmark_dossier.csv", help="Output CSV file")
     args = parser.parse_args()
@@ -426,7 +583,8 @@ def main():
     sweep = load_all(args.sweep)
     probe = load_all(args.depth)
     searches = load_all(args.search or sorted(glob.glob("docs/benchmarks/*/data/search_report.json")))
-    generate_markdown(reports, args.output_md, sweep, probe, searches)
+    awq = load_all(args.awq or sorted(glob.glob("docs/benchmarks/*/data/awq_calibration.json")))
+    generate_markdown(reports, args.output_md, sweep, probe, searches, awq)
     generate_csv(reports, args.output_csv)
     return 0
 

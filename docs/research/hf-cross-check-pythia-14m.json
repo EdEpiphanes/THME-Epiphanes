@@ -1,0 +1,175 @@
+{
+  "model": "Pythia-14M (EleutherAI, Apache-2.0)",
+  "date": "2026-11-20",
+  "reference": "Hugging Face transformers 5.23.0, torch 2.14.1, fp32",
+  "thme": "target release build of main after #92; thme forward --json",
+  "tolerance": 0.005,
+  "runs": {
+    "hf_reference_on_cpu": {
+      "model": "models/pythia-14m",
+      "tolerance": 0.005,
+      "method": "cli",
+      "prompts": [
+        {
+          "prompt": "The capital of France is",
+          "tokens": [
+            510,
+            5347,
+            273,
+            6181,
+            310
+          ],
+          "stats": {
+            "max_abs_diff": 5.841255187988281e-05,
+            "mean_abs_diff": 1.972109079360962e-05,
+            "tolerance": 0.005,
+            "passed": true
+          }
+        },
+        {
+          "prompt": "In mathematics, a manifold is",
+          "tokens": [
+            688,
+            23065,
+            13,
+            247,
+            16751,
+            310
+          ],
+          "stats": {
+            "max_abs_diff": 7.509440183639526e-05,
+            "mean_abs_diff": 2.2313743829727174e-05,
+            "tolerance": 0.005,
+            "passed": true
+          }
+        },
+        {
+          "prompt": "Deep learning models require careful precision tuning because",
+          "tokens": [
+            30763,
+            4715,
+            3210,
+            2430,
+            10182,
+            12320,
+            25184,
+            984
+          ],
+          "stats": {
+            "max_abs_diff": 0.000186920166015625,
+            "mean_abs_diff": 4.331186413764954e-05,
+            "tolerance": 0.005,
+            "passed": true
+          }
+        },
+        {
+          "prompt": "Once upon a time in a distant topological realm,",
+          "tokens": [
+            10758,
+            2220,
+            247,
+            673,
+            275,
+            247,
+            13392,
+            17597,
+            19929,
+            13
+          ],
+          "stats": {
+            "max_abs_diff": 0.0001456737518310547,
+            "mean_abs_diff": 4.045009613037109e-05,
+            "tolerance": 0.005,
+            "passed": true
+          }
+        }
+      ],
+      "overall_passed": true,
+      "status": "PASSED"
+    },
+    "hf_reference_on_cuda_rtx_4060_ti": {
+      "model": "models/pythia-14m",
+      "tolerance": 0.005,
+      "method": "cli",
+      "prompts": [
+        {
+          "prompt": "The capital of France is",
+          "tokens": [
+            510,
+            5347,
+            273,
+            6181,
+            310
+          ],
+          "stats": {
+            "max_abs_diff": 0.00012135505676269531,
+            "mean_abs_diff": 4.274124279618263e-05,
+            "tolerance": 0.005,
+            "passed": true
+          }
+        },
+        {
+          "prompt": "In mathematics, a manifold is",
+          "tokens": [
+            688,
+            23065,
+            13,
+            247,
+            16751,
+            310
+          ],
+          "stats": {
+            "max_abs_diff": 7.987022399902344e-05,
+            "mean_abs_diff": 2.531733363866806e-05,
+            "tolerance": 0.005,
+            "passed": true
+          }
+        },
+        {
+          "prompt": "Deep learning models require careful precision tuning because",
+          "tokens": [
+            30763,
+            4715,
+            3210,
+            2430,
+            10182,
+            12320,
+            25184,
+            984
+          ],
+          "stats": {
+            "max_abs_diff": 0.00015866756439208984,
+            "mean_abs_diff": 5.0626844167709354e-05,
+            "tolerance": 0.005,
+            "passed": true
+          }
+        },
+        {
+          "prompt": "Once upon a time in a distant topological realm,",
+          "tokens": [
+            10758,
+            2220,
+            247,
+            673,
+            275,
+            247,
+            13392,
+            17597,
+            19929,
+            13
+          ],
+          "stats": {
+            "max_abs_diff": 0.00013530254364013672,
+            "mean_abs_diff": 3.733739256858826e-05,
+            "tolerance": 0.005,
+            "passed": true
+          }
+        }
+      ],
+      "overall_passed": true,
+      "status": "PASSED"
+    }
+  },
+  "scope": "Pythia-14M only; SmolLM-135M not run (model runs paused)",
+  "label_note": "The run names say where the Hugging Face (torch) reference ran. The THME side used its default device in both runs; the GPU backend at that date was the earlier per-operation Vulkan path. Names corrected on 20 November 2026."
+}

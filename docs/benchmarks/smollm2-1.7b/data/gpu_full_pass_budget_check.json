@@ -1,0 +1,33 @@
+{
+  "model": "SmolLM2-1.7B (HuggingFaceTB, Apache-2.0)",
+  "device": "RTX 4060 Ti, Vulkan, GPU only, f32 weights",
+  "date": "2026-11-20",
+  "note": "Two full test-split passes with the same build. Only the resident-weight budget differs: the default 4 GiB is smaller than the 6.9 GB model, so weights are re-uploaded for every window.",
+  "runs": [
+    {
+      "label": "smollm2-1.7b-full-quiet-check",
+      "elapsed_secs": 1016.2249584,
+      "cross_entropy_nats": 2.209279098948947,
+      "corpus_tokens_used": 303415,
+      "context_len": 1024,
+      "build_profile": "release",
+      "git_commit": "764385a",
+      "machine_load_note": "single full pass 20 November 2026 18:55; CPU 22 percent before start (watchdog), live and watchdog windows open, no builds running",
+      "run": "default weight budget (4 GiB)",
+      "perplexity": 9.109147231653633
+    },
+    {
+      "label": "smollm2-1.7b-full-budget12",
+      "elapsed_secs": 145.1419582,
+      "cross_entropy_nats": 2.209279098948947,
+      "corpus_tokens_used": 303415,
+      "context_len": 1024,
+      "build_profile": "release",
+      "git_commit": "764385a",
+      "machine_load_note": "full pass 20 November 2026; weight budget 12 GiB so the 6.9 GB f32 weights stay resident; CPU about 20 percent before start, live and watchdog windows open, no builds",
+      "run": "weight budget 12 GiB",
+      "perplexity": 9.109147231653633
+    }
+  ],
+  "speedup_from_budget_alone": 7.001593274631732
+}

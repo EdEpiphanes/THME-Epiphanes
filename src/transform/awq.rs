@@ -29,6 +29,47 @@ pub struct ChannelStats {
     pub rms: Vec<f32>,
 }
 
+/// Which per-channel scales an `ActivationAware` rule applies. `PermutedScales` is control A
+/// (THME-2204): the layer's real scale vector keeps its values but is assigned to the input
+/// channels by a seeded permutation. The activation-weighted error still uses the true
+/// statistics.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ScaleSource {
+    #[default]
+    Calibrated,
+    PermutedScales {
+        seed: u64,
+    },
+}
+
+/// Copy of `stats` with `mean_abs` (the scale source) permuted across input channels. The
+/// shuffle is seeded by `seed` mixed with the layer's own statistics, so every layer draws its
+/// own permutation. `rms` is unchanged.
+/// shortcut: the key is the seed and the statistics, not the tensor name, so two layers with
+/// identical statistics draw the same permutation; pass the tensor name through `ApplyContext`
+/// if that ever matters.
+pub fn permute_scales(stats: &ChannelStats, seed: u64) -> ChannelStats {
+    let mut state = stats
+        .mean_abs
+        .iter()
+        .fold(seed, |h, m| h.rotate_left(13) ^ u64::from(m.to_bits()));
+    let mut mean_abs = stats.mean_abs.clone();
+    // Fisher-Yates over SplitMix64 outputs.
+    for i in (1..mean_abs.len()).rev() {
+        state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = state;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^= z >> 31;
+        let j = (z % (i as u64 + 1)) as usize;
+        mean_abs.swap(i, j);
+    }
+    ChannelStats {
+        mean_abs,
+        rms: stats.rms.clone(),
+    }
+}
+
 /// The block format named by an `ActivationAware` rule.
 pub fn parse_format(name: &str) -> Result<TensorFormat> {
     Ok(match name.to_ascii_uppercase().as_str() {
@@ -182,6 +223,36 @@ mod tests {
             .zip(&plain)
             .all(|(a, b)| (a - b).abs() < 1e-6);
         assert!(close);
+    }
+
+    #[test]
+    fn permuted_scales_keep_the_multiset_and_move_channels() {
+        let (_, stats) = salient();
+        let mut moved = false;
+        for seed in 1..=5u64 {
+            let permuted = permute_scales(&stats, seed);
+            assert_eq!(
+                permuted,
+                permute_scales(&stats, seed),
+                "same seed, same shuffle"
+            );
+            let mut a = stats.mean_abs.clone();
+            let mut b = permuted.mean_abs.clone();
+            a.sort_by(f32::total_cmp);
+            b.sort_by(f32::total_cmp);
+            assert_eq!(a, b, "a permutation keeps the scale multiset");
+            assert_eq!(
+                permuted.rms, stats.rms,
+                "errors still use the true activations"
+            );
+            moved |= permuted.mean_abs[3] != stats.mean_abs[3];
+        }
+        assert!(
+            moved,
+            "the salient channel should leave position 3 for some seed"
+        );
+        // The default source is the real statistics, so existing recipes keep their meaning.
+        assert_eq!(ScaleSource::default(), ScaleSource::Calibrated);
     }
 
     #[test]

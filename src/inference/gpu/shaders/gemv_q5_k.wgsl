@@ -5,7 +5,8 @@ struct GemvParams {
     in_dim: u32,
     out_dim: u32,
     num_blocks_per_row: u32,
-    stride_bytes: u32,
+    rows: u32,
+    out_offset: u32,
 };
 
 @group(0) @binding(0) var<storage, read> params: GemvParams;
@@ -45,8 +46,8 @@ fn main(
     @builtin(workgroup_id) wid: vec3<u32>,
     @builtin(local_invocation_id) lid: vec3<u32>
 ) {
-    let row = wid.x;
-    let batch_row = wid.y;
+    let row = wid.y * 65535u + wid.x;
+    let tok = wid.z;
     if (row >= params.out_dim) {
         return;
     }
@@ -55,11 +56,10 @@ fn main(
 
     // Each Q5_K super-block is 176 bytes = 44 u32 words
     let row_word_base = row * params.num_blocks_per_row * 44u;
-    let x_batch_base = batch_row * params.in_dim;
 
     for (var b = 0u; b < params.num_blocks_per_row; b++) {
         let b_base = row_word_base + b * 44u;
-        let x_base = x_batch_base + b * 256u;
+        let x_base = tok * params.in_dim + b * 256u;
 
         // Word 0 holds f16 d and dmin
         let d_dmin = unpack2x16float(weights[b_base]);
@@ -121,6 +121,6 @@ fn main(
     workgroupBarrier();
 
     if (tid == 0u) {
-        output_y[batch_row * params.out_dim + row] = sdata[0];
+        output_y[params.out_offset + tok * params.out_dim + row] = sdata[0];
     }
 }

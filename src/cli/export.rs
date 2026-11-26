@@ -149,6 +149,9 @@ mod tests {
             artifact: None,
             calibration: None,
             gate: None,
+            device: crate::inference::DeviceArg::Cpu,
+            no_baseline_cache: true,
+            baseline_cache_dir: None,
         })
         .unwrap();
         let measured = report["evaluation"]["variants"][1]["perplexity"]

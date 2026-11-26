@@ -21,7 +21,7 @@ All agents and contributors must uphold these rules without exception:
 1. **Clean Git Hygiene**:
    - Never commit or print absolute paths from developer machines or personal usernames in code, configurations, logs, or documentation.
    - Use relative workspace paths or forward-slash Unix-style paths.
-   - Keep `.cargo/config.toml` path remapping active to avoid embedding developer machine paths in release binaries.
+   - Keep path remapping active to avoid embedding developer machine paths in release binaries: `.cargo/config.toml` strips symbols, and the release workflow passes `--remap-path-prefix` for the cargo home, rustup home and workspace through `RUSTFLAGS` (a committed config cannot name machine prefixes). Machine-local build limits stay in the global `~/.cargo/config.toml`.
 
 2. **No Unverified Empirical Claims**:
    - Never present simulated numbers or synthetic benchmarks as measured hardware results.
@@ -37,6 +37,10 @@ All agents and contributors must uphold these rules without exception:
    - Return structured `Result<T, E>` types with actionable diagnostic contexts.
    - Enforced by the compiler: `src/lib.rs` and every binary deny `clippy::unwrap_used`, `expect_used`, `panic`, `unreachable`, `unimplemented` and `todo` outside tests, so `cargo clippy -- -D warnings` fails on any new one.
 
+
+5. **Clean-Room Learning**:
+   - Learn from other projects through public documentation, specifications, papers and black-box measurements; do not read, copy or translate their source or shader code (see [docs/clean-room.md](docs/clean-room.md)).
+   - Any code taken from outside the repository needs the reference audit, a third-party register entry and the owner's approval first.
 ---
 
 ## 3. Code Standards & CI Requirements
@@ -112,7 +116,7 @@ Current focus and priorities live in the **now / next / later** view at the top 
 | **v0.2.1.0** | Recipe & BYOA Lab | [v0.2.1.1 - v0.2.1.9] `thme evaluate --recipe`, BYOA encode/decode contracts, measured cost table, greedy allocator on measured costs, global refinement, automatic random controls, measured Pareto front, calibration/validation/test split, Studio recipe workbench. | Scheduled |
 | **v0.2.2.0** | Formats & Calibration | [v0.2.2.1 - v0.2.2.9] Per-tensor GGUF formats, Q4_K/Q5_K/Q6_K, calibration activations, AWQ-style scaling, GPTQ-style rounding, Hadamard rotation, SmoothQuant migration, llama.cpp compatibility, measured artifact size. | Scheduled |
 | **v0.2.3.0** | Recovery & Distillation | [v0.2.3.1 - v0.2.3.9] Backward pass or trainer bridge, quantization-aware distillation, LoRA recovery, teacher calibration data, loop and early-exit objectives, exit heads, recovery cost accounting, overfitting guard, recovered-candidate reports. | Scheduled |
-| **v0.2.4.0** | Runtime, Speed & KV Cache | [v0.2.4.1 - v0.2.4.9] Incremental decoding, KV bytes vs context, CPU throughput, quantized kernels, peak memory, KV quantization, calibrated roofline, measured speculative decoding, energy where measurable. | Scheduled |
+| **v0.2.4.0** | Runtime, Speed & KV Cache | [v0.2.4.1 - v0.2.4.9] Incremental decoding, KV bytes vs context, CPU throughput, quantized kernels, peak memory, KV quantization, calibrated roofline, measured speculative decoding, energy where measurable. | Active |
 | **v0.2.5.0** | Math Engine Foundations | [v0.2.5.1 - v0.2.5.9] Error type, exact DP allocator, number formats with bounds, transport, bases and rotations, ODE steppers, projections, SVG visual engine, conversion registry. | Active |
 | **v0.2.6.0** | Epiphanes Model Format | [v0.2.6.1 - v0.2.6.9] .epiph container, signatures, quantized payloads, tokenizer, streaming, compression, GPU/CPU placement, Studio support, compatibility reports. | Active |
 | **v0.2.7.0** | Security & Trust | [v0.2.7.1 - v0.2.7.9] Model scanner, more formats, scan on import, permission record, sandbox design and build, read-only guardrail detection, optional safety layers, supply chain. | Active |

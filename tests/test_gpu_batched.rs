@@ -1,0 +1,987 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+//! The batched GPU path: one dispatch for all prompt rows, many linears per submit,
+//! weights resident on the device, and parity with the CPU path.
+//!
+//! Tests that need an adapter print a skip reason and return when there is none.
+//! Real-model tests are opt-in: set THME_REAL_MODEL_TESTS=1 and THME_TEST_MODELS_DIR to a
+//! folder holding `pythia-14m` and `smollm-135m` (see tests/common).
+
+mod common;
+
+use common::{real_model_dir, TestModel, PYTHIA_14M, SMOLLM_135M};
+use std::sync::Arc;
+use thme::inference::gpu::{GpuBackend, GpuContext, QuantDtype, QuantizedTensor, ThmeError};
+use thme::inference::llama::{linear, synthetic_demo};
+use thme::inference::{load_reference_model, DeviceArg};
+
+/// Absolute tolerance for GPU vs CPU logits and activations (matches the 0.005 HF cross-check bound).
+const PARITY_TOL: f32 = 5e-3;
+
+fn pseudo_random(seed: &mut u64, len: usize, scale: f32) -> Vec<f32> {
+    (0..len)
+        .map(|_| {
+            *seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            (((*seed >> 33) as f32 / 2_147_483_648.0) - 1.0) * scale
+        })
+        .collect()
+}
+
+fn gpu_or_skip() -> Option<GpuContext> {
+    match GpuContext::init() {
+        Ok(gpu) => Some(gpu),
+        Err(err) => {
+            eprintln!("SKIP: no GPU adapter on this host ({err})");
+            None
+        }
+    }
+}
+
+fn assert_close(cpu: &[f32], gpu: &[f32], tol: f32, what: &str) {
+    assert_eq!(cpu.len(), gpu.len(), "{what}: length");
+    let worst = cpu
+        .iter()
+        .zip(gpu)
+        .map(|(c, g)| (c - g).abs() / c.abs().max(1.0))
+        .fold(0.0f32, f32::max);
+    assert!(worst < tol, "{what}: worst relative diff {worst} >= {tol}");
+}
+
+#[test]
+fn batched_matmul_matches_cpu_across_tile_edges() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut seed = 7u64;
+    for (rows, in_dim, out_dim) in [
+        (1, 70, 33),
+        (2, 16, 64),
+        (17, 70, 100),
+        (64, 64, 64),
+        (65, 129, 65),
+        (130, 576, 200),
+    ] {
+        let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+        let w = pseudo_random(&mut seed, out_dim * in_dim, 0.5);
+        let got = gpu
+            .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+            .expect("gpu batched linear");
+        assert_close(
+            &linear(&x, &w, in_dim, out_dim),
+            &got[0],
+            1e-4,
+            &format!("rows={rows} in={in_dim} out={out_dim}"),
+        );
+    }
+}
+
+#[test]
+fn prompt_rows_go_in_one_dispatch_and_one_submit() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut seed = 11u64;
+    let (rows, in_dim, out_dim) = (128, 64, 96);
+    let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+    let w = pseudo_random(&mut seed, out_dim * in_dim, 0.5);
+    let before = gpu.stats();
+    gpu.compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+        .expect("gpu batched linear");
+    let after = gpu.stats();
+    assert_eq!(after.dispatches - before.dispatches, 1, "dispatches");
+    assert_eq!(after.submits - before.submits, 1, "submits");
+}
+
+#[test]
+fn many_linears_share_one_submit_and_match_separate_calls() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut seed = 13u64;
+    let (rows, in_dim) = (5, 48);
+    let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+    let (wq, wk, wv) = (
+        pseudo_random(&mut seed, 48 * in_dim, 0.5),
+        pseudo_random(&mut seed, 24 * in_dim, 0.5),
+        pseudo_random(&mut seed, 24 * in_dim, 0.5),
+    );
+    let ops: [(&[f32], usize); 3] = [(&wq, 48), (&wk, 24), (&wv, 24)];
+    let before = gpu.stats();
+    let together = gpu
+        .compute_linear_slices(&x, &ops, in_dim)
+        .expect("gpu multi linear");
+    let after = gpu.stats();
+    assert_eq!(
+        after.submits - before.submits,
+        1,
+        "one submit for three ops"
+    );
+    assert_eq!(after.dispatches - before.dispatches, 3, "three dispatches");
+    for (i, (w, out_dim)) in ops.iter().enumerate() {
+        assert_close(
+            &linear(&x, w, in_dim, *out_dim),
+            &together[i],
+            1e-4,
+            &format!("op {i}"),
+        );
+    }
+}
+
+#[test]
+fn weights_stay_resident_between_calls() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut seed = 17u64;
+    let in_dim = 32;
+    let x = pseudo_random(&mut seed, in_dim, 1.0);
+    let w = pseudo_random(&mut seed, 16 * in_dim, 0.5);
+    let w2 = pseudo_random(&mut seed, 16 * in_dim, 0.5);
+    let s0 = gpu.stats();
+    gpu.compute_linear_slices(&x, &[(&w, 16)], in_dim)
+        .expect("first");
+    let s1 = gpu.stats();
+    gpu.compute_linear_slices(&x, &[(&w, 16)], in_dim)
+        .expect("second");
+    let s2 = gpu.stats();
+    gpu.compute_linear_slices(&x, &[(&w2, 16)], in_dim)
+        .expect("other weights");
+    let s3 = gpu.stats();
+    assert_eq!(
+        s1.weight_uploads - s0.weight_uploads,
+        1,
+        "first call uploads"
+    );
+    assert_eq!(
+        s2.weight_uploads - s1.weight_uploads,
+        0,
+        "second call reuses"
+    );
+    assert_eq!(
+        s3.weight_uploads - s2.weight_uploads,
+        1,
+        "new weights upload"
+    );
+}
+
+#[test]
+fn changed_weights_at_same_address_are_not_served_stale() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut seed = 19u64;
+    let in_dim = 32;
+    let x = pseudo_random(&mut seed, in_dim, 1.0);
+    let mut w = pseudo_random(&mut seed, 16 * in_dim, 0.5);
+    gpu.compute_linear_slices(&x, &[(&w, 16)], in_dim)
+        .expect("first");
+    for v in w.iter_mut() {
+        *v = -*v;
+    }
+    let got = gpu
+        .compute_linear_slices(&x, &[(&w, 16)], in_dim)
+        .expect("after in-place change");
+    assert_close(
+        &linear(&x, &w, in_dim, 16),
+        &got[0],
+        1e-4,
+        "mutated weights",
+    );
+}
+
+#[test]
+fn rows_beyond_the_workgroup_limit_still_work_for_a_single_row() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut seed = 23u64;
+    let (in_dim, out_dim) = (16, 70_000);
+    let x = pseudo_random(&mut seed, in_dim, 1.0);
+    let w = pseudo_random(&mut seed, out_dim * in_dim, 0.5);
+    let got = gpu
+        .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+        .expect("wide output");
+    assert_close(
+        &linear(&x, &w, in_dim, out_dim),
+        &got[0],
+        1e-4,
+        "70000 outputs",
+    );
+}
+
+#[test]
+fn quantized_shaders_handle_many_rows_in_one_dispatch() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut seed = 29u64;
+    let (rows, in_dim, out_dim) = (4, 256, 8);
+    let mut raw = Vec::new();
+    let mut decoded = Vec::new();
+    for _ in 0..out_dim {
+        let row = pseudo_random(&mut seed, in_dim, 2.0);
+        let mut block = Vec::new();
+        thme::exporter::kquant::encode_q4_k_block(&row, &mut block).expect("encode");
+        decoded.extend(thme::exporter::kquant::decode_q4_k(&block).expect("decode"));
+        raw.extend(block);
+    }
+    let tensor = QuantizedTensor::new_quantized(
+        "q4k_rows",
+        vec![out_dim, in_dim],
+        QuantDtype::Q4_K,
+        Arc::from(raw.into_boxed_slice()),
+    )
+    .expect("tensor");
+    let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+    let before = gpu.stats();
+    let got = gpu
+        .compute_linear(&x, &tensor, in_dim, out_dim)
+        .expect("q4_k rows");
+    assert_eq!(
+        gpu.stats().dispatches - before.dispatches,
+        1,
+        "one dispatch"
+    );
+    assert_close(
+        &linear(&x, &decoded, in_dim, out_dim),
+        &got,
+        1e-3,
+        "q4_k rows",
+    );
+}
+
+/// CPU-only stand-in for a device, so CI without a GPU still covers the dispatch plumbing.
+struct FakeBackend;
+
+impl GpuBackend for FakeBackend {
+    fn compute_linear(
+        &self,
+        x: &[f32],
+        weights: &QuantizedTensor,
+        in_dim: usize,
+        out_dim: usize,
+    ) -> Result<Vec<f32>, ThmeError> {
+        Ok(linear(x, weights.as_f32_slice()?, in_dim, out_dim))
+    }
+    fn is_format_supported(&self, _dtype: QuantDtype) -> bool {
+        true
+    }
+    fn device_name(&self) -> &str {
+        "fake"
+    }
+}
+
+#[test]
+fn fake_backend_default_batch_matches_cpu() {
+    let mut seed = 31u64;
+    let (rows, in_dim) = (3, 20);
+    let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+    let (a, b) = (
+        pseudo_random(&mut seed, 7 * in_dim, 0.5),
+        pseudo_random(&mut seed, 9 * in_dim, 0.5),
+    );
+    let got = FakeBackend
+        .compute_linear_slices(&x, &[(&a, 7), (&b, 9)], in_dim)
+        .expect("default batch");
+    assert_eq!(got[0], linear(&x, &a, in_dim, 7));
+    assert_eq!(got[1], linear(&x, &b, in_dim, 9));
+}
+
+#[test]
+fn fake_backend_model_matches_cpu_exactly() {
+    let tokens: Vec<u32> = (0..24).map(|i| (i * 37 % 256) as u32).collect();
+    let (cpu_model, _) = synthetic_demo(5);
+    let (mut gpu_model, _) = synthetic_demo(5);
+    gpu_model.set_gpu(Some(Arc::new(FakeBackend)));
+    assert_eq!(
+        cpu_model.forward_nll(&tokens).expect("cpu"),
+        gpu_model.forward_nll(&tokens).expect("fake gpu")
+    );
+}
+
+#[test]
+fn synthetic_model_gpu_matches_cpu_within_tolerance() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let tokens: Vec<u32> = (0..40).map(|i| (i * 53 % 256) as u32).collect();
+    let (cpu_model, _) = synthetic_demo(9);
+    let (mut gpu_model, _) = synthetic_demo(9);
+    gpu_model.set_gpu(Some(Arc::new(gpu)));
+    let cpu = cpu_model.forward_logits(&tokens).expect("cpu logits");
+    let got = gpu_model.forward_logits(&tokens).expect("gpu logits");
+    let worst = cpu
+        .iter()
+        .zip(&got)
+        .map(|(c, g)| (c - g).abs())
+        .fold(0.0f32, f32::max);
+    assert!(worst < PARITY_TOL, "max abs logit diff {worst}");
+    let nll_cpu = cpu_model.forward_nll(&tokens).expect("cpu nll");
+    let nll_gpu = gpu_model.forward_nll(&tokens).expect("gpu nll");
+    for (c, g) in nll_cpu.iter().zip(&nll_gpu) {
+        assert!((c - g).abs() < PARITY_TOL, "nll diff {c} vs {g}");
+    }
+}
+
+fn real_model_parity(model: &TestModel) {
+    let name = model.dir_name;
+    let Some(dir) = real_model_dir(model) else {
+        return;
+    };
+    if gpu_or_skip().is_none() {
+        return;
+    }
+    let (_, _, cpu_model) = load_reference_model(&dir, DeviceArg::Cpu).expect("cpu load");
+    let (_, _, gpu_model) = load_reference_model(&dir, DeviceArg::Gpu).expect("gpu load");
+    let vocab = cpu_model.vocab_size();
+    for len in [2usize, 128] {
+        let tokens: Vec<u32> = (0..len).map(|i| ((i * 7919 + 13) % vocab) as u32).collect();
+        let cpu = cpu_model.forward_logits(&tokens).expect("cpu logits");
+        let got = gpu_model.forward_logits(&tokens).expect("gpu logits");
+        let worst = cpu
+            .iter()
+            .zip(&got)
+            .map(|(c, g)| (c - g).abs())
+            .fold(0.0f32, f32::max);
+        println!("{name} len={len}: max abs logit diff {worst:.3e}");
+        assert!(worst < PARITY_TOL, "{name} len={len}: diff {worst}");
+        let top = |v: &[f32]| {
+            v.iter()
+                .enumerate()
+                .max_by(|a, b| a.1.total_cmp(b.1))
+                .map(|p| p.0)
+        };
+        assert_eq!(top(&cpu), top(&got), "{name} len={len}: top-1 token");
+    }
+}
+
+#[test]
+fn smollm_135m_gpu_matches_cpu() {
+    real_model_parity(&SMOLLM_135M);
+}
+
+#[test]
+fn pythia_14m_gpu_matches_cpu() {
+    real_model_parity(&PYTHIA_14M);
+}
+
+#[test]
+fn whole_forward_pass_is_one_submit() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let gpu = Arc::new(gpu);
+    let (mut model, _) = synthetic_demo(3);
+    model.set_gpu(Some(gpu.clone()));
+    let tokens: Vec<u32> = (0..16).map(|i| (i * 41 % 256) as u32).collect();
+    let before = gpu.stats();
+    model.forward_logits(&tokens).expect("gpu logits");
+    let after = gpu.stats();
+    assert_eq!(
+        after.submits - before.submits,
+        1,
+        "one submit for the stack"
+    );
+    assert!(
+        after.dispatches - before.dispatches > 8,
+        "layers were dispatched"
+    );
+}
+
+#[test]
+fn context_longer_than_the_device_limit_falls_back_to_the_per_op_path() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let tokens: Vec<u32> = (0..2100).map(|i| (i * 29 % 256) as u32).collect();
+    let (cpu_model, _) = synthetic_demo(4);
+    let (mut gpu_model, _) = synthetic_demo(4);
+    gpu_model.set_gpu(Some(Arc::new(gpu)));
+    let cpu = cpu_model.forward_logits(&tokens).expect("cpu");
+    let got = gpu_model.forward_logits(&tokens).expect("gpu");
+    let worst = cpu
+        .iter()
+        .zip(&got)
+        .map(|(c, g)| (c - g).abs())
+        .fold(0.0f32, f32::max);
+    assert!(worst < PARITY_TOL, "max abs logit diff {worst}");
+}
+
+/// Tolerance on cross-entropy (nats) between the device and CPU perplexity passes.
+const NLL_TOL: f64 = 1e-4;
+
+fn window_report(
+    model: &dyn thme::inference::CausalLm,
+    tokens: &[u32],
+    ctx: usize,
+) -> thme::inference::PerplexityReport {
+    let config = thme::inference::PerplexityConfig {
+        context_len: ctx,
+        max_tokens: None,
+    };
+    thme::inference::evaluate_perplexity(model, tokens, &config, |_, _, _| {}).expect("perplexity")
+}
+
+#[test]
+fn synthetic_perplexity_on_device_matches_cpu() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let gpu = Arc::new(gpu);
+    let tokens: Vec<u32> = (0..300).map(|i| (i * 53 % 256) as u32).collect();
+    let (cpu_model, _) = synthetic_demo(9);
+    let (mut gpu_model, _) = synthetic_demo(9);
+    gpu_model.set_gpu(Some(gpu.clone()));
+    let cpu = window_report(&cpu_model, &tokens, 128);
+    let before = gpu.stats();
+    let got = window_report(&gpu_model, &tokens, 128);
+    // Through the trait object: one device submission per window (128, 128, 44 tokens).
+    assert_eq!(gpu.stats().submits - before.submits, 3);
+    assert_eq!(cpu.scored_tokens, got.scored_tokens);
+    let diff = (cpu.cross_entropy_nats - got.cross_entropy_nats).abs();
+    assert!(diff < NLL_TOL, "cross-entropy diff {diff}");
+}
+
+#[test]
+fn nll_pass_is_one_submit_and_reads_back_only_the_scores() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let gpu = Arc::new(gpu);
+    let (mut model, _) = synthetic_demo(3);
+    model.set_gpu(Some(gpu.clone()));
+    let tokens: Vec<u32> = (0..200).map(|i| (i * 41 % 256) as u32).collect();
+    let before = gpu.stats();
+    let nll = model.forward_nll(&tokens).expect("gpu nll");
+    let after = gpu.stats();
+    assert_eq!(nll.len(), tokens.len() - 1);
+    assert_eq!(after.submits - before.submits, 1, "one submit");
+}
+
+fn real_model_perplexity_parity(model: &TestModel) {
+    let name = model.dir_name;
+    let Some(dir) = real_model_dir(model) else {
+        return;
+    };
+    if gpu_or_skip().is_none() {
+        return;
+    }
+    let (_, _, cpu_model) = load_reference_model(&dir, DeviceArg::Cpu).expect("cpu load");
+    let (_, _, gpu_model) = load_reference_model(&dir, DeviceArg::Gpu).expect("gpu load");
+    let vocab = cpu_model.vocab_size();
+    let tokens: Vec<u32> = (0..512).map(|i| ((i * 7919 + 13) % vocab) as u32).collect();
+    let cpu = window_report(&*cpu_model, &tokens, 256);
+    let got = window_report(&*gpu_model, &tokens, 256);
+    let diff = (cpu.cross_entropy_nats - got.cross_entropy_nats).abs();
+    println!(
+        "{name}: cpu {:.6} nats, gpu {:.6} nats, diff {diff:.3e}",
+        cpu.cross_entropy_nats, got.cross_entropy_nats
+    );
+    assert!(diff < NLL_TOL, "{name}: cross-entropy diff {diff}");
+}
+
+#[test]
+fn smollm_135m_perplexity_on_device_matches_cpu() {
+    real_model_perplexity_parity(&SMOLLM_135M);
+}
+
+#[test]
+fn pythia_14m_perplexity_on_device_matches_cpu() {
+    real_model_perplexity_parity(&PYTHIA_14M);
+}
+
+#[test]
+fn fused_head_nll_matches_cpu_across_chunks() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut seed = 77u64;
+    // 700 rows and a 100000-word vocabulary force several head chunks.
+    let (t, d, vocab) = (700usize, 24usize, 100_000usize);
+    let normed = pseudo_random(&mut seed, t * d, 1.0);
+    let head = pseudo_random(&mut seed, vocab * d, 0.5);
+    let tokens: Vec<u32> = (0..t).map(|i| (i * 7919 % vocab) as u32).collect();
+    let cpu = thme::inference::llama::score_head(&head, d, vocab, &normed, &tokens, 0).nll;
+    let got = gpu
+        .score_head_nll(&normed, &head, d, vocab, &tokens[1..])
+        .expect("gpu head")
+        .expect("supported");
+    assert_eq!(got.len(), t - 1);
+    for (c, g) in cpu.iter().zip(&got) {
+        assert!((c - g).abs() < 1e-3, "nll {c} vs {g}");
+    }
+}
+
+#[test]
+fn a_device_wait_that_cannot_finish_is_an_error_not_a_freeze() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut seed = 91u64;
+    let (t, d, vocab) = (700usize, 24usize, 100_000usize);
+    let normed = pseudo_random(&mut seed, t * d, 1.0);
+    let head = pseudo_random(&mut seed, vocab * d, 0.5);
+    let tokens: Vec<u32> = (0..t).map(|i| (i * 7919 % vocab) as u32).collect();
+    // Warm the weight cache so only the pass itself is left to time out.
+    gpu.score_head_nll(&normed, &head, d, vocab, &tokens[1..])
+        .expect("warm");
+    gpu.set_wait_timeout(std::time::Duration::ZERO);
+    let err = gpu
+        .score_head_nll(&normed, &head, d, vocab, &tokens[1..])
+        .expect_err("a zero wait cannot complete a 700 x 100000 head pass");
+    assert!(err.to_string().contains("GPU wait failed"), "{err}");
+    gpu.set_wait_timeout(std::time::Duration::from_secs(120));
+    gpu.score_head_nll(&normed, &head, d, vocab, &tokens[1..])
+        .expect("recovers once the wait is long enough");
+}
+
+#[test]
+fn op_profile_lists_every_decoder_kernel_with_device_time() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    if !gpu.timestamp_query_supported() {
+        eprintln!("SKIP: adapter has no timestamp queries");
+        return;
+    }
+    let gpu = Arc::new(gpu);
+    let (mut model, _) = synthetic_demo(3);
+    model.set_gpu(Some(gpu.clone()));
+    let tokens: Vec<u32> = (0..16).map(|i| (i * 41 % 256) as u32).collect();
+    gpu.set_op_profile(true);
+    let before = gpu.stats();
+    model.forward_logits(&tokens).expect("gpu logits");
+    gpu.set_op_profile(false);
+    let samples = gpu.take_op_profile();
+    let dispatches = gpu.stats().dispatches - before.dispatches;
+    assert_eq!(samples.len() as u64, dispatches, "one sample per dispatch");
+    for kernel in ["rms_norm", "rope", "attention", "swiglu", "add", "linear"] {
+        assert!(
+            samples.iter().any(|s| s.label.starts_with(kernel)),
+            "no sample for {kernel}"
+        );
+    }
+    assert!(samples.iter().any(|s| s.ns > 0), "all zero device times");
+    assert!(gpu.take_op_profile().is_empty(), "take drains the samples");
+}
+
+#[test]
+fn large_vec4_friendly_shapes_use_the_register_blocked_gemm_and_match_cpu() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    assert_eq!(gpu.gemm_kernel_name(1024, 2048, 2048, 0), "gemm128");
+    assert_eq!(gpu.gemm_kernel_name(4, 2048, 2048, 0), "gemv");
+    assert_eq!(
+        gpu.gemm_kernel_name(1024, 70, 100, 0),
+        "gemm64",
+        "in_dim not a multiple of 4"
+    );
+    assert_eq!(
+        gpu.gemm_kernel_name(1024, 64, 100, 2),
+        "gemm64",
+        "unaligned output offset"
+    );
+    let mut seed = 21u64;
+    // Edges of the 128 x 128 tile and of the 16-deep k step.
+    for (rows, in_dim, out_dim) in [
+        (9, 16, 8),
+        (127, 48, 132),
+        (129, 64, 124),
+        (130, 576, 200),
+        (257, 20, 260),
+    ] {
+        assert_eq!(gpu.gemm_kernel_name(rows, in_dim, out_dim, 0), "gemm128");
+        let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+        let w = pseudo_random(&mut seed, out_dim * in_dim, 0.5);
+        let got = gpu
+            .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+            .expect("gpu batched linear");
+        assert_close(
+            &linear(&x, &w, in_dim, out_dim),
+            &got[0],
+            1e-4,
+            &format!("rows={rows} in={in_dim} out={out_dim}"),
+        );
+    }
+}
+
+#[test]
+fn a_weight_budget_above_the_model_keeps_every_weight_resident_across_passes() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut seed = 31u64;
+    let in_dim = 64;
+    let x = pseudo_random(&mut seed, in_dim, 1.0);
+    // Three 64 KiB weights: a 100 KiB budget cannot hold them, a 1 MiB budget can.
+    let ws: Vec<Vec<f32>> = (0..3)
+        .map(|_| pseudo_random(&mut seed, 256 * in_dim, 0.5))
+        .collect();
+    let pass = |gpu: &GpuContext| {
+        for w in &ws {
+            gpu.compute_linear_slices(&x, &[(w, 256)], in_dim)
+                .expect("linear");
+        }
+    };
+    gpu.set_weight_budget(100 << 10);
+    pass(&gpu);
+    let before = gpu.stats().weight_uploads;
+    pass(&gpu);
+    assert!(
+        gpu.stats().weight_uploads - before >= 1,
+        "a small budget flushes and re-uploads"
+    );
+    gpu.set_weight_budget(1 << 20);
+    pass(&gpu);
+    let before = gpu.stats().weight_uploads;
+    pass(&gpu);
+    assert_eq!(
+        gpu.stats().weight_uploads - before,
+        0,
+        "a large budget keeps all three resident"
+    );
+}
+
+/// Runs one random decoder plan on the device and returns its last-position logits.
+fn random_plan_logits(
+    gpu: &GpuContext,
+    seed: u64,
+    (heads, kv_heads, hd, t): (usize, usize, usize, usize),
+) -> Vec<f32> {
+    use thme::inference::gpu::{DecoderPlan, LayerWeights};
+    let mut seed = seed;
+    let (d, kv_dim, inter, vocab) = (heads * hd, kv_heads * hd, 2 * heads * hd, 48);
+    let mut rand = |n: usize, scale: f32| pseudo_random(&mut seed, n, scale);
+    let ones = |n: usize| vec![1.0f32; n];
+    let attn_norm = ones(d);
+    let mlp_norm = ones(d);
+    let final_norm = ones(d);
+    let owned: Vec<[Vec<f32>; 7]> = (0..2)
+        .map(|_| {
+            [
+                rand(d * d, 0.05),
+                rand(kv_dim * d, 0.05),
+                rand(kv_dim * d, 0.05),
+                rand(d * d, 0.05),
+                rand(inter * d, 0.05),
+                rand(inter * d, 0.05),
+                rand(d * inter, 0.05),
+            ]
+        })
+        .collect();
+    let layers = owned
+        .iter()
+        .map(|w| LayerWeights {
+            attn_norm: &attn_norm,
+            q: &w[0],
+            k: &w[1],
+            v: &w[2],
+            o: &w[3],
+            mlp_norm: &mlp_norm,
+            gate: &w[4],
+            up: &w[5],
+            down: &w[6],
+        })
+        .collect();
+    let head = rand(vocab * d, 0.1);
+    let x0 = rand(t * d, 1.0);
+    let half = hd / 2;
+    let angle = |i: usize| (i as f32) * 0.37;
+    let cos: Vec<f32> = (0..t * half).map(|i| angle(i).cos()).collect();
+    let sin: Vec<f32> = (0..t * half).map(|i| angle(i).sin()).collect();
+    let plan = DecoderPlan {
+        layers,
+        final_norm: &final_norm,
+        head: &head,
+        hidden: d,
+        heads,
+        kv_heads,
+        head_dim: hd,
+        inter,
+        vocab,
+        eps: 1e-5,
+        rope_cos: &cos,
+        rope_sin: &sin,
+        targets: None,
+    };
+    gpu.forward_decoder(&plan, &x0)
+        .expect("decoder")
+        .expect("supported shape")
+}
+
+#[test]
+fn tiled_attention_matches_the_reference_kernel_across_blocks_and_head_sizes() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    // (heads, kv_heads, head_dim, positions): grouped-query, several 64-query blocks, a ragged
+    // last block, and a head size that is not 64.
+    for shape in [
+        (4, 2, 64, 150),
+        (2, 2, 128, 130),
+        (3, 1, 32, 65),
+        (2, 2, 64, 1000),
+    ] {
+        gpu.set_tiled_attention(false);
+        let reference = random_plan_logits(&gpu, 5, shape);
+        gpu.set_tiled_attention(true);
+        let tiled = random_plan_logits(&gpu, 5, shape);
+        let worst = reference
+            .iter()
+            .zip(&tiled)
+            .map(|(a, b)| (a - b).abs() / a.abs().max(1.0))
+            .fold(0.0f32, f32::max);
+        assert!(worst < 1e-3, "{shape:?}: worst relative diff {worst}");
+    }
+    gpu.set_tiled_attention(true);
+    assert_eq!(gpu.attention_kernel_name(64), "tiled");
+    assert_eq!(
+        gpu.attention_kernel_name(6),
+        "reference",
+        "head size not a multiple of 4"
+    );
+    assert_eq!(
+        gpu.attention_kernel_name(256),
+        "reference",
+        "head size above 128"
+    );
+}
+
+/// Dequantizes GGML block bytes with the CPU decoders the loader uses.
+fn cpu_decode_blocks(storage: thme::inference::gpu::WeightStorage, blocks: &[u8]) -> Vec<f32> {
+    use thme::inference::gpu::WeightStorage;
+    use thme::parser::gguf::GgufBlockDecoder;
+    let q8 = storage == WeightStorage::Q8_0;
+    let size = if q8 { 34 } else { 18 };
+    blocks
+        .chunks_exact(size)
+        .flat_map(|b| {
+            if q8 {
+                GgufBlockDecoder::unpack_q8_0(b)
+            } else {
+                GgufBlockDecoder::unpack_q4_0(b)
+            }
+            .expect("block")
+        })
+        .collect()
+}
+
+#[test]
+fn quantized_and_f16_weight_storage_match_the_cpu_decoders_for_few_and_many_rows() {
+    use thme::inference::gpu::{quantize_blocks, WeightStorage};
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut seed = 77u64;
+    let (in_dim, out_dim) = (96usize, 136usize);
+    let w = pseudo_random(&mut seed, in_dim * out_dim, 0.7);
+    for storage in [WeightStorage::Q8_0, WeightStorage::Q4_0, WeightStorage::F16] {
+        let reference: Vec<f32> = match storage {
+            WeightStorage::F16 => w
+                .iter()
+                .map(|&v| {
+                    thme::engine::minifloat::f16_to_f32(thme::engine::minifloat::f32_to_f16(v))
+                })
+                .collect(),
+            _ => cpu_decode_blocks(storage, &quantize_blocks(storage, &w).expect("quantize")),
+        };
+        gpu.set_weight_storage(storage);
+        for rows in [1usize, 5, 130] {
+            let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+            let got = gpu
+                .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+                .expect("gpu linear");
+            assert_close(
+                &linear(&x, &reference, in_dim, out_dim),
+                &got[0],
+                2e-4,
+                &format!("{storage:?} rows={rows}"),
+            );
+        }
+    }
+    // A shape the formats cannot hold (in_dim not a multiple of 32) silently stays f32.
+    gpu.set_weight_storage(WeightStorage::Q4_0);
+    let (rows, in_dim, out_dim) = (9usize, 70usize, 100usize);
+    let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+    let w = pseudo_random(&mut seed, out_dim * in_dim, 0.5);
+    let got = gpu
+        .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+        .expect("fallback");
+    assert_close(
+        &linear(&x, &w, in_dim, out_dim),
+        &got[0],
+        1e-4,
+        "f32 fallback",
+    );
+    gpu.set_weight_storage(WeightStorage::F32);
+}
+
+#[test]
+fn quantized_tensors_run_on_the_device_without_expanding_to_f32() {
+    use thme::inference::gpu::{quantize_blocks, WeightStorage};
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut seed = 5u64;
+    let (in_dim, out_dim) = (64usize, 40usize);
+    let w = pseudo_random(&mut seed, in_dim * out_dim, 0.6);
+    for (storage, dtype) in [
+        (WeightStorage::Q8_0, QuantDtype::Q8_0),
+        (WeightStorage::Q4_0, QuantDtype::Q4_0),
+    ] {
+        let blocks = quantize_blocks(storage, &w).expect("quantize");
+        let reference = cpu_decode_blocks(storage, &blocks);
+        let tensor = QuantizedTensor::new_quantized(
+            "quantized_test",
+            vec![out_dim, in_dim],
+            dtype,
+            Arc::from(blocks.into_boxed_slice()),
+        )
+        .expect("tensor");
+        assert!(gpu.is_format_supported(dtype));
+        for rows in [1usize, 33] {
+            let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+            let got = gpu
+                .compute_linear(&x, &tensor, in_dim, out_dim)
+                .expect("gpu linear");
+            assert_close(
+                &linear(&x, &reference, in_dim, out_dim),
+                &got,
+                2e-4,
+                &format!("{dtype:?} rows={rows}"),
+            );
+        }
+    }
+}
+
+#[test]
+fn quantized_storage_cuts_resident_weight_bytes() {
+    use thme::inference::gpu::WeightStorage;
+    let n = 1 << 20;
+    assert_eq!(WeightStorage::F32.device_bytes(n), 4 << 20);
+    assert_eq!(WeightStorage::F16.device_bytes(n), 2 << 20);
+    assert_eq!(WeightStorage::Q8_0.device_bytes(n), n / 32 * 36);
+    assert_eq!(WeightStorage::Q4_0.device_bytes(n), n / 32 * 20);
+}
+
+#[test]
+fn cooperative_matrix_matmul_matches_cpu_within_f16_rounding_across_tile_edges() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    if !gpu.coop_matrix_ready() {
+        eprintln!("SKIP: no usable cooperative-matrix path on this adapter");
+        return;
+    }
+    let mut seed = 41u64;
+    let mut ran_f16_arithmetic = false;
+    for (rows, in_dim, out_dim) in [
+        (9, 16, 8),
+        (127, 48, 132),
+        (129, 64, 124),
+        (130, 576, 200),
+        (257, 20, 260),
+        (200, 1024, 128),
+    ] {
+        let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+        let w = pseudo_random(&mut seed, out_dim * in_dim, 0.5);
+        let cpu = linear(&x, &w, in_dim, out_dim);
+        gpu.set_coop_matrix(false);
+        let exact = gpu
+            .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+            .expect("f32 batched linear");
+        gpu.set_coop_matrix(true);
+        let got = gpu
+            .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+            .expect("coop batched linear");
+        // f16 inputs: about 1e-3 relative per product, so the sums stay within 5e-3 absolute.
+        assert_close(
+            &cpu,
+            &got[0],
+            5e-3,
+            &format!("rows={rows} in={in_dim} out={out_dim}"),
+        );
+        ran_f16_arithmetic |= exact[0].iter().zip(&got[0]).any(|(a, b)| a != b);
+    }
+    gpu.set_coop_matrix(false);
+    assert!(
+        ran_f16_arithmetic,
+        "outputs identical to f32: the coop kernel did not run"
+    );
+}
+
+#[test]
+fn cooperative_matrix_matmul_reads_f16_weights_in_place_and_matches_cpu() {
+    use thme::inference::gpu::WeightStorage;
+    let Some(gpu) = gpu_or_skip() else { return };
+    if !gpu.coop_matrix_ready() {
+        eprintln!("SKIP: no usable cooperative-matrix path on this adapter");
+        return;
+    }
+    gpu.set_weight_storage(WeightStorage::F16);
+    gpu.set_coop_matrix(true);
+    let mut seed = 43u64;
+    // Row counts and out_dim off the 128 tile; in_dim off the 64-deep slice.
+    for (rows, in_dim, out_dim) in [
+        (9, 16, 16),
+        (129, 64, 112),
+        (130, 576, 208),
+        (200, 1024, 128),
+        (257, 80, 272),
+    ] {
+        let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+        let w = pseudo_random(&mut seed, out_dim * in_dim, 0.5);
+        let got = gpu
+            .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+            .expect("coop f16 linear");
+        assert_close(
+            &linear(&x, &w, in_dim, out_dim),
+            &got[0],
+            5e-3,
+            &format!("f16 rows={rows} in={in_dim} out={out_dim}"),
+        );
+    }
+}
+
+#[test]
+fn cooperative_attention_matches_the_tiled_kernel_across_blocks_and_ragged_ends() {
+    let Some(gpu) = gpu_or_skip() else { return };
+    if !gpu.coop_matrix_ready() {
+        eprintln!("SKIP: no usable cooperative-matrix path on this adapter");
+        return;
+    }
+    gpu.set_coop_matrix(true);
+    // Grouped-query, several 64-query blocks, a ragged last block, a block shorter than a tile.
+    for shape in [
+        (4, 2, 64, 150),
+        (2, 2, 64, 1000),
+        (3, 1, 64, 65),
+        (2, 2, 64, 17),
+    ] {
+        gpu.set_coop_attention(false);
+        assert_eq!(gpu.attention_kernel_name(64), "tiled");
+        let tiled = random_plan_logits(&gpu, 5, shape);
+        gpu.set_coop_attention(true);
+        assert_eq!(gpu.attention_kernel_name(64), "coop");
+        let coop = random_plan_logits(&gpu, 5, shape);
+        let worst = tiled
+            .iter()
+            .zip(&coop)
+            .map(|(a, b)| (a - b).abs() / a.abs().max(1.0))
+            .fold(0.0f32, f32::max);
+        assert!(worst < 5e-3, "{shape:?}: worst relative diff {worst}");
+        assert!(
+            worst > 0.0,
+            "{shape:?}: identical output, the kernel did not run"
+        );
+    }
+    assert_eq!(
+        gpu.attention_kernel_name(128),
+        "tiled",
+        "other head sizes fall back"
+    );
+    gpu.set_coop_matrix(false);
+    assert_eq!(gpu.attention_kernel_name(64), "tiled");
+}
+
+#[test]
+fn int8_dot_matmul_matches_the_float_kernel_up_to_activation_rounding() {
+    use thme::inference::gpu::WeightStorage;
+    let Some(gpu) = gpu_or_skip() else { return };
+    let mut seed = 47u64;
+    // Row counts and out_dim off the 128 tile, in_dim a few 32-value blocks.
+    for storage in [WeightStorage::Q8_0, WeightStorage::Q4_0] {
+        gpu.set_weight_storage(storage);
+        for (rows, in_dim, out_dim) in [
+            (9, 32, 4),
+            (129, 96, 132),
+            (130, 576, 200),
+            (257, 1024, 260),
+        ] {
+            let x = pseudo_random(&mut seed, rows * in_dim, 1.0);
+            let w = pseudo_random(&mut seed, out_dim * in_dim, 0.5);
+            gpu.set_int8_dot(false);
+            let exact = gpu
+                .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+                .expect("float kernel")
+                .remove(0);
+            gpu.set_int8_dot(true);
+            let got = gpu
+                .compute_linear_slices(&x, &[(&w, out_dim)], in_dim)
+                .expect("int8 kernel")
+                .remove(0);
+            let rms = |v: &[f32]| (v.iter().map(|a| a * a).sum::<f32>() / v.len() as f32).sqrt();
+            let diff: Vec<f32> = exact.iter().zip(&got).map(|(a, b)| a - b).collect();
+            let rel = rms(&diff) / rms(&exact);
+            assert!(
+                rel < 0.02,
+                "{storage:?} rows={rows} in={in_dim} out={out_dim}: rms diff {rel}"
+            );
+            assert!(
+                rel > 0.0,
+                "{storage:?} {rows}x{in_dim}x{out_dim}: identical, int8 kernel did not run"
+            );
+        }
+    }
+    gpu.set_int8_dot(false);
+}

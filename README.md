@@ -83,6 +83,8 @@ bits per weight. Everything is read from the model file's header; no weights are
 
 More figures, and how they are made: [docs/figures.md](docs/figures.md).
 
+Models that passed THME's checks, with their evidence: [docs/hall-of-fame.md](docs/hall-of-fame.md).
+
 ## Plug and play
 
 THME is meant to work for people who arrive from any background and with whatever tools they use,
@@ -105,18 +107,33 @@ so it reads what you already have instead of asking you to move files.
 - **Text in, text out.** `thme tokenize` encodes and decodes text with a model's own `tokenizer.json`, and
   `thme chat-template` renders the model's own chat template from a messages file. Tested on fixtures; a
   the Studio's Chat tab builds on them.
+- **A welcome screen.** With no model loaded the Studio shows what `thme doctor` and `thme discover` found, and Open
+  loads a model through the safety scan. Its logic is tested; nobody has looked at the window yet.
 - **Know your machine.** `thme doctor` says what works here (system, memory, disk, GPU adapter, the models
   found) and what to try next. It marks each fact as checked or assumed.
+- **Guides and notebooks.** [Getting started](docs/getting-started.md) has install steps and short guides for analysts, AI engineers and data scientists; [notebooks](docs/notebooks.md) lists the `--json` output of each command.
 
+Planned, not built yet: model download from the Hugging Face hub, and bridges to Ollama and
+llama.cpp (THME-3042 in the [backlog](BACKLOG.md)). Notebooks already work through the `--json` output of each command, with no separate bridge.
 Planned, not built yet: bridges to notebooks, Ollama and llama.cpp (THME-3042 in the [backlog](BACKLOG.md)).
 
 ## Measurements
 
-The earlier measured results are being re-run with the corrected code, after the FP16 rounding
-fix (THME-3023). The reports from before that fix were stale, so they have been removed from the
-repository. Results will be published here with the full method and the committed report behind
-each number. To see how a result is produced, read the [benchmark registry](docs/benchmark-registry.md)
-and the [quality gate](docs/quality-gate.md).
+Measured on 20 November 2026 with the corrected code (after the FP16 rounding fix, THME-3023), on
+the full WikiText-2 test split, CPU, quality gate at a perplexity rise of 0.45 or less. Every number
+below comes from a committed report under `docs/benchmarks/`; the full tables, charts and method are
+in [docs/benchmark_dossier.md](docs/benchmark_dossier.md).
+
+| Model | Source perplexity | Uniform Q8_0 export | Searched 50% recipe |
+| :--- | :--- | :--- | :--- |
+| Pythia-14M | 114.29 | +0.83, fails the gate | budget not met (58.3% reached), +0.30 |
+| SmolLM-135M | 19.80 | +0.03, passes the gate | 50.0% reached, -0.02 (within noise) |
+
+Read these with care: the SmolLM-135M search differences are about 0.02 perplexity, which is noise
+and has no confidence interval yet; the Pythia-14M Q8_0 result has not been cross-checked with a
+reference quantizer. Datasets, sources, licences and the notice that THME does not own or distribute them are on
+[docs/benchmark-datasets.md](docs/benchmark-datasets.md). To see how a result is produced, read the
+[benchmark registry](docs/benchmark-registry.md) and the [quality gate](docs/quality-gate.md).
 
 ## What is real today
 
@@ -232,9 +249,11 @@ in `models/<name>/`. Weights are never committed.
 pip install tokenizers
 python scripts/prepare_eval_tokens.py --repo EleutherAI/pythia-14m
 
-# Quality gate: source vs exported GGUF vs surgery recipe
-cargo run --release --example production_verification -- \
-    --model-path models/Pythia-14M --tokens target/eval/wikitext2_test.pythia-14m.u32
+# Quality gate: source vs exported GGUF vs surgery recipe. production_verification only
+# accepts its --target models (SmolLM-135M here); Pythia-14M is measured with the tools below.
+python scripts/prepare_eval_tokens.py
+cargo run --release --example production_verification -- --target smollm135m \
+    --model-path models/SmolLM-135M --tokens target/eval/wikitext2_test.SmolLM-135M.u32
 
 # Gate the report it wrote
 ./target/release/thme validate --report target/verification_report.json
@@ -315,7 +334,7 @@ is in **[docs/subsystems.md](docs/subsystems.md)**.
 
 Two views of one plan. The **[now, next, later](ROADMAP.md#now-next-later)** view groups work by
 track (math engine, Epiphanes model format, security, quality and evidence). The numbered
-milestones below track the measured-model programme, which waits while model runs are paused.
+milestones below track the measured-model programme, which now runs on Pythia-14M and SmolLM-135M only, by decision, until results are stable.
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'fontFamily': 'Chakra Petch, Bahnschrift, Arial Narrow, sans-serif', 'primaryColor': '#ffffff', 'primaryTextColor': '#0b0b0b', 'primaryBorderColor': '#0b0b0b', 'lineColor': '#0b0b0b', 'secondaryColor': '#f6f6f4', 'tertiaryColor': '#ffffff', 'clusterBkg': '#f6f6f4', 'clusterBorder': '#0b0b0b', 'edgeLabelBackground': '#ffffff', 'noteBkgColor': '#ffffff', 'noteBorderColor': '#0b0b0b', 'actorBkg': '#ffffff', 'actorBorder': '#0b0b0b', 'signalColor': '#0b0b0b', 'labelBoxBkgColor': '#ffffff'}}}%%
@@ -343,7 +362,7 @@ flowchart LR
 
 | Milestone | Goal | Done when |
 | :--- | :--- | :--- |
-| **v0.2.0 Measured core** (active; the HF cross-check is paused) | Real forward pass, measured gate, honest dossier | Every published figure regenerates from a report; analytic proxy retired or labelled everywhere |
+| **v0.2.0 Measured core** (active; the HF cross-check passed on Pythia-14M and SmolLM-135M) | Real forward pass, measured gate, honest dossier | Every published figure regenerates from a report; analytic proxy retired or labelled everywhere |
 | **v0.2.1 Recipe and BYOA lab** (done) | Any recipe or BYOA algorithm runs through the measured gate | A searched recipe beats uniform and random placement at matched size |
 | **v0.2.2 Formats and calibration** (in progress) | 4-bit K-quants, activation-aware scales, Hadamard rotation, per-tensor export | A heterogeneous artifact smaller than uniform Q8_0 passes the gate |
 | v0.2.3 Recovery | Distillation and LoRA recovery for aggressive formats | A recovered ternary-heavy candidate passes the gate |

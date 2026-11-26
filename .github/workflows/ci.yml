@@ -14,17 +14,29 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  contents: read
+
 jobs:
   hygiene:
     name: Repository hygiene
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: No absolute developer paths
         run: |
-          if git grep -inE "(C:\\\\Users\\\\[a-zA-Z0-9_-]+|/home/[a-zA-Z0-9_-]+)" -- ':!*.png' ':!*.gif' ':!*.jpg' ':!*.ttf' ':!AGENTS.md'; then
+          # Windows (either slash), macOS and Linux home folders, and AppData paths.
+          if git grep -inE '(C:[/\]+Users[/\]+[A-Za-z0-9_-]|/Users/[A-Za-z0-9_-]|/home/[A-Za-z0-9_-]+|[/\]AppData[/\])' -- ':!*.png' ':!*.gif' ':!*.jpg' ':!*.ttf' ':!AGENTS.md'; then
             echo "::error::Local username or absolute developer path found in tracked files"
+            exit 1
+          fi
+
+      - name: No agent notes or personal settings tracked
+        run: |
+          # THME-3050 removes the remaining tracked notes; add their names here when it lands.
+          if git ls-files | grep -E '(^|/)(\.claude/|\.agents/|\.mcp\.json$)|[^/]*\.local\.md$'; then
+            echo "::error::Agent notes or personal settings are tracked"
             exit 1
           fi
 
@@ -38,6 +50,9 @@ jobs:
       - name: SPDX licence header on every source file
         run: python3 scripts/spdx.py --check
 
+      - name: Example notebooks are nbformat 4, without outputs or user paths
+        run: python3 scripts/check_notebook.py
+
       - name: Third-party notice has a row in the register
         run: python3 scripts/third_party.py --check
 
@@ -48,10 +63,10 @@ jobs:
     name: Format and clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # rust-toolchain.toml pins the compiler, rustfmt and clippy.
       - run: rustup show active-toolchain
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --locked -- -D warnings
 
@@ -64,8 +79,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v7
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       - run: cargo test --locked
 
       - name: Verify configured llama.cpp and Ollama runtimes
@@ -81,13 +96,13 @@ jobs:
     name: Minimum supported Rust (Cargo.toml rust-version)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Read rust-version
         id: msrv
         run: echo "version=$(grep -m1 '^rust-version' Cargo.toml | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
       - name: Install the minimum toolchain
         run: rustup toolchain install "${{ steps.msrv.outputs.version }}" --profile minimal
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           key: msrv
       - run: cargo +${{ steps.msrv.outputs.version }} check --all-targets --locked
@@ -96,8 +111,8 @@ jobs:
     name: Published figures regenerate from committed reports
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
       - name: Scripts compile
@@ -122,13 +137,13 @@ jobs:
     name: Dependency advisories, licences and sources
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: EmbarkStudios/cargo-deny-action@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: EmbarkStudios/cargo-deny-action@17aeb3c839e42274e2b8adf721c8c65edfdc74dd # v2
         with:
           command: check advisories bans licenses sources
       # Release archives ship THIRD_PARTY_LICENSES.html; fail here, not at release time,
       # if a dependency's licence text cannot be found.
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f # v2.90.6
         with:
           tool: cargo-about@0.9.3
       - name: Third-party licence notices generate
@@ -139,7 +154,7 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Override the pinned toolchain
         run: |
           rustup toolchain install stable --profile minimal --component clippy

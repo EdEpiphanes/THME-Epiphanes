@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use super::gemma::{GemmaConfig, GemmaModel};
 use super::gpu::GpuBackend;
+use super::kv::KvCache;
 use super::llama::{DepthExit, LlamaConfig, LlamaModel, WeightPrecision};
 use super::neox::{NeoxConfig, NeoxModel};
 use super::probe::ForwardTrace;
@@ -43,6 +44,17 @@ pub trait CausalLm: Send + Sync {
 
     /// Forward pass returning unnormalized logits of shape `[vocab_size]` for the final token position.
     fn forward_logits(&self, tokens: &[u32]) -> Result<Vec<f32>>;
+
+    /// An empty KV cache for incremental decoding, or `None` when this architecture has no cached path.
+    fn new_cache(&self) -> Option<KvCache> {
+        None
+    }
+
+    /// Appends `tokens` after the positions in `cache` and returns the logits of the last one.
+    /// Equal to `forward_logits` over the whole sequence; only architectures with a cache implement it.
+    fn forward_extend(&self, _cache: &mut KvCache, _tokens: &[u32]) -> Result<Vec<f32>> {
+        bail!("This architecture has no KV-cache path; use forward_logits")
+    }
 }
 
 impl CausalLm for LlamaModel {
@@ -67,8 +79,17 @@ impl CausalLm for LlamaModel {
     ) -> Result<(DepthExit, ForwardTrace)> {
         LlamaModel::forward_traced(self, tokens, schedule)
     }
+    fn forward_nll(&self, tokens: &[u32]) -> Result<Vec<f32>> {
+        LlamaModel::forward_nll(self, tokens)
+    }
     fn forward_logits(&self, tokens: &[u32]) -> Result<Vec<f32>> {
         LlamaModel::forward_logits(self, tokens)
+    }
+    fn new_cache(&self) -> Option<KvCache> {
+        Some(LlamaModel::new_cache(self))
+    }
+    fn forward_extend(&self, cache: &mut KvCache, tokens: &[u32]) -> Result<Vec<f32>> {
+        LlamaModel::forward_extend(self, cache, tokens)
     }
 }
 
@@ -94,8 +115,17 @@ impl CausalLm for NeoxModel {
     ) -> Result<(DepthExit, ForwardTrace)> {
         NeoxModel::forward_traced(self, tokens, schedule)
     }
+    fn forward_nll(&self, tokens: &[u32]) -> Result<Vec<f32>> {
+        NeoxModel::forward_nll(self, tokens)
+    }
     fn forward_logits(&self, tokens: &[u32]) -> Result<Vec<f32>> {
         NeoxModel::forward_logits(self, tokens)
+    }
+    fn new_cache(&self) -> Option<KvCache> {
+        Some(NeoxModel::new_cache(self))
+    }
+    fn forward_extend(&self, cache: &mut KvCache, tokens: &[u32]) -> Result<Vec<f32>> {
+        NeoxModel::forward_extend(self, cache, tokens)
     }
 }
 
@@ -195,7 +225,13 @@ impl ArchConfig {
                 }
                 Box::new(m)
             }
-            Self::NeoX(config) => Box::new(NeoxModel::load(model, config.clone(), precision)?),
+            Self::NeoX(config) => {
+                let mut m = NeoxModel::load(model, config.clone(), precision)?;
+                if let Some(backend) = gpu {
+                    m.set_gpu(Some(backend));
+                }
+                Box::new(m)
+            }
             Self::Gemma(config) => {
                 let mut m = GemmaModel::load(model, config.clone(), precision)?;
                 if let Some(backend) = gpu {

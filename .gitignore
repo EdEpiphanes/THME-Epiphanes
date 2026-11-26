@@ -64,3 +64,6 @@ THIRD_PARTY_LICENSES.html
 # Research PDFs (large binaries; Markdown versions are tracked)
 docs/research/*.pdf
 /models
+# Local agent and editor state
+.claude/
+.mcp.json

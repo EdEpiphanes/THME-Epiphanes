@@ -1,0 +1,174 @@
+{
+  "model": "SmolLM-135M (HuggingFaceTB, Apache-2.0)",
+  "date": "2026-11-20",
+  "reference": "Hugging Face transformers 5.23.0, torch 2.14.1, fp32",
+  "thme": "target release build of main after #92; thme forward --json",
+  "tolerance": 0.005,
+  "runs": {
+    "hf_reference_on_cpu": {
+      "model": "models/smollm-135m",
+      "tolerance": 0.005,
+      "method": "cli",
+      "prompts": [
+        {
+          "prompt": "The capital of France is",
+          "tokens": [
+            504,
+            3575,
+            282,
+            4649,
+            314
+          ],
+          "stats": {
+            "max_abs_diff": 1.8835067749023438e-05,
+            "mean_abs_diff": 7.845759391784668e-06,
+            "tolerance": 0.005,
+            "passed": true
+          }
+        },
+        {
+          "prompt": "In mathematics, a manifold is",
+          "tokens": [
+            788,
+            6530,
+            28,
+            253,
+            33182,
+            314
+          ],
+          "stats": {
+            "max_abs_diff": 1.71661376953125e-05,
+            "mean_abs_diff": 5.9872865676879885e-06,
+            "tolerance": 0.005,
+            "passed": true
+          }
+        },
+        {
+          "prompt": "Deep learning models require careful precision tuning because",
+          "tokens": [
+            29602,
+            1380,
+            2859,
+            1984,
+            5649,
+            9636,
+            25163,
+            975
+          ],
+          "stats": {
+            "max_abs_diff": 1.2874603271484375e-05,
+            "mean_abs_diff": 3.6215782165527343e-06,
+            "tolerance": 0.005,
+            "passed": true
+          }
+        },
+        {
+          "prompt": "Once upon a time in a distant topological realm,",
+          "tokens": [
+            6403,
+            1980,
+            253,
+            655,
+            281,
+            253,
+            9931,
+            44698,
+            7815,
+            28
+          ],
+          "stats": {
+            "max_abs_diff": 2.09808349609375e-05,
+            "mean_abs_diff": 1.4072060585021973e-05,
+            "tolerance": 0.005,
+            "passed": true
+          }
+        }
+      ],
+      "overall_passed": true,
+      "status": "PASSED"
+    },
+    "hf_reference_on_cuda_rtx_4060_ti": {
+      "model": "models/smollm-135m",
+      "tolerance": 0.005,
+      "method": "cli",
+      "prompts": [
+        {
+          "prompt": "The capital of France is",
+          "tokens": [
+            504,
+            3575,
+            282,
+            4649,
+            314
+          ],
+          "stats": {
+            "max_abs_diff": 9.417533874511719e-06,
+            "mean_abs_diff": 2.1645426750183104e-06,
+            "tolerance": 0.005,
+            "passed": true
+          }
+        },
+        {
+          "prompt": "In mathematics, a manifold is",
+          "tokens": [
+            788,
+            6530,
+            28,
+            253,
+            33182,
+            314
+          ],
+          "stats": {
+            "max_abs_diff": 9.5367431640625e-06,
+            "mean_abs_diff": 4.536807537078857e-06,
+            "tolerance": 0.005,
+            "passed": true
+          }
+        },
+        {
+          "prompt": "Deep learning models require careful precision tuning because",
+          "tokens": [
+            29602,
+            1380,
+            2859,
+            1984,
+            5649,
+            9636,
+            25163,
+            975
+          ],
+          "stats": {
+            "max_abs_diff": 1.4781951904296875e-05,
+            "mean_abs_diff": 8.161067962646484e-06,
+            "tolerance": 0.005,
+            "passed": true
+          }
+        },
+        {
+          "prompt": "Once upon a time in a distant topological realm,",
+          "tokens": [
+            6403,
+            1980,
+            253,
+            655,
+            281,
+            253,
+            9931,
+            44698,
+            7815,
+            28
+          ],
+          "stats": {
+            "max_abs_diff": 7.62939453125e-06,
+            "mean_abs_diff": 2.5492906570434572e-06,
+            "tolerance": 0.005,
+            "passed": true
+          }
+        }
+      ],
+      "overall_passed": true,
+      "status": "PASSED"
+    }
+  },
+  "label_note": "The run names say where the Hugging Face (torch) reference ran. The THME side used its default device in both runs; the GPU backend at that date was the earlier per-operation Vulkan path. Names corrected on 20 November 2026."
+}

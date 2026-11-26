@@ -175,6 +175,12 @@ def main():
         help="Path to write JSON comparison report",
     )
     parser.add_argument(
+        "--device",
+        type=str,
+        default="cpu",
+        help="Device for the Hugging Face reference (cpu or cuda); fp32 either way",
+    )
+    parser.add_argument(
         "--allow-skip",
         action="store_true",
         help="Exit with status code 77 (SKIP) if dependencies or models are missing",
@@ -236,8 +242,11 @@ def main():
     try:
         print(f"Loading Hugging Face model & tokenizer for '{model_target}'...")
         tokenizer = AutoTokenizer.from_pretrained(model_target)
-        model = AutoModelForCausalLM.from_pretrained(model_target)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_target, dtype=torch.float32  # newer transformers default to the stored dtype (fp16 here)
+        )
         model.eval()
+        model.to(args.device)
     except Exception as e:
         print(
             f"\n[ERROR] Failed to load reference model '{model_target}': {e}",
@@ -269,12 +278,12 @@ def main():
 
     for prompt in DEFAULT_PROMPTS:
         print(f"\nEvaluating prompt: '{prompt}'")
-        inputs = tokenizer(prompt, return_tensors="pt")
+        inputs = tokenizer(prompt, return_tensors="pt").to(args.device)
         token_ids = inputs["input_ids"][0].tolist()
 
         with torch.no_grad():
             hf_out = model(**inputs)
-            hf_logits = hf_out.logits[0, -1, : args.limit].tolist()
+            hf_logits = hf_out.logits[0, -1, : args.limit].float().cpu().tolist()
 
         try:
             if args.method == "mcp":
