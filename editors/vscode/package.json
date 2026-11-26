@@ -70,6 +70,18 @@
     },
     "commands": [
       {
+        "command": "thme.selectModel",
+        "title": "THME: Select Model for the Sidebar",
+        "category": "THME",
+        "icon": "$(preview)"
+      },
+      {
+        "command": "thme.refreshSidebar",
+        "title": "THME: Refresh Sidebar from the CLI",
+        "category": "THME",
+        "icon": "$(refresh)"
+      },
+      {
         "command": "thme.launchStudio",
         "title": "THME: Launch 60 FPS Native Studio GUI",
         "category": "THME",

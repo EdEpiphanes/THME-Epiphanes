@@ -1,0 +1,91 @@
+{
+  "kv_cache": [
+    {
+      "batch_size": 1,
+      "bytes_fp16": 2097152,
+      "bytes_fp8": 1048576,
+      "bytes_q4": 524288,
+      "context_length": 1024
+    },
+    {
+      "batch_size": 1,
+      "bytes_fp16": 4194304,
+      "bytes_fp8": 2097152,
+      "bytes_q4": 1048576,
+      "context_length": 2048
+    },
+    {
+      "batch_size": 1,
+      "bytes_fp16": 8388608,
+      "bytes_fp8": 4194304,
+      "bytes_q4": 2097152,
+      "context_length": 4096
+    },
+    {
+      "batch_size": 1,
+      "bytes_fp16": 16777216,
+      "bytes_fp8": 8388608,
+      "bytes_q4": 4194304,
+      "context_length": 8192
+    },
+    {
+      "batch_size": 1,
+      "bytes_fp16": 33554432,
+      "bytes_fp8": 16777216,
+      "bytes_q4": 8388608,
+      "context_length": 16384
+    },
+    {
+      "batch_size": 1,
+      "bytes_fp16": 67108864,
+      "bytes_fp8": 33554432,
+      "bytes_q4": 16777216,
+      "context_length": 32768
+    },
+    {
+      "batch_size": 1,
+      "bytes_fp16": 134217728,
+      "bytes_fp8": 67108864,
+      "bytes_q4": 33554432,
+      "context_length": 65536
+    },
+    {
+      "batch_size": 1,
+      "bytes_fp16": 268435456,
+      "bytes_fp8": 134217728,
+      "bytes_q4": 67108864,
+      "context_length": 131072
+    }
+  ],
+  "layers": [
+    {
+      "average_sensitivity": 0.41777777777777775,
+      "layer_index": 0,
+      "recommended_format": "Q4_0",
+      "total_bytes": 1966080,
+      "total_parameters": 983040
+    },
+    {
+      "average_sensitivity": 0.2834920634920635,
+      "layer_index": 1,
+      "recommended_format": "Ternary",
+      "total_bytes": 1966080,
+      "total_parameters": 983040
+    },
+    {
+      "average_sensitivity": 0.23873015873015876,
+      "layer_index": 2,
+      "recommended_format": "Ternary",
+      "total_bytes": 1966080,
+      "total_parameters": 983040
+    },
+    {
+      "average_sensitivity": 0.2834920634920635,
+      "layer_index": 3,
+      "recommended_format": "Ternary",
+      "total_bytes": 1966080,
+      "total_parameters": 983040
+    }
+  ],
+  "model": "mock_llama"
+}
