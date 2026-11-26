@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 //! C3 deterministic test: the duplicate-seed bug in the random control
 //! (THME-3067).
 //!
