@@ -127,6 +127,8 @@ pub struct CudaContext {
     fn_gemm_f16_tiled: CudaFunction,
     fn_attn_f32: CudaFunction,
     fn_flash_attn_f16: CudaFunction,
+    fn_kv_append_f16: CudaFunction,
+    fn_kv_attention_f16: CudaFunction,
     device_name: String,
     weight_cache: Mutex<WeightCache>,
     workspace: Mutex<Option<(CudaWorkspaceKey, CudaWorkspace)>>,
@@ -307,6 +309,8 @@ impl CudaContext {
             fn_gemm_f16_tiled: load("gemm_f16_tiled")?,
             fn_attn_f32: load("causal_attention_f32")?,
             fn_flash_attn_f16: load("flash_attention_f16")?,
+            fn_kv_append_f16: load("kv_append_f16")?,
+            fn_kv_attention_f16: load("kv_attention_f16")?,
             device_name,
             weight_cache: Mutex::new(WeightCache::default()),
             workspace: Mutex::new(None),
@@ -840,6 +844,80 @@ impl CudaContext {
                 .launch(cfg)
         }
         .map_err(|e| cuda_err("flash_attention_f16 launch", e))?;
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn launch_kv_append_f16(
+        &self,
+        k_src: &CudaSlice<u16>,
+        v_src: &CudaSlice<u16>,
+        k_dst: &mut CudaSlice<u16>,
+        v_dst: &mut CudaSlice<u16>,
+        offset: usize,
+        t_len: usize,
+        kv_dim: usize,
+    ) -> Result<(), ThmeError> {
+        let offset_u32 = offset as u32;
+        let t_u32 = t_len as u32;
+        let kv_dim_u32 = kv_dim as u32;
+        unsafe {
+            self.stream
+                .launch_builder(&self.fn_kv_append_f16)
+                .arg(k_src)
+                .arg(v_src)
+                .arg(k_dst)
+                .arg(v_dst)
+                .arg(&offset_u32)
+                .arg(&t_u32)
+                .arg(&kv_dim_u32)
+                .launch(grid_1d(t_len * kv_dim))
+        }
+        .map_err(|e| cuda_err("kv_append_f16 launch", e))?;
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn launch_kv_attention_f16(
+        &self,
+        q16: &CudaSlice<u16>,
+        k_cache16: &CudaSlice<u16>,
+        v_cache16: &CudaSlice<u16>,
+        out16: &mut CudaSlice<u16>,
+        offset: usize,
+        t_len: usize,
+        heads: usize,
+        kv_heads: usize,
+        head_dim: usize,
+        scale: f32,
+    ) -> Result<(), ThmeError> {
+        let offset_u32 = offset as u32;
+        let t_u32 = t_len as u32;
+        let heads_u32 = heads as u32;
+        let kv_heads_u32 = kv_heads as u32;
+        let hd_u32 = head_dim as u32;
+        let smem_bytes = (32 * head_dim * 2 * 2) as u32;
+        let cfg = LaunchConfig {
+            grid_dim: (heads_u32, t_u32.div_ceil(8), 1),
+            block_dim: (32, 8, 1),
+            shared_mem_bytes: smem_bytes,
+        };
+        unsafe {
+            self.stream
+                .launch_builder(&self.fn_kv_attention_f16)
+                .arg(q16)
+                .arg(k_cache16)
+                .arg(v_cache16)
+                .arg(out16)
+                .arg(&offset_u32)
+                .arg(&t_u32)
+                .arg(&heads_u32)
+                .arg(&kv_heads_u32)
+                .arg(&hd_u32)
+                .arg(&scale)
+                .launch(cfg)
+        }
+        .map_err(|e| cuda_err("kv_attention_f16 launch", e))?;
         Ok(())
     }
 
@@ -1620,6 +1698,286 @@ impl GpuBackend for CudaContext {
         if nll_mode {
             out.truncate(scored);
         }
+        Ok(Some(out))
+    }
+
+    fn forward_decoder_extend(
+        &self,
+        plan: &DecoderPlan<'_>,
+        x0: &[f32],
+        cache: &mut crate::inference::KvCache,
+    ) -> Result<Option<Vec<f32>>, ThmeError> {
+        if self.blas.is_none() {
+            return Ok(None);
+        }
+        let (d, heads, kv_heads, hd) = (plan.hidden, plan.heads, plan.kv_heads, plan.head_dim);
+        if d == 0 || x0.is_empty() || !x0.len().is_multiple_of(d) {
+            return Ok(None);
+        }
+        let t = x0.len() / d;
+        let kv_dim = kv_heads * hd;
+        let supported = hd > 0
+            && hd <= BLOCK_256 as usize
+            && heads * hd == d
+            && kv_heads > 0
+            && heads.is_multiple_of(kv_heads)
+            && hd.is_multiple_of(2)
+            && plan.rope_cos.len() >= t * (hd / 2)
+            && plan.rope_sin.len() >= t * (hd / 2)
+            && !plan.layers.is_empty();
+        if !supported {
+            return Ok(None);
+        }
+        if !cache.has_device_state() && !cache.is_empty() {
+            return Ok(None);
+        }
+
+        struct CudaKvState {
+            capacity: usize,
+            layers: Vec<(CudaSlice<u16>, CudaSlice<u16>)>,
+        }
+
+        let offset = cache.len();
+        let needed = offset + t;
+        if cache.device_state_mut::<CudaKvState>().is_none() {
+            let cap = needed.max(2048).next_power_of_two();
+            let mut layers = Vec::with_capacity(plan.layers.len());
+            for _ in 0..plan.layers.len() {
+                let k = self.stream.alloc_zeros::<u16>(cap * kv_dim).map_err(|e| {
+                    ThmeError::BufferAllocationFailed {
+                        name: "kv_k".into(),
+                        bytes: cap * kv_dim * 2,
+                        reason: format!("{e:?}"),
+                    }
+                })?;
+                let v = self.stream.alloc_zeros::<u16>(cap * kv_dim).map_err(|e| {
+                    ThmeError::BufferAllocationFailed {
+                        name: "kv_v".into(),
+                        bytes: cap * kv_dim * 2,
+                        reason: format!("{e:?}"),
+                    }
+                })?;
+                layers.push((k, v));
+            }
+            cache.set_device_state(
+                CudaKvState {
+                    capacity: cap,
+                    layers,
+                },
+                0,
+                0,
+            );
+        }
+
+        let Some((kv_state, dev_len, dev_bytes)) = cache.device_state_mut::<CudaKvState>() else {
+            return Ok(None);
+        };
+        if needed > kv_state.capacity {
+            let new_cap = needed.next_power_of_two();
+            for (k_buf, v_buf) in &mut kv_state.layers {
+                let mut new_k = self
+                    .stream
+                    .alloc_zeros::<u16>(new_cap * kv_dim)
+                    .map_err(|e| ThmeError::BufferAllocationFailed {
+                        name: "kv_k_grow".into(),
+                        bytes: new_cap * kv_dim * 2,
+                        reason: format!("{e:?}"),
+                    })?;
+                let mut new_v = self
+                    .stream
+                    .alloc_zeros::<u16>(new_cap * kv_dim)
+                    .map_err(|e| ThmeError::BufferAllocationFailed {
+                        name: "kv_v_grow".into(),
+                        bytes: new_cap * kv_dim * 2,
+                        reason: format!("{e:?}"),
+                    })?;
+                if offset > 0 {
+                    let used = offset * kv_dim;
+                    self.stream
+                        .memcpy_dtod(&k_buf.slice(..used), &mut new_k.slice_mut(..used))
+                        .map_err(|e| {
+                            ThmeError::DataTransferFailed(format!("CUDA kv_k grow copy: {e:?}"))
+                        })?;
+                    self.stream
+                        .memcpy_dtod(&v_buf.slice(..used), &mut new_v.slice_mut(..used))
+                        .map_err(|e| {
+                            ThmeError::DataTransferFailed(format!("CUDA kv_v grow copy: {e:?}"))
+                        })?;
+                }
+                *k_buf = new_k;
+                *v_buf = new_v;
+            }
+            kv_state.capacity = new_cap;
+        }
+
+        let inter = plan.inter;
+        let mut resident = Vec::with_capacity(plan.layers.len());
+        for l in &plan.layers {
+            resident.push((
+                self.resident_f32(l.attn_norm)?,
+                self.resident_f32(l.mlp_norm)?,
+                [
+                    self.resident_f16(l.q)?,
+                    self.resident_f16(l.k)?,
+                    self.resident_f16(l.v)?,
+                    self.resident_f16(l.o)?,
+                    self.resident_f16(l.gate)?,
+                    self.resident_f16(l.up)?,
+                    self.resident_f16(l.down)?,
+                ],
+            ));
+        }
+        let final_norm = self.resident_f32(plan.final_norm)?;
+        let head = self.resident_f16(plan.head)?;
+
+        let half = hd / 2;
+        let key = CudaWorkspaceKey {
+            t,
+            d,
+            kv_dim,
+            inter,
+            vocab: plan.vocab,
+            nll_mode: false,
+            head_dim: hd,
+        };
+        let mut ws = {
+            let mut guard = self
+                .workspace
+                .lock()
+                .map_err(|_| ThmeError::ExecutionFailed("CUDA workspace lock poisoned".into()))?;
+            match guard.take() {
+                Some((k, w)) if k == key => w,
+                _ => self.alloc_workspace(key, 0)?,
+            }
+        };
+
+        self.stream
+            .memcpy_htod(x0, &mut ws.x_a)
+            .map_err(|e| ThmeError::DataTransferFailed(format!("CUDA x0 upload: {e:?}")))?;
+        let cos_slice = &plan.rope_cos[..t * half];
+        let sin_slice = &plan.rope_sin[..t * half];
+        let cos_hash = slice_hash(cos_slice);
+        if cos_hash != ws.cos_hash {
+            self.stream
+                .memcpy_htod(cos_slice, &mut ws.cos)
+                .map_err(|e| ThmeError::DataTransferFailed(format!("CUDA cos upload: {e:?}")))?;
+            ws.cos_hash = cos_hash;
+        }
+        let sin_hash = slice_hash(sin_slice);
+        if sin_hash != ws.sin_hash {
+            self.stream
+                .memcpy_htod(sin_slice, &mut ws.sin)
+                .map_err(|e| ThmeError::DataTransferFailed(format!("CUDA sin upload: {e:?}")))?;
+            ws.sin_hash = sin_hash;
+        }
+
+        let tint = t * inter;
+        let scale = 1.0 / (hd as f32).sqrt();
+
+        self.launch_rms_norm_f16(&ws.x_a, &resident[0].0, &mut ws.x16, t, d, plan.eps, 0)?;
+        for (idx, (_attn_norm, mlp_norm, [wq, wk, wv, wo, wg, wu, wd])) in
+            resident.iter().enumerate()
+        {
+            self.gemm_f16_to_f16(&ws.x16, 0, wq, &mut ws.q16, t, d, d)?;
+            self.gemm_f16_to_f16(&ws.x16, 0, wk, &mut ws.k16, t, d, kv_dim)?;
+            self.gemm_f16_to_f16(&ws.x16, 0, wv, &mut ws.v16, t, d, kv_dim)?;
+
+            self.launch_rope_qk_f16(
+                &ws.cos,
+                &ws.sin,
+                &mut ws.q16,
+                &mut ws.k16,
+                t,
+                d,
+                kv_dim,
+                hd,
+                half,
+            )?;
+
+            let (k_cache, v_cache) = &mut kv_state.layers[idx];
+            self.launch_kv_append_f16(&ws.k16, &ws.v16, k_cache, v_cache, offset, t, kv_dim)?;
+            self.launch_kv_attention_f16(
+                &ws.q16,
+                k_cache,
+                v_cache,
+                &mut ws.x16,
+                offset,
+                t,
+                heads,
+                kv_heads,
+                hd,
+                scale,
+            )?;
+
+            self.gemm_f16_to_f16(&ws.x16, 0, wo, &mut ws.tmp16, t, d, d)?;
+            self.launch_add_rms_norm_f16(
+                &ws.x_a,
+                &ws.tmp16,
+                mlp_norm,
+                &mut ws.x_b,
+                &mut ws.x16,
+                t,
+                d,
+                plan.eps,
+            )?;
+
+            self.gemm_f16_to_f16(&ws.x16, 0, wg, &mut ws.gate16, t, d, inter)?;
+            self.gemm_f16_to_f16(&ws.x16, 0, wu, &mut ws.up16, t, d, inter)?;
+            self.launch_swiglu_f16_in(&ws.gate16, &ws.up16, &mut ws.x16, tint)?;
+            self.gemm_f16_to_f16(&ws.x16, 0, wd, &mut ws.tmp16, t, inter, d)?;
+
+            let next_norm = if idx + 1 < resident.len() {
+                &resident[idx + 1].0
+            } else {
+                &final_norm
+            };
+            self.launch_add_rms_norm_f16(
+                &ws.x_b,
+                &ws.tmp16,
+                next_norm,
+                &mut ws.x_a,
+                &mut ws.x16,
+                t,
+                d,
+                plan.eps,
+            )?;
+        }
+
+        if t == 1 {
+            self.gemm_f16_preconverted(&ws.x16, &head, &mut ws.logits, 1, d, plan.vocab)?;
+        } else {
+            self.launch_rms_norm(
+                &ws.x_a,
+                &final_norm,
+                &mut ws.last,
+                1,
+                d,
+                plan.eps,
+                (t - 1) * d,
+            )?;
+            self.linear_into(
+                &ws.last,
+                0,
+                &mut ws.x16,
+                &head,
+                &mut ws.logits,
+                1,
+                d,
+                plan.vocab,
+            )?;
+        }
+        let out = self.stream.clone_dtoh(&ws.logits).map_err(|e| {
+            ThmeError::DataTransferFailed(format!("CUDA extend logits readback: {e:?}"))
+        })?;
+
+        *dev_len = needed;
+        *dev_bytes = 2 * kv_state.layers.len() * needed * kv_dim * std::mem::size_of::<u16>();
+
+        if let Ok(mut guard) = self.workspace.lock() {
+            *guard = Some((key, ws));
+        }
+        drop(resident);
+        check_finite(&out, "decoder logits")?;
         Ok(Some(out))
     }
 

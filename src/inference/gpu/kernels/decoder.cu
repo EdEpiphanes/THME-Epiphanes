@@ -670,3 +670,139 @@ extern "C" __global__ void flash_attention_f16(
         }
     }
 }
+
+extern "C" __global__ void kv_append_f16(
+    const unsigned short* k_src,
+    const unsigned short* v_src,
+    unsigned short* k_dst,
+    unsigned short* v_dst,
+    unsigned int offset,
+    unsigned int t_len,
+    unsigned int kv_dim
+) {
+    unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int total = t_len * kv_dim;
+    if (idx < total) {
+        unsigned int dst_idx = offset * kv_dim + idx;
+        k_dst[dst_idx] = k_src[idx];
+        v_dst[dst_idx] = v_src[idx];
+    }
+}
+
+extern "C" __global__ void kv_attention_f16(
+    const unsigned short* q16,
+    const unsigned short* k_cache16,
+    const unsigned short* v_cache16,
+    unsigned short* out16,
+    unsigned int offset,
+    unsigned int t_len,
+    unsigned int heads,
+    unsigned int kv_heads,
+    unsigned int head_dim,
+    float scale
+) {
+    // 8 warps per block: each warp handles one query row t = t0 + warp.
+    // Attends over cached positions 0 .. offset + t (inclusive).
+    extern __shared__ unsigned short kv_smem[];
+    unsigned short* k_tile = kv_smem;
+    unsigned short* v_tile = kv_smem + 32u * head_dim;
+
+    unsigned int h = blockIdx.x;
+    unsigned int t0 = blockIdx.y * 8u;
+    unsigned int lane = threadIdx.x;
+    unsigned int warp = threadIdx.y;
+    unsigned int tid = warp * 32u + lane;
+    unsigned int t = t0 + warp;
+    if (h >= heads || t0 >= t_len) {
+        return;
+    }
+
+    unsigned int group = heads / kv_heads;
+    unsigned int kvh = h / group;
+    unsigned int q_stride = heads * head_dim;
+    unsigned int kv_stride = kv_heads * head_dim;
+    unsigned int t_max = t0 + 7u;
+    if (t_max >= t_len) {
+        t_max = t_len - 1u;
+    }
+    unsigned int total_kv = offset + t_max + 1u;
+
+    float q_reg[8];
+    float acc[8];
+    for (unsigned int r = 0u; r < 8u; ++r) {
+        q_reg[r] = 0.0f;
+        acc[r] = 0.0f;
+    }
+    if (t < t_len) {
+        unsigned int q_off = t * q_stride + h * head_dim;
+        for (unsigned int d = lane, r = 0u; d < head_dim && r < 8u; d += 32u, ++r) {
+            float qv;
+            asm("cvt.f32.f16 %0, %1;" : "=f"(qv) : "h"(q16[q_off + d]));
+            q_reg[r] = qv * scale;
+        }
+    }
+
+    float m_i = -3.402823466e+38f;
+    float l_i = 0.0f;
+    unsigned int tile_elems = 32u * head_dim;
+    unsigned int q_abs = offset + t;
+
+    for (unsigned int kb = 0u; kb < total_kv; kb += 32u) {
+        for (unsigned int idx = tid; idx < tile_elems; idx += 256u) {
+            unsigned int row = idx / head_dim;
+            unsigned int col = idx % head_dim;
+            unsigned int ks = kb + row;
+            if (ks < total_kv) {
+                unsigned int kv_off = ks * kv_stride + kvh * head_dim + col;
+                k_tile[idx] = k_cache16[kv_off];
+                v_tile[idx] = v_cache16[kv_off];
+            } else {
+                k_tile[idx] = 0;
+                v_tile[idx] = 0;
+            }
+        }
+        __syncthreads();
+
+        if (t < t_len) {
+            unsigned int limit = 32u;
+            if (kb + limit - 1u > q_abs) {
+                limit = (q_abs >= kb) ? (q_abs - kb + 1u) : 0u;
+            }
+            for (unsigned int j = 0u; j < limit; ++j) {
+                unsigned int j_off = j * head_dim;
+                float dot = 0.0f;
+                for (unsigned int d = lane, r = 0u; d < head_dim && r < 8u; d += 32u, ++r) {
+                    float kv;
+                    asm("cvt.f32.f16 %0, %1;" : "=f"(kv) : "h"(k_tile[j_off + d]));
+                    dot += q_reg[r] * kv;
+                }
+                for (int off = 16; off > 0; off >>= 1) {
+                    dot += __shfl_xor_sync(0xffffffffu, dot, off);
+                }
+
+                float m_new = fmaxf(m_i, dot);
+                float alpha = expf(m_i - m_new);
+                float p = expf(dot - m_new);
+                l_i = l_i * alpha + p;
+                m_i = m_new;
+
+                for (unsigned int d = lane, r = 0u; d < head_dim && r < 8u; d += 32u, ++r) {
+                    float vv;
+                    asm("cvt.f32.f16 %0, %1;" : "=f"(vv) : "h"(v_tile[j_off + d]));
+                    acc[r] = acc[r] * alpha + p * vv;
+                }
+            }
+        }
+        __syncthreads();
+    }
+
+    if (t < t_len) {
+        float inv_l = 1.0f / l_i;
+        unsigned int o_off = t * q_stride + h * head_dim;
+        for (unsigned int d = lane, r = 0u; d < head_dim && r < 8u; d += 32u, ++r) {
+            unsigned short hv;
+            asm("cvt.rn.f16.f32 %0, %1;" : "=h"(hv) : "f"(acc[r] * inv_l));
+            out16[o_off + d] = hv;
+        }
+    }
+}

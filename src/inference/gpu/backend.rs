@@ -1569,6 +1569,17 @@ pub trait GpuBackend: Send + Sync {
         Ok(None)
     }
 
+    /// Incremental KV-cached decoder forward pass on the device. Appends `embedded` (`t_len * d`)
+    /// after `cache.len()` and returns the last position's logits. `Ok(None)` falls back to CPU.
+    fn forward_decoder_extend(
+        &self,
+        _plan: &DecoderPlan<'_>,
+        _embedded: &[f32],
+        _cache: &mut crate::inference::KvCache,
+    ) -> Result<Option<Vec<f32>>, ThmeError> {
+        Ok(None)
+    }
+
     /// Output head plus negative log-likelihood on the device for already normalized rows:
     /// returns one score per row but the last (`targets[r]` is row `r`'s next token) and reads
     /// back only those scores. `Ok(None)` means unsupported; use the per-op path.

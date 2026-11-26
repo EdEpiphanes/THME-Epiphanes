@@ -432,8 +432,47 @@ impl LlamaModel {
             let start = token as usize * d;
             row.copy_from_slice(&self.embed[start..start + d]);
         }
-        // shortcut: rotary table rebuilt per call (O(cached positions) trig), fine at these sizes; keep it in the cache if decode profiles show it.
-        let rope = RopeTable::new(offset + t_len, head_dim, head_dim, self.config.rope_theta);
+        let rope = self.rope_for(offset + t_len, head_dim);
+        if let Some(gpu) = &self.gpu_backend {
+            let half = head_dim / 2;
+            let head_w = self.lm_head.as_deref().unwrap_or(&self.embed);
+            let plan = DecoderPlan {
+                hidden: d,
+                heads: self.config.num_heads,
+                kv_heads: self.config.num_kv_heads,
+                head_dim,
+                inter: self.intermediate_size,
+                vocab: self.vocab_size,
+                eps: self.config.rms_norm_eps,
+                rope_cos: &rope.cos()[offset * half..],
+                rope_sin: &rope.sin()[offset * half..],
+                layers: self
+                    .layers
+                    .iter()
+                    .map(|l| LayerWeights {
+                        attn_norm: &l.attn_norm,
+                        mlp_norm: &l.mlp_norm,
+                        q: &l.q,
+                        k: &l.k,
+                        v: &l.v,
+                        o: &l.o,
+                        gate: &l.gate,
+                        up: &l.up,
+                        down: &l.down,
+                    })
+                    .collect(),
+                final_norm: &self.final_norm,
+                head: head_w,
+                targets: None,
+            };
+            match gpu.forward_decoder_extend(&plan, &x, cache) {
+                Ok(Some(logits)) => return Ok(logits),
+                Ok(None) => {}
+                Err(e) => {
+                    eprintln!("Notice: GPU KV decode fallback to CPU path: {e}");
+                }
+            }
+        }
         let mut normed = vec![0.0f32; t_len * d];
         for (index, layer) in self.layers.iter().enumerate() {
             let layer_cache = cache.layer_mut(index)?;
@@ -461,11 +500,28 @@ impl LlamaModel {
         )
     }
 
-    /// Embedded rows and the rotary table for `tokens`.
-    fn embed_rows(&self, tokens: &[u32]) -> (Vec<f32>, RopeTable) {
-        type RopeCacheEntry = ((usize, usize, u32), RopeTable);
+    fn rope_for(&self, len: usize, head_dim: usize) -> RopeTable {
+        type RopeCacheEntry = ((usize, u32), RopeTable);
         static ROPE_CACHE: std::sync::OnceLock<std::sync::Mutex<Option<RopeCacheEntry>>> =
             std::sync::OnceLock::new();
+        let key = (head_dim, self.config.rope_theta.to_bits());
+        let cache = ROPE_CACHE.get_or_init(|| std::sync::Mutex::new(None));
+        if let Ok(mut guard) = cache.lock() {
+            if let Some((k, tbl)) = guard.as_ref() {
+                if *k == key && tbl.cos.len() >= len * (head_dim / 2) {
+                    return tbl.clone();
+                }
+            }
+            let alloc_len = len.max(2048);
+            let tbl = RopeTable::new(alloc_len, head_dim, head_dim, self.config.rope_theta);
+            *guard = Some((key, tbl.clone()));
+            return tbl;
+        }
+        RopeTable::new(len, head_dim, head_dim, self.config.rope_theta)
+    }
+
+    /// Embedded rows and the rotary table for `tokens`.
+    fn embed_rows(&self, tokens: &[u32]) -> (Vec<f32>, RopeTable) {
         let d = self.config.hidden_size;
         let head_dim = d / self.config.num_heads;
         let mut x = vec![0.0f32; tokens.len() * d];
@@ -473,26 +529,7 @@ impl LlamaModel {
             let start = token as usize * d;
             row.copy_from_slice(&self.embed[start..start + d]);
         }
-        let key = (tokens.len(), head_dim, self.config.rope_theta.to_bits());
-        let cache = ROPE_CACHE.get_or_init(|| std::sync::Mutex::new(None));
-        let rope = if let Ok(mut guard) = cache.lock() {
-            if let Some((k, tbl)) = guard.as_ref() {
-                if *k == key {
-                    tbl.clone()
-                } else {
-                    let tbl =
-                        RopeTable::new(tokens.len(), head_dim, head_dim, self.config.rope_theta);
-                    *guard = Some((key, tbl.clone()));
-                    tbl
-                }
-            } else {
-                let tbl = RopeTable::new(tokens.len(), head_dim, head_dim, self.config.rope_theta);
-                *guard = Some((key, tbl.clone()));
-                tbl
-            }
-        } else {
-            RopeTable::new(tokens.len(), head_dim, head_dim, self.config.rope_theta)
-        };
+        let rope = self.rope_for(tokens.len(), head_dim);
         (x, rope)
     }
 
@@ -1485,5 +1522,40 @@ pub(crate) mod tests {
                 "gap {gap}"
             );
         }
+    }
+
+    #[test]
+    fn gpu_incremental_logits_match_cpu_full_forward() {
+        let Some(gpu) = crate::inference::gpu::DeviceArg::Gpu.resolve() else {
+            return;
+        };
+        let (mut gpu_model, _) = super::synthetic_demo(5);
+        gpu_model.set_gpu(Some(gpu));
+        let (cpu_model, _) = super::synthetic_demo(5);
+        let tokens: Vec<u32> = (0..32).map(|i| (i * 37 % 256) as u32).collect();
+
+        let mut cache = gpu_model.new_cache();
+        let prefill_logits = gpu_model.forward_extend(&mut cache, &tokens[..16]).unwrap();
+        let cpu_prefill = cpu_model.forward_logits(&tokens[..16]).unwrap();
+        let prefill_gap = prefill_logits
+            .iter()
+            .zip(&cpu_prefill)
+            .map(|(g, c)| (g - c).abs())
+            .fold(0.0f32, f32::max);
+        assert!(prefill_gap < 5e-2, "prefill gap {prefill_gap}");
+
+        for i in 16..tokens.len() {
+            let step_logits = gpu_model
+                .forward_extend(&mut cache, &tokens[i..i + 1])
+                .unwrap();
+            let cpu_full = cpu_model.forward_logits(&tokens[..=i]).unwrap();
+            let step_gap = step_logits
+                .iter()
+                .zip(&cpu_full)
+                .map(|(g, c)| (g - c).abs())
+                .fold(0.0f32, f32::max);
+            assert!(step_gap < 5e-2, "step {i} gap {step_gap}");
+        }
+        assert_eq!(cache.len(), tokens.len());
     }
 }
