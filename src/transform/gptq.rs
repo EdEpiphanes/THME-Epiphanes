@@ -319,6 +319,68 @@ pub fn second_order_round(
     Ok(error)
 }
 
+/// Fast O(numel) diagonal-Hessian fallback (`H_ii = rms_i^2`) when full `X X^T` second
+/// moments are unavailable. Fits each 32-weight block's scale to minimize activation-weighted
+/// squared error `sum rms_j^2 (w_j - Q(w_j, s))^2`.
+pub fn second_order_round_diagonal(
+    values: &mut [f32],
+    in_dim: usize,
+    stats: &ChannelStats,
+    format: &str,
+) -> Result<f64> {
+    let grid = Grid::parse(format)?;
+    if in_dim == 0 || !in_dim.is_multiple_of(GROUP) || !values.len().is_multiple_of(in_dim) {
+        bail!(
+            "Weights of length {} are not whole rows of {in_dim} inputs (a multiple of {GROUP})",
+            values.len()
+        );
+    }
+    if stats.rms.len() != in_dim {
+        bail!(
+            "Calibration statistics cover {} channels, the tensor has {in_dim} inputs",
+            stats.rms.len()
+        );
+    }
+    const ALPHAS: [f32; 5] = [0.85, 0.90, 0.94, 0.97, 1.00];
+    let mut total_err = 0.0f64;
+    for row in values.chunks_exact_mut(in_dim) {
+        for (g_idx, block) in row.chunks_exact_mut(GROUP).enumerate() {
+            let base_col = g_idx * GROUP;
+            let (base_scale, base_stored) = grid.fit(block)?;
+            if base_scale == 0.0 {
+                continue;
+            }
+            let mut best_params = (base_scale, base_stored);
+            let mut best_werr = f64::INFINITY;
+            for &alpha in &ALPHAS {
+                let s = base_scale * alpha;
+                let half = crate::exporter::conversion::f32_to_f16(s);
+                let stored = crate::profiling::f16_to_f32(half);
+                if !stored.is_finite() || (s != 0.0 && half & 0x7fff == 0) {
+                    continue;
+                }
+                let params = (s, stored);
+                let mut werr = 0.0f64;
+                for (k, &v) in block.iter().enumerate() {
+                    let q = grid.round(v, params);
+                    let d = f64::from(v) - f64::from(q);
+                    let r = f64::from(stats.rms[base_col + k]);
+                    werr += r * r * d * d;
+                }
+                if werr < best_werr {
+                    best_werr = werr;
+                    best_params = params;
+                }
+            }
+            for v in block.iter_mut() {
+                *v = grid.round(*v, best_params);
+            }
+            total_err += best_werr;
+        }
+    }
+    Ok(total_err)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

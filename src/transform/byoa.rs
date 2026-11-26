@@ -337,14 +337,18 @@ fn apply_rule(
             let stats = ctx.calibration.ok_or(
                 "second-order rounding needs calibration statistics; run `thme calibrate` and pass `--calibration` to `thme evaluate`",
             )?;
-            let hessian = ctx.hessian.ok_or(
-                "second-order rounding needs the input second moments; run `thme calibrate` and pass `--calibration` to `thme evaluate`",
-            )?;
             let in_dim = ctx.row_width.unwrap_or(n);
-            crate::transform::gptq::second_order_round(
-                weights, in_dim, stats, hessian, format, *damping,
-            )
-            .map_err(|e| format!("{e:#}"))?;
+            if let Some(hessian) = ctx.hessian {
+                crate::transform::gptq::second_order_round(
+                    weights, in_dim, stats, hessian, format, *damping,
+                )
+                .map_err(|e| format!("{e:#}"))?;
+            } else {
+                crate::transform::gptq::second_order_round_diagonal(
+                    weights, in_dim, stats, format,
+                )
+                .map_err(|e| format!("{e:#}"))?;
+            }
         }
         TransformationRule::AbsmeanTernary {
             scale_gamma,
@@ -439,7 +443,9 @@ fn apply_rule(
                 calibration: None,
                 ..*ctx
             };
-            apply_rule(inner, weights, &rotated)?;
+            for chunk in weights.chunks_mut(b) {
+                apply_rule(inner, chunk, &rotated)?;
+            }
             // The normalized Hadamard matrix is its own inverse.
             walsh_hadamard_blocks(weights, b).map_err(|e| e.to_string())?;
         }
