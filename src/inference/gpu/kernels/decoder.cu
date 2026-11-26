@@ -806,3 +806,64 @@ extern "C" __global__ void kv_attention_f16(
         }
     }
 }
+
+extern "C" __global__ void gemv_q4_0_aligned(
+    const unsigned short* scales,
+    const uint4* qs,
+    const unsigned short* x16,
+    unsigned short* out16,
+    unsigned int out_dim,
+    unsigned int in_dim
+) {
+    // 8 warps per block: each warp computes 1 output row.
+    // Shared memory holds x16[0..in_dim] converted to f32 for fast warp reads.
+    extern __shared__ float sx[];
+    unsigned int lane = threadIdx.x;
+    unsigned int warp = threadIdx.y;
+    unsigned int tid = warp * 32u + lane;
+    unsigned int row = blockIdx.x * 8u + warp;
+
+    for (unsigned int i = tid; i < in_dim; i += 256u) {
+        float xv;
+        asm("cvt.f32.f16 %0, %1;" : "=f"(xv) : "h"(x16[i]));
+        sx[i] = xv;
+    }
+    __syncthreads();
+
+    if (row >= out_dim) {
+        return;
+    }
+
+    unsigned int nb = in_dim >> 5; // in_dim / 32
+    unsigned int row_off = row * nb;
+    float acc = 0.0f;
+
+    for (unsigned int b = lane; b < nb; b += 32u) {
+        float d;
+        asm("cvt.f32.f16 %0, %1;" : "=f"(d) : "h"(scales[row_off + b]));
+        uint4 q4 = qs[row_off + b];
+        unsigned int words[4] = {q4.x, q4.y, q4.z, q4.w};
+        unsigned int xb = b << 5;
+        float bsum = 0.0f;
+        #pragma unroll
+        for (unsigned int w = 0u; w < 4u; ++w) {
+            unsigned int word = words[w];
+            unsigned int base = xb + (w << 3);
+            #pragma unroll
+            for (unsigned int k = 0u; k < 8u; ++k) {
+                int q = (int)((word >> (k * 4u)) & 0xfu) - 8;
+                bsum += (float)q * sx[base + k];
+            }
+        }
+        acc += d * bsum;
+    }
+
+    for (int off = 16; off > 0; off >>= 1) {
+        acc += __shfl_xor_sync(0xffffffffu, acc, off);
+    }
+    if (lane == 0u) {
+        unsigned short hv;
+        asm("cvt.rn.f16.f32 %0, %1;" : "=h"(hv) : "f"(acc));
+        out16[row] = hv;
+    }
+}

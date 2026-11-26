@@ -27,10 +27,16 @@ const BLOCK_256: u32 = 256;
 /// Persistent cuBLAS workspace size (32 MiB) to avoid per-call allocations and unlock Ada Tensor Core algos.
 const CUBLAS_WORKSPACE_BYTES: usize = 32 << 20;
 
+type Q4Resident = (Arc<CudaSlice<u16>>, Arc<CudaSlice<u32>>);
+
 #[derive(Clone)]
 enum CachedBuffer {
     F16(Arc<CudaSlice<u16>>),
     F32(Arc<CudaSlice<f32>>),
+    Q4_0 {
+        scales: Arc<CudaSlice<u16>>,
+        qs: Arc<CudaSlice<u32>>,
+    },
 }
 
 struct CachedEntry {
@@ -129,6 +135,7 @@ pub struct CudaContext {
     fn_flash_attn_f16: CudaFunction,
     fn_kv_append_f16: CudaFunction,
     fn_kv_attention_f16: CudaFunction,
+    fn_gemv_q4_0_aligned: CudaFunction,
     device_name: String,
     weight_cache: Mutex<WeightCache>,
     workspace: Mutex<Option<(CudaWorkspaceKey, CudaWorkspace)>>,
@@ -311,6 +318,7 @@ impl CudaContext {
             fn_flash_attn_f16: load("flash_attention_f16")?,
             fn_kv_append_f16: load("kv_append_f16")?,
             fn_kv_attention_f16: load("kv_attention_f16")?,
+            fn_gemv_q4_0_aligned: load("gemv_q4_0_aligned")?,
             device_name,
             weight_cache: Mutex::new(WeightCache::default()),
             workspace: Mutex::new(None),
@@ -364,6 +372,83 @@ impl CudaContext {
         }
         cache.bytes += bytes;
         Ok(buf)
+    }
+
+    fn resident_q4_0(&self, w: &[f32]) -> Result<Q4Resident, ThmeError> {
+        let key = (w.as_ptr() as usize, w.len(), 4u8);
+        let fp = fingerprint(w);
+        {
+            let mut cache = self
+                .weight_cache
+                .lock()
+                .map_err(|_| ThmeError::ExecutionFailed("CUDA weight cache poisoned".into()))?;
+            cache.tick += 1;
+            let tick = cache.tick;
+            if let Some(entry) = cache.entries.get_mut(&key) {
+                if entry.fingerprint == fp {
+                    if let CachedBuffer::Q4_0 { scales, qs } = &entry.buffer {
+                        entry.last_used = tick;
+                        return Ok((Arc::clone(scales), Arc::clone(qs)));
+                    }
+                }
+            }
+        }
+
+        let nb = w.len() / 32;
+        let mut scales_host = vec![0u16; nb];
+        let mut qs_host = vec![0u32; nb * 4];
+        for (b, chunk) in w.chunks_exact(32).enumerate() {
+            let mut amax = 0.0f32;
+            for &v in chunk {
+                amax = amax.max(v.abs());
+            }
+            let d = amax / 7.0f32;
+            let inv_d = if amax > 0.0 { 7.0f32 / amax } else { 0.0f32 };
+            scales_host[b] = f32_to_f16_bits(d);
+            let q_base = b * 4;
+            for word_idx in 0..4 {
+                let mut word = 0u32;
+                for k in 0..8 {
+                    let v = chunk[word_idx * 8 + k];
+                    let q = ((v * inv_d).round().clamp(-8.0, 7.0) as i32 + 8) as u32;
+                    word |= (q & 0xf) << (k * 4);
+                }
+                qs_host[q_base + word_idx] = word;
+            }
+        }
+
+        let scales = Arc::new(self.stream.clone_htod(&scales_host).map_err(|e| {
+            ThmeError::DataTransferFailed(format!("CUDA q4_0 scales upload: {e:?}"))
+        })?);
+        let qs =
+            Arc::new(self.stream.clone_htod(&qs_host).map_err(|e| {
+                ThmeError::DataTransferFailed(format!("CUDA q4_0 qs upload: {e:?}"))
+            })?);
+        let bytes = scales_host.len() * 2 + qs_host.len() * 4;
+
+        let mut cache = self
+            .weight_cache
+            .lock()
+            .map_err(|_| ThmeError::ExecutionFailed("CUDA weight cache poisoned".into()))?;
+        cache.evict_if_needed(bytes);
+        cache.tick += 1;
+        let tick = cache.tick;
+        if let Some(prev) = cache.entries.insert(
+            key,
+            CachedEntry {
+                fingerprint: fp,
+                buffer: CachedBuffer::Q4_0 {
+                    scales: Arc::clone(&scales),
+                    qs: Arc::clone(&qs),
+                },
+                bytes,
+                last_used: tick,
+            },
+        ) {
+            cache.bytes = cache.bytes.saturating_sub(prev.bytes);
+        }
+        cache.bytes += bytes;
+        Ok((scales, qs))
     }
 
     fn resident_f32(&self, w: &[f32]) -> Result<Arc<CudaSlice<f32>>, ThmeError> {
@@ -918,6 +1003,38 @@ impl CudaContext {
                 .launch(cfg)
         }
         .map_err(|e| cuda_err("kv_attention_f16 launch", e))?;
+        Ok(())
+    }
+
+    fn launch_gemv_q4_0_aligned(
+        &self,
+        scales: &CudaSlice<u16>,
+        qs: &CudaSlice<u32>,
+        x16: &CudaSlice<u16>,
+        out16: &mut CudaSlice<u16>,
+        out_dim: usize,
+        in_dim: usize,
+    ) -> Result<(), ThmeError> {
+        let out_u32 = out_dim as u32;
+        let in_u32 = in_dim as u32;
+        let smem_bytes = (in_dim * std::mem::size_of::<f32>()) as u32;
+        let cfg = LaunchConfig {
+            grid_dim: (out_u32.div_ceil(8), 1, 1),
+            block_dim: (32, 8, 1),
+            shared_mem_bytes: smem_bytes,
+        };
+        unsafe {
+            self.stream
+                .launch_builder(&self.fn_gemv_q4_0_aligned)
+                .arg(scales)
+                .arg(qs)
+                .arg(x16)
+                .arg(out16)
+                .arg(&out_u32)
+                .arg(&in_u32)
+                .launch(cfg)
+        }
+        .map_err(|e| cuda_err("gemv_q4_0_aligned launch", e))?;
         Ok(())
     }
 
@@ -1811,12 +1928,31 @@ impl GpuBackend for CudaContext {
         }
 
         let inter = plan.inter;
+        let use_q4_decode = t == 1
+            && d.is_multiple_of(32)
+            && inter.is_multiple_of(32)
+            && std::env::var("THME_CUDA_Q4_DECODE").as_deref() == Ok("1");
+
+        type Q4Pair = (Arc<CudaSlice<u16>>, Arc<CudaSlice<u32>>);
+        enum LayerResident {
+            F16([Arc<CudaSlice<u16>>; 7]),
+            Q4_0([Q4Pair; 7]),
+        }
+
         let mut resident = Vec::with_capacity(plan.layers.len());
         for l in &plan.layers {
-            resident.push((
-                self.resident_f32(l.attn_norm)?,
-                self.resident_f32(l.mlp_norm)?,
-                [
+            let weights = if use_q4_decode {
+                LayerResident::Q4_0([
+                    self.resident_q4_0(l.q)?,
+                    self.resident_q4_0(l.k)?,
+                    self.resident_q4_0(l.v)?,
+                    self.resident_q4_0(l.o)?,
+                    self.resident_q4_0(l.gate)?,
+                    self.resident_q4_0(l.up)?,
+                    self.resident_q4_0(l.down)?,
+                ])
+            } else {
+                LayerResident::F16([
                     self.resident_f16(l.q)?,
                     self.resident_f16(l.k)?,
                     self.resident_f16(l.v)?,
@@ -1824,7 +1960,12 @@ impl GpuBackend for CudaContext {
                     self.resident_f16(l.gate)?,
                     self.resident_f16(l.up)?,
                     self.resident_f16(l.down)?,
-                ],
+                ])
+            };
+            resident.push((
+                self.resident_f32(l.attn_norm)?,
+                self.resident_f32(l.mlp_norm)?,
+                weights,
             ));
         }
         let final_norm = self.resident_f32(plan.final_norm)?;
@@ -1875,12 +2016,19 @@ impl GpuBackend for CudaContext {
         let scale = 1.0 / (hd as f32).sqrt();
 
         self.launch_rms_norm_f16(&ws.x_a, &resident[0].0, &mut ws.x16, t, d, plan.eps, 0)?;
-        for (idx, (_attn_norm, mlp_norm, [wq, wk, wv, wo, wg, wu, wd])) in
-            resident.iter().enumerate()
-        {
-            self.gemm_f16_to_f16(&ws.x16, 0, wq, &mut ws.q16, t, d, d)?;
-            self.gemm_f16_to_f16(&ws.x16, 0, wk, &mut ws.k16, t, d, kv_dim)?;
-            self.gemm_f16_to_f16(&ws.x16, 0, wv, &mut ws.v16, t, d, kv_dim)?;
+        for (idx, (_attn_norm, mlp_norm, weights)) in resident.iter().enumerate() {
+            match weights {
+                LayerResident::F16([wq, wk, wv, _wo, _wg, _wu, _wd]) => {
+                    self.gemm_f16_to_f16(&ws.x16, 0, wq, &mut ws.q16, t, d, d)?;
+                    self.gemm_f16_to_f16(&ws.x16, 0, wk, &mut ws.k16, t, d, kv_dim)?;
+                    self.gemm_f16_to_f16(&ws.x16, 0, wv, &mut ws.v16, t, d, kv_dim)?;
+                }
+                LayerResident::Q4_0([wq, wk, wv, _wo, _wg, _wu, _wd]) => {
+                    self.launch_gemv_q4_0_aligned(&wq.0, &wq.1, &ws.x16, &mut ws.q16, d, d)?;
+                    self.launch_gemv_q4_0_aligned(&wk.0, &wk.1, &ws.x16, &mut ws.k16, kv_dim, d)?;
+                    self.launch_gemv_q4_0_aligned(&wv.0, &wv.1, &ws.x16, &mut ws.v16, kv_dim, d)?;
+                }
+            }
 
             self.launch_rope_qk_f16(
                 &ws.cos,
@@ -1909,7 +2057,14 @@ impl GpuBackend for CudaContext {
                 scale,
             )?;
 
-            self.gemm_f16_to_f16(&ws.x16, 0, wo, &mut ws.tmp16, t, d, d)?;
+            match weights {
+                LayerResident::F16([_wq, _wk, _wv, wo, _wg, _wu, _wd]) => {
+                    self.gemm_f16_to_f16(&ws.x16, 0, wo, &mut ws.tmp16, t, d, d)?;
+                }
+                LayerResident::Q4_0([_wq, _wk, _wv, wo, _wg, _wu, _wd]) => {
+                    self.launch_gemv_q4_0_aligned(&wo.0, &wo.1, &ws.x16, &mut ws.tmp16, d, d)?;
+                }
+            }
             self.launch_add_rms_norm_f16(
                 &ws.x_a,
                 &ws.tmp16,
@@ -1921,10 +2076,25 @@ impl GpuBackend for CudaContext {
                 plan.eps,
             )?;
 
-            self.gemm_f16_to_f16(&ws.x16, 0, wg, &mut ws.gate16, t, d, inter)?;
-            self.gemm_f16_to_f16(&ws.x16, 0, wu, &mut ws.up16, t, d, inter)?;
+            match weights {
+                LayerResident::F16([_wq, _wk, _wv, _wo, wg, wu, _wd]) => {
+                    self.gemm_f16_to_f16(&ws.x16, 0, wg, &mut ws.gate16, t, d, inter)?;
+                    self.gemm_f16_to_f16(&ws.x16, 0, wu, &mut ws.up16, t, d, inter)?;
+                }
+                LayerResident::Q4_0([_wq, _wk, _wv, _wo, wg, wu, _wd]) => {
+                    self.launch_gemv_q4_0_aligned(&wg.0, &wg.1, &ws.x16, &mut ws.gate16, inter, d)?;
+                    self.launch_gemv_q4_0_aligned(&wu.0, &wu.1, &ws.x16, &mut ws.up16, inter, d)?;
+                }
+            }
             self.launch_swiglu_f16_in(&ws.gate16, &ws.up16, &mut ws.x16, tint)?;
-            self.gemm_f16_to_f16(&ws.x16, 0, wd, &mut ws.tmp16, t, inter, d)?;
+            match weights {
+                LayerResident::F16([_wq, _wk, _wv, _wo, _wg, _wu, wd]) => {
+                    self.gemm_f16_to_f16(&ws.x16, 0, wd, &mut ws.tmp16, t, inter, d)?;
+                }
+                LayerResident::Q4_0([_wq, _wk, _wv, _wo, _wg, _wu, wd]) => {
+                    self.launch_gemv_q4_0_aligned(&wd.0, &wd.1, &ws.x16, &mut ws.tmp16, d, inter)?;
+                }
+            }
 
             let next_norm = if idx + 1 < resident.len() {
                 &resident[idx + 1].0
