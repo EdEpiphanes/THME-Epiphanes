@@ -49,7 +49,7 @@ The MCP interface communicates over standard input and standard output streams (
 
 ## Prerequisites and Environment Setup
 
-- Visual Studio Code: Version 1.90.0 or later.
+- Visual Studio Code: Version 1.146.0 or later.
 - GitHub Copilot Chat Extension: Installed and authenticated in VS Code.
 - Node.js & npm (optional): Required only if compiling the VS Code extension from source (`npm install && npm run compile`).
 - Compiled THME Binary: Available at `./target/release/thme`.
