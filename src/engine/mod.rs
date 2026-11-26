@@ -18,6 +18,7 @@ pub mod iso;
 pub mod minifloat;
 pub mod numfmt;
 pub mod ode;
+pub mod policy_select;
 pub mod transport;
 pub mod viz;
 

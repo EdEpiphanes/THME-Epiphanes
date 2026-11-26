@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pub mod bench;
 pub mod calibrate;
+pub mod chat;
 pub mod chat_template;
+pub mod cluster;
 pub mod co_surgery;
 pub mod convert;
 pub mod discover;
@@ -69,6 +71,9 @@ pub enum Commands {
     #[command(alias = "logits")]
     Forward(forward::ForwardArgs),
 
+    /// Chat with a model using incremental KV-cached greedy decoding
+    Chat(chat::ChatArgs),
+
     /// Search for a mixed-precision recipe from measured costs under a size budget
     Search(search::SearchArgs),
 
@@ -88,6 +93,9 @@ pub enum Commands {
 
     /// Cross-convert model topology across 8 specialized AI paradigms (LLM, LCM, LAM, MoE, VLM, SLM, MLM, SAM)
     Convert(convert::ConvertArgs),
+
+    /// Classify multi-PC interconnects (Thunderbolt / Ethernet / Wi-Fi) and partition layers
+    Cluster(cluster::ClusterArgs),
 
     /// Synthesize draft models and evaluate multi-token speculative decoding speedups
     Speculate(speculate::SpeculateArgs),
@@ -150,12 +158,14 @@ pub fn run() -> Result<()> {
         Commands::Plan(args) => plan::execute(args),
         Commands::Evaluate(args) => evaluate::execute(args),
         Commands::Forward(args) => forward::execute(args),
+        Commands::Chat(args) => chat::execute(args),
         Commands::Search(args) => search::execute(args),
         Commands::Calibrate(args) => calibrate::execute(args),
         Commands::Validate(args) => validate::execute(args),
         Commands::Tweak(args) => tweak::execute(args),
         Commands::Report(args) => report::execute(args),
         Commands::Convert(args) => convert::execute(args),
+        Commands::Cluster(args) => cluster::execute(args),
         Commands::Speculate(args) => speculate::execute(args),
         Commands::Roofline(args) => roofline::execute(args),
         Commands::Export(args) => export::execute(args),

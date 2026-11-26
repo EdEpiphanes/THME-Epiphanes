@@ -23,6 +23,7 @@ pub enum QuantDtype {
     Q5_K,
     Q6_K,
     IQ4_XS,
+    Bitcos,
 }
 
 impl QuantDtype {
@@ -37,6 +38,7 @@ impl QuantDtype {
             "Q5_K" => Some(Self::Q5_K),
             "Q6_K" => Some(Self::Q6_K),
             "IQ4_XS" => Some(Self::IQ4_XS),
+            "BITCOS" | "Bitcos" => Some(Self::Bitcos),
             _ => None,
         }
     }
@@ -46,6 +48,7 @@ impl QuantDtype {
             Self::F32 | Self::F16 | Self::BF16 => 1,
             Self::Q8_0 | Self::Q4_0 => 32,
             Self::Q4_K | Self::Q5_K | Self::Q6_K | Self::IQ4_XS => 256,
+            Self::Bitcos => 1024,
         }
     }
 
@@ -59,6 +62,7 @@ impl QuantDtype {
             Self::Q5_K => 176,
             Self::Q6_K => 210,
             Self::IQ4_XS => 136,
+            Self::Bitcos => 256,
         }
     }
 }

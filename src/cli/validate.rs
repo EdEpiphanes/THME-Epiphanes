@@ -49,6 +49,14 @@ pub struct ValidateArgs {
     #[arg(long, value_name = "REPORT_JSON")]
     pub report: Option<PathBuf>,
 
+    /// Comma-separated block-wise normalized drifts for Epiphanes anytime-valid gating
+    #[arg(long, value_name = "DRIFTS")]
+    pub drifts: Option<String>,
+
+    /// Confidence level eta for Epiphanes anytime martingale bounds (default: 0.05)
+    #[arg(long, default_value_t = 0.05)]
+    pub epiphanes_eta: f64,
+
     /// Output verification outcome in machine-readable JSON format
     #[arg(long)]
     pub json: bool,
@@ -204,6 +212,34 @@ pub fn execute(args: ValidateArgs) -> Result<()> {
     }
     // Check if running perplexity verification
     if let (Some(base_ppl), Some(cand_ppl)) = (args.baseline_ppl, args.candidate_ppl) {
+        if let Some(ref drifts_raw) = args.drifts {
+            let drifts: Vec<f64> = drifts_raw
+                .split(',')
+                .map(|s| s.trim().parse::<f64>())
+                .collect::<std::result::Result<Vec<_>, _>>()
+                .map_err(|e| anyhow::anyhow!("Invalid --drifts value: {e}"))?;
+            let spec = GateSpec::perplexity(args.max_ppl_delta);
+            let verdict = spec.judge_epiphanes_drifts(
+                "perplexity",
+                base_ppl,
+                cand_ppl,
+                &drifts,
+                args.epiphanes_eta,
+            )?;
+            if args.json {
+                println!("{}", serde_json::to_string_pretty(&verdict)?);
+            } else {
+                println!(
+                    "Epiphanes Anytime Gate ({}): accepted={}",
+                    spec.id(),
+                    verdict.accepted
+                );
+            }
+            if !verdict.accepted {
+                anyhow::bail!("Epiphanes quality gate rejected candidate");
+            }
+            return Ok(());
+        }
         let corpus = match args.corpus.as_deref().unwrap_or("wikitext2") {
             "c4" => EvaluationCorpus::C4,
             "ptb" => EvaluationCorpus::PennTreebank,

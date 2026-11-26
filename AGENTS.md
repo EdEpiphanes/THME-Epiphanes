@@ -41,6 +41,7 @@ All agents and contributors must uphold these rules without exception:
 5. **Clean-Room Learning**:
    - Learn from other projects through public documentation, specifications, papers and black-box measurements; do not read, copy or translate their source or shader code (see [docs/clean-room.md](docs/clean-room.md)).
    - Any code taken from outside the repository needs the reference audit, a third-party register entry and the owner's approval first.
+   - Owner decision (26 November 2026, while THME ships only as open source): code from MIT-licensed projects (for example llama.cpp and ggml) may be translated or included. Each import keeps the upstream copyright and permission notice in the file, has a `docs/third-party.md` row and a provenance entry, and is labelled as derived, never as clean-room. GPL, CC BY-NC, custom community licences and unclear copyright stay excluded until the owner and counsel decide. Revisit before any commercial release.
 ---
 
 ## 3. Code Standards & CI Requirements
@@ -60,7 +61,7 @@ cargo test
 
 - **Toolchain**: Rust 2021 edition (version >= 1.95, enforced by the CI `msrv` job).
 - **Binary Footprint Constraints**:
-  - Release GUI binary (`thme-gui`): <= 15 MB.
+  - Release GUI binary (`thme-gui`): <= 25 MB (raised from 15 MB on 25 November 2026 for the embedded PTX kernels, CUDA backend, and GPU diagnostics in the unified binary).
   - Release CLI binary (`thme` / `llm-tweaker`): <= 16 MB (raised from 10 MB on 19 November 2026 for the tokenizer, chat templates, figures and GPU checks in one binary).
 - **Dependencies**: Pure Rust wherever feasible; avoid heavy C/C++ runtimes or external dynamic linking requirements.
 - **Vocabulary**: Use the terms defined in [CONTEXT.md](CONTEXT.md) in code, docs and reports (for example *quality gate* and *criterion*, never a bare "gate"; *nominal* vs *measured* bits per weight).

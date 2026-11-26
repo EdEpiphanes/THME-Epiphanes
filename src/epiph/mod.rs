@@ -19,6 +19,8 @@ use crate::inference::{decode_payload, read_tensor_bytes, CalibrationFile};
 use crate::ir::tensor::{SourceEncoding, TensorSource};
 use crate::ir::ModelIR;
 
+pub mod bitcos;
+
 /// File extension, without the dot.
 pub const EXTENSION: &str = "epiph";
 /// First eight bytes of every file: `\x89EPIPH\r\n`.

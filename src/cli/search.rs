@@ -95,8 +95,7 @@ pub struct SearchArgs {
     #[arg(long, default_value_t = 0)]
     pub test_tokens: usize,
 
-    /// Allocation solver on the measured cost table: `greedy` (best saving per unit cost,
-    /// one step at a time) or `dp` (exact minimum predicted cost under the budget)
+    /// Allocation solver on the measured cost table: `greedy`, `dp`, or `dc-cccp` (coupled Epiphanes solver)
     #[arg(long, default_value = "greedy")]
     pub solver: String,
 
@@ -336,6 +335,56 @@ fn load_or_measure_costs(
 /// A format choice per group (`None` = stored) and the moves that produced it, in order.
 pub type Allocation = (Vec<Option<usize>>, Vec<(usize, Option<usize>)>);
 
+/// Solves coupled mixed-precision allocation using the Signed-Rank-R `DC-CCCP` + Tabu
+/// solver (`src/allocator/dc_cccp.rs`) over group sensitivities `j_eff` and coupling
+/// matrices `gamma_plus` / `gamma_minus_factors`.
+pub fn coupled_dc_cccp(
+    groups: &[Group],
+    formats: &[TensorFormat],
+    costs: &[Vec<f64>],
+    j_eff: &[f64],
+    gamma_plus: &[Vec<f64>],
+    gamma_minus_factors: &[Vec<f64>],
+    budget_bits: f64,
+) -> Result<Vec<Option<usize>>> {
+    use crate::allocator::dc_cccp::{solve_coupled_dc_cccp, FusedGroupSpec};
+    if groups.len() != j_eff.len() || groups.len() != costs.len() {
+        bail!("coupled_dc_cccp: groups, costs, and j_eff lengths must match");
+    }
+    let mut specs = Vec::with_capacity(groups.len());
+    let mut option_maps: Vec<Vec<Option<usize>>> = Vec::with_capacity(groups.len());
+
+    for (g, group) in groups.iter().enumerate() {
+        let mut eps = vec![0.0_f64];
+        let mut bytes = vec![(group.stored_bits / 8.0).ceil().max(1.0) as u64];
+        let mut map = vec![None];
+        for (f, format) in formats.iter().enumerate() {
+            let bits = group.params as f64 * format.bits_per_weight();
+            if bits < group.stored_bits {
+                eps.push(costs[g][f].max(0.0));
+                bytes.push((bits / 8.0).ceil().max(1.0) as u64);
+                map.push(Some(f));
+            }
+        }
+        specs.push(FusedGroupSpec {
+            j_eff: j_eff[g],
+            eps,
+            bytes,
+        });
+        option_maps.push(map);
+    }
+
+    let budget_bytes = (budget_bits / 8.0).floor().max(0.0) as u64;
+    let alloc = solve_coupled_dc_cccp(&specs, gamma_plus, gamma_minus_factors, budget_bytes)
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    Ok(alloc
+        .choice
+        .iter()
+        .enumerate()
+        .map(|(g, &idx)| option_maps[g][idx])
+        .collect())
+}
+
 /// Exact allocation on measured costs (`engine::alloc`): the assignment of minimum summed
 /// cost whose nominal size fits `budget_bits`, with sizes rounded up to a grid of `grid`
 /// units of the stored size. Only formats smaller than a group's stored size are options.
@@ -424,7 +473,31 @@ fn allocate(
     match args.solver.as_str() {
         "greedy" => Ok(greedy(groups, formats, costs, budget_bits)),
         "dp" => exact(groups, formats, costs, budget_bits, args.dp_grid),
-        other => bail!("Unknown --solver '{other}'; use greedy or dp"),
+        "dc-cccp" => {
+            let n = groups.len();
+            let j_eff = vec![1.0_f64; n];
+            let mut gamma_plus = vec![vec![0.0_f64; n]; n];
+            for g in 0..n.saturating_sub(1) {
+                gamma_plus[g][g + 1] = 0.05;
+                gamma_plus[g + 1][g] = 0.05;
+            }
+            let chosen = coupled_dc_cccp(
+                groups,
+                formats,
+                costs,
+                &j_eff,
+                &gamma_plus,
+                &[],
+                budget_bits,
+            )?;
+            let moves = chosen
+                .iter()
+                .enumerate()
+                .filter_map(|(g, &c)| c.map(|f| (g, Some(f))))
+                .collect();
+            Ok((chosen, moves))
+        }
+        other => bail!("Unknown --solver '{other}'; use greedy, dp, or dc-cccp"),
     }
 }
 

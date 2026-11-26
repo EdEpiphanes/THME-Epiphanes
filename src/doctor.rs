@@ -6,6 +6,7 @@
 use serde_json::{json, Value};
 
 use crate::discover::{self, DiscoveredModel, EnvSnapshot};
+use crate::engine::policy_select::{select_offload_scenario, HardwareEnvelope, OffloadScenario};
 
 /// Models listed in full; the rest are only counted.
 pub const MAX_SHOWN_MODELS: usize = 10;
@@ -51,6 +52,29 @@ impl<T> Fact<T> {
     }
 }
 
+/// Selects the recommended §7.8/§7.11 off-loading scenario for the first discovered
+/// model (or a 4 GiB baseline) from checked host memory and GPU adapter presence.
+pub fn recommend_offload_scenario(facts: &HostFacts) -> OffloadScenario {
+    let host_ram_free = *facts.memory_available_bytes.value().unwrap_or(&0);
+    let vram_free = if facts.gpu_adapter.is_some() {
+        8 * 1024 * 1024 * 1024
+    } else {
+        0
+    };
+    let model_bytes = facts
+        .models
+        .first()
+        .map(|m| m.size_bytes)
+        .unwrap_or(4 * 1024 * 1024 * 1024);
+    let hw = HardwareEnvelope {
+        vram_free_bytes: vram_free,
+        host_ram_free_bytes: host_ram_free,
+        pcie_gbps_ewma: 24.0,
+        has_avx512: false,
+    };
+    select_offload_scenario(&hw, model_bytes, model_bytes / 4, None, 0)
+}
+
 /// The next commands to try, chosen from what was found. Pure: no I/O.
 pub fn next_steps(facts: &HostFacts) -> Vec<String> {
     let mut steps = Vec::new();
@@ -93,6 +117,10 @@ pub fn fact_lines(facts: &HostFacts) -> Vec<String> {
             show(&facts.disk_free_bytes, gib)
         ),
         format!("GPU adapter (Vulkan): {gpu}"),
+        format!(
+            "Offload policy (§7.11): {:?}",
+            recommend_offload_scenario(facts)
+        ),
         format!(
             "CPU threads: {}",
             show(&facts.cpu_threads, |n| n.to_string())
@@ -142,6 +170,7 @@ pub fn render_json(facts: &HostFacts) -> Value {
         "disk_free_bytes": fact_json(&facts.disk_free_bytes),
         "gpu_adapter": { "value": facts.gpu_adapter, "basis": "checked" },
         "cpu_threads": fact_json(&facts.cpu_threads),
+        "offload_policy": format!("{:?}", recommend_offload_scenario(facts)),
         "models": { "total": facts.models.len(), "shown": shown },
         "next": next_steps(facts),
     })
@@ -341,7 +370,7 @@ mod tests {
     fn fact_lines_are_the_lines_the_text_report_prints() {
         let f = facts(vec![model("tiny")], Some("Test GPU"));
         let lines = fact_lines(&f);
-        assert_eq!(lines.len(), 7);
+        assert_eq!(lines.len(), 8);
         assert!(lines
             .iter()
             .any(|l| l == "GPU adapter (Vulkan): Test GPU (checked)"));
