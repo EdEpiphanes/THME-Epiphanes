@@ -985,3 +985,59 @@ fn int8_dot_matmul_matches_the_float_kernel_up_to_activation_rounding() {
     }
     gpu.set_int8_dot(false);
 }
+
+/// The BITCOS kernel reads 2-bit ternary codes (1 = +x, 2 = -x) and ignores group scales, so the
+/// CPU reference is the sign pattern of `BitcosSuperBlock1024::decode` applied to the same input.
+#[test]
+fn bitcos_gemv_matches_cpu_decode() {
+    use thme::epiph::bitcos::{BitcosSuperBlock1024, SUPERBLOCK_LEN};
+    let Some(gpu) = gpu_or_skip() else { return };
+    let (out_dim, rows) = (5usize, 3usize);
+    let mut seed = 11u64;
+    let mut packed = Vec::new();
+    let mut signs: Vec<Vec<f32>> = Vec::new();
+    for _ in 0..out_dim {
+        let w = pseudo_random(&mut seed, SUPERBLOCK_LEN, 1.0);
+        let block = BitcosSuperBlock1024::encode(&w, 0.5).expect("encode");
+        let s: Vec<f32> = block
+            .decode()
+            .iter()
+            .map(|v| v.signum() * f32::from(*v != 0.0))
+            .collect();
+        for chunk in s.chunks(16) {
+            let word = chunk.iter().enumerate().fold(0u32, |acc, (j, v)| {
+                let code = if *v > 0.0 {
+                    1
+                } else if *v < 0.0 {
+                    2
+                } else {
+                    0
+                };
+                acc | (code << (j * 2))
+            });
+            packed.extend_from_slice(&word.to_le_bytes());
+        }
+        signs.push(s);
+    }
+    let x = pseudo_random(&mut seed, rows * SUPERBLOCK_LEN, 1.0);
+    let tensor = QuantizedTensor::new_quantized(
+        "bitcos",
+        vec![out_dim, SUPERBLOCK_LEN],
+        QuantDtype::Bitcos,
+        Arc::from(packed),
+    )
+    .expect("tensor");
+    let gpu_y = gpu
+        .compute_linear(&x, &tensor, SUPERBLOCK_LEN, out_dim)
+        .expect("gpu bitcos linear");
+    let cpu_y: Vec<f32> = x
+        .chunks(SUPERBLOCK_LEN)
+        .flat_map(|xr| {
+            signs
+                .iter()
+                .map(|s| s.iter().zip(xr).map(|(a, b)| a * b).sum::<f32>())
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    assert_close(&cpu_y, &gpu_y, PARITY_TOL, "bitcos gemv");
+}

@@ -76,6 +76,10 @@ name = "token_frequency"
 path = "examples/token_frequency.rs"
 test = true
 
+[features]
+default = []
+cuda = []
+
 [dependencies]
 clap = { workspace = true }
 serde = { workspace = true }
@@ -107,6 +111,9 @@ sysinfo = "0.40"
 tokenizers = { version = "0.22", default-features = false, features = ["fancy-regex"] }
 minijinja = { version = "3.1", features = ["json", "loop_controls", "serde"] }
 minijinja-contrib = { version = "3.1", features = ["pycompat"] }
+
+[target.'cfg(any(target_os = "windows", target_os = "linux"))'.dependencies]
+cudarc = { version = "0.19", default-features = false, features = ["driver", "nvrtc", "cublas", "dynamic-loading", "fallback-latest", "cuda-12090"] }
 
 [dev-dependencies]
 tempfile = "3.17"

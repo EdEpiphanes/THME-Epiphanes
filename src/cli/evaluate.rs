@@ -79,6 +79,10 @@ pub struct EvaluateArgs {
     #[arg(long, value_name = "CALIBRATION_JSON")]
     pub calibration: Option<PathBuf>,
 
+    /// Enable FP16 Tensor Core accumulation on CUDA (`THME_CUDA_F16_ACC=1`) for higher throughput
+    #[arg(long)]
+    pub f16_acc: bool,
+
     /// Execution compute device (auto, gpu, cpu). The report records the device and adapter.
     #[arg(long, value_enum, default_value_t = DeviceArg::Auto)]
     pub device: DeviceArg,
@@ -312,11 +316,13 @@ pub(crate) fn variant_json(
 ) -> Value {
     let delta = base.map(|b| report.perplexity - b.perplexity);
     let accepted = base.map(|b| judge_reports(gate, b, report).accepted);
+    let bits_per_token = report.cross_entropy_nats / std::f64::consts::LN_2;
     json!({
         "id": id,
         "description": description,
         "perplexity": report.perplexity,
         "cross_entropy_nats": report.cross_entropy_nats,
+        "bits_per_token": bits_per_token,
         "scored_tokens": report.scored_tokens,
         "corpus_tokens_used": report.corpus_tokens_used,
         "windows": report.windows,
@@ -433,6 +439,9 @@ pub fn prepare_candidate(
 
 /// Runs the evaluation and returns the report (also written to `args.report`).
 pub fn evaluate(args: &EvaluateArgs) -> Result<Value> {
+    if args.f16_acc {
+        std::env::set_var("THME_CUDA_F16_ACC", "1");
+    }
     let text = std::fs::read_to_string(&args.recipe)
         .with_context(|| format!("Failed to read recipe {:?}", args.recipe))?;
     let recipe: TweakRecipe = serde_json::from_str(&text)
@@ -478,6 +487,9 @@ pub fn evaluate(args: &EvaluateArgs) -> Result<Value> {
         arch.family()
     );
     let gpu = args.device.resolve();
+    if let Some(g) = gpu.as_deref() {
+        g.enable_coop_if_ready();
+    }
     let device = device_json(args.device, gpu.as_deref());
     let cache = if args.no_baseline_cache {
         None
@@ -504,6 +516,10 @@ pub fn evaluate(args: &EvaluateArgs) -> Result<Value> {
             let baseline_model =
                 arch.load_with_gpu(&source, WeightPrecision::AsStored, gpu.clone())?;
             let report = evaluate_perplexity(&*baseline_model, &tokens, &eval, |_, _, _| {})?;
+            drop(baseline_model);
+            if let Some(gpu) = gpu.as_deref() {
+                gpu.clear_cache();
+            }
             if let Some(cache) = &cache {
                 cache.store(&report)?;
             }
@@ -593,11 +609,10 @@ pub fn evaluate(args: &EvaluateArgs) -> Result<Value> {
             "arch": std::env::consts::ARCH,
             "logical_cpus": std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1),
             "device": device,
-            "backend": if gpu.is_some() {
-                "THME reference forward pass on the GPU (wgpu, f32 weights and activations)"
-            } else {
-                "THME reference CPU forward pass (f32, multithreaded)"
-            },
+            "backend": gpu.as_ref().map_or_else(
+                || "THME reference CPU forward pass (f32, multithreaded)".to_string(),
+                |g| g.backend_description(),
+            ),
         },
     });
     write_report(&args.report, &report)?;
@@ -769,6 +784,7 @@ pub(crate) mod tests {
             algorithms: Vec::new(),
             artifact: None,
             calibration: None,
+            f16_acc: false,
             gate: None,
             device: DeviceArg::Cpu,
             no_baseline_cache: false,
