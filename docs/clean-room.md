@@ -28,7 +28,8 @@ is ours. This page is a process document, not legal advice.
 - Not allowed for the builder: the other project's source code, shader files, decompiled output or
   anything derived directly from them. Ideas and facts (a published file format, a mathematical
   method) may be used; expression (code, comments, structure copied from a file) may not.
-- Permissive licences do not change this rule. If code from another project is ever included, it
+- Owner decision (26 November 2026): while THME ships only as open source, code from MIT-licensed projects (for example llama.cpp and ggml) may be translated or included under the audit below. A translation is a derivative work: keep the upstream copyright and permission notice in the file, never call it clean-room, and the person or agent who translated a part does not also claim the clean-room replacement for it. GPL, CC BY-NC, custom community licences and unclear copyright stay excluded until the owner and counsel decide, and the decision is revisited before any commercial release.
+- Apart from that decision, permissive licences do not change this rule. If code from another project is ever included, it
   goes through the reference audit first: licence read from the file, notices kept, an entry in the
   third-party register and the provenance ledger (THME-3071), and the owner's approval.
 - Keep a record for every learning step: which public sources were read, by whom or which agent,
