@@ -41,6 +41,7 @@ All agents and contributors must uphold these rules without exception:
 5. **Clean-Room Learning**:
    - Learn from other projects through public documentation, specifications, papers and black-box measurements; do not read, copy or translate their source or shader code (see [docs/clean-room.md](docs/clean-room.md)).
    - Any code taken from outside the repository needs the reference audit, a third-party register entry and the owner's approval first.
+   - Owner decision (26 November 2026, while THME ships only as open source): code from MIT-licensed projects (for example llama.cpp and ggml) may be translated or included. Each import keeps the upstream copyright and permission notice in the file, has a `docs/third-party.md` row and a provenance entry, and is labelled as derived, never as clean-room. GPL, CC BY-NC, custom community licences and unclear copyright stay excluded until the owner and counsel decide. Revisit before any commercial release.
 ---
 
 ## 3. Code Standards & CI Requirements

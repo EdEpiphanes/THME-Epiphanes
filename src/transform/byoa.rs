@@ -83,8 +83,9 @@ pub enum TransformationRule {
     },
     /// GPTQ-style second-order rounding: round columns in a Cholesky-pivot order and let the
     /// not-yet-quantized columns absorb each rounding error, weighted by the calibration
-    /// input second moments. Needs calibration statistics and the Hessian proxy attached to
-    /// the tensor (`thme evaluate --calibration`).
+    /// input second moments. Needs calibration statistics; with the Hessian proxy it uses full
+    /// second-order compensation, without it a diagonal fallback fits each 32-value scale to the
+    /// activation-weighted error (`thme evaluate --calibration`).
     SecondOrderRounding {
         format: String,
         /// Damping on the propagated error: 0 is plain per-column rounding, 1 is full
@@ -337,14 +338,16 @@ fn apply_rule(
             let stats = ctx.calibration.ok_or(
                 "second-order rounding needs calibration statistics; run `thme calibrate` and pass `--calibration` to `thme evaluate`",
             )?;
-            let hessian = ctx.hessian.ok_or(
-                "second-order rounding needs the input second moments; run `thme calibrate` and pass `--calibration` to `thme evaluate`",
-            )?;
             let in_dim = ctx.row_width.unwrap_or(n);
-            crate::transform::gptq::second_order_round(
-                weights, in_dim, stats, hessian, format, *damping,
-            )
-            .map_err(|e| format!("{e:#}"))?;
+            if let Some(hessian) = ctx.hessian {
+                crate::transform::gptq::second_order_round(
+                    weights, in_dim, stats, hessian, format, *damping,
+                )
+                .map_err(|e| format!("{e:#}"))?;
+            } else {
+                crate::transform::gptq::second_order_round_diagonal(weights, in_dim, stats, format)
+                    .map_err(|e| format!("{e:#}"))?;
+            }
         }
         TransformationRule::AbsmeanTernary {
             scale_gamma,
@@ -983,5 +986,42 @@ mod tests {
         };
         let mut w = vec![0.1; 96];
         assert!(apply_rule(&rule, &mut w, &ApplyContext::default()).is_err());
+    }
+
+    #[test]
+    fn second_order_rounding_without_a_hessian_uses_the_diagonal_fallback() {
+        use crate::transform::awq::ChannelStats;
+        let rule = TransformationRule::SecondOrderRounding {
+            format: "Q4_0".into(),
+            damping: 1.0,
+        };
+        let in_dim = 32;
+        let w: Vec<f32> = (0..64)
+            .map(|i| ((i * 7 % 32) as f32 - 15.5) / 20.0)
+            .collect();
+        let stats = ChannelStats {
+            mean_abs: vec![0.5; in_dim],
+            rms: vec![0.5; in_dim],
+        };
+        let ctx = ApplyContext {
+            row_width: Some(in_dim),
+            calibration: Some(&stats),
+            hessian: None,
+            round: None,
+        };
+        let mut out = w.clone();
+        apply_rule(&rule, &mut out, &ctx).unwrap();
+        assert_ne!(out, w);
+        let mut direct = w.clone();
+        crate::transform::gptq::second_order_round_diagonal(&mut direct, in_dim, &stats, "Q4_0")
+            .unwrap();
+        assert_eq!(out, direct);
+        let no_stats = ApplyContext {
+            calibration: None,
+            ..ctx
+        };
+        assert!(apply_rule(&rule, &mut w.clone(), &no_stats)
+            .unwrap_err()
+            .contains("--calibration"));
     }
 }

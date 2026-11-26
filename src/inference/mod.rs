@@ -22,6 +22,7 @@ pub mod offload;
 pub mod perplexity;
 pub mod polar_kv;
 pub mod probe;
+pub mod sampler;
 pub mod smoothing;
 pub mod weights;
 
