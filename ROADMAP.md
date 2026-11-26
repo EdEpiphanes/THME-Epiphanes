@@ -6,6 +6,8 @@
 > and timing to be decided). Model runs are paused, so work that needs a measurement on a real
 > model is built and tested but marked *measurement pending*. Every claim stays measured, or
 > labelled as not measured.
+>
+> 26 November 2026: research sprint code landed (Epiphanes quality gate, DC-CCCP allocator, BitCOS, architecture conversion, cluster planner, Polar KV, grounded decode, offload policy, GPU decode speedups); built and unit-tested, *measurement pending* on real models.
 
 ---
 

@@ -1362,6 +1362,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
   - Terminal dashboard showing active nodes, hardware specifications, assigned layers, and network latency matrix.
 - **Production Pipeline / CI/CD Impact**: Primary CLI for managing distributed THME deployments in data centers and local labs.
 - **Done Means**: `thme cluster --help` executes cleanly, unit tests verify cluster command dispatch.
+- **Progress** (26 November 2026): `src/cli/cluster.rs` and the planner in `src/cluster/mod.rs` exist (interconnect classification, stage partition, Q4_1 wire codec); init, join and status networking not done.
 
 ---
 

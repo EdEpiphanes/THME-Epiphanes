@@ -378,8 +378,9 @@ fn measure(
     eval: &PerplexityConfig,
 ) -> Result<PerplexityReport> {
     println!("  Evaluating {label}...");
+    let gpu = thme::inference::DeviceArg::Auto.resolve();
     let dense = config
-        .load(model, precision)
+        .load_with_gpu(model, precision, gpu)
         .with_context(|| format!("Failed to load weights for: {label}"))?;
     let report = evaluate_perplexity(&*dense, tokens, eval, |done, total, running| {
         if done == total || done % 16 == 0 {

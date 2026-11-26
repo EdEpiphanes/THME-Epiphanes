@@ -2,6 +2,7 @@
 pub mod bench;
 pub mod calibrate;
 pub mod chat_template;
+pub mod cluster;
 pub mod co_surgery;
 pub mod convert;
 pub mod discover;
@@ -89,6 +90,9 @@ pub enum Commands {
     /// Cross-convert model topology across 8 specialized AI paradigms (LLM, LCM, LAM, MoE, VLM, SLM, MLM, SAM)
     Convert(convert::ConvertArgs),
 
+    /// Classify multi-PC interconnects (Thunderbolt / Ethernet / Wi-Fi) and partition layers
+    Cluster(cluster::ClusterArgs),
+
     /// Synthesize draft models and evaluate multi-token speculative decoding speedups
     Speculate(speculate::SpeculateArgs),
 
@@ -156,6 +160,7 @@ pub fn run() -> Result<()> {
         Commands::Tweak(args) => tweak::execute(args),
         Commands::Report(args) => report::execute(args),
         Commands::Convert(args) => convert::execute(args),
+        Commands::Cluster(args) => cluster::execute(args),
         Commands::Speculate(args) => speculate::execute(args),
         Commands::Roofline(args) => roofline::execute(args),
         Commands::Export(args) => export::execute(args),
