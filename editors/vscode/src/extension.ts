@@ -67,7 +67,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand("thme.startMcpServer", () => startMcpServer(context))
     );
 
-    // 4. Register GitHub Copilot Language Model Tools (VS Code 1.90+ API)
+    // 4. Register GitHub Copilot Language Model Tools (VS Code 1.146+ API)
     registerCopilotTools(context);
 
     outputChannel.appendLine("[THME] System ready. GitHub Copilot tools registered.");

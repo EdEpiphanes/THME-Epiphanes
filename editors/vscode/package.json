@@ -10,7 +10,7 @@
     "url": "https://github.com/EdEpiphanes/THME-Epiphanes.git"
   },
   "engines": {
-    "vscode": "^1.90.0"
+    "vscode": "^1.146.0"
   },
   "categories": [
     "Machine Learning",
@@ -225,7 +225,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.19.43",
-    "@types/vscode": "^1.90.0",
+    "@types/vscode": "^1.146.0",
     "@vscode/vsce": "^4.1.1",
     "typescript": "^7.0.2"
   },
