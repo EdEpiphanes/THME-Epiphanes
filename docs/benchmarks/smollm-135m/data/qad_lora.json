@@ -1,7 +1,7 @@
 {
   "report": "qad_lora",
   "report_version": 1,
-  "status": "preregistered",
+  "status": "measured",
   "status_note": "Registered on 2026-11-27 before any QAD-LoRA perplexity was measured. ROADMAP v0.2.3.2 and v0.2.3.3, THME-3105 first slice. The teacher is the unquantized source model; no hosted teacher is used.",
   "model_name": "SmolLM-135M",
   "model_repo": "HuggingFaceTB/SmolLM-135M",
@@ -112,10 +112,137 @@
       "three seeds measure training noise only; evaluation is deterministic"
     ]
   },
-  "results": {},
-  "pending": [
-    "pilot",
-    "scored runs"
-  ],
-  "provenance": {}
+  "results": {
+    "replication_gate": {
+      "teacher": 19.79845809453531,
+      "student_q4_0": 23.698458311690175,
+      "teacher_error": 1.8280950703051204e-06,
+      "student_error": 1.7086028214063264e-06,
+      "passed": true
+    },
+    "pilot": {
+      "runs": {
+        "0.0001": {
+          "validation_perplexity": 22.986875962761264,
+          "validation_perplexity_q4_0": 26.086229515981454,
+          "first_loss": 0.1926615871489048,
+          "last_loss": 0.059352658689022064
+        },
+        "0.0003": {
+          "validation_perplexity": 22.73746392245636,
+          "validation_perplexity_q4_0": 26.086229515981454,
+          "first_loss": 0.1926615871489048,
+          "last_loss": 0.045495228841900826
+        },
+        "0.001": {
+          "validation_perplexity": 22.582425436816244,
+          "validation_perplexity_q4_0": 26.086229515981454,
+          "first_loss": 0.1926615871489048,
+          "last_loss": 0.03763619810342789
+        }
+      },
+      "chosen_learning_rate": 0.001
+    },
+    "scored_runs": [
+      {
+        "seed": 1,
+        "perplexity": 20.429885326232707,
+        "teacher_perplexity": 19.79845809453531,
+        "q4_0_perplexity": 23.698458311690175,
+        "first_loss": 0.19075123965740204,
+        "last_loss": 0.035826836712658405,
+        "adapter_bytes": 19593064,
+        "trainable_params": 4884480,
+        "train_seconds": 603.1573133000638,
+        "tokens_seen": 2097152
+      },
+      {
+        "seed": 2,
+        "perplexity": 20.394579868725007,
+        "teacher_perplexity": 19.79845809453531,
+        "q4_0_perplexity": 23.698458311690175,
+        "first_loss": 0.1886361427605152,
+        "last_loss": 0.035175733268260956,
+        "adapter_bytes": 19593064,
+        "trainable_params": 4884480,
+        "train_seconds": 601.0372566999868,
+        "tokens_seen": 2097152
+      },
+      {
+        "seed": 3,
+        "perplexity": 20.413536320724553,
+        "teacher_perplexity": 19.79845809453531,
+        "q4_0_perplexity": 23.698458311690175,
+        "first_loss": 0.19932835176587105,
+        "last_loss": 0.036733283661305904,
+        "adapter_bytes": 19593064,
+        "trainable_params": 4884480,
+        "train_seconds": 592.5225501999957,
+        "tokens_seen": 2097152
+      }
+    ],
+    "mean_perplexity": 20.41266717189409,
+    "sd_perplexity": 0.017668768978741305,
+    "sigma": 0.06482348031221556,
+    "verdicts": {
+      "rtn_q4_0": {
+        "comparator_perplexity": 23.698417820506624,
+        "comparator_minus_qad": 3.2857506486125345,
+        "verdict": "qad_better"
+      },
+      "awq_q4_0_mean": {
+        "comparator_perplexity": 22.042465275628587,
+        "comparator_minus_qad": 1.6297981037344975,
+        "verdict": "qad_better"
+      },
+      "gptq_q4_0": {
+        "comparator_perplexity": 22.23117505494233,
+        "comparator_minus_qad": 1.818507883048241,
+        "verdict": "qad_better"
+      }
+    },
+    "gate": {
+      "delta_vs_ceiling": 0.6142452707562569,
+      "v1": "failed",
+      "v2_note": "the baseline perplexity is below the switch point 20.0, so v2 uses the same absolute margin"
+    },
+    "drift": {
+      "reference_nominal": 19.798421901137832,
+      "bias_pre": 1.8280950703051204e-06,
+      "bias_post": 1.8280950703051204e-06,
+      "stability": {
+        "accepted": true,
+        "reasons": [],
+        "spread": 0.0017295857131454087,
+        "drift": 0.0
+      },
+      "guard_band_verdict_v1": "fail"
+    },
+    "cost": {
+      "adapter_bytes": 19593064,
+      "trainable_params": 4884480,
+      "total_params": 139399488
+    },
+    "cross_check": {
+      "what": "thme evaluate on the merged float16 model of seed 1 (FP32 identity recipe, same test token file, THME CUDA path) against the PyTorch evaluation of the same run",
+      "thme_perplexity": 20.4295,
+      "pytorch_perplexity": 20.429885326232707,
+      "relative_difference": -1.886091020841363e-05,
+      "allowed": 0.01,
+      "passed": true
+    },
+    "reading": "With the pre-registered rule, LoRA recovery on the Q4_0 student beats round-to-nearest (by 3.29), GPTQ (by 1.82) and AWQ (by 1.63) on the SmolLM-135M test split, each far above 2 sigma (0.065); the three seeds agree to 0.018. It recovers most of the quantization loss (round-to-nearest 3.90 above the ceiling, this 0.61 above) but still fails the gate's 0.45 margin. This is a comparison against methods that add no parameters: the recovered model is Q4_0 plus a float32 adapter of 19,593,064 bytes (4,884,480 trainable parameters, about 3.5 percent of the model), so it is larger than Q4_0 alone, and the adapter was not folded back into 4-bit weights.",
+    "limits_found": [
+      "the pilot's best learning rate (1e-3) is the edge of the pre-registered grid, so a higher rate might do better; the grid was not extended after the result, per the protocol",
+      "one model, one corpus, one configuration, 256 steps; no claim about other models or longer training",
+      "the adapter is evaluated unmerged in float32; the float16 merge adds its own small rounding (checked: THME on the merged file agrees to 0.002 percent)",
+      "training scores every position while evaluation drops each window's first token (stated in the protocol)"
+    ]
+  },
+  "pending": [],
+  "provenance": {
+    "python": "C:/Users/TechTroniX/venvs/thme-train/Scripts/python.exe",
+    "trainer": "scripts/train/qad_lora.py",
+    "device": "cuda"
+  }
 }
