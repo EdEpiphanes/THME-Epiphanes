@@ -23,176 +23,21 @@ use super::theme::ThemePalette;
 use crate::inference::{
     read_token_file, synthetic_demo, ArchConfig, CausalLm, ForwardTrace, WeightPrecision,
 };
-use crate::ir::{ModelIR, TensorFormat, TensorRole};
 use crate::parser::ModelImporter;
 
-/// Representation families a tensor can belong to. Binary and phase families are part of
-/// the THME research design but have no implementation yet; they appear in the legend
-/// marked as such so the view never implies they are running.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Family {
-    Dense,
-    Int8,
-    Int4,
-    Ternary,
-    Binary,
-    Phase,
-}
+mod composition;
+mod family;
+mod geometry;
 
-impl Family {
-    pub fn of(format: &TensorFormat) -> Self {
-        match format {
-            TensorFormat::FP32
-            | TensorFormat::FP16
-            | TensorFormat::BF16
-            | TensorFormat::Custom(_) => Self::Dense,
-            TensorFormat::INT8 | TensorFormat::Q8_0 | TensorFormat::Q5_K | TensorFormat::Q6_K => {
-                Self::Int8
-            }
-            TensorFormat::Q4_0 | TensorFormat::Q4_K | TensorFormat::Q2_K => Self::Int4,
-            TensorFormat::Ternary => Self::Ternary,
-            TensorFormat::Bit1_5 => Self::Binary,
-        }
-    }
-
-    fn from_dtype(dtype: &str) -> Self {
-        match dtype {
-            "Q8_0" | "Q8_1" | "Q8_K" | "I8" => Self::Int8,
-            d if d.starts_with("Q4")
-                || d.starts_with("Q5")
-                || d.starts_with("Q2")
-                || d.starts_with("Q3")
-                || d.starts_with("IQ") =>
-            {
-                Self::Int4
-            }
-            "TQ1_0" | "TQ2_0" => Self::Ternary,
-            _ => Self::Dense,
-        }
-    }
-
-    fn label(self) -> &'static str {
-        match self {
-            Self::Dense => "Dense (FP32/FP16/BF16)",
-            Self::Int8 => "5 to 8-bit blocks",
-            Self::Int4 => "4-bit and below",
-            Self::Ternary => "Ternary {-1, 0, +1}",
-            Self::Binary => "Binary (not implemented)",
-            Self::Phase => "Phase (not implemented)",
-        }
-    }
-
-    /// Categorical hues validated for dark surfaces; identity is also carried by the legend.
-    fn color(self) -> Color32 {
-        match self {
-            Self::Dense => Color32::from_rgb(0x39, 0x87, 0xe5),
-            Self::Int8 => Color32::from_rgb(0x19, 0x9e, 0x70),
-            Self::Int4 => Color32::from_rgb(0xc9, 0x85, 0x00),
-            Self::Ternary => Color32::from_rgb(0xd9, 0x59, 0x26),
-            Self::Binary => Color32::from_rgb(0x90, 0x85, 0xe9),
-            Self::Phase => Color32::from_rgb(0xd5, 0x51, 0x81),
-        }
-    }
-}
-
-const ANOMALY: Color32 = Color32::from_rgb(0xd0, 0x3b, 0x3b);
-
-/// Anomaly marker: red in colour themes, solid ink in the black-and-white panel theme.
-fn anomaly(p: &ThemePalette) -> Color32 {
-    if p.is_mono() {
-        manga::ink(p)
-    } else {
-        ANOMALY
-    }
-}
-
-impl Family {
-    /// Family colour for the active theme. Black-and-white themes use distinct grey tones
-    /// (and, in the manifold, screentone densities) instead of hue.
-    fn color_for(self, p: &ThemePalette) -> Color32 {
-        if !p.is_mono() {
-            return self.color();
-        }
-        Color32::from_gray(match self {
-            Self::Dense => 46,
-            Self::Int8 => 92,
-            Self::Int4 => 132,
-            Self::Ternary => 168,
-            Self::Binary => 196,
-            Self::Phase => 220,
-        })
-    }
-
-    /// Screentone dot radius used for this family on the manifold in mono themes.
-    fn tone_radius(self) -> f32 {
-        match self {
-            Self::Dense => 0.0,
-            Self::Int8 => 0.7,
-            Self::Int4 => 1.0,
-            Self::Ternary => 1.3,
-            Self::Binary => 1.6,
-            Self::Phase => 1.9,
-        }
-    }
-}
-
-/// The family most tensors of a layer use (Dense when unknown).
-fn dominant_family(entries: Option<&Vec<(String, Family)>>) -> Family {
-    let Some(entries) = entries else {
-        return Family::Dense;
-    };
-    let mut best = (Family::Dense, 0usize);
-    for family in ALL_FAMILIES {
-        let count = entries.iter().filter(|(_, f)| *f == family).count();
-        if count > best.1 {
-            best = (family, count);
-        }
-    }
-    best.0
-}
-
-/// True when the screen quad turns the same way at every corner.
-fn is_convex(pts: &[Pos2; 4]) -> bool {
-    let mut sign = 0.0f32;
-    for k in 0..4 {
-        let (a, b, c) = (pts[k], pts[(k + 1) % 4], pts[(k + 2) % 4]);
-        let cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
-        if cross.abs() > 1e-3 {
-            if sign != 0.0 && cross.signum() != sign {
-                return false;
-            }
-            sign = cross.signum();
-        }
-    }
-    true
-}
-
-fn sub3(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
-    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
-}
-
-fn cross3(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
-}
-
-fn normalize3(v: [f32; 3]) -> [f32; 3] {
-    let len = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt().max(1e-9);
-    [v[0] / len, v[1] / len, v[2] / len]
-}
-
-struct Face {
-    depth: f32,
-    pts: [Pos2; 4],
-    fill: Color32,
-    dots: f32,
-    glint: bool,
-    center: Pos2,
-    patch: usize,
-}
+use composition::{
+    composition_from_candidate, composition_from_ir, gate_summary, optional_path,
+    pseudo_random_tokens,
+};
+pub use family::Family;
+use family::{anomaly, dominant_family, ALL_FAMILIES};
+use geometry::{
+    cross3, hash01, inside, is_convex, lerp, normalize3, sub3, with_alpha, Camera, Face,
+};
 
 /// Draws the Calabi-Yau manifold: manga cel shading (three tones), ink linework,
 /// screentone in shadow, a glass rim light and specular glints, and token particles.
@@ -447,14 +292,6 @@ fn draw_manifold(
         }
     }
 }
-const ALL_FAMILIES: [Family; 6] = [
-    Family::Dense,
-    Family::Int8,
-    Family::Int4,
-    Family::Ternary,
-    Family::Binary,
-    Family::Phase,
-];
 
 /// Per stored layer: `(tensor short name, family)`.
 pub type Composition = Vec<Vec<(String, Family)>>;
@@ -1331,194 +1168,6 @@ fn run_worker(
     }
 }
 
-fn composition_from_ir(ir: &ModelIR) -> Composition {
-    let mut layers: Composition = vec![Vec::new(); ir.num_layers];
-    for tensor in &ir.tensors {
-        let (Some(layer), true) = (tensor.layer_index, tensor.shape.len() == 2) else {
-            continue;
-        };
-        let name = match tensor.role {
-            TensorRole::AttentionQ => "q",
-            TensorRole::AttentionK => "k",
-            TensorRole::AttentionV => "v",
-            TensorRole::AttentionOut => "o",
-            TensorRole::AttentionQkv => "qkv",
-            TensorRole::MlpGate => "gate",
-            TensorRole::MlpUp => "up",
-            TensorRole::MlpDown => "down",
-            _ => continue,
-        };
-        if let Some(slot) = layers.get_mut(layer) {
-            slot.push((name.to_string(), Family::from_dtype(&tensor.original_dtype)));
-        }
-    }
-    layers
-}
-
-/// Composition of a recipe-applied model: assigned formats, BYOA algorithms by their declared
-/// bits, and stored formats for untouched tensors.
-fn composition_from_candidate(ir: &ModelIR) -> Composition {
-    let mut layers = composition_from_ir(ir);
-    for tensor in &ir.tensors {
-        let (Some(layer), true) = (tensor.layer_index, tensor.shape.len() == 2) else {
-            continue;
-        };
-        let family = match &tensor.selected_format {
-            TensorFormat::FP32 => continue, // untouched: keep the stored family
-            TensorFormat::Custom(_) => {
-                let bits = tensor
-                    .metadata
-                    .get(crate::inference::BYOA_METADATA_KEY)
-                    .and_then(|json| {
-                        crate::transform::byoa::AlgorithmDefinition::from_json(json).ok()
-                    })
-                    .map_or(16.0, |a| a.effective_bits_per_param);
-                match bits {
-                    b if b <= 1.2 => Family::Binary,
-                    b if b <= 2.0 => Family::Ternary,
-                    b if b <= 4.5 => Family::Int4,
-                    b if b <= 8.5 => Family::Int8,
-                    _ => Family::Dense,
-                }
-            }
-            other => Family::of(other),
-        };
-        let name = role_short_name(tensor.role);
-        if let (Some(slot), Some(name)) = (layers.get_mut(layer), name) {
-            if let Some(entry) = slot.iter_mut().find(|(n, _)| n == name) {
-                entry.1 = family;
-            }
-        }
-    }
-    layers
-}
-
-fn role_short_name(role: TensorRole) -> Option<&'static str> {
-    Some(match role {
-        TensorRole::AttentionQ => "q",
-        TensorRole::AttentionK => "k",
-        TensorRole::AttentionV => "v",
-        TensorRole::AttentionOut => "o",
-        TensorRole::AttentionQkv => "qkv",
-        TensorRole::MlpGate => "gate",
-        TensorRole::MlpUp => "up",
-        TensorRole::MlpDown => "down",
-        _ => return None,
-    })
-}
-
-fn optional_path(text: &str) -> Option<PathBuf> {
-    let trimmed = text.trim();
-    (!trimmed.is_empty()).then(|| PathBuf::from(trimmed))
-}
-
-/// Short lines for the side panel from a `thme evaluate` report.
-fn gate_summary(report: &serde_json::Value, path: &std::path::Path) -> Vec<String> {
-    let variants = report["evaluation"]["variants"]
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
-    let ppl = |i: usize| {
-        variants
-            .get(i)
-            .and_then(|v| v["perplexity"].as_f64())
-            .unwrap_or(f64::NAN)
-    };
-    let delta = ppl(1) - ppl(0);
-    let passed = report["evaluation"]["gate_passed"]
-        .as_bool()
-        .unwrap_or(false);
-    let mut lines = vec![
-        format!(
-            "{} Δ PPL {delta:+.4}",
-            if passed { "PASSED" } else { "FAILED" }
-        ),
-        format!("Source {:.4} -> recipe {:.4}", ppl(0), ppl(1)),
-    ];
-    if let Some(skipped) = report["recipe"]["operations_not_evaluated"].as_array() {
-        if !skipped.is_empty() {
-            let names: Vec<&str> = skipped.iter().filter_map(|s| s.as_str()).collect();
-            lines.push(format!("Not evaluated: {}", names.join(", ")));
-        }
-    }
-    lines.push(format!("Report: {}", path.display()));
-    lines
-}
-
-fn pseudo_random_tokens(vocab: usize, count: usize, seed: u64) -> Vec<u32> {
-    let mut state = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15).wrapping_add(1);
-    (0..count)
-        .map(|_| {
-            state = state
-                .wrapping_mul(6364136223846793005)
-                .wrapping_add(1442695040888963407);
-            ((state >> 33) % vocab.max(1) as u64) as u32
-        })
-        .collect()
-}
-
-struct Camera {
-    yaw: f32,
-    pitch: f32,
-    dist: f32,
-    rect: Rect,
-}
-
-impl Camera {
-    /// World point to camera space (x right, y up, z = depth away from the eye).
-    fn view(&self, p: [f32; 3]) -> [f32; 3] {
-        let (sy, cy) = self.yaw.sin_cos();
-        let x1 = p[0] * cy - p[2] * sy;
-        let z1 = p[0] * sy + p[2] * cy;
-        let (sp, cp) = self.pitch.sin_cos();
-        let y2 = p[1] * cp - z1 * sp;
-        let z2 = p[1] * sp + z1 * cp + self.dist;
-        [x1, y2, z2]
-    }
-
-    /// Camera-space point to screen (caller ensures depth > 0.2).
-    fn screen(&self, v: [f32; 3]) -> Pos2 {
-        let f = self.rect.height() * 1.15;
-        self.rect.center() + Vec2::new(v[0] * f / v[2], -v[1] * f / v[2])
-    }
-
-    /// Projects a world point; returns the screen position and camera-space depth.
-    fn project(&self, p: [f32; 3]) -> Option<(Pos2, f32)> {
-        let v = self.view(p);
-        if v[2] < 0.2 {
-            return None;
-        }
-        Some((self.screen(v), v[2]))
-    }
-
-    fn quad(&self, corners: [[f32; 3]; 4]) -> Option<(f32, [Pos2; 4])> {
-        let mut pts = [Pos2::ZERO; 4];
-        let mut depth = 0.0;
-        for (slot, corner) in pts.iter_mut().zip(corners) {
-            let (pos, z) = self.project(corner)?;
-            *slot = pos;
-            depth += z / 4.0;
-        }
-        Some((depth, pts))
-    }
-}
-
-fn inside(point: Pos2, pts: &[Pos2; 4]) -> bool {
-    let mut sign = 0.0f32;
-    for i in 0..4 {
-        let a = pts[i];
-        let b = pts[(i + 1) % 4];
-        let cross = (b.x - a.x) * (point.y - a.y) - (b.y - a.y) * (point.x - a.x);
-        if cross != 0.0 {
-            if sign != 0.0 && cross.signum() != sign {
-                return false;
-            }
-            sign = cross.signum();
-        }
-    }
-    true
-}
-
 fn draw_update_bars(ui: &mut egui::Ui, trace: &ForwardTrace, p: &ThemePalette) {
     let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 70.0), Sense::hover());
     let painter = ui.painter_at(rect);
@@ -1579,24 +1228,6 @@ fn draw_tooltip(
             if i == 0 { p.text_main } else { p.text_muted },
         );
     }
-}
-
-fn lerp(a: Color32, b: Color32, t: f32) -> Color32 {
-    let t = t.clamp(0.0, 1.0);
-    let mix = |x: u8, y: u8| (f32::from(x) + (f32::from(y) - f32::from(x)) * t).round() as u8;
-    Color32::from_rgb(mix(a.r(), b.r()), mix(a.g(), b.g()), mix(a.b(), b.b()))
-}
-
-fn with_alpha(c: Color32, alpha: u8) -> Color32 {
-    Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), alpha)
-}
-
-fn hash01(i: usize) -> f32 {
-    let mut x = (i as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
-    x ^= x >> 31;
-    x = x.wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    x ^= x >> 29;
-    (x % 10_000) as f32 / 10_000.0
 }
 
 /// Seconds the ink-glass highlight spends on each layer.
@@ -1708,6 +1339,7 @@ fn ink_splash_shapes(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ir::TensorFormat;
 
     #[test]
     fn forward_cursor_walks_every_layer_in_order_and_wraps() {
