@@ -34,7 +34,7 @@ pub use gpu::{
     dispatch_linear, dispatch_linear_slice, dispatch_score_head, dispatch_score_head_slice,
     DeviceArg, GpuBackend, GpuContext, QuantDtype, QuantizedTensor, ThmeError,
 };
-pub use kv::KvCache;
+pub use kv::{KvCache, KvPrecision};
 pub use llama::{synthetic_demo, DepthExit, LlamaConfig, LlamaModel, WeightPrecision};
 pub use neox::{NeoxConfig, NeoxModel};
 pub use perplexity::{evaluate_perplexity, read_token_file, PerplexityConfig, PerplexityReport};

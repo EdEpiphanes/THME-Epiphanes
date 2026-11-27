@@ -335,6 +335,7 @@ closes it.
 - **Milestone**: v0.2.4 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: experiment · **Status**: ready
 - **Problem**: The KV cache is now real (THME-3070): 12.6 MB at 2,048 context for Pythia-14M, more for larger models. Lower-precision KV could cut it, mainly for models at SmolLM size and above.
 - **Done means**: KV stored in int8 and int4 per group behind the existing cache type; cache bytes, perplexity at 1k and 4k context and decode tokens per second measured against the f32 cache on Pythia-14M, with SmolLM-135M as the late confirmation; the placement budget (THME-3016) counts the real KV bytes.
+- **Progress** (27 November 2026): part 1 in code: `KvPrecision` (F32, Int8, Int4 per group of 32) behind `KvCache::with_precision`, real packed bytes reported, round-trip tests. Not yet: a flag to choose it, perplexity at 1k/4k context, tokens per second, GPU cache, placement budget. No measurement yet.
 
 ### [THME-3083] Layer-removal check on the small models
 

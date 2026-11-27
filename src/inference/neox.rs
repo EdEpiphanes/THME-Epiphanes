@@ -538,13 +538,16 @@ impl NeoxModel {
             cache.append(&k, &v);
         }
         let (keys, values) = match kv.as_deref() {
-            Some(cache) => (cache.keys(), cache.values()),
-            None => (&k[..], &v[..]),
+            Some(cache) => (cache.keys_f32(), cache.values_f32()),
+            None => (
+                std::borrow::Cow::Borrowed(&k[..]),
+                std::borrow::Cow::Borrowed(&v[..]),
+            ),
         };
         let mixed = attention(&AttentionInputs {
             q: &q,
-            k: keys,
-            v: values,
+            k: &keys,
+            v: &values,
             num_heads: heads,
             num_kv_heads: heads,
             head_dim: hd,
