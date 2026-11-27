@@ -1,0 +1,70 @@
+{
+  "report": "hadamard_comparison",
+  "report_version": 1,
+  "status": "preregistered",
+  "status_note": "Registered on 2026-11-27 before any perplexity of this comparison was measured. THME-2206, ROADMAP v0.2.2.6.",
+  "model_name": "pythia-14m",
+  "model_repo": "EleutherAI/pythia-14m",
+  "evaluation": {
+    "benchmark": {
+      "id": "wikitext2-raw",
+      "version": "1",
+      "split": "test"
+    },
+    "context_len": 1024,
+    "corpus_sha256": "173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08",
+    "token_count": 287159,
+    "token_file_sha256": "973595d9c7c580360a39eedde7297ec050f362a521940f7527eca4a00ea85278",
+    "tokenizer_sha256": "870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+    "scoring_note": "Full test split in consecutive windows of 1024 (thme evaluate defaults), same protocol as the verification reports."
+  },
+  "comparators": {
+    "file": "awq_calibration.json",
+    "arms": [
+      "ceiling",
+      "rtn (Q4_0)"
+    ],
+    "note": "Read from that file, not re-run."
+  },
+  "pairs": [
+    {
+      "id": "int4",
+      "unrotated": {
+        "algorithm_id": "thme.codebook_int4_unrotated",
+        "description": "The same 15 symmetric levels (k/7, k = -7..7) and absolute-maximum scale as thme.hadamard_int4, with no rotation; defined in this protocol as a custom algorithm"
+      },
+      "rotated": {
+        "algorithm_id": "thme.hadamard_int4"
+      }
+    },
+    {
+      "id": "ternary",
+      "unrotated": {
+        "algorithm_id": "thme.bitnet_b158"
+      },
+      "rotated": {
+        "algorithm_id": "thme.hadamard_ternary"
+      }
+    }
+  ],
+  "preregistration": {
+    "date": "2026-11-27",
+    "registered_before": "any measured perplexity of this comparison",
+    "decision_rule": [
+      "Every arm is deterministic (no calibration data, no seed), so there is no run-to-run variance; a relative threshold is used instead.",
+      "Within a pair, rotation is better if the rotated perplexity is lower than the unrotated one by at least 1 percent of the unrotated perplexity, worse if higher by at least 1 percent, otherwise no difference is shown.",
+      "Gate: reported for the repository default (v1, at most 0.45 above the ceiling) and read from the `thme evaluate` report; nothing is judged by the gate here.",
+      "A null or negative result is a valid result and is reported as one. The 1 percent threshold, the pairs and this rule are fixed here and are not changed after any measured result is seen."
+    ],
+    "limits": [
+      "Both rotated rules use blocks of 64 weights; no other block size is tried.",
+      "The int4 pair compares a rule defined in this protocol with the built-in rotated rule; the rotation is the only difference.",
+      "One corpus, one model per file; no calibration-based arm."
+    ]
+  },
+  "results": {},
+  "pending": [
+    "run on this model"
+  ],
+  "provenance": {}
+}
