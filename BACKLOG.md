@@ -353,6 +353,8 @@ closes it.
 - **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p1 · **Area**: gpu · **Type**: bug · **Status**: ready
 - **Problem**: The GPU path keeps weights resident only up to a budget that defaults to 4 GiB. A model larger than the budget is flushed and re-uploaded for every window. Measured on SmolLM2-1.7B (6.9 GB in f32), RTX 4060 Ti, full test split, same build: 1,016 s with the default budget and 145 s with a 12 GiB budget (same perplexity, 9.1091), so a user who runs the engine with defaults loses a factor of seven. wgpu does not report VRAM, so the right default is unknown.
 - **Done means**: The budget is chosen automatically (adapter limits, a probe allocation with an out-of-memory fallback, or `thme pathfinder`) and never smaller than needed when memory allows; a model that does not fit falls back to f16 or a quantized device format before it falls back to re-uploading; the report states the budget used; a test with a fake backend covers the fallback order.
+- **Progress** (27 November 2026): the decision logic is in `src/inference/gpu/budget.rs` (format order F32, F16, Q8_0, Q4_0, out-of-memory fallback, six tests on a fake probe). Not yet wired into `GpuContext`, and the report does not yet state the budget used.
+- **Follow-up (owner, 27 November 2026)**: the fake-backend test only proves the decision logic. After the code lands, repeat it against the real backends (CUDA and wgpu) on SmolLM2-1.7B on the RTX 4060 Ti and record the measured budget and timings here. Until then the status stays "done in code; not run on a real GPU".
 
 ### [THME-3091] GGUF export that llama.cpp loads (names, tokenizer, rope layout, norms, flags)
 
