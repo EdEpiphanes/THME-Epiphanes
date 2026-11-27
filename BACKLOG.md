@@ -241,9 +241,10 @@ closes it.
 
 ### [THME-3097] DC-CCCP sign split
 
-- **Milestone**: v0.2.4 · **Roadmap**: unassigned · **Priority**: p1 · **Area**: allocator · **Type**: fix · **Status**: triage
+- **Milestone**: v0.2.4 · **Roadmap**: unassigned · **Priority**: p1 · **Area**: allocator · **Type**: fix · **Status**: done in code; not run on a real model
 - **Problem**: `src/allocator/dc_cccp.rs` majorizes every coupling entry; paper section 4.2 keeps negative-coefficient terms convex and majorizes only positive ones.
 - **Done means**: sign-split majorizer with a test that the surrogate is at least the objective at random points and equal at the expansion point, and monotone descent.
+- **Progress** (27 November 2026): `sign_split_surrogate` and `mm_descend` in `src/allocator/dc_cccp.rs`. Tests: the surrogate is at least the objective at 200 random instances whose gamma_plus has negative off-diagonal entries and equals it at the expansion point; majorize-minimize steps never raise the objective and stay in budget; the solver is never worse than its diagonal-DP start. Not done: a measurement on a real model.
 
 ### [THME-3098] Commit the paper and its check scripts
 
