@@ -5,6 +5,7 @@
 use thme::exporter::safetensors_writer::SafeTensorsWriter;
 use thme::exporter::{ExportConfig, ExportFormat, ExportQuantType, ModelExporter};
 use thme::inference::{ArchConfig, WeightPrecision};
+use thme::ir::model::ModelMetadataValue;
 use thme::ir::{ModelArchitecture, ModelIR, TensorFormat};
 use thme::parser::{ModelImporter, SafetensorsScanner};
 
@@ -136,10 +137,11 @@ fn logits(model: &ModelIR, path: &std::path::Path, tokens: &[u32]) -> Vec<f32> {
     loaded.forward_logits(tokens).expect("forward")
 }
 
-#[test]
-fn a_llama_cpp_layout_gguf_reads_back_to_the_checkpoints_logits() {
-    let dir = tempfile::tempdir().expect("temp dir");
-    let mut source = write_tiny_checkpoint(dir.path());
+fn export_tiny_gguf(
+    dir: &std::path::Path,
+    llama_cpp_layout: bool,
+) -> (ModelIR, std::path::PathBuf) {
+    let mut source = write_tiny_checkpoint(dir);
     // Keep every matrix in f32 so rounding to f16 cannot hide or fake a layout error.
     for tensor in &mut source.tensors {
         tensor.selected_format = TensorFormat::FP32;
@@ -148,14 +150,12 @@ fn a_llama_cpp_layout_gguf_reads_back_to_the_checkpoints_logits() {
     // 1e-6 and the exporter writes 1e-5, which would show up here as a gap unrelated to the rope
     // layout.
     std::fs::write(
-        dir.path().join("config.json"),
+        dir.join("config.json"),
         r#"{"rms_norm_eps": 1e-5, "rope_theta": 10000.0}"#,
     )
     .expect("write config.json");
-    let tokens = [1u32, 5, 3, 7, 2];
-    let want = logits(&source, dir.path(), &tokens);
 
-    let gguf = dir.path().join("tiny.gguf");
+    let gguf = dir.join("tiny.gguf");
     ModelExporter::export(
         &source,
         &ExportConfig {
@@ -163,19 +163,77 @@ fn a_llama_cpp_layout_gguf_reads_back_to_the_checkpoints_logits() {
             quant_type: ExportQuantType::PerTensor,
             output_path: gguf.clone(),
             compute_checksum: false,
-            llama_cpp_layout: true,
-            tokenizer_json_path: Some(write_tokenizer(dir.path())),
+            llama_cpp_layout,
+            tokenizer_json_path: llama_cpp_layout.then(|| write_tokenizer(dir)),
         },
     )
-    .expect("export with the llama.cpp layout");
+    .expect("export GGUF");
 
-    let reread = ModelImporter::import(&gguf).expect("import the GGUF");
-    let got = logits(&reread, &gguf, &tokens);
+    (source, gguf)
+}
+
+fn assert_logits_close(got: &[f32], want: &[f32]) {
     assert_eq!(got.len(), want.len());
     let worst = got
         .iter()
-        .zip(&want)
+        .zip(want)
         .map(|(a, b)| (a - b).abs())
         .fold(0.0f32, f32::max);
     assert!(worst < 1e-4, "largest logit gap {worst}");
+}
+
+#[test]
+fn a_llama_cpp_layout_gguf_reads_back_to_the_checkpoints_logits() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let (source, gguf) = export_tiny_gguf(dir.path(), true);
+    let tokens = [1u32, 5, 3, 7, 2];
+    let want = logits(&source, dir.path(), &tokens);
+
+    let reread = ModelImporter::import(&gguf).expect("import the GGUF");
+    let got = logits(&reread, &gguf, &tokens);
+    assert_logits_close(&got, &want);
+}
+
+#[test]
+fn a_gguf_with_hugging_face_names_is_not_unpermuted() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let (source, gguf) = export_tiny_gguf(dir.path(), false);
+    let tokens = [1u32, 5, 3, 7, 2];
+    let want = logits(&source, dir.path(), &tokens);
+
+    let reread = ModelImporter::import(&gguf).expect("import the GGUF");
+    let got = logits(&reread, &gguf, &tokens);
+    assert_logits_close(&got, &want);
+}
+
+#[test]
+fn the_unpermute_is_keyed_on_the_llama_architecture_string() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let (_, gguf) = export_tiny_gguf(dir.path(), true);
+
+    let reread = ModelImporter::import(&gguf).expect("import the GGUF");
+    assert_eq!(
+        reread.source_gguf_metadata.get("general.architecture"),
+        Some(&ModelMetadataValue::String("llama".to_string()))
+    );
+}
+
+#[test]
+fn the_round_trip_holds_for_several_token_sequences() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let (source, gguf) = export_tiny_gguf(dir.path(), true);
+    let reread = ModelImporter::import(&gguf).expect("import the GGUF");
+
+    let sequences: &[&[u32]] = &[
+        &[0, 9],
+        &[2, 4, 6],
+        &[9, 1, 8, 0],
+        &[1, 5, 3, 7, 2],
+        &[3, 0, 7, 4, 8, 5],
+    ];
+    for &tokens in sequences {
+        let want = logits(&source, dir.path(), tokens);
+        let got = logits(&reread, &gguf, tokens);
+        assert_logits_close(&got, &want);
+    }
 }
