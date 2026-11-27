@@ -281,6 +281,13 @@ closes it.
 - **Done means**: The GGUF import undoes the permutation for the LLaMA family (using the inverse in `src/exporter/ggml_names.rs`), with a round-trip test (export with the layout, read back, logits equal to the checkpoint within the format tolerance) and a check that a file already in Hugging Face layout is not changed.
 - **Progress** (27 November 2026): the loader (`src/inference/llama.rs`) undoes the q/k permutation for tensors named `attn_q`/`attn_k` in a GGUF whose `general.architecture` is `llama`; HF-named tensors and other architectures are left alone. Test `tests/test_gguf_layout_roundtrip.rs`: tiny LLaMA exported with `--llama-cpp-layout` in f32 and read back gives the checkpoint's logits within 1e-4 (largest gap 1.29e-3 without the fix, so the test discriminates). Also tested: an HF-named GGUF (flag off) is not touched, five token sequences, and the architecture key the fix depends on. Not done: a check against a GGUF made by llama.cpp's own converter, and other architectures that use the interleaved layout (none are handled; the check is for `llama` only). Side finding, fixed: when a source recorded no norm epsilon the engine assumed 1e-6 while the exporter wrote 1e-5; both now use `FALLBACK_RMS_NORM_EPS` (1e-6), with a test.
 
+### [THME-3104] Finish every v0.2 sub-milestone
+
+- **Milestone**: v0.2.9 · **Roadmap**: v0.2.9.9 · **Priority**: p1 · **Area**: docs · **Type**: chore · **Status**: in progress
+- **Problem**: 44 of the 90 sub-milestones of v0.2.0 to v0.2.9 are not marked done. Some are small measurements, some need hardware or an owner decision, and v0.2.3 is a training program.
+- **Done means**: Each sub-milestone is either done (its own done-means text met, evidence committed) or closed with a dated reason (owner decision, missing hardware); `docs/status/v0.2_completion_plan.md` is current; v0.2.9.9 is closed by re-reading it.
+- **Progress** (27 November 2026): the plan groups the 44 items (CPU work, hardware, owner decisions, the training program) and fixes the order. No sub-milestone is changed yet.
+
 ### [THME-3100] Calibrate the allocator link constant C
 
 - **Milestone**: v0.2.4 · **Roadmap**: unassigned · **Priority**: p2 · **Area**: research · **Type**: research · **Status**: triage
