@@ -153,6 +153,27 @@ class QadLora(unittest.TestCase):
         qad_lora.run(c)
         self.assertNotEqual(self.log(a), self.log(c))
 
+    def test_micro_batches_give_the_same_training_as_one_big_batch(self):
+        """Gradient accumulation in pieces must not change what is learned (it only saves memory)."""
+        from safetensors.torch import load_file
+
+        full = self.args("mb_full", steps=4)
+        pieces = self.args("mb_pieces", steps=4, micro_batch=2)
+        singles = self.args("mb_singles", steps=4, micro_batch=1)
+        r_full, r_pieces, r_singles = qad_lora.run(full), qad_lora.run(pieces), qad_lora.run(singles)
+        self.assertEqual(r_full["micro_batch"], 4)
+        self.assertEqual(r_pieces["micro_batch"], 2)
+        self.assertEqual(r_singles["micro_batch"], 1)
+        weights = lambda x: load_file(os.path.join(x.out_dir, "adapter", "adapter_model.safetensors"))
+        base = weights(full)
+        for other in (pieces, singles):
+            got = weights(other)
+            self.assertEqual(sorted(base), sorted(got))
+            worst = max((base[k] - got[k]).abs().max().item() for k in base)
+            self.assertLess(worst, 1e-5, f"adapter differs by {worst}")
+            for a, b in zip(self.log(full), self.log(other)):
+                self.assertAlmostEqual(a["loss"], b["loss"], places=5)
+
 
 if __name__ == "__main__":
     unittest.main()

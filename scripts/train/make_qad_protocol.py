@@ -29,6 +29,8 @@ doc = {
         "optimizer": "AdamW, weight decay 0, constant learning rate, no warm-up, no clipping",
         "steps": 256,
         "batch_windows": 8,
+        "micro_batch_windows": 2,
+        "micro_batch_note": "Added before any adapter step or any result existed: the first launch of the pilot ran out of GPU memory with 8 windows per forward pass (49,152-word vocabulary, 16 GB card). The effective batch stays 8 windows: the gradient of 4 pieces of 2 windows equals the gradient of one batch of 8 (tested in scripts/train/test_qad_lora.py). It changes no rule of this protocol.",
         "window_tokens": 1024,
         "device": "cuda",
         "teacher_dtype": "float32",

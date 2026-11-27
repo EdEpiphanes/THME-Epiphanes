@@ -114,15 +114,21 @@ def run(a):
     log = []
     model.train()
     train_started = time.perf_counter()
+    micro = getattr(a, "micro_batch", None) or a.batch_size
     for step, idx in enumerate(batch_indices(a.seed, len(train), a.batch_size, a.steps)):
-        ids = train[idx.to(device)]
-        with torch.no_grad():
-            t_logits = teacher(input_ids=ids).logits
-        loss = kl_loss(t_logits, model(input_ids=ids).logits)
         opt.zero_grad(set_to_none=True)
-        loss.backward()
+        step_loss = 0.0
+        for piece in idx.to(device).split(micro):
+            ids = train[piece]
+            with torch.no_grad():
+                t_logits = teacher(input_ids=ids).logits
+            # Every window has the same number of positions, so weighting each piece's mean by its share
+            # of the windows gives exactly the mean of the whole batch.
+            loss = kl_loss(t_logits, model(input_ids=ids).logits) * (len(piece) / len(idx))
+            loss.backward()
+            step_loss += loss.item()
         opt.step()
-        log.append({"step": step, "loss": loss.item()})
+        log.append({"step": step, "loss": step_loss})
     train_seconds = time.perf_counter() - train_started
 
     model.eval()
@@ -139,6 +145,7 @@ def run(a):
         "seed": a.seed,
         "steps": a.steps,
         "batch_size": a.batch_size,
+        "micro_batch": micro,
         "window": a.window,
         "rank": a.rank,
         "alpha": a.alpha,
@@ -173,6 +180,8 @@ def parse_args(argv=None):
     ap.add_argument("--seed", type=int, default=1234)
     ap.add_argument("--steps", type=int, default=200)
     ap.add_argument("--batch-size", type=int, default=4)
+    ap.add_argument("--micro-batch", type=int, default=None,
+                    help="windows per forward pass (gradient accumulation to fit memory); default: the whole batch")
     ap.add_argument("--window", type=int, default=1024)
     ap.add_argument("--rank", type=int, default=16)
     ap.add_argument("--alpha", type=float, default=32.0)
