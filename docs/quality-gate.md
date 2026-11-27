@@ -76,3 +76,23 @@ re-labelled under another gate.
 `thme validate --report REPORT.json` rebuilds the recorded gate, checks its hash, and re-judges
 every variant from its measured numbers. A stored verdict that disagrees with the gate, or a gate
 edited after the run, is an error.
+
+## Gate v2: a margin that fits the model's perplexity
+
+Gate v1 allows a flat +0.45 perplexity. That is too tight for models whose perplexity is large (a 0.7 % change on a baseline of 114 is far over 0.45) and loose for small ones. v2 gives each criterion a `switch_at` threshold and picks one regime from the baseline:
+
+| Baseline \|b\| | Allowed drift |
+|---|---|
+| below `switch_at` (20.0) | absolute only: `max_abs` (0.45) |
+| `switch_at` or above | relative only: `max_rel · |b|` (0.0225, i.e. 0.45 / 20, so the two regimes meet at the switch) |
+
+Select it with `--gate configs/gates/thme-perplexity-v2.json`. The default stays v1 and its hash does not change.
+
+Committed reports judged under both versions:
+
+| Report | Baseline → candidate | v1 | v2 |
+|---|---|---|---|
+| SmolLM-135M Q8_0 | 19.80 → 19.83 | pass | pass |
+| Pythia-14M Q8_0 | 114.29 → 115.12 | fail | pass |
+| SmolLM recipe | Δ +28.9 | fail | fail |
+| Pythia Q4_0 | large drift | fail | fail |

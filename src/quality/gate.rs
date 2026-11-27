@@ -27,6 +27,12 @@ pub struct Criterion {
     /// Largest allowed degradation as a fraction of the baseline (0.01 = 1%).
     #[serde(default)]
     pub max_rel: Option<f64>,
+    /// Two-regime rule (gate v2): when set, a baseline whose absolute value is below this uses
+    /// `max_abs` alone and a baseline at or above it uses `max_rel` alone (a relative margin
+    /// misbehaves near zero, an absolute one is too strict for high baselines). Requires both
+    /// margins. Absent in v1 gates, so their canonical JSON and hash do not change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub switch_at: Option<f64>,
 }
 
 /// A versioned quality gate.
@@ -133,6 +139,7 @@ impl GateSpec {
                 lower_is_better: true,
                 max_abs: Some(max_abs),
                 max_rel: None,
+                switch_at: None,
             }],
         }
     }
@@ -170,6 +177,17 @@ impl GateSpec {
             for m in [c.max_abs, c.max_rel].into_iter().flatten() {
                 if !m.is_finite() || m < 0.0 {
                     bail!("Criterion '{}' has an invalid margin {m}", c.metric);
+                }
+            }
+            if let Some(t) = c.switch_at {
+                if !t.is_finite() || t <= 0.0 {
+                    bail!("Criterion '{}' has an invalid switch_at {t}", c.metric);
+                }
+                if c.max_abs.is_none() || c.max_rel.is_none() {
+                    bail!(
+                        "Criterion '{}' sets switch_at, which needs both max_abs and max_rel",
+                        c.metric
+                    );
                 }
             }
         }
@@ -250,12 +268,20 @@ impl GateSpec {
                 let rel_allowed = c
                     .max_rel
                     .map(|r| (m.baseline != 0.0).then(|| r * m.baseline.abs()));
-                let allowed = match (c.max_abs, rel_allowed) {
-                    (_, Some(None)) => None,
-                    (Some(a), Some(Some(r))) => Some(a.min(r)),
-                    (Some(a), None) => Some(a),
-                    (None, Some(Some(r))) => Some(r),
-                    (None, None) => None,
+                let allowed = match (c.switch_at, c.max_abs, rel_allowed) {
+                    // Gate v2: the baseline picks one regime.
+                    (Some(t), Some(a), Some(r)) => {
+                        if m.baseline.abs() < t {
+                            Some(a)
+                        } else {
+                            r
+                        }
+                    }
+                    (_, _, Some(None)) => None,
+                    (_, Some(a), Some(Some(r))) => Some(a.min(r)),
+                    (_, Some(a), None) => Some(a),
+                    (_, None, Some(Some(r))) => Some(r),
+                    (_, None, None) => None,
                 };
                 let finite = [m.baseline, m.candidate, low, high]
                     .iter()
@@ -438,6 +464,7 @@ impl QualityGate {
                     lower_is_better: s.lower_is_better,
                     max_abs: Some(s.allowed_degradation),
                     max_rel: None,
+                    switch_at: None,
                 })
                 .collect(),
         };
@@ -502,6 +529,7 @@ mod tests {
             lower_is_better: lower,
             max_abs: abs,
             max_rel: rel,
+            switch_at: None,
         }
     }
 
@@ -573,6 +601,66 @@ mod tests {
                 ])
                 .accepted
         );
+    }
+
+    fn v2() -> GateSpec {
+        GateSpec::load(Path::new("configs/gates/thme-perplexity-v2.json")).unwrap()
+    }
+
+    fn passes(gate: &GateSpec, baseline: f64, candidate: f64) -> bool {
+        gate.judge(&[Measure::new("perplexity", baseline, candidate)])
+            .accepted
+    }
+
+    /// Below the switch the margin is absolute: a perplexity-19.8 model may lose 0.45, not 0.5.
+    #[test]
+    fn v2_uses_an_absolute_margin_below_the_switch() {
+        let gate = v2();
+        assert!(passes(&gate, 19.8, 20.2));
+        assert!(!passes(&gate, 19.8, 20.3));
+    }
+
+    /// At and above the switch the margin is relative: Pythia-14M (baseline 114.29) loses 0.73
+    /// percent to a Q8_0 export, which v1 refused and v2 accepts; 2.6 percent is still refused.
+    #[test]
+    fn v2_uses_a_relative_margin_at_and_above_the_switch() {
+        let gate = v2();
+        assert!(passes(&gate, 114.286, 115.120));
+        assert!(!passes(&gate, 114.286, 117.3));
+        let v1 = GateSpec::load(Path::new("configs/gates/thme-perplexity-v1.json")).unwrap();
+        assert!(!passes(&v1, 114.286, 115.120), "v1 keeps its verdict");
+    }
+
+    /// The two regimes allow the same degradation (0.45) exactly at the switch, so the rule has no
+    /// jump there.
+    #[test]
+    fn v2_regimes_agree_at_the_switch() {
+        let gate = v2();
+        let c = &gate.criteria[0];
+        let switch = c.switch_at.unwrap();
+        let rel_allowed = c.max_rel.unwrap() * switch;
+        assert!((rel_allowed - c.max_abs.unwrap()).abs() < 1e-12);
+        assert!(passes(&gate, switch, switch + 0.449));
+        assert!(!passes(&gate, switch, switch + 0.451));
+    }
+
+    /// Adding the switch must not change the identity of an existing gate or its verdicts.
+    #[test]
+    fn v1_hash_and_verdicts_do_not_change() {
+        let v1 = GateSpec::load(Path::new("configs/gates/thme-perplexity-v1.json")).unwrap();
+        assert_eq!(v1.hash(), GateSpec::perplexity(0.45).hash());
+        assert!(!serde_json::to_string(&v1).unwrap().contains("switch_at"));
+    }
+
+    #[test]
+    fn a_switch_needs_both_margins_and_a_positive_threshold() {
+        let mut gate = v2();
+        gate.criteria[0].max_rel = None;
+        assert!(gate.validate().is_err());
+        let mut gate = v2();
+        gate.criteria[0].switch_at = Some(0.0);
+        assert!(gate.validate().is_err());
+        assert!(v2().validate().is_ok());
     }
 
     /// Dossier R.5: pass only if the high end is within the margin, fail if the low end is

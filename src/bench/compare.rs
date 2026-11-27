@@ -176,6 +176,7 @@ mod tests {
                 lower_is_better: false,
                 max_abs: Some(max_abs),
                 max_rel: None,
+                switch_at: None,
             }],
         }
     }

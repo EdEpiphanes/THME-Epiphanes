@@ -313,7 +313,7 @@ closes it.
 
 ### [THME-3077] Quality gate v2: a margin that fits the model's perplexity (two regimes)
 
-- **Milestone**: v0.2.8 · **Roadmap**: none · **Priority**: p1 · **Area**: quality · **Type**: feature · **Status**: ready
+- **Milestone**: v0.2.8 · **Roadmap**: none · **Priority**: p1 · **Area**: quality · **Type**: feature · **Status**: done in code (27 November 2026); the default gate stays v1, v2 is chosen with `--gate`
 - **Problem**: The default gate (`thme-perplexity-v1`) is one absolute limit of 0.45 perplexity. That fits models whose perplexity is in the single digits, but Pythia-14M has a baseline of 114, where even a uniform Q8_0 export (+0.83, 0.73 percent) fails. An accuracy rule from emissions monitoring (a relative limit when the level is high, an absolute limit when it is low, because a relative limit misbehaves near zero) is the model: the owner's recollection, not yet checked against the standard's text.
 - **Done means**: A versioned gate `thme-perplexity-v2` whose criterion applies a relative margin when the baseline is above a stated threshold and an absolute margin when it is below, with the threshold, margins and the rule written in the gate file and covered by its hash; both regimes documented in `docs/quality-gate.md` with the reasoning and a table of what each committed report would have been under v1 and v2; old reports keep their v1 verdicts; the decision rule is stated before it is applied to any new run; unit tests on both sides of the threshold.
 

@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - v0.2.0 Measured Core
 
 ### Added
+- **Quality gate v2** (27 November 2026, THME-3077): a criterion may set `switch_at`; a baseline below it uses the absolute margin only, at or above it the relative margin only (`configs/gates/thme-perplexity-v2.json`: 0.45 / 0.0225 / 20.0). v1 files and hashes are unchanged; v2 is chosen with `--gate`.
 - **DC-CCCP uses the paper's sign split** (27 November 2026): `sign_split_surrogate` bounds the coupled objective from above (positive coupling terms by AM-GM, negative terms kept exactly) and `mm_descend` takes monotone majorize-minimize steps inside the byte budget before the tabu polish. The CUDA path now uses the shared f16 conversion; the old hand-rolled one flushed values just above half of the smallest subnormal to zero. `llama/simd.rs` and `gui/app/universal_model.rs` were split out of the two largest files.
 - **`.epiph` named next to SafeTensors and GGUF everywhere models are listed** (27 November 2026): README badge and format lists, manual, getting started, subsystems, man page and CLI help now name the Epiphanes format where the feature supports it.
 - **VS Code extension requires VS Code 1.146 or later** (26 November 2026): the engines field and the @types/vscode typings moved from 1.90 to 1.146 together, because vsce refuses typings newer than the declared minimum. Extensions installed on older VS Code versions stay on the previous release.
