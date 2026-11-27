@@ -72,7 +72,7 @@ use requires permission from that model's provider. The person who plans the rel
 hold it; THME cannot grant it and does not assume it. That is why the work here is limited to testing
 that the engine works and to proving the claims THME makes.
 
-The engine should enforce this, not just document it. Planned guard (not built):
+The engine should enforce this, not just document it. Planned guard (deferred by the owner on 27 November 2026; to be installed later, not built):
 - A file annotated `use=test-only` cannot be signed (`thme epiph sign`), exported to GGUF or
   SafeTensors for sharing, or packed into a release archive; the command refuses and says why.
 - The way past it is an explicit `--permission-note TEXT` that is written into the file's provenance
