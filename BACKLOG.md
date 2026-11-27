@@ -317,6 +317,13 @@ closes it.
 - **Done means**: Each ported feature meets the process in `docs/research/unified-engine-port-plan.md`: a gap THME actually has, a permissive licence read from the LICENSE file, an attribution row, a test whose expected values come from the source engine, the full gate, and a measured effect under the drift protocol; the ranked candidate list exists and its first slice is done; the binary stays under its size caps.
 - **Progress** (27 November 2026): nine engines cloned shallowly outside the repository (`C:/Users/TechTroniX/engines`); licences read from their LICENSE files (llama.cpp, mistral.rs, ollama, exllamav2 MIT; candle, burn, vLLM, SGLang, MLC-LLM Apache-2.0). The nine surveys are written (`docs/research/engines/*.md`) and merged into a ranked, gap-driven list in the plan: six small items first (first slice: rotate before quantizing the KV cache, tested on the Pythia-14M keys case; second: imatrix and the missing encoders, tested against the local `llama-quantize`), then medium and large ones. Licence cautions recorded (two MIT files with no copyright line, one NOTICE file to carry). Nothing is ported yet. Scheduled after the v0.2 merge.
 
+### [THME-3109] Band-capable quality gate (RATA-style tolerances)
+
+- **Milestone**: v0.2.8 · **Roadmap**: v0.2.8.3 · **Priority**: p2 · **Area**: quality · **Type**: feature · **Status**: triage
+- **Problem**: Gate v2 has two regimes (absolute below a switch point, relative above). The owner describes a relative-accuracy-test shape with more bands: 10 percent above 100, an absolute difference below about 20, something in between. `docs/research/rata-style-tolerance-check.md` shows the bands give the same verdicts as v2 on every committed result at an absolute limit of 0.45, so the change is about future results and clarity.
+- **Done means**: Criteria accept an ordered list of bands (from, relative and absolute limits) validated and hashed like the rest of the gate file; v1 and v2 files and hashes unchanged; a gate v3 file with the owner's confirmed limits; tests on both sides of every band edge; a documented table of the committed results re-judged.
+- **Progress** (27 November 2026): the check is written. Not built. Waiting for the owner's absolute limit below 20 and the middle-band limit.
+
 ### [THME-3100] Calibrate the allocator link constant C
 
 - **Milestone**: v0.2.4 · **Roadmap**: unassigned · **Priority**: p2 · **Area**: research · **Type**: research · **Status**: triage
