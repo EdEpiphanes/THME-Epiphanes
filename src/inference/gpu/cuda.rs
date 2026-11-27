@@ -2,7 +2,6 @@
 //! NVIDIA CUDA + cuBLAS Tensor Core acceleration backend for THME.
 
 use crate::engine::minifloat::f32_to_f16;
-use std::collections::HashMap;
 use std::ffi::c_void;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
@@ -10,8 +9,8 @@ use std::sync::{Arc, Mutex};
 use cudarc::cublas::sys as cublas_sys;
 use cudarc::cublas::CudaBlas;
 use cudarc::driver::{
-    sys as driver_sys, CudaContext as DriverContext, CudaFunction, CudaGraph, CudaSlice,
-    CudaStream, CudaView, DevicePtr, DevicePtrMut, LaunchConfig, PushKernelArg,
+    sys as driver_sys, CudaContext as DriverContext, CudaFunction, CudaSlice, CudaStream, CudaView,
+    DevicePtr, DevicePtrMut, LaunchConfig, PushKernelArg,
 };
 use cudarc::nvrtc::Ptx;
 
@@ -20,8 +19,12 @@ use super::decoder::DecoderPlan;
 use super::error::ThmeError;
 use super::tensor::{QuantDtype, QuantizedTensor};
 
-/// Default weight bytes kept resident on CUDA before LRU eviction (10 GiB).
-const WEIGHT_CACHE_BUDGET: usize = 10 << 30;
+mod weight_cache;
+mod workspace;
+
+use weight_cache::{CachedBuffer, CachedEntry, WeightCache};
+use workspace::{CudaWorkspace, CudaWorkspaceKey, SendCudaGraph};
+
 /// Maximum logits elements buffered per NLL chunk (128 MiB in FP16).
 const NLL_CHUNK_MAX_ELEMS: usize = 64 * 1024 * 1024;
 const BLOCK_256: u32 = 256;
@@ -29,95 +32,6 @@ const BLOCK_256: u32 = 256;
 const CUBLAS_WORKSPACE_BYTES: usize = 32 << 20;
 
 type Q4Resident = (Arc<CudaSlice<u16>>, Arc<CudaSlice<u32>>);
-
-#[derive(Clone)]
-enum CachedBuffer {
-    F16(Arc<CudaSlice<u16>>),
-    F32(Arc<CudaSlice<f32>>),
-    Q4_0 {
-        scales: Arc<CudaSlice<u16>>,
-        qs: Arc<CudaSlice<u32>>,
-    },
-}
-
-struct CachedEntry {
-    fingerprint: u64,
-    buffer: CachedBuffer,
-    bytes: usize,
-    last_used: u64,
-}
-
-#[derive(Default)]
-struct WeightCache {
-    entries: HashMap<(usize, usize, u8), CachedEntry>,
-    bytes: usize,
-    tick: u64,
-}
-
-impl WeightCache {
-    fn evict_if_needed(&mut self, incoming: usize) {
-        while self.bytes + incoming > WEIGHT_CACHE_BUDGET && !self.entries.is_empty() {
-            let Some(oldest_key) = self
-                .entries
-                .iter()
-                .min_by_key(|(_, entry)| entry.last_used)
-                .map(|(k, _)| *k)
-            else {
-                break;
-            };
-            if let Some(removed) = self.entries.remove(&oldest_key) {
-                self.bytes = self.bytes.saturating_sub(removed.bytes);
-            }
-        }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-struct CudaWorkspaceKey {
-    t: usize,
-    d: usize,
-    kv_dim: usize,
-    inter: usize,
-    vocab: usize,
-    nll_mode: bool,
-    head_dim: usize,
-}
-
-struct SendCudaGraph(CudaGraph);
-// SAFETY: `CudaGraph` is only accessed while holding `CudaContext::workspace` and launched on `self.stream`.
-unsafe impl Send for SendCudaGraph {}
-unsafe impl Sync for SendCudaGraph {}
-
-struct CudaWorkspace {
-    x_a: CudaSlice<f32>,
-    x_b: CudaSlice<f32>,
-    x16: CudaSlice<u16>,
-    q16: CudaSlice<u16>,
-    k16: CudaSlice<u16>,
-    v16: CudaSlice<u16>,
-    attn_scores: CudaSlice<f32>,
-    attn_probs16: CudaSlice<u16>,
-    q: CudaSlice<f32>,
-    k: CudaSlice<f32>,
-    v: CudaSlice<f32>,
-    mixed: CudaSlice<f32>,
-    tmp: CudaSlice<f32>,
-    tmp16: CudaSlice<u16>,
-    gate: CudaSlice<f32>,
-    gate16: CudaSlice<u16>,
-    up: CudaSlice<f32>,
-    up16: CudaSlice<u16>,
-    last: CudaSlice<f32>,
-    logits: CudaSlice<f32>,
-    logits16: CudaSlice<u16>,
-    scores: CudaSlice<f32>,
-    targets: CudaSlice<u32>,
-    cos: CudaSlice<f32>,
-    sin: CudaSlice<f32>,
-    cos_hash: u64,
-    sin_hash: u64,
-    graph: Option<(u64, SendCudaGraph)>,
-}
 
 /// CUDA + cuBLAS compute backend implementing [`GpuBackend`].
 pub struct CudaContext {
