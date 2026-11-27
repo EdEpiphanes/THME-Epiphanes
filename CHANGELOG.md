@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - v0.2.0 Measured Core
 
 ### Added
+- **`thme export --llama-cpp-layout` warns when the pre-tokenizer type is missing** (27 November 2026, THME-3102 part): `ExportReport.warnings` carries it and the CLI prints it.
 - **README brought up to date** (27 November 2026): the llama.cpp match, KV cache precision and `thme pathfinder` are listed with their evidence; the Studio chat note no longer says there is no KV cache; the roadmap diagram has the v0.3.0 node.
 - **GGUF export and the engine agree on the fallback norm epsilon** (27 November 2026): a source with no recorded `rms_norm_eps` was exported with 1e-5 but read with 1e-6; both now use 1e-6 (`FALLBACK_RMS_NORM_EPS`). Checkpoints that record one are unchanged.
 - **Getting-started and manual cover the new features** (27 November 2026): llama.cpp layout export, `--kv-precision`, `thme pathfinder`, `--allow-root` and gate v2, each with its evidence level.

@@ -94,6 +94,9 @@ pub fn execute(args: ExportArgs) -> Result<()> {
         "Exported {} tensors to {:?} ({} bytes)",
         report.total_tensors, args.output, report.exported_bytes
     );
+    for warning in &report.warnings {
+        eprintln!("Warning: {warning}");
+    }
     if let Some(checksum) = report.sha256_checksum {
         println!("SHA-256: {checksum}");
     }

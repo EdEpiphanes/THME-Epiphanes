@@ -160,6 +160,7 @@ fn test_export_config_and_report_json_serde() {
         sha256_checksum: Some(
             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string(),
         ),
+        warnings: Vec::new(),
     };
 
     let report_json = serde_json::to_string(&report).expect("Serialize report");

@@ -272,6 +272,7 @@ closes it.
 - **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.8 · **Priority**: p2 · **Area**: exporter · **Type**: bug · **Status**: triage
 - **Problem**: A `--llama-cpp-layout` export has no `tokenizer.ggml.pre`, and llama.cpp b12584 warns "missing pre-tokenizer type, using: 'default'" and "generation quality will be degraded". The prompt used in THME-3091 tokenised identically, but other text may split differently.
 - **Done means**: The key is written from the public documentation of the value set and a rule that follows from `tokenizer.json` (its pre-tokenizer and split pattern), or the export says it could not tell and what to set; a test with a tokenizer.json of each supported kind; a comparison of token ids between THME's tokenizer and llama.cpp on a few hundred varied strings.
+- **Progress** (27 November 2026): `thme export --llama-cpp-layout` now prints a warning that no `tokenizer.ggml.pre` was written (`ExportReport.warnings`, tested). The key itself is not written because choosing the right value from `tokenizer.json` needs the public value set and a tested rule; the ticket stays triage.
 
 ### [THME-3103] THME's GGUF reader does not undo the q/k row permutation of llama.cpp layout files
 

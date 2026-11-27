@@ -114,6 +114,9 @@ pub struct ExportReport {
     pub exported_bytes: u64,
     pub compression_ratio: f32,
     pub sha256_checksum: Option<String>,
+    /// Things the file lacks that the user should know about; empty for a default export.
+    #[serde(default)]
+    pub warnings: Vec<String>,
 }
 
 /// Unified binary model serialization engine
@@ -178,6 +181,14 @@ impl ModelExporter {
             None
         };
 
+        let mut warnings = Vec::new();
+        if config.llama_cpp_layout && config.tokenizer_json_path.is_some() {
+            warnings.push(
+                "No tokenizer.ggml.pre was written; llama.cpp will use its default pre-tokenizer and may warn that quality is degraded (THME-3102)."
+                    .to_string(),
+            );
+        }
+
         Ok(ExportReport {
             format: config.format,
             quant_type: config.quant_type,
@@ -186,6 +197,7 @@ impl ModelExporter {
             exported_bytes,
             compression_ratio,
             sha256_checksum,
+            warnings,
         })
     }
 }
@@ -878,7 +890,7 @@ mod tests {
         let out_off_with_path = dir.path().join("off_with_path.gguf");
         let out_on = dir.path().join("on.gguf");
 
-        ModelExporter::export(
+        let off_report = ModelExporter::export(
             &model,
             &ExportConfig {
                 format: ExportFormat::GGUFv3,
@@ -908,7 +920,7 @@ mod tests {
             "llama_cpp_layout=false must ignore tokenizer_json_path"
         );
 
-        ModelExporter::export(
+        let on_report = ModelExporter::export(
             &model,
             &ExportConfig {
                 format: ExportFormat::GGUFv3,
@@ -920,6 +932,17 @@ mod tests {
             },
         )
         .expect("export with llama_cpp_layout");
+        assert!(
+            off_report.warnings.is_empty(),
+            "default export warns: {:?}",
+            off_report.warnings
+        );
+        assert_eq!(on_report.warnings.len(), 1, "{:?}", on_report.warnings);
+        assert!(
+            on_report.warnings[0].contains("tokenizer.ggml.pre"),
+            "{:?}",
+            on_report.warnings
+        );
 
         let bytes = std::fs::read(&out_on).expect("read exported gguf");
         let findings = gguf_check::check_gguf(&bytes);
