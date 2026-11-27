@@ -210,7 +210,7 @@ Copilot invokes `thme_copilot_validate` and reports:
 - The tools only read. No write tool and no process spawning were found in the audit of 19 November 2026 (L3); model files go through the scanner before they are parsed. This is a code reading, not a sandbox: nothing enforces it.
 - Start the server from a built binary (`target/release/thme`), never through `cargo run`, which compiles and runs build scripts from the working tree on every start.
 - Connect it only to clients and workspaces you trust. The VS Code extension declares `untrustedWorkspaces: false` for the same reason.
-- **Allowed roots (planned, not implemented):** an optional list of folders outside which the server would refuse a path. Until it exists the server accepts any readable path; tracked in THME-3054.
+- **Allowed roots (`--allow-root DIR`, repeatable):** with at least one root given, a tool call whose `model_path` resolves (symlinks and `..` followed) outside every root is refused before any tool runs, and so is a path that cannot be resolved. With no root the server accepts any readable path, as before. The model bound with `--model` is chosen by you and is not checked. Example: `thme mcp --model C:/models/m.gguf --allow-root C:/models`.
 
 ## Step 6: Integrating with Claude Desktop and Cursor
 
