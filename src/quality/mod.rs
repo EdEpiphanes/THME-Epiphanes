@@ -2,6 +2,7 @@
 pub mod epiphanes;
 pub mod evaluator;
 pub mod gate;
+pub mod kv_perplexity;
 
 pub use evaluator::{
     EvaluationCorpus, EvaluatorConfig, ModelEvaluator, PerplexityGateDecision,
