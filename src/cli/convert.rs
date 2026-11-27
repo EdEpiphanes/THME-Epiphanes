@@ -10,7 +10,7 @@ use crate::surgery::{TweakOperation, TweakRecipe};
 
 #[derive(Args, Debug)]
 pub struct ConvertArgs {
-    /// Path to model directory or safetensors/gguf file (omit to use synthetic baseline)
+    /// Path to model directory or SafeTensors, GGUF and .epiph file (omit to use synthetic baseline)
     #[arg(short, long, value_name = "MODEL_PATH")]
     pub model: Option<PathBuf>,
 

@@ -8,7 +8,7 @@ use crate::parser::ModelImporter;
 
 #[derive(Args, Debug)]
 pub struct ExportArgs {
-    /// Source GGUF file or SafeTensors model directory
+    /// Source model path (SafeTensors, GGUF and .epiph)
     #[arg(value_name = "MODEL_PATH")]
     pub model: PathBuf,
 

@@ -8,7 +8,7 @@ use crate::surgery::{SurgeryEngine, TweakRecipe};
 
 #[derive(Args, Debug)]
 pub struct TweakArgs {
-    /// Path to base model directory or model file (.gguf, .safetensors)
+    /// Path to base model directory or model file (SafeTensors, GGUF and .epiph)
     #[arg(short, long, value_name = "MODEL_PATH")]
     pub model: PathBuf,
 

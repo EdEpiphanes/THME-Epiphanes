@@ -89,7 +89,7 @@ Nothing here has been tried on a clean machine yet.
    thme doctor
    ```
 
-3. **Inspect a model.** Give it a model folder, a `.gguf` file or a `.safetensors` file. It reads
+3. **Inspect a model.** Give it a model folder or a SafeTensors, GGUF or `.epiph` file. It reads
    the header; it does not copy the weights. `profile` adds the layer sensitivity table and how the
    KV cache grows with the context length.
 

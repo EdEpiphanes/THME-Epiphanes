@@ -13,7 +13,7 @@
 <p align="center">
   <a href="https://github.com/EdEpiphanes/THME-Epiphanes/actions/workflows/ci.yml"><img src="https://github.com/EdEpiphanes/THME-Epiphanes/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <img src="https://img.shields.io/badge/Rust-2021%20%C2%B7%20MSRV%201.95-orange?logo=rust&style=flat-square" alt="Rust 2021, MSRV 1.95" />
-  <img src="https://img.shields.io/badge/Formats-SafeTensors%20%C2%B7%20GGUF%20v2%2Fv3-10b981?style=flat-square" alt="Formats" />
+  <img src="https://img.shields.io/badge/Formats-SafeTensors%20%C2%B7%20GGUF%20v2%2Fv3%20%C2%B7%20.epiph-10b981?style=flat-square" alt="Formats" />
   <a href="LICENSING.md"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue?style=flat-square" alt="License: AGPL-3.0; commercial license planned" /></a>
 </p>
 
@@ -93,8 +93,10 @@ so it reads what you already have instead of asking you to move files.
 - **Find your models.** `thme discover` lists the models already on your machine from the Hugging
   Face cache, Ollama, LM Studio, llama.cpp and any folder you name (`--path DIR`, `--json`). It is
   read-only and needs no network.
-- **Open anything.** SafeTensors, GGUF v2/v3 and `.epiph` load directly; pickle files are scanned
-  before they are opened.
+- **Open anything.** SafeTensors, GGUF v2/v3 and `.epiph` load directly (`.epiph` is the Epiphanes
+  format: a single verifiable file with weights, model description, recipe, provenance and quality
+  results, see [the spec](docs/formats/epiph-v1.md)); pickle files are scanned before they are
+  opened.
 - **Talk to it from your editor or agent.** `thme mcp` runs a stdio server that other tools can drive.
 - **One window.** The Studio shows the same models, and the numbers it can only estimate say so.
 
@@ -139,7 +141,7 @@ reference quantizer. Datasets, sources, licences and the notice that THME does n
 
 | Capability | Status | Evidence |
 | :--- | :--- | :--- |
-| SafeTensors and GGUF v2/v3 import, 28 GGML types | Implemented | Unit and fuzz tests |
+| SafeTensors, GGUF v2/v3 and .epiph import, 28 GGML types | Implemented | Unit and fuzz tests |
 | Reference forward pass (LLaMA family, GPT-NeoX) | Tested | `scheduled_forward_matches_plain_forward_and_validates_inputs` and `uniform_model_has_perplexity_equal_to_vocabulary_size` (`src/inference/`) |
 | Precision round trips: FP16, BF16, Q8_0, Q4_0, ternary TQ1_0 | Tested | `every_fp16_code_round_trips`, `decode_matches_the_bit_shift_definition_of_bf16`, `q8_round_trip_stays_within_half_a_step`, `ternary_round_trip_leaves_three_levels_per_block` |
 | GGUF v3 export | Tested | Writer round trips and structure checks (`tests/test_gguf_writer.rs`, `tests/test_exporter_compatibility.rs`); per-tensor formats (Q4_K, Q5_K, Q6_K, ternary) also tested |

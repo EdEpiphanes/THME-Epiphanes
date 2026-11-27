@@ -139,11 +139,11 @@ fn handle_tools_list(id: Value) -> JsonRpcResponse {
     let tools = json!([
         {
             "name": "thme_inspect_model",
-            "description": "Inspects a SafeTensors or GGUF model zero-copy: returns layer count, hidden size, tensor shapes, memory footprint, and architectural topology.",
+            "description": "Inspects a SafeTensors, GGUF and .epiph model zero-copy: returns layer count, hidden size, tensor shapes, memory footprint, and architectural topology.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "model_path": { "type": "string", "description": "Path to the model file (.safetensors or .gguf). Omit to inspect synthetic baseline." }
+                    "model_path": { "type": "string", "description": "Path to the model (SafeTensors, GGUF and .epiph). Omit to inspect synthetic baseline." }
                 }
             }
         },
@@ -263,7 +263,7 @@ fn handle_tools_list(id: Value) -> JsonRpcResponse {
                 "properties": {
                     "model_path": {
                         "type": "string",
-                        "description": "Optional model path (.safetensors or .gguf). Omit to use synthetic baseline."
+                        "description": "Optional model path (SafeTensors, GGUF and .epiph). Omit to use synthetic baseline."
                     },
                     "hardware": {
                         "type": "string",

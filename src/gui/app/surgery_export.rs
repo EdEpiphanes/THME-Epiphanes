@@ -67,7 +67,7 @@ impl THMEApp {
                         source.name
                     )).size(9.0).color(p.text_muted));
                 } else {
-                    ui.label(egui::RichText::new("Load a file-backed GGUF or SafeTensors model to export real tensor weights.").size(9.0).color(p.danger));
+                    ui.label(egui::RichText::new("Load a file-backed model (SafeTensors, GGUF and .epiph) to export real tensor weights.").size(9.0).color(p.danger));
                 }
 
                 ui.checkbox(&mut self.export_checksum, "Compute SHA-256 checksum");
@@ -114,7 +114,7 @@ impl THMEApp {
                         ui.add_space(6.0);
 
                         if self.model().source_model.is_none() {
-                            ui.label(egui::RichText::new("Load a file-backed GGUF or SafeTensors model before packing.").size(9.0).color(p.text_muted));
+                            ui.label(egui::RichText::new("Load a file-backed model (SafeTensors, GGUF and .epiph) before packing.").size(9.0).color(p.text_muted));
                         } else if ui.button(egui::RichText::new("Export to Epiphanes (.epiph)").strong().color(p.text_main)).clicked() {
                             if let Some(source_model) = self.model().source_model.clone() {
                                 let path = rfd::FileDialog::new()

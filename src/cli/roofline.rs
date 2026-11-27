@@ -13,7 +13,7 @@ use crate::profiling::thermal::{DynamicThermalModel, ThermalConfig};
 
 #[derive(Args, Debug, Clone)]
 pub struct RooflineArgs {
-    /// Path to target model file (.safetensors or .gguf) (omit to use synthetic baseline)
+    /// Path to target model (SafeTensors, GGUF and .epiph) (omit to use synthetic baseline)
     #[arg(short, long, value_name = "MODEL_PATH")]
     pub model: Option<PathBuf>,
 

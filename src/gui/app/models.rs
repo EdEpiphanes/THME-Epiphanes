@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Studio tab: TAB 1: Models Manager (Loaded models, GGUF/SafeTensors importer, tensor inventory)
+//! Studio tab: TAB 1: Models Manager (Loaded models, SafeTensors, GGUF and .epiph importer, tensor inventory)
 
 use super::*;
 
 impl THMEApp {
-    /// TAB 1: Models Manager (Loaded models, GGUF/SafeTensors importer, tensor inventory)
+    /// TAB 1: Models Manager (Loaded models, SafeTensors, GGUF and .epiph importer, tensor inventory)
     pub(super) fn render_tab_models(&mut self, ui: &mut egui::Ui) {
         let p = self.palette();
         let mut switch_idx = None;

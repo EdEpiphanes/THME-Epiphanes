@@ -22,7 +22,7 @@ thme <SUBCOMMAND> [OPTIONS]
 | Subcommand | Alias | Purpose |
 | :--- | :--- | :--- |
 | `gui` | `ui` | Launch the 60 FPS interactive Native Desktop Studio GUI. |
-| `inspect` | — | Zero-copy inspection of SafeTensors and GGUF tensors, shapes, and header metadata. |
+| `inspect` | — | Zero-copy inspection of SafeTensors, GGUF and .epiph tensors, shapes, and header metadata. |
 | `profile` | — | Layerwise topological sensitivity analysis, condition numbers, and KV-cache scaling. |
 | `plan` | — | Dynamic programming heterogeneous Pareto precision allocation plan generator. |
 | `validate` | `check` | Perplexity gate verification against baseline across WikiText-2, C4, PTB. |
@@ -49,7 +49,7 @@ thme gui
 The GUI consists of 10 specialized workspaces:
 
 - **Tab 0: Master Dashboard**: Global cockpit consolidating memory savings, perplexity deltas, and token simulation.
-- **Tab 1: Models & Weights**: Ingestion wizard supporting drag-and-drop GGUF/SafeTensors and architecture rebuilder.
+- **Tab 1: Models & Weights**: Ingestion wizard supporting drag-and-drop SafeTensors, GGUF and .epiph and architecture rebuilder.
 - **Tab 2: Layer Tweaker**: Fine-grained deconstruction of layer attention, MLPs, reaching profiles, and alpha/beta mixing.
 - **Tab 3: Matrix Engine**: Spectral SVD decomposition, Hadamard transformations, and SmoothQuant analysis.
 - **Tab 4: Benchmarks & Roofline**: Interactive log-log Roofline plot with hardware selector and batch sliders.
