@@ -614,6 +614,7 @@ closes it.
 - **Milestone**: v0.2.3 · **Roadmap**: v0.2.3.1 · **Priority**: p2 · **Area**: trainer · **Type**: feature · **Status**: triage
 - **Problem**: THME has no backward pass, so it cannot fine-tune; the current trainer is synthetic.
 - **Done means**: Hand-written CPU backward for the LLaMA and Gemma blocks, checked against finite differences, then LoRA adapters with AdamW on a tiny model. Written from the published formulas (permissive references only); a heavy training framework is not added.
+- **Design note** (27 November 2026, from a summary the owner pasted of arXiv 2610.31642 "A Fix for Softmax and Cross-Entropy"; the paper itself was not read or verified here): softmax can lose the gradient of the dominant class once logit margins pass a precision-dependent size (reported about 16.6 in fp32), and distillation between near-equal student and teacher logits can leave a gradient noise floor. When the real backward is written, compute the cross-entropy and distillation gradients as direct differences (for example `p - onehot` and `p_student - p_teacher` from log-probabilities in f64) and add a test with margins above 17 in f32 that keeps the gradients summing to zero. Today's evaluation path is not affected: `src/inference/llama.rs` computes the loss from the maximum-subtracted form with the sum in f64, and `kv_perplexity` does the same. The current trainer (`src/trainer/mod.rs`) is synthetic and uses f32 softmax gradients.
 
 ### [THME-3037] Tokenizer and chat templates
 
