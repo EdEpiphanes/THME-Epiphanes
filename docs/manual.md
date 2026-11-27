@@ -55,6 +55,15 @@ Generated from `thme --help` on 27 November 2026; run `thme <subcommand> --help`
 | `chat-template` | - | Render a model's own chat template for a JSON list of messages |
 | `download` | - | Download a model from the Hugging Face hub, then run the safety scan on it |
 
+### 2.2 Options Notes
+
+- `export <model> -o out.gguf --quant fp16 --llama-cpp-layout`: Writes GGUF in llama.cpp layout (GGML tensor names, F32 norms, permuted `q`/`k` rotary rows, `rope.dimension_count`, adjacent `tokenizer.json` required; refuses files failing THME's llama.cpp checks; default exports unchanged; THME's reader undoes permutation for `llama` architecture; measured once on SmolLM-135M F16 vs llama.cpp b12584 CPU, 20 greedy tokens, `docs/benchmarks/smollm-135m/data/llama_cpp_load.json`; pre-tokenizer warning tracked in THME-3102).
+- `export --quant fp16 | q8_0`: Accepts BF16 checkpoints.
+- `chat --kv-precision f32|int8|int4`: Stores CPU KV cache at that precision (default `f32`); JSON output includes `kv_precision` and `kv_cache_bytes` (SmolLM-135M WikiText-2 CPU measurements in `docs/benchmarks/smollm-135m/data/kv_precision_ppl.json`).
+- `pathfinder <MODEL_PATH> [--budget-gb F] [--context N] [--kv f32|f16|int8|int4] [--json]`: Prints predicted memory plan (weights, KV cache, scratch) from the model header; every figure is labelled `predicted` and nothing is run or measured.
+- `mcp --allow-root DIR`: Repeatable flag limiting which folders MCP tools may read models from; the VS Code extension passes one per workspace folder.
+- `evaluate --gate configs/gates/thme-perplexity-v2.json`: Uses quality gate v2 (default stays v1): baseline perplexity below 20 uses an absolute margin of 0.45, and at or above 20 uses a 2.25 percent relative margin.
+
 ---
 
 ## 3. Desktop Studio GUI Guide
