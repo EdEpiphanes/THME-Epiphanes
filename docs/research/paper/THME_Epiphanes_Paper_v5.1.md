@@ -148,7 +148,7 @@ On block $b$, the normalized log-loss drift is $\tilde{\delta}_b = \overline{\ma
 
 For a null value $\mu_0$, both processes below are nonnegative supermartingales under the corresponding one-sided null, given assumption A5 (all bet sizes are predictable). With $\mu$ the common conditional mean of $\tilde\delta_b$ (A2), their inversion gives a confidence sequence $[L_t, U_t]$ (Waudby-Smith & Ramdas, 2024).
 
-**Predictable statistics** (computed from blocks $1,\dots,b-1$ only): $\hat\mu_{b-1} = \frac{1}{b-1}\sum_{i<b}\tilde\delta_i$ (with $\hat\mu_0=0$), and $\hat V_{b-1} = \bigl(\tau_{\mathrm{RA}}^2 + \sum_{i<b}(\tilde\delta_i-\hat\mu_{b-1})^2\bigr)/b$.
+**Predictable statistics** (computed from blocks $1,\dots,b-1$ only): $\hat\mu_{b-1} = \frac{1}{b-1}\sum_{i\lt b}\tilde\delta_i$ (with $\hat\mu_0=0$), and $\hat V_{b-1} = \bigl(\tau_{\mathrm{RA}}^2 + \sum_{i\lt b}(\tilde\delta_i-\hat\mu_{b-1})^2\bigr)/b$.
 
 #### *3.3.1 Lower Side*
 
@@ -274,7 +274,7 @@ $$\mathscr{E}_{\mathrm{gate}}:\;\bigl(\{\overline{\mathcal L}_0(b), n_b\}_{b},\;
 | A2 | Common conditional mean: $\mathbb{E}[\tilde\delta_b\mid\mathcal F_{b-1}] = \mu$ for all $b$ in processing order | Interpreting $[L_t,U_t]$ as a confidence sequence for $\mu$ | Under non-stationary means the processes stay valid for the one-sided nulls "all $\mu_b\le\mu_0$" and "all $\mu_b\ge\mu_0$"; the guarantees then state $L_t \le \max_b\mu_b$ and $U_t \ge \min_b\mu_b$, so `pass` bounds the smallest block mean, not the average |
 | A3 | Declared range $\tilde\delta_b \le M$ | $K^-$, $U_t$, `pass` | $U_t$ loses validity (Bahadur & Savage, 1956); the gate checks observed blocks (rule 1), and unobserved blocks remain covered by the declaration only |
 | A4 | Autocorrelation separation ($g \ge \hat\tau_{\mathrm{int}}$, document boundaries) | Credibility of A2 | Dependence between blocks can make the conditional mean depend on the past, so A2 fails |
-| A5 | Predictability: $\lambda^\pm_{j,b}$, $\hat\mu_{b-1}$, $\hat V_{b-1}$ use only blocks $<b$ | Supermartingale property | Using block $b$ in its own bet voids Ville's inequality |
+| A5 | Predictability: $\lambda^\pm_{j,b}$, $\hat\mu_{b-1}$, $\hat V_{b-1}$ use only blocks $\lt b$ | Supermartingale property | Using block $b$ in its own bet voids Ville's inequality |
 | A6 | Split integrity: no test block was used for tuning (AWQ/GPTQ calibration, thresholds, $M$, $g$) | All gate guarantees | Optimistic bias; guarantees void |
 | A7 | Same tokenizer and same scored text for source and candidate | Definition of $\tilde\delta_b$ | $\tilde\delta_b$ is not comparable; the gate is undefined |
 | A8 | Path Lipschitz bound $\sup_t\|J_\ell(t)-J_\ell(0)\|_2 \le L_{J,\ell}$ | Theorem 1, Part A (interior) | Only the endpoint form of Part A applies |
@@ -445,7 +445,7 @@ $$b_{\mathrm{BITCOS}}(p_0) = 1 + (1 - p_0) + \frac{128}{1024} = 2.125 - p_0, \ta
   which is 1.610 at $p_0 = 0.515$. The mask is fixed-rate at 1 bit per weight. Section 10.3 plots the rate against $p_0$.
 - **Comparison with base-3 packing** [Estimate; recomputed]. $3^5 = 243 \le 256$ packs 5 trits per byte at 1.600 bpw. On raw bits, BITCOS at 1.610 differs from 5-per-byte by +0.010 bpw. If 5-per-byte carries one f16 scale per 1,024 weights (1.6156 bpw), BITCOS has the lower rate for $p_0 > 0.5094$. The design advantage of BITCOS is decode structure: zero-skipping masks, popcount prefix sums, and a sign-only payload.
 - **Entropy check** [Estimate; recomputed]. For i.i.d. ternary weights with symmetric signs, $H = h_2(p_0) + (1-p_0) = 1.4844$ bits at $p_0 = 0.515$. The BITCOS payload (mask plus signs) is $2 - p_0 = 1.485$ bits, an excess of $1-h_2(p_0) = 0.00065$ bits. Under the i.i.d. model, entropy-coding the mask near $p_0 \approx 0.5$ would gain almost nothing.
-- **Warp-shuffle prefix sum and `uq4.4` decode.** Group offsets $\sum_{j<g}$ `grp_nz_cnt[j]` are computed via `__shfl_up_sync` across 8 lanes. `uq4.4` (`u8 * 0.0625f`, range $[0, 15.9375]$) avoids `f8_e4m3` subnormals and NaN patterns.
+- **Warp-shuffle prefix sum and `uq4.4` decode.** Group offsets $\sum_{j\lt g}$ `grp_nz_cnt[j]` are computed via `__shfl_up_sync` across 8 lanes. `uq4.4` (`u8 * 0.0625f`, range $[0, 15.9375]$) avoids `f8_e4m3` subnormals and NaN patterns.
 
 **Proposition 1 (Shannon lower bound).** For a source with differential entropy $h(W')$ (bits) under MSE distortion,
 
@@ -1320,7 +1320,7 @@ The measured results in the committed reports support the design choices: unifor
 5. Measure BITCOS-2:4 and BITCOS accuracy with the gate before stating any rate-quality trade-off.
 6. Recompute the gate's per-block loss files from float32 logits under Rule G-P1 (Section 3.2), and measure the effect of float16 logit storage on $\tilde\delta_b$ for SmolLM-135M before any gate run.
 7. Calibrate the constant $C$ of the allocator link (Section 12.2) against joint measurements, or replace the surrogate with an empirically bounded constant.
-8. Produce paired per-block loss files for the committed candidates and compute the PS-16 statistics of Section 3.8 (the relative-accuracy statistic with its confidence term, the bias, variance and correlation tests, and the three levels); then decide the absolute band's threshold and limit.
+8. Produce paired per-block loss files for the committed candidates and compute the PS-16 statistics of Section 3.8 (the relative-accuracy statistic with its confidence term, the bias, variance and correlation tests, and the three levels); the absolute band's threshold is kept at 20 by owner decision (27 November 2026) and its limit is decided with the computed statistics.
 
 ---
 
