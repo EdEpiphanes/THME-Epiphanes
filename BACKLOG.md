@@ -264,7 +264,7 @@ closes it.
 - **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: docs · **Type**: chore · **Status**: in progress
 - **Problem**: Several top-level files describe an older state: `TASKS.md` (last updated 10 November 2026), `TEST_READY.md` (milestone v0.1.7), roadmap state colours, README figures, status counts, and GitHub labels (only seven of 26 BACKLOG areas existed as labels).
 - **Done means**: ROADMAP "Where things stand" and each milestone state re-derived from BACKLOG statuses with no unsupported "done"; README numbers (tests, binary sizes, measured reports) taken from a command run on the merged tree and dated; `scripts/generate_status.py` and `scripts/generate_charts.py` rerun and their outputs committed; `TASKS.md`, `TEST_READY.md`, `PROJECT.md` refreshed or archived under `docs/archive/` with a pointer; GitHub labels cover every BACKLOG area and status; no release tag created (v0.2.0 is deferred by the owner).
-- **Progress** (27 November 2026): labels `area:*` for all BACKLOG areas and `status:in-progress|in-review|done|shelved` created on GitHub; status board regenerated.
+- **Progress** (27 November 2026): labels `area:*` for all BACKLOG areas and `status:in-progress|in-review|done|shelved` created on GitHub; status board regenerated; five stale top-level agent notes untracked (see THME-3050); crate version set to 0.2.0.
 
 ### [THME-3100] Calibrate the allocator link constant C
 
@@ -681,6 +681,7 @@ closes it.
 
 - **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: legal · **Type**: chore · **Status**: ready
 - **Problem**: Tracked agent working notes and personal editor settings: `.claude_handover.md`, `TASKS.md`, `TEST_READY.md`, `TEST_INFRA.md`, `PROJECT.md`, `.vscode/settings.json` (M2). `docs/research/THME_measured_findings_2026-11.md` publishes perplexity figures whose report was removed (M4). `docs/research/THME_AUTHENTICITY_AUDIT_AND_ROADMAP.md` credits a third-party organisation (L8). README says recipes are measured with no committed report and has a broken sentence (L9).
+- **Progress** (27 November 2026): `.claude_handover.md`, `TASKS.md`, `TEST_READY.md`, `TEST_INFRA.md` and `PROJECT.md` are no longer tracked (they stay in git history). Not done: `.vscode/settings.json`, the withdrawn findings note, the audit note's AI-author notice, README statuses.
 - **Done means**: The notes and personal settings are no longer tracked; the findings note is marked withdrawn (pre-THME-3023, to be re-measured) at the top and per table, or removed; the audit note says it was written by an AI agent and is unverified; README statuses match the evidence.
 
 ### [THME-3051] Drop the hard-coded model fallback from MCP and tests

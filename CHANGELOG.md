@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - v0.2.0 Measured Core
 
 ### Added
+- **Stale agent notes removed from the tree** (27 November 2026, THME-3050 part): `TASKS.md`, `TEST_READY.md`, `TEST_INFRA.md`, `PROJECT.md` and `.claude_handover.md` described November milestones that have moved on; they remain in git history.
 - **Crate version is 0.2.0** (27 November 2026): `Cargo.toml` said 0.1.9 although the v0.2.0 milestone was already the active one. No tag or release is created; the release stays deferred. Committed benchmark reports keep the version that produced them.
 - **Run memory model** (27 November 2026, THME-3056 part): `profiling::run_memory::run_memory` gives weight, KV and scratch bytes from a model shape, context and KV type, with no model read; tested against hand-computed LLaMA and GPT-NeoX shapes.
 - **Quality gate v2** (27 November 2026, THME-3077): a criterion may set `switch_at`; a baseline below it uses the absolute margin only, at or above it the relative margin only (`configs/gates/thme-perplexity-v2.json`: 0.45 / 0.0225 / 20.0). v1 files and hashes are unchanged; v2 is chosen with `--gate`.
