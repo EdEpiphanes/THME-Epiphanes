@@ -21,15 +21,17 @@ closes it.
 
 ### [THME-2205] Second-order rounding (GPTQ-style)
 
-- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.5 · **Priority**: p2 · **Area**: byoa · **Type**: feature · **Status**: ready
+- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.5 · **Priority**: p2 · **Area**: byoa · **Type**: feature · **Status**: done
 - **Problem**: Error compensation across columns is the strongest known post-training method.
 - **Progress** (19 November 2026): `thme.gptq_q4_0` and `thme.gptq_q8_0` follow the reference algorithm (scales fitted per 32-column group, Cholesky of the inverse Hessian, damping with retry). Tested on synthetic matrices: output error below plain rounding, result exactly on the exporter grid. Not measured on a real model; K-quants not supported yet.
+- **Progress** (27 November 2026): measured on both models against round-to-nearest, AWQ and the ceiling (`docs/benchmarks/*/data/gptq_comparison.json`); issue closed 27 November 2026.
 - **Done means**: Implemented as a BYOA rule using calibration activations; measured against THME-2204.
 
 ### [THME-2206] Measure Hadamard rotation on real models
 
-- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.6 · **Priority**: p2 · **Area**: research · **Type**: experiment · **Status**: blocked
+- **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.6 · **Priority**: p2 · **Area**: research · **Type**: experiment · **Status**: done
 - **Problem**: `RotatedQuantize` lowers rounding error on outlier-heavy weights in tests; its effect on perplexity is unmeasured.
+- **Progress** (27 November 2026): measured with and without rotation on both models; the 4-bit and ternary arms were unusable, no benefit claimed (`docs/benchmarks/*/data/hadamard_comparison.json`); issue closed 27 November 2026.
 - **Done means**: `thme.hadamard_int4` and `thme.hadamard_ternary` compared with their unrotated rules via `thme evaluate` on both models; reports committed.
 - **Progress** (27 November 2026): measured on both models under a pre-registered 1 percent rule (`docs/benchmarks/*/data/hadamard_comparison.json`). Pythia-14M (CPU): int4 rotation worse (311,383 to 1,714,157), ternary better (37,099 to 28,238). SmolLM-135M (CUDA): both better (int4 7.3M to 466k, ternary 75M to 28.6M). Every arm is unusable against the ceilings (114.3 and 19.80): the whole-tensor absolute-maximum scale destroys these models with or without rotation, so rotation is not a consistent improvement and no quality claim follows. Status was blocked; the measurement part of the done-means is met.
 
