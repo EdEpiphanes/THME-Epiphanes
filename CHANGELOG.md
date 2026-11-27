@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - v0.2.0 Measured Core
 
 ### Added
+- **GGUF export and the engine agree on the fallback norm epsilon** (27 November 2026): a source with no recorded `rms_norm_eps` was exported with 1e-5 but read with 1e-6; both now use 1e-6 (`FALLBACK_RMS_NORM_EPS`). Checkpoints that record one are unchanged.
 - **Getting-started and manual cover the new features** (27 November 2026): llama.cpp layout export, `--kv-precision`, `thme pathfinder`, `--allow-root` and gate v2, each with its evidence level.
 - **THME reads llama.cpp-layout GGUFs correctly** (27 November 2026, THME-3103): `thme forward`, `chat` and `evaluate` on a GGUF with `general.architecture` llama now undo the q/k row permutation, so logits match the checkpoint. Before, they differed (a SmolLM-135M export read back with a top logit of 7.5 instead of 13.1).
 - **KV cache precision measured** (27 November 2026, THME-3082 part 3): `examples/kv_precision_ppl.rs` gives perplexity with an f32, int8 or int4 cache. On SmolLM-135M int8 matched f32 within noise and int4 cost about 6 to 7 percent perplexity, for 3.6 and 6.4 times smaller caches (CPU, short windows, one model).

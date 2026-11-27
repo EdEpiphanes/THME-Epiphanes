@@ -146,9 +146,8 @@ fn export_tiny_gguf(
     for tensor in &mut source.tensors {
         tensor.selected_format = TensorFormat::FP32;
     }
-    // Real checkpoints record their norm epsilon in config.json. Without one the engine assumes
-    // 1e-6 and the exporter writes 1e-5, which would show up here as a gap unrelated to the rope
-    // layout.
+    // Real checkpoints record their norm epsilon in config.json; the test does the same so the
+    // only difference between the two loads is the file layout.
     std::fs::write(
         dir.join("config.json"),
         r#"{"rms_norm_eps": 1e-5, "rope_theta": 10000.0}"#,

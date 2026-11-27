@@ -36,6 +36,10 @@ pub struct LlamaConfig {
     pub rope_theta: f32,
 }
 
+/// RMS-norm epsilon assumed when a model records none. The GGUF exporter writes the same value
+/// in that case, so a file the engine reads back behaves like the source (THME-3091).
+pub const FALLBACK_RMS_NORM_EPS: f32 = 1e-6;
+
 impl LlamaConfig {
     /// Builds a config from the IR. Epsilon and RoPE base come from the model's recorded
     /// values (`config.json` or GGUF metadata), falling back to LLaMA defaults.
@@ -45,7 +49,7 @@ impl LlamaConfig {
             hidden_size: model.hidden_size,
             num_heads: model.num_attention_heads,
             num_kv_heads: model.num_key_value_heads,
-            rms_norm_eps: model.norm_eps.unwrap_or(1e-6),
+            rms_norm_eps: model.norm_eps.unwrap_or(FALLBACK_RMS_NORM_EPS),
             rope_theta: model.rope_theta.unwrap_or(10_000.0),
         }
     }
