@@ -275,9 +275,10 @@ closes it.
 
 ### [THME-3103] THME's GGUF reader does not undo the q/k row permutation of llama.cpp layout files
 
-- **Milestone**: v0.2.2 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: bug · **Status**: triage
+- **Milestone**: v0.2.2 · **Roadmap**: none · **Priority**: p2 · **Area**: inference · **Type**: bug · **Status**: in review
 - **Problem**: The forward pass uses the Hugging Face rotary layout. A GGUF written for llama.cpp (including THME's own `--llama-cpp-layout` export) has permuted q and k rows, so `thme forward` on it gives different logits (SmolLM-135M: top logit 7.53 against 13.06 for the checkpoint; the top token matched for one prompt).
 - **Done means**: The GGUF import undoes the permutation for the LLaMA family (using the inverse in `src/exporter/ggml_names.rs`), with a round-trip test (export with the layout, read back, logits equal to the checkpoint within the format tolerance) and a check that a file already in Hugging Face layout is not changed.
+- **Progress** (27 November 2026): the loader (`src/inference/llama.rs`) undoes the q/k permutation for tensors named `attn_q`/`attn_k` in a GGUF whose `general.architecture` is `llama`; HF-named tensors and other architectures are left alone. Test `tests/test_gguf_layout_roundtrip.rs`: tiny LLaMA exported with `--llama-cpp-layout` in f32 and read back gives the checkpoint's logits within 1e-4 (largest gap 1.29e-3 without the fix, so the test discriminates). Not done: a check against a GGUF made by llama.cpp's own converter, a flag-off (HF-named) round trip test, and other architectures that use the interleaved layout. Side finding: when a source records no norm epsilon, the engine assumes 1e-6 while the exporter writes 1e-5 into the GGUF; real checkpoints record one, but the two defaults should agree.
 
 ### [THME-3100] Calibrate the allocator link constant C
 

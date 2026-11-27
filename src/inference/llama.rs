@@ -181,6 +181,17 @@ pub fn find_tensor<'a>(model: &'a ModelIR, name: &str) -> Option<&'a TensorIR> {
     None
 }
 
+/// True when `tensor` is a q or k projection from a GGUF whose architecture is `llama`. Those
+/// files store the rows in the interleaved-pair order llama.cpp rotates, not the Hugging Face
+/// `rotate_half` order this forward pass uses (THME-3103).
+fn is_llama_cpp_rope_tensor(model: &ModelIR, tensor: &TensorIR) -> bool {
+    let from_llama_gguf = matches!(
+        model.source_gguf_metadata.get("general.architecture"),
+        Some(crate::ir::model::ModelMetadataValue::String(arch)) if arch == "llama"
+    );
+    from_llama_gguf && (tensor.name.contains("attn_q.") || tensor.name.contains("attn_k."))
+}
+
 pub(crate) fn load_tensor(
     tensor: &TensorIR,
     expected: usize,
@@ -264,7 +275,23 @@ impl LlamaModel {
         for index in 0..config.num_layers {
             let fetch = |suffix: &str, expected: usize| -> Result<Vec<f32>> {
                 let name = format!("model.layers.{index}.{suffix}");
-                load_tensor(required(&name)?, expected, precision)
+                let tensor = required(&name)?;
+                let values = load_tensor(tensor, expected, precision)?;
+                if !is_llama_cpp_rope_tensor(model, tensor) {
+                    return Ok(values);
+                }
+                let heads = if suffix.contains("q_proj") {
+                    config.num_heads
+                } else {
+                    config.num_kv_heads
+                };
+                crate::exporter::ggml_names::unpermute_rope_rows(
+                    &values,
+                    values.len() / d,
+                    d,
+                    heads,
+                )
+                .map_err(|e| anyhow::anyhow!("Tensor '{}': {e}", tensor.name))
             };
             layers.push(LlamaLayer {
                 attn_norm: fetch("input_layernorm.weight", d)?,
