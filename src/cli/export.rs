@@ -73,8 +73,11 @@ pub fn execute(args: ExportArgs) -> Result<()> {
             (model, ExportQuantType::PerTensor)
         }
     };
+    // An `.epiph` carries its tokenizer inside the file, so it is unpacked into a scratch folder
+    // that lives until the export is written.
+    let scratch = ScratchDir::new();
     let tokenizer_json_path = if args.llama_cpp_layout {
-        find_tokenizer_json(&args.model)
+        tokenizer_for_export(&args.model, scratch.path())?
     } else {
         None
     };
@@ -101,6 +104,48 @@ pub fn execute(args: ExportArgs) -> Result<()> {
         println!("SHA-256: {checksum}");
     }
     Ok(())
+}
+
+/// A folder under the system temporary folder, removed when dropped. Nothing is created until
+/// something is written into it.
+struct ScratchDir(PathBuf);
+
+impl ScratchDir {
+    fn new() -> Self {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos());
+        Self(std::env::temp_dir().join(format!("thme-export-{}-{nanos}", std::process::id())))
+    }
+
+    fn path(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+
+impl Drop for ScratchDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// The `tokenizer.json` a llama.cpp-layout export needs: the one beside the model, or, for an
+/// `.epiph` file, the one attached to it (written into `scratch`).
+fn tokenizer_for_export(
+    model_path: &std::path::Path,
+    scratch: &std::path::Path,
+) -> Result<Option<PathBuf>> {
+    if let Some(found) = find_tokenizer_json(model_path) {
+        return Ok(Some(found));
+    }
+    if !crate::epiph::is_epiph(model_path) {
+        return Ok(None);
+    }
+    let names = crate::epiph::extract_hf_files(model_path, scratch)?;
+    Ok(names
+        .iter()
+        .any(|n| n == "tokenizer.json")
+        .then(|| scratch.join("tokenizer.json")))
 }
 
 fn find_tokenizer_json(model_path: &std::path::Path) -> Option<PathBuf> {
@@ -370,5 +415,54 @@ mod tests {
             find_tokenizer_json(&weights).as_deref(),
             Some(tok.as_path())
         );
+    }
+
+    #[test]
+    fn an_epiph_files_attached_tokenizer_is_extracted_for_export() {
+        use crate::epiph::{write, PackOptions};
+        use crate::exporter::safetensors_writer::SafeTensorsWriter;
+
+        let dir = tempfile::tempdir().unwrap();
+        let model_dir = dir.path().join("model");
+        std::fs::create_dir_all(&model_dir).unwrap();
+        let one = 0x3C00u16.to_le_bytes();
+        let mut st = SafeTensorsWriter::new();
+        st.add_tensor(
+            "model.embed_tokens.weight",
+            "F16",
+            vec![5, 4],
+            one.repeat(20),
+        );
+        st.add_tensor("model.norm.weight", "F16", vec![4], one.repeat(4));
+        st.write_to_file(model_dir.join("model.safetensors"))
+            .unwrap();
+        std::fs::write(
+            model_dir.join("config.json"),
+            r#"{"architectures":["LlamaForCausalLM"],"hidden_size":4,"num_hidden_layers":1,"num_attention_heads":1,"num_key_value_heads":1,"vocab_size":5}"#,
+        )
+        .unwrap();
+        let tok_bytes = br#"{"model":{"type":"BPE","vocab":{"a":0},"merges":[]}}"#;
+        let tok = model_dir.join("tokenizer.json");
+        std::fs::write(&tok, tok_bytes).unwrap();
+
+        let model = ModelImporter::import(&model_dir).unwrap();
+        let packed = dir.path().join("m.epiph");
+        write(
+            &model,
+            &PackOptions {
+                hf_files: vec![tok.clone()],
+                ..PackOptions::default()
+            },
+            &packed,
+        )
+        .unwrap();
+
+        // Nothing sits next to the packed file, so the tokenizer must come out of the file.
+        let scratch = dir.path().join("scratch");
+        let found = tokenizer_for_export(&packed, &scratch).unwrap().unwrap();
+        assert_eq!(std::fs::read(found).unwrap(), tok_bytes);
+        // A plain folder still finds its own tokenizer.json and extracts nothing.
+        let own = tokenizer_for_export(&model_dir, &scratch.join("unused")).unwrap();
+        assert_eq!(own.as_deref(), Some(tok.as_path()));
     }
 }

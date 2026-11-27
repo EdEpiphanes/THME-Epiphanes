@@ -386,6 +386,7 @@ Full plan with sub-milestones: **[ROADMAP.md](ROADMAP.md)** · Tickets: **[BACKL
 
 THME is also a research programme into heterogeneous representations for language models.
 
+- **[Epiphanes Math paper, version 5.1](docs/research/paper/THME_Epiphanes_Paper_v5.1.md)** (the quality gate, allocator and measured evaluation; adds the US EPA PS-16 acceptance bands and the measurements committed since version 5; [what changed and what is missing](docs/research/paper/README.md))
 - [Research Programme v2](docs/research/THME_Research_Programme_v2.pdf): hypotheses, method, controls
 - [Measured findings, November 2026](docs/research/THME_measured_findings_2026-11.md): what the first experiments support and refute
 - [Research Dossier v3.1](docs/research/THME_Research_Dossier_v3.1_2026-11-13.pdf) (theoretical proposal and engineering brief; no measurements of its own) and its [review against the repository](docs/research/REVIEW_dossier_v3.1.md)

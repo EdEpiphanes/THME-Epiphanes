@@ -886,3 +886,58 @@ fn compressed_file_converts_to_the_same_gguf_bytes() {
         assert_eq!(from_small, from_plain, "{label}");
     }
 }
+
+/// The mapped reader slices payloads out of the file image. Every range is checked against the
+/// image, and an out-of-range or overflowing one is an error, never a panic.
+#[test]
+fn payload_slices_stay_inside_the_file_image() {
+    let image = [1u8, 2, 3, 4];
+    assert_eq!(slice_of(&image, 1, 2).unwrap(), &[2, 3]);
+    assert_eq!(slice_of(&image, 4, 0).unwrap(), &[] as &[u8]);
+    assert!(slice_of(&image, 3, 2).is_err());
+    assert!(slice_of(&image, 5, 0).is_err());
+    assert!(slice_of(&image, u64::MAX, 1).is_err());
+    assert!(slice_of(&image, 0, u64::MAX).is_err());
+}
+
+/// The Studio data function reads the description, provenance, lineage and quality evidence
+/// without reading any payload: a flipped payload byte still describes, and fails `verify`.
+#[test]
+fn describe_summarises_a_file_without_reading_its_payloads() {
+    let dir = tempfile::tempdir().unwrap();
+    let ir = model_with(
+        dir.path(),
+        &[("a.weight", ramp_bytes()), ("b.weight", noise_bytes())],
+    );
+    let out = dir.path().join("model.epiph");
+    let quality = json!({"gate": "demo", "verdict": "pass", "evidence": "measured"});
+    let options = PackOptions {
+        quality: vec![quality.clone()],
+        parents: vec!["0".repeat(64)],
+        compress: Some(Encoding::Deflate),
+        created_unix: Some(7),
+        ..PackOptions::default()
+    };
+    write(&ir, &options, &out).unwrap();
+
+    let d = describe(&out).unwrap();
+    assert_eq!(d.version, "1.3");
+    assert_eq!(d.tensors, 2);
+    assert_eq!(
+        d.compressed_tensors, 1,
+        "the ramp shrinks, the noise stays identity"
+    );
+    assert_eq!(d.quality, vec![quality]);
+    assert_eq!(d.parents, vec!["0".repeat(64)]);
+    assert_eq!(d.created_unix, 7);
+    assert_eq!(d.tool, "thme");
+    assert!(!d.placed);
+    assert_eq!(d.signature, sign::SignatureStatus::Unsigned);
+
+    let mut bytes = std::fs::read(&out).unwrap();
+    let last = bytes.len() - 1;
+    bytes[last] ^= 0xFF;
+    std::fs::write(&out, bytes).unwrap();
+    assert!(describe(&out).is_ok());
+    assert!(verify(&out).is_err());
+}

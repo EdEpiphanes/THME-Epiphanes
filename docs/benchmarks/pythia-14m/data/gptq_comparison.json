@@ -1,0 +1,115 @@
+{
+  "report": "gptq_comparison",
+  "report_version": 1,
+  "status": "measured",
+  "status_note": "Registered on 2026-11-27 before any GPTQ perplexity of this comparison was measured. THME-2205, ROADMAP v0.2.2.5.",
+  "model_name": "pythia-14m",
+  "model_repo": "EleutherAI/pythia-14m",
+  "format": "Q4_0",
+  "algorithm_id": "thme.gptq_q4_0",
+  "evaluation": {
+    "benchmark": {
+      "id": "wikitext2-raw",
+      "version": "1",
+      "split": "test"
+    },
+    "context_len": 1024,
+    "corpus_sha256": "173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08",
+    "token_count": 287159,
+    "token_file_sha256": "973595d9c7c580360a39eedde7297ec050f362a521940f7527eca4a00ea85278",
+    "tokenizer_sha256": "870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+    "scoring_note": "Full test split in consecutive windows of 1024 (thme evaluate defaults), same protocol as the verification reports."
+  },
+  "calibration": {
+    "source": "the seed-1234 calibration token file of awq_calibration.json",
+    "seed": 1234,
+    "windows": 16,
+    "window_len": 2048,
+    "tokens": 32768,
+    "token_file_sha256": "9df21e5b5cb0e6a1b283d4b0325ba557b01b350b5eda040da37a3aac0eb0ebe4"
+  },
+  "comparators": {
+    "file": "awq_calibration.json",
+    "arms": [
+      "ceiling",
+      "rtn",
+      "awq (five seeds)"
+    ],
+    "note": "Their perplexities are read from that file, not re-run."
+  },
+  "arms": [
+    {
+      "id": "gptq",
+      "description": "GPTQ-style Q4_0 rounding (thme.gptq_q4_0) on every weight matrix, calibration statistics from the seed-1234 file; deterministic, one run."
+    }
+  ],
+  "preregistration": {
+    "date": "2026-11-27",
+    "registered_before": "any measured GPTQ perplexity for this comparison",
+    "noise_scale": "sigma = sample standard deviation (n - 1) of the five AWQ-seed perplexities recorded in awq_calibration.json for this model and Q4_0.",
+    "decision_rule": [
+      "GPTQ beats round-to-nearest only if RTN perplexity minus GPTQ perplexity is greater than 2 x sigma.",
+      "GPTQ beats AWQ only if the mean AWQ perplexity over its five seeds minus GPTQ perplexity is greater than 2 x sigma; GPTQ is worse than AWQ only if GPTQ perplexity minus that mean is greater than 2 x sigma; otherwise the report says no difference was shown.",
+      "Gate: reported for the repository default (v1: at most 0.45 above the ceiling) and for gate v2 (configs/gates/thme-perplexity-v2.json).",
+      "A null or negative result is a valid result and is reported as one. Calibration seed, format, damping default, thresholds and this rule are fixed here and are not changed after any measured result is seen."
+    ],
+    "limits": [
+      "One calibration seed, so GPTQ's own seed variance is not measured; sigma comes from the AWQ arm.",
+      "Q4_0 only: K-quants are not supported by thme.gptq_*.",
+      "One corpus (WikiText-2 test), one model per file."
+    ]
+  },
+  "results": {
+    "ceiling": 114.28620839585075,
+    "rtn": 193.00280711915582,
+    "awq_runs": [
+      172.72876575620236,
+      168.00413748950712,
+      173.571877513255,
+      171.64176998309856,
+      167.5658710929535
+    ],
+    "awq_mean": 170.7024843670033,
+    "gptq": {
+      "baseline_perplexity": 114.28620839585075,
+      "perplexity": 180.5455484065106,
+      "delta_ppl": 66.25934001065984,
+      "gate_accepted": false,
+      "thme_version": "0.2.0",
+      "logical_cpus": 12,
+      "device": {
+        "adapter": null,
+        "requested": "cpu",
+        "used": "cpu"
+      },
+      "backend": "THME reference CPU forward pass (f32, multithreaded)"
+    },
+    "gptq_gate_v2": {
+      "baseline_perplexity": 114.28620839585075,
+      "perplexity": 180.5455484065106,
+      "delta_ppl": 66.25934001065984,
+      "gate_accepted": false,
+      "thme_version": "0.2.0",
+      "logical_cpus": 12,
+      "device": {
+        "adapter": null,
+        "requested": "cpu",
+        "used": "cpu"
+      },
+      "backend": "THME reference CPU forward pass (f32, multithreaded)"
+    },
+    "verdict": {
+      "sigma": 2.754129148515597,
+      "rtn_minus_gptq": 12.457258712645228,
+      "beats_rtn": true,
+      "awq_mean_minus_gptq": -9.843064039507283,
+      "vs_awq": "gptq_worse"
+    },
+    "gptq_minus_ceiling": 66.25934001065984
+  },
+  "pending": [],
+  "provenance": {
+    "thme": "target/release/thme",
+    "device": "cpu"
+  }
+}

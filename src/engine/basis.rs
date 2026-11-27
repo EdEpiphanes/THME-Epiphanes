@@ -3,7 +3,7 @@
 //! every caller (BYOA rotated quantization, `MatrixMath`) uses it, so two code paths that
 //! must rotate identically cannot drift apart.
 
-use super::error::{EngineError, EngineResult};
+use super::error::{ensure_finite, EngineError, EngineResult};
 
 /// Normalized in-place Walsh-Hadamard transform applied to each consecutive block of
 /// `block` values. `block` must be a power of two and divide `data.len()`.
@@ -52,6 +52,123 @@ pub fn walsh_hadamard(data: &mut [f32]) -> EngineResult<()> {
         return Ok(());
     }
     walsh_hadamard_blocks(data, data.len())
+}
+
+/// In-place radix-2 FFT, forward sign convention: `X_k = sum_j x_j exp(-2 pi i j k / n)`,
+/// unnormalized. `re` and `im` hold the real and imaginary parts and must have the same
+/// length, a nonzero power of two. The naive DFT is the test oracle, not a second code path.
+pub fn fft(re: &mut [f64], im: &mut [f64]) -> EngineResult<()> {
+    let n = re.len();
+    if n == 0 || !n.is_power_of_two() || im.len() != n {
+        return Err(EngineError::InvalidInput(format!(
+            "FFT needs equal lengths that are a nonzero power of two, got {n} and {}",
+            im.len()
+        )));
+    }
+    ensure_finite("FFT real part", re)?;
+    ensure_finite("FFT imaginary part", im)?;
+    let bits = n.trailing_zeros();
+    for i in 0..n {
+        let j = (0..bits).fold(0, |acc, b| acc | (((i >> b) & 1) << (bits - 1 - b)));
+        if j > i {
+            re.swap(i, j);
+            im.swap(i, j);
+        }
+    }
+    let mut len = 2;
+    while len <= n {
+        let half = len / 2;
+        let angle = -2.0 * std::f64::consts::PI / len as f64;
+        for start in (0..n).step_by(len) {
+            for k in 0..half {
+                let (s, c) = (angle * k as f64).sin_cos();
+                let (a, b) = (start + k, start + k + half);
+                let tr = c * re[b] - s * im[b];
+                let ti = c * im[b] + s * re[b];
+                re[b] = re[a] - tr;
+                im[b] = im[a] - ti;
+                re[a] += tr;
+                im[a] += ti;
+            }
+        }
+        len <<= 1;
+    }
+    Ok(())
+}
+
+/// Givens rotation `(c, s)` with `c*a + s*b = r` and `-s*a + c*b = 0`, where `r = hypot(a, b)`.
+/// For `a = b = 0` the identity `(1, 0)` is returned.
+pub fn givens(a: f64, b: f64) -> EngineResult<(f64, f64)> {
+    ensure_finite("Givens input", &[a, b])?;
+    let r = a.hypot(b);
+    if r == 0.0 {
+        return Ok((1.0, 0.0));
+    }
+    Ok((a / r, b / r))
+}
+
+/// Applies the Givens rotation `(c, s)` to coordinates `i` and `j` of `x` in place:
+/// `x_i <- c x_i + s x_j` and `x_j <- -s x_i + c x_j`. Orthogonal, so the norm is kept.
+pub fn apply_givens(x: &mut [f64], i: usize, j: usize, (c, s): (f64, f64)) -> EngineResult<()> {
+    if i == j || i >= x.len() || j >= x.len() {
+        return Err(EngineError::InvalidInput(format!(
+            "Givens indices {i} and {j} must differ and be below {}",
+            x.len()
+        )));
+    }
+    let (xi, xj) = (x[i], x[j]);
+    x[i] = c * xi + s * xj;
+    x[j] = -s * xi + c * xj;
+    Ok(())
+}
+
+/// Unit Householder vector `v` with `(I - 2 v v^T) x = alpha e_1`, `alpha = -sign(x_0) |x|`.
+/// The sign choice keeps `x_0 - alpha` free of cancellation. Errors on the zero vector.
+pub fn householder_vector(x: &[f64]) -> EngineResult<Vec<f64>> {
+    if x.is_empty() {
+        return Err(EngineError::InvalidInput(
+            "Householder vector of an empty slice".to_string(),
+        ));
+    }
+    ensure_finite("Householder input", x)?;
+    let norm = x.iter().map(|v| v * v).sum::<f64>().sqrt();
+    ensure_finite("Householder norm", &[norm])?;
+    if norm == 0.0 {
+        return Err(EngineError::InvalidInput(
+            "the zero vector has no Householder reflector".to_string(),
+        ));
+    }
+    let alpha = if x[0] < 0.0 { norm } else { -norm };
+    let mut v = x.to_vec();
+    v[0] -= alpha;
+    let len = v.iter().map(|t| t * t).sum::<f64>().sqrt();
+    for t in &mut v {
+        *t /= len;
+    }
+    Ok(v)
+}
+
+/// Applies the reflector `I - 2 v v^T` to `y` in place. `v` must be unit length (as returned
+/// by [`householder_vector`]); a non-unit `v` is an error rather than a silent non-reflection.
+pub fn apply_householder(v: &[f64], y: &mut [f64]) -> EngineResult<()> {
+    if v.len() != y.len() {
+        return Err(EngineError::InvalidInput(format!(
+            "Householder vector length {} differs from data length {}",
+            v.len(),
+            y.len()
+        )));
+    }
+    let norm_sq: f64 = v.iter().map(|t| t * t).sum();
+    if (norm_sq - 1.0).abs() > 1e-9 {
+        return Err(EngineError::InvalidInput(format!(
+            "Householder vector must be unit length, squared norm is {norm_sq}"
+        )));
+    }
+    let dot: f64 = v.iter().zip(y.iter()).map(|(a, b)| a * b).sum();
+    for (yi, vi) in y.iter_mut().zip(v) {
+        *yi -= 2.0 * dot * vi;
+    }
+    Ok(())
 }
 
 /// Computes diagonal column-side Sinkhorn equilibrium scales `S` for row-major
@@ -315,5 +432,160 @@ mod tests {
         for (a, b) in got.iter().zip(want.iter()) {
             assert!((a - b).abs() < 1e-5, "got={a} want={b}");
         }
+    }
+
+    fn seeded64(n: usize, seed: u64) -> Vec<f64> {
+        let mut s = seed;
+        (0..n)
+            .map(|_| {
+                s = s
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(1442695040888963407);
+                ((s >> 11) as f64 / 9_007_199_254_740_992.0) - 0.5
+            })
+            .collect()
+    }
+
+    /// Oracle: the naive O(n^2) DFT, X_k = sum_j x_j exp(-2 pi i j k / n), in f64.
+    fn naive_dft(re: &[f64], im: &[f64]) -> (Vec<f64>, Vec<f64>) {
+        let n = re.len();
+        let mut out_re = vec![0.0; n];
+        let mut out_im = vec![0.0; n];
+        for k in 0..n {
+            for j in 0..n {
+                let angle = -2.0 * std::f64::consts::PI * ((j * k) % n) as f64 / n as f64;
+                let (s, c) = angle.sin_cos();
+                out_re[k] += re[j] * c - im[j] * s;
+                out_im[k] += re[j] * s + im[j] * c;
+            }
+        }
+        (out_re, out_im)
+    }
+
+    #[test]
+    fn fft_matches_the_naive_dft() {
+        for n in [1usize, 2, 4, 8, 16, 32, 64] {
+            let re = seeded64(n, n as u64);
+            let im = seeded64(n, 1000 + n as u64);
+            let (want_re, want_im) = naive_dft(&re, &im);
+            let (mut got_re, mut got_im) = (re.clone(), im.clone());
+            fft(&mut got_re, &mut got_im).unwrap();
+            for k in 0..n {
+                assert!((got_re[k] - want_re[k]).abs() < 1e-10, "n={n} re k={k}");
+                assert!((got_im[k] - want_im[k]).abs() < 1e-10, "n={n} im k={k}");
+            }
+        }
+    }
+
+    /// Hand-worked: an impulse has a flat spectrum; a constant has one spike at bin 0; and
+    /// [1, 0, -1, 0] has spectrum [0, 2, 0, 2].
+    #[test]
+    fn fft_hand_worked_cases() {
+        let (mut re, mut im) = ([1.0, 0.0, 0.0, 0.0], [0.0; 4]);
+        fft(&mut re, &mut im).unwrap();
+        assert_eq!(re, [1.0; 4]);
+        assert_eq!(im, [0.0; 4]);
+
+        let (mut re, mut im) = ([1.0; 4], [0.0; 4]);
+        fft(&mut re, &mut im).unwrap();
+        assert_eq!(re, [4.0, 0.0, 0.0, 0.0]);
+
+        let (mut re, mut im) = ([1.0, 0.0, -1.0, 0.0], [0.0; 4]);
+        fft(&mut re, &mut im).unwrap();
+        for (got, want) in re.iter().zip([0.0, 2.0, 0.0, 2.0]) {
+            assert!((got - want).abs() < 1e-12);
+        }
+        assert!(im.iter().all(|v| v.abs() < 1e-12));
+    }
+
+    #[test]
+    fn fft_rejects_bad_shapes_and_non_finite_values() {
+        assert!(fft(&mut [0.0; 3], &mut [0.0; 3]).is_err());
+        assert!(fft(&mut [], &mut []).is_err());
+        assert!(fft(&mut [0.0; 4], &mut [0.0; 2]).is_err());
+        assert!(matches!(
+            fft(&mut [f64::NAN, 0.0], &mut [0.0; 2]),
+            Err(EngineError::NonFinite { .. })
+        ));
+    }
+
+    /// Hand-worked: (3, 4) has r = 5, so (c, s) = (0.6, 0.8) and the rotated pair is (5, 0).
+    #[test]
+    fn givens_zeroes_the_second_component() {
+        let (c, s) = givens(3.0, 4.0).unwrap();
+        assert!((c - 0.6).abs() < 1e-15 && (s - 0.8).abs() < 1e-15);
+        assert!((c * 3.0 + s * 4.0 - 5.0).abs() < 1e-12);
+        assert!((-s * 3.0 + c * 4.0).abs() < 1e-12);
+        assert_eq!(givens(2.0, 0.0).unwrap(), (1.0, 0.0));
+        assert_eq!(givens(0.0, -2.0).unwrap(), (0.0, -1.0));
+        assert_eq!(givens(0.0, 0.0).unwrap(), (1.0, 0.0));
+        assert!(givens(f64::INFINITY, 1.0).is_err());
+    }
+
+    #[test]
+    fn givens_rotation_in_a_plane_preserves_the_norm() {
+        let mut x = vec![1.0, 2.0, 3.0, 4.0];
+        let g = givens(x[1], x[3]).unwrap();
+        apply_givens(&mut x, 1, 3, g).unwrap();
+        assert!(x[3].abs() < 1e-12);
+        assert!((x[1] - 20f64.sqrt()).abs() < 1e-12);
+        assert_eq!((x[0], x[2]), (1.0, 3.0));
+        let norm: f64 = x.iter().map(|v| v * v).sum();
+        assert!((norm - 30.0).abs() < 1e-12);
+        assert!(apply_givens(&mut x, 1, 1, g).is_err());
+        assert!(apply_givens(&mut x, 1, 4, g).is_err());
+    }
+
+    /// Hand-worked: x = (3, 4), alpha = -5, v = (8, 4) / sqrt(80), and H x = (-5, 0).
+    #[test]
+    fn householder_maps_a_vector_onto_the_first_axis() {
+        let x = [3.0, 4.0];
+        let v = householder_vector(&x).unwrap();
+        let root = 80f64.sqrt();
+        assert!((v[0] - 8.0 / root).abs() < 1e-12 && (v[1] - 4.0 / root).abs() < 1e-12);
+        let mut y = x.to_vec();
+        apply_householder(&v, &mut y).unwrap();
+        assert!((y[0] + 5.0).abs() < 1e-12 && y[1].abs() < 1e-12);
+        // Reflecting twice returns the input.
+        apply_householder(&v, &mut y).unwrap();
+        assert!((y[0] - 3.0).abs() < 1e-12 && (y[1] - 4.0).abs() < 1e-12);
+    }
+
+    /// Oracle: the explicit matrix H = I - 2 v v^T, built and multiplied in the test.
+    #[test]
+    fn householder_matches_the_explicit_matrix() {
+        for n in [2usize, 3, 5, 8] {
+            let x = seeded64(n, 40 + n as u64);
+            let v = householder_vector(&x).unwrap();
+            let mut got = seeded64(n, 90 + n as u64);
+            let want: Vec<f64> = (0..n)
+                .map(|i| {
+                    (0..n)
+                        .map(|j| {
+                            let h = f64::from(u8::from(i == j)) - 2.0 * v[i] * v[j];
+                            h * got[j]
+                        })
+                        .sum()
+                })
+                .collect();
+            apply_householder(&v, &mut got).unwrap();
+            for (a, b) in got.iter().zip(&want) {
+                assert!((a - b).abs() < 1e-12, "n={n}");
+            }
+            let norm_v: f64 = v.iter().map(|t| t * t).sum();
+            assert!((norm_v - 1.0).abs() < 1e-12);
+        }
+    }
+
+    #[test]
+    fn householder_rejects_zero_mismatch_and_non_unit_input() {
+        assert!(matches!(
+            householder_vector(&[0.0, 0.0]),
+            Err(EngineError::InvalidInput(_))
+        ));
+        assert!(householder_vector(&[]).is_err());
+        assert!(householder_vector(&[1.0, f64::NAN]).is_err());
+        assert!(apply_householder(&[1.0, 0.0], &mut [1.0]).is_err());
+        assert!(apply_householder(&[2.0, 0.0], &mut [1.0, 1.0]).is_err());
     }
 }

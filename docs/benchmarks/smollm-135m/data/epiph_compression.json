@@ -1,0 +1,22 @@
+{
+  "what": "Lossless payload compression of a .epiph file (`thme epiph pack` with and without `--compress`, deflate), checked with `thme epiph verify`",
+  "date": "2026-11-27",
+  "command": "thme epiph pack MODEL --out OUT [--compress]; thme epiph verify OUT",
+  "device": "CPU, release build of the merged tree",
+  "known_gaps": [
+    "decode speed was not measured",
+    "pack times were taken while another CPU-heavy job ran, so they are inflated and only indicate the order of magnitude",
+    "one corpus-free measurement per model; ratio depends on the stored dtype of the source weights",
+    "binary-size effect of flate2 was not measured here"
+  ],
+  "model": "SmolLM-135M",
+  "plain_bytes": 541967191,
+  "deflate_bytes": 256850071,
+  "ratio": 0.4739,
+  "pack_seconds_plain": 13.8,
+  "pack_seconds_deflate": 131.4,
+  "verify": {
+    "plain": "exit 0",
+    "deflate": "OK: 272 tensors and 7 attachments verified (256276178 payload bytes), exit 0"
+  }
+}

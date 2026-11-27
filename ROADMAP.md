@@ -274,7 +274,7 @@ user-facing path.
 | v0.2.0.6 | Cross-check the forward pass against the Hugging Face reference (logit agreement on fixed prompts) | **Done**: largest logit difference 1.9e-4 (Pythia-14M) and 2.1e-5 (SmolLM-135M) against the fp32 reference, tolerance 0.005 (`docs/research/hf-cross-check-*.json`) |
 | v0.2.0.7 | Retire the analytic proxy from `thme validate`, the MCP quality tool and the co-surgery loop; route them through the measured gate | **Done**: `thme validate --report` gates measured reports; `thme co-surgery MODEL --tokens` scores candidates with the forward pass (`QualityEvaluator`, `MeasuredEvaluator`); supplied-value and proxy paths are labelled, including the Studio Co-Surgery tab |
 | v0.2.0.8 | Real Studio screenshots (`scripts/capture_studio.ps1`); fix missing-glyph labels and overlapping text in the Layer Tweaker dataflow row; show measured reports in the Studio | **Done** except showing measured reports in the Studio (moved to v0.2.1.9) |
-| v0.2.0.9 | Release engineering: LTO binaries, Minisign/GPG signing, SHA-256 manifest, clean-machine test, manual and man page | Implemented in v0.1.x workflows and hardened on 20 November 2026 (THME-3049); the release and verify steps have not run on GitHub yet; to be re-verified at tag time |
+| v0.2.0.9 | Release engineering: LTO binaries, Minisign/GPG signing, SHA-256 manifest, clean-machine test, manual and man page | **Deferred** (27 November 2026): by owner decision: the release step stays open; signing and clean-machine parts are implemented. Re-verify at tag time. Earlier note: Implemented in v0.1.x workflows and hardened on 20 November 2026 (THME-3049); the release and verify steps have not run on GitHub yet; to be re-verified at tag time |
 
 ## v0.2.1 — Recipe and BYOA lab
 
@@ -315,10 +315,10 @@ SmolLM-135M, measured from the written file.
 | v0.2.2.2 | Q4_K, Q5_K and Q6_K encoders with round-trip tests against the decoders. **Done**: GGML-layout codecs (`src/exporter/kquant.rs`) checked against hand-built blocks; the forward pass reads K-quant tensors; `q4_k`, `q5_k`, `q6_k` usable in recipes, `thme evaluate` and `thme search --formats` |
 | v0.2.2.3 | Calibration activations captured from the forward pass. **Done**: the probe records per-input-channel mean \|x\|, rms and max \|x\| for every linear tensor; `thme calibrate` merges them over calibration windows and saves them keyed by tensor name (`inference::calibration`) |
 | v0.2.2.4 | Activation-aware scaling (AWQ-style). **Done**: measured on Pythia-14M and SmolLM-135M with controls (20 November 2026). Implemented: `thme.awq_q4_0` and `thme.awq_q4_k` BYOA rules (`inference::awq`) choose a per-channel scale exponent by activation-weighted error, using `thme evaluate --calibration`; tested on synthetic weights and the synthetic model. Measurement on a real model against plain Q4_0 is pending (no model runs) |
-| v0.2.2.5 | Second-order rounding (GPTQ-style). Implemented: Q4_0 and Q8_0 rounding follows the reference algorithm; tested on synthetic matrices, not measured on a real model |
-| v0.2.2.6 | Randomized Hadamard rotation of weight inputs (QuaRot-style), measured with and without |
+| v0.2.2.5 | Second-order rounding (GPTQ-style). **Done** (27 November 2026): GPTQ-style rounding measured on both models against round-to-nearest, AWQ and the ceiling under a pre-registered rule (`docs/benchmarks/*/data/gptq_comparison.json`). Earlier note: Implemented: Q4_0 and Q8_0 rounding follows the reference algorithm; tested on synthetic matrices, not measured on a real model |
+| v0.2.2.6 | Randomized Hadamard rotation of weight inputs (QuaRot-style), measured with and without. **Done** (27 November 2026): rotation measured with and without on both models, four arms, pre-registered 1 percent rule (`docs/benchmarks/*/data/hadamard_comparison.json`); the committed result is that 4-bit and ternary arms were unusable on both, so no benefit is claimed |
 | v0.2.2.7 | SmoothQuant-style scale migration for activation outliers. **Done**: `inference::smoothing` folds per-channel scales (from calibration max \|x\|) into the preceding RMSNorm or LayerNorm and the linears that read it, for LLaMA and GPT-NeoX; tests confirm unchanged outputs before quantization. Its effect after quantization is not measured |
-| v0.2.2.8 | Format compatibility checks against llama.cpp on exported files. Implemented in part: a GGUF checker (structure, data section, metadata keys); the run through llama.cpp is open |
+| v0.2.2.8 | Format compatibility checks against llama.cpp on exported files. **Done** (27 November 2026): exported SmolLM-135M loads in llama.cpp (CPU, CUDA, Vulkan) and its greedy tokens equal THME's on 5 prompts (`docs/benchmarks/smollm-135m/data/llama_cpp_load.json`, `compatibility.json`, `engine_compare.json`); more quantization types are a gap, not part of this row. Earlier note: Implemented in part: a GGUF checker (structure, data section, metadata keys); the run through llama.cpp is open |
 | v0.2.2.9 | Measured artifact size, including scales and metadata, in every report. **Done**: `thme evaluate` and `thme search` write the candidate as a per-tensor GGUF and report `export.artifact_bytes` beside the nominal estimate (`--artifact` keeps the file); candidates the exporter cannot write are reported as not measured, with the reason |
 
 ## v0.2.3 — Recovery and distillation
@@ -329,15 +329,15 @@ SmolLM-135M, evaluated on held-out tokens.
 
 | # | Item |
 | :--- | :--- |
-| v0.2.3.1 | Backward pass for the reference model (or a bridge to an external trainer) |
-| v0.2.3.2 | Quantization-aware distillation against the source model's logits |
-| v0.2.3.3 | LoRA recovery adapters on quantized weights, merged with the existing LoRA merger |
-| v0.2.3.4 | Teacher-assisted calibration data, with an independent evaluation set |
-| v0.2.3.5 | Training-time loop and early-exit objectives (the depth probe as the measuring tool) |
-| v0.2.3.6 | Exit heads trained per depth; settling curves re-measured |
-| v0.2.3.7 | Recovery cost accounting: tokens, time and energy where measurable |
-| v0.2.3.8 | Overfitting guard: recovery data disjoint from evaluation data |
-| v0.2.3.9 | Recovered-candidate reports in the dossier |
+| v0.2.3.1 | Backward pass for the reference model (or a bridge to an external trainer). **Done** (27 November 2026): Rust backward pass and LoRA checked against Hugging Face to about 1e-12 on a tiny LLaMA, and a PyTorch bridge (`scripts/train/`) is the external trainer (decision of 27 November 2026); Gemma blocks not attempted |
+| v0.2.3.2 | Quantization-aware distillation against the source model's logits. **Done** (27 November 2026): quantization-aware distillation from the float32 teacher into a Q4_0 student, pre-registered, on SmolLM-135M (`docs/benchmarks/smollm-135m/data/qad_lora.json`); Claude as teacher is test-only |
+| v0.2.3.3 | LoRA recovery adapters on quantized weights, merged with the existing LoRA merger. **Deferred** (27 November 2026): LoRA recovery on the Q4_0 student is measured (perplexity 23.70 to 20.41) but merged by PyTorch; merging through THME's own LoRA merger is not shown; to v0.3 |
+| v0.2.3.4 | Teacher-assisted calibration data, with an independent evaluation set. **Deferred** (27 November 2026): teacher-assisted calibration data not built; the distillation design is in `docs/research/distillation-pipeline-design.md`; to v0.3 |
+| v0.2.3.5 | Training-time loop and early-exit objectives (the depth probe as the measuring tool). **Deferred** (27 November 2026): training-time loop and early-exit objectives not built; to v0.3 |
+| v0.2.3.6 | Exit heads trained per depth; settling curves re-measured. **Deferred** (27 November 2026): exit heads not trained; to v0.3 |
+| v0.2.3.7 | Recovery cost accounting: tokens, time and energy where measurable. **Done** (27 November 2026): adapter bytes, trainable parameters, training seconds and tokens seen recorded for the recovery run (`docs/benchmarks/smollm-135m/data/qad_lora.json`, `results.cost`); energy not measured |
+| v0.2.3.8 | Overfitting guard: recovery data disjoint from evaluation data. **Done** (27 November 2026): training windows come from the WikiText-2 train split, disjoint from validation and the held-out test tokens, stated in the report (`qad_lora.json`, `data.disjointness`) |
+| v0.2.3.9 | Recovered-candidate reports in the dossier. **Deferred** (27 November 2026): recovered-candidate section in the dossier not generated; to v0.3 |
 
 ## v0.2.4 — Runtime, speed and KV cache
 
@@ -348,14 +348,14 @@ hardware for the source and for a passing heterogeneous candidate.
 | # | Item |
 | :--- | :--- |
 | v0.2.4.1 | Incremental decoding with a KV cache in the reference runtime. **Done** (THME-3070): paired speedups 4x to 12x on the two small models, cache bytes match the estimate |
-| v0.2.4.2 | KV-cache bytes measured across a context-length sweep. **In progress**: measured at 23, 71 and 263 tokens; the full sweep to 2,048 is open |
-| v0.2.4.3 | Prefill and decode throughput measured on CPU. **In progress**: measured on CPU and GPU (`decode_speed.json`, `gpu_profile.json`, `gpu_perplexity.json`) |
-| v0.2.4.4 | Quantized kernels that compute directly on Q8_0 and Q4 blocks |
-| v0.2.4.5 | Peak resident memory measured per run |
-| v0.2.4.6 | KV-cache quantization, measured against long-context quality |
-| v0.2.4.7 | Roofline model calibrated against measured kernel timings |
-| v0.2.4.8 | Speculative decoding measured end to end, replacing formula estimates |
-| v0.2.4.9 | Energy measurement where hardware counters are available, with the method stated |
+| v0.2.4.2 | KV-cache bytes measured across a context-length sweep. **Deferred** (27 November 2026): measured at 23, 71 and 263 tokens; the sweep to 2,048 and KV precision runs are in `kv_precision_ppl.json`; the full byte sweep is open; to v0.3. Earlier note: **In progress**: measured at 23, 71 and 263 tokens; the full sweep to 2,048 is open |
+| v0.2.4.3 | Prefill and decode throughput measured on CPU. **Deferred** (27 November 2026): CPU and GPU throughput measured once (`decode_speed.json`, `gpu_profile.json`); repeats under the drift protocol are open; to v0.3. Earlier note: **In progress**: measured on CPU and GPU (`decode_speed.json`, `gpu_profile.json`, `gpu_perplexity.json`) |
+| v0.2.4.4 | Quantized kernels that compute directly on Q8_0 and Q4 blocks. **Deferred** (27 November 2026): quantized kernels not built; to v0.3 |
+| v0.2.4.5 | Peak resident memory measured per run. **Deferred** (27 November 2026): peak resident memory per run not measured; to v0.3 |
+| v0.2.4.6 | KV-cache quantization, measured against long-context quality. **Deferred** (27 November 2026): KV precision measured on both models (`docs/benchmarks/*/data/kv_precision_ppl.json`) but not against long-context quality, and the Pythia-14M cause is open; to v0.3 |
+| v0.2.4.7 | Roofline model calibrated against measured kernel timings. **Deferred** (27 November 2026): roofline calibration not done; to v0.3 |
+| v0.2.4.8 | Speculative decoding measured end to end, replacing formula estimates. **Deferred** (27 November 2026): speculative decoding not measured end to end; to v0.3 |
+| v0.2.4.9 | Energy measurement where hardware counters are available, with the method stated. **Deferred** (27 November 2026): energy counters not confirmed on this machine; to v0.3 |
 
 ## v0.2.5 — Math engine foundations
 
@@ -367,14 +367,14 @@ its oracle tests; no method is implemented twice in the crate.
 | # | Item | Status |
 | :--- | :--- | :--- |
 | v0.2.5.1 | Engine error type and finite-value guard (WP1, THME-3001) | **Done**: every variant reached by a test |
-| v0.2.5.2 | Exact dynamic-programming allocator beside greedy and thresholds (WP2, THME-3002) | Implemented: matches exhaustive search; comparison on real cost tables pending |
+| v0.2.5.2 | Exact dynamic-programming allocator beside greedy and thresholds (WP2, THME-3002) | **Deferred** (27 November 2026): the allocator matches exhaustive search (done-means met); the comparison on real measured cost tables needs model runs; to v0.3. Earlier note: Implemented: matches exhaustive search; comparison on real cost tables pending |
 | v0.2.5.3 | Number formats with stated error bounds: integer, ternary, binary, codebook, FP16, BF16, FP8, phase (WP3, THME-3006) | **Done**: one rounding routine for FP16, BF16 and FP8, exhaustively tested; integer, sign, codebook and phase quantizers with checked bounds |
 | v0.2.5.4 | Optimal transport: northwest-corner start, Sinkhorn with a log-domain variant (WP4) | **Done** |
-| v0.2.5.5 | Bases and rotations: one Walsh-Hadamard transform, FFT against a naive DFT, Givens and Householder (WP5, THME-3004) | Implemented in part: one shared Walsh-Hadamard transform, three copies removed |
+| v0.2.5.5 | Bases and rotations: one Walsh-Hadamard transform, FFT against a naive DFT, Givens and Householder (WP5, THME-3004) | **Done** (27 November 2026): one shared Walsh-Hadamard transform, FFT against a naive DFT, Givens and Householder, oracle-tested (`docs/status/agent-notes/math-engine.md`). Earlier note: Implemented in part: one shared Walsh-Hadamard transform, three copies removed |
 | v0.2.5.6 | ODE steppers: Dormand-Prince 5(4) with step control and fixed-step RK4, no default tolerances (WP6) | **Done** |
-| v0.2.5.7 | Projections that always report retained structure: PCA, participation ratio, MDS, stereographic (WP8) | |
+| v0.2.5.7 | Projections that always report retained structure: PCA, participation ratio, MDS, stereographic (WP8) | **Done** (27 November 2026): PCA, participation ratio, classical MDS and stereographic projection report retained structure, oracle-tested (`docs/status/agent-notes/math-engine.md`); other MDS variants not built |
 | v0.2.5.8 | Dependency-free SVG visual engine: log-axis traces, heatmaps, scatter, dataflow graphs, Pareto fronts (WP9) | **Done**: `engine::viz` (THME-3007) |
-| v0.2.5.9 | Typed conversion registry with accumulated error bounds, and engine benchmarks run on every release (WP10, WP39) | |
+| v0.2.5.9 | Typed conversion registry with accumulated error bounds, and engine benchmarks run on every release (WP10, WP39) | **Deferred** (27 November 2026): typed conversion registry covers float formats only and the exporter does not call it; no engine benchmark harness on release; to v0.3 |
 
 ## v0.2.6 — Epiphanes model format
 
@@ -389,11 +389,11 @@ file, and converts to GGUF and back without losing its tokenizer.
 | v0.2.6.2 | Minisign signatures over the manifest; Epiphanes key by default (THME-3019) | **Done**: tamper, wrong key and broken trailer tested |
 | v0.2.6.3 | Quantized payloads: each tensor in its selected format, including K-quants, ternary and BYOA (THME-3013) | **Done**: `thme epiph pack --recipe R --quantize`; packed file runs bit-identically to the candidate; BYOA formats have no stored encoding yet |
 | v0.2.6.4 | Tokenizer and GGUF metadata attachments, lossless GGUF round trip (THME-3014) | **Done**: every GGUF key and type survives; HF files attached and extracted; format v1.1 |
-| v0.2.6.5 | Streaming writer and memory-mapped reader for models larger than memory | |
-| v0.2.6.6 | Lossless payload compression behind a per-payload encoding field (THME-3015) | |
+| v0.2.6.5 | Streaming writer and memory-mapped reader for models larger than memory | **Deferred** (27 November 2026): writer holds one tensor at a time and the reader maps the file; never run on a model larger than memory and peak memory not measured; to v0.3 |
+| v0.2.6.6 | Lossless payload compression behind a per-payload encoding field (THME-3015) | **Done** (27 November 2026): per-payload `encoding` field, lossless round trip, bounds on decompression, compression ratio and speed committed (`docs/benchmarks/*/data/epiph_compression.json`); an older reader's refusal is untestable (none exists) |
 | v0.2.6.7 | GPU/CPU/disk placement plan from the exact allocator for a stated memory budget (THME-3016) | **Done**: `src/epiph/placement.rs` plans GPU, CPU and streamed tensors exactly from a VRAM and host budget; stored in the manifest (`.epiph` 1.2); `thme epiph pack --placement`, `verify` checks it. Synthetic tensors only; no runtime reads it yet |
-| v0.2.6.8 | Studio support: open `.epiph`, show provenance, lineage, signature and quality evidence | |
-| v0.2.6.9 | Compatibility report per model and runtime: loads, runs, agrees, passes the gate (WP18) | |
+| v0.2.6.8 | Studio support: open `.epiph`, show provenance, lineage, signature and quality evidence | **Deferred** (27 November 2026): the data function exists; the Studio view needs a person to look at the screen; to v0.3 |
+| v0.2.6.9 | Compatibility report per model and runtime: loads, runs, agrees, passes the gate (WP18) | **Done** (27 November 2026): per-runtime report: loads, runs, agrees on THME CPU, CUDA-PTX, wgpu-Vulkan, DX12 and llama.cpp builds (`docs/benchmarks/smollm-135m/data/compatibility.json`); one model measured, repeats under the drift protocol are open |
 
 ## v0.2.7 — Security and trust
 
@@ -405,13 +405,13 @@ with signatures and a dependency report.
 | # | Item | Status |
 | :--- | :--- | :--- |
 | v0.2.7.1 | Static model scanner: pickles, headers, hidden bytes, templates, remote code (THME-3018) | **Done**: rule fixtures tested; nothing loaded or run |
-| v0.2.7.2 | Scanner coverage: compressed pickles, ONNX, Keras, NumPy object arrays (THME-3022) | |
+| v0.2.7.2 | Scanner coverage: compressed pickles, ONNX, Keras, NumPy object arrays (THME-3022) | **Done** (27 November 2026): scanner covers compressed pickles, ONNX, Keras and NumPy object arrays on fixtures (`docs/status/agent-notes/security.md`); chunked HDF5 is a documented limit |
 | v0.2.7.3 | Scan on import: every command that loads a model scans it first, with an explicit override | **Done**: in `ModelImporter::import`; `--allow-unsafe-model` |
-| v0.2.7.4 | Permission and ownership record for reverse-engineering features (WP19, THME-3008) | |
+| v0.2.7.4 | Permission and ownership record for reverse-engineering features (WP19, THME-3008) | **Deferred** (27 November 2026): the record exists but no reverse-engineering feature calls it, no CLI records permission, and the wording awaits counsel; to v0.3 |
 | v0.2.7.5 | Developer sandbox design: process isolation, no network, file and time limits per OS (THME-3020) | **Done**: [design](docs/sandbox.md) with threat model, layers per OS and escape tests |
-| v0.2.7.6 | Sandbox implementation with escape tests; remote-code models and plugins run only inside it | **Commercial version**: shelved by the owner; the open-source version does not run untrusted code |
-| v0.2.7.7 | Guardrail detection, read-only: safety classifiers and refusal instructions reported (THME-3021) | |
-| v0.2.7.8 | Optional safety layers THME adds on top of a model, switched on or off per deployment | |
+| v0.2.7.6 | Sandbox implementation with escape tests; remote-code models and plugins run only inside it | **Deferred** (27 November 2026): by owner decision: shelved for the commercial version. Earlier note: **Commercial version**: shelved by the owner; the open-source version does not run untrusted code |
+| v0.2.7.7 | Guardrail detection, read-only: safety classifiers and refusal instructions reported (THME-3021) | **Done** (27 November 2026): read-only detection reports safety classifiers and refusal instructions by name and keyword on fixtures; it is a short hand-written list and the refusal-rate evaluation is not built (`docs/status/agent-notes/security.md`) |
+| v0.2.7.8 | Optional safety layers THME adds on top of a model, switched on or off per deployment | **Deferred** (27 November 2026): the safety-layer config and `check` exist; they are not called in the serve, chat and MCP paths, and no classifier layers; to v0.3 |
 | v0.2.7.9 | Supply chain: SPDX headers (THME-3005), signed releases, dependency licence report in every release | **Done**: headers on every source file, enforced in CI; releases signed with Minisign; `THIRD_PARTY_LICENSES.html` in every archive |
 
 ## v0.2.8 — Quality gate and benchmarks
@@ -425,7 +425,7 @@ interval, a three-state verdict and a chart; harness self-tests pass.
 | :--- | :--- | :--- |
 | v0.2.8.1 | One versioned quality gate: custom criteria, one or many, absolute and relative margins (WP20, THME-3003) | **Done**: every gate decision goes through `GateSpec`; reports record the gate hash; `thme validate` re-judges |
 | v0.2.8.2 | Benchmark registry: declarative task files and result records (WP31) | **Done**: [formats](docs/benchmark-registry.md), strict checks, `thme bench` (THME-3024) |
-| v0.2.8.3 | Benchmark runner: native, bridged and imported modes; resume and cache (WP32) | **Imported mode done** (`thme bench score`, THME-3031); native and bridged wait for model runs |
+| v0.2.8.3 | Benchmark runner: native, bridged and imported modes; resume and cache (WP32) | **Deferred** (27 November 2026): imported mode done; native and bridged modes wait for model runs and a benchmark suite choice; to v0.3. Earlier note: **Imported mode done** (`thme bench score`, THME-3031); native and bridged wait for model runs |
 | v0.2.8.4 | Metrics library: exact and normalized match, numeric tolerance, likelihood choice, pass@k (WP33) | **Done**: `bench::metrics`, Table R3 reproduced (THME-3027) |
 | v0.2.8.5 | Statistics: Wilson and bootstrap intervals, paired tests, required-items calculator (WP34) | **Done**: `bench::stats`, Table R3 reproduced (THME-3028) |
 | v0.2.8.6 | Three-state gate: pass, fail or inconclusive from the interval (WP35) | **Done**: one decision path; `thme bench gate` (THME-3029) |
@@ -442,15 +442,15 @@ transformations prove themselves by test, and every v0.2 track meets its exit cr
 
 | # | Item | Status |
 | :--- | :--- | :--- |
-| v0.2.9.1 | Architecture-neutral operation graph with shape inference (WP14) | |
-| v0.2.9.2 | Exact symmetries: permutations, norm folding, residual rotation, each labelled exact, bounded or empirical (WP15) | |
-| v0.2.9.3 | Weight layout planner: shard, tile, interleave, transpose; reordering only behind the gate (WP16) | |
-| v0.2.9.4 | Architecture inference from tensors, with confidence labels, behind the permission record (WP17) | |
-| v0.2.9.5 | Compatibility ladder reports shown in the Studio and the dossier (WP18) | |
-| v0.2.9.6 | External compatibility checks: exported files load in llama.cpp, on synthetic models (THME-2208) | |
-| v0.2.9.7 | Studio views for the engine: solver traces, layer maps, dataflow graphs, projected manifolds | |
-| v0.2.9.8 | Documentation pass: tutorials for every command, glossary and specifications current | |
-| v0.2.9.9 | Convergence gate: every v0.2 exit criterion met or explicitly deferred with a reason | |
+| v0.2.9.1 | Architecture-neutral operation graph with shape inference (WP14) | **Deferred** (27 November 2026): operation graph and shape inference exist for the LLaMA-style decoder only; GPT-NeoX and Gemma have no builder and the graph is not executed; to v0.3 |
+| v0.2.9.2 | Exact symmetries: permutations, norm folding, residual rotation, each labelled exact, bounded or empirical (WP15) | **Deferred** (27 November 2026): exact transforms done for dense LLaMA-family; bounded and empirical labels, NeoX and Gemma, and CLI use are open; to v0.3 |
+| v0.2.9.3 | Weight layout planner: shard, tile, interleave, transpose; reordering only behind the gate (WP16) | **Deferred** (27 November 2026): needs a layout decision from the owner; not attempted; to v0.3 |
+| v0.2.9.4 | Architecture inference from tensors, with confidence labels, behind the permission record (WP17) | **Deferred** (27 November 2026): names-only inference tested for refusal and ordering; no real model file imported under a record; no CLI, Studio or dossier use; to v0.3 |
+| v0.2.9.5 | Compatibility ladder reports shown in the Studio and the dossier (WP18) | **Deferred** (27 November 2026): needs the Studio and a person to look at the screen; the data exists in `compatibility.json`; to v0.3 |
+| v0.2.9.6 | External compatibility checks: exported files load in llama.cpp, on synthetic models (THME-2208) | **Done** (27 November 2026): exported files load in llama.cpp: structural tests (`tests/test_exporter_compatibility.rs`) and a real load with token agreement (`docs/benchmarks/smollm-135m/data/llama_cpp_load.json`) |
+| v0.2.9.7 | Studio views for the engine: solver traces, layer maps, dataflow graphs, projected manifolds | **Deferred** (27 November 2026): Studio views need a person to look at the screen; to v0.3 |
+| v0.2.9.8 | Documentation pass: tutorials for every command, glossary and specifications current | **Deferred** (27 November 2026): tutorials for every command not written; glossary and specifications are current (`GLOSSARY.md`, ADRs 0010 to 0012); to v0.3 |
+| v0.2.9.9 | Convergence gate: every v0.2 exit criterion met or explicitly deferred with a reason | **Done** (27 November 2026): every v0.2 row is Done or Deferred with a named gap in `docs/status/v0.2_closure.md` |
 
 ## v0.3.0 — Plug and Play Workspace
 

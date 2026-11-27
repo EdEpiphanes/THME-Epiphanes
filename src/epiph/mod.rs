@@ -7,17 +7,18 @@
 //! THME command (evaluate, search, export to GGUF or SafeTensors, the Studio) can use it.
 
 use anyhow::{bail, Context, Result};
+use memmap2::Mmap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{BufWriter, Read, Write};
 use std::path::Path;
 
 use crate::exporter::{compute_file_sha256, compute_sha256};
 use crate::inference::{decode_payload, read_tensor_bytes, CalibrationFile};
 use crate::ir::tensor::{SourceEncoding, TensorSource};
-use crate::ir::ModelIR;
+use crate::ir::{ModelIR, TensorIR};
 
 pub mod bitcos;
 
@@ -231,52 +232,37 @@ pub fn write(model: &ModelIR, options: &PackOptions, out: &Path) -> Result<PackS
             bail!("Quality entry {i} has no valid evidence label (one of {EVIDENCE:?})");
         }
     }
-    let mut payloads: Vec<Vec<u8>> = Vec::with_capacity(model.tensors.len() + 1);
+    // Two passes over the tensors, so that only one payload is in memory at a time. Pass one
+    // encodes each tensor to learn its stored length and digests, then drops the bytes; pass two,
+    // below, encodes each tensor again and streams it to the file.
     let mut tensors = Vec::with_capacity(model.tensors.len());
     let mut offset = 0u64;
     // The description written to the manifest: with `store_selected`, each tensor's stored type
     // and size become those of its encoded payload, and the original type is kept in metadata.
     let mut described = model.clone();
     for (tensor, out) in model.tensors.iter().zip(described.tensors.iter_mut()) {
-        let bytes = if options.store_selected {
-            let (dtype, bytes) = crate::exporter::encoded_payload(tensor)
-                .with_context(|| format!("Cannot pack tensor '{}'", tensor.name))?;
-            if dtype != tensor.original_dtype {
-                out.metadata
-                    .insert("epiph.source_dtype".into(), tensor.original_dtype.clone());
-                out.original_dtype = dtype;
-                out.byte_size = bytes.len();
-            }
-            bytes
-        } else {
-            read_tensor_bytes(tensor)
-                .with_context(|| format!("Cannot pack tensor '{}'", tensor.name))?
-        };
-        let decoded_len = bytes.len() as u64;
-        let (encoding, stored, decoded_digest) = match options.compress {
-            Some(Encoding::Deflate) => {
-                let packed = deflate_payload(&bytes)?;
-                if packed.len() < bytes.len() {
-                    (Encoding::Deflate, packed, Some(compute_sha256(&bytes)))
-                } else {
-                    (Encoding::Identity, bytes, None)
-                }
-            }
-            Some(Encoding::Identity) | None => (Encoding::Identity, bytes, None),
-        };
-        let deflated = encoding == Encoding::Deflate;
-        tensors.push(TensorEntry {
+        let stored = encode_tensor(tensor, options)?;
+        if let Some(dtype) = stored.dtype {
+            out.metadata
+                .insert("epiph.source_dtype".into(), tensor.original_dtype.clone());
+            out.original_dtype = dtype;
+            out.byte_size = stored.decoded_len;
+        }
+        let deflated = stored.encoding == Encoding::Deflate;
+        let entry = TensorEntry {
             name: tensor.name.clone(),
             offset,
-            length: stored.len() as u64,
-            sha256: compute_sha256(&stored),
-            encoding,
-            decoded_length: deflated.then_some(decoded_len),
-            decoded_sha256: decoded_digest,
-        });
-        offset = align(offset + stored.len() as u64);
-        payloads.push(stored);
+            length: stored.bytes.len() as u64,
+            sha256: compute_sha256(&stored.bytes),
+            encoding: stored.encoding,
+            decoded_length: deflated.then_some(stored.decoded_len as u64),
+            decoded_sha256: stored.decoded_sha256,
+        };
+        offset = align(offset + entry.length);
+        tensors.push(entry);
     }
+    // Attachments are small (calibration, metadata, tokenizer files) and are held in memory.
+    let mut attached: Vec<Vec<u8>> = Vec::new();
     let mut attachments = Vec::new();
     let mut attach = |kind: &str, name: Option<String>, encoding: &str, bytes: Vec<u8>| {
         attachments.push(Attachment {
@@ -288,7 +274,7 @@ pub fn write(model: &ModelIR, options: &PackOptions, out: &Path) -> Result<PackS
             sha256: compute_sha256(&bytes),
         });
         offset = align(offset + bytes.len() as u64);
-        payloads.push(bytes);
+        attached.push(bytes);
     };
     if let Some(calibration) = &options.calibration {
         attach(
@@ -381,7 +367,8 @@ pub fn write(model: &ModelIR, options: &PackOptions, out: &Path) -> Result<PackS
     if let Some(parent) = out.parent().filter(|p| !p.as_os_str().is_empty()) {
         std::fs::create_dir_all(parent).with_context(|| format!("Failed to create {parent:?}"))?;
     }
-    let mut file = File::create(out).with_context(|| format!("Failed to create {out:?}"))?;
+    let file = File::create(out).with_context(|| format!("Failed to create {out:?}"))?;
+    let mut file = BufWriter::new(file);
     file.write_all(&MAGIC)?;
     file.write_all(&MAJOR.to_le_bytes())?;
     file.write_all(&MINOR.to_le_bytes())?;
@@ -390,19 +377,26 @@ pub fn write(model: &ModelIR, options: &PackOptions, out: &Path) -> Result<PackS
     file.write_all(&data_offset.to_le_bytes())?;
     file.write_all(&manifest_bytes)?;
     let mut written = HEADER_LEN + manifest_bytes.len() as u64;
-    let pad = |file: &mut File, to: u64, written: &mut u64| -> Result<()> {
-        let zeros = vec![0u8; usize::try_from(to - *written)?];
-        file.write_all(&zeros)?;
-        *written = to;
-        Ok(())
-    };
     pad(&mut file, data_offset, &mut written)?;
-    let places = manifest
-        .tensors
+    for (tensor, entry) in model.tensors.iter().zip(&manifest.tensors) {
+        pad(&mut file, data_offset + entry.offset, &mut written)?;
+        let stored = encode_tensor(tensor, options)?;
+        if stored.bytes.len() as u64 != entry.length
+            || compute_sha256(&stored.bytes) != entry.sha256
+        {
+            // Pass one stored different bytes: the source changed while the file was written.
+            bail!(
+                "Tensor '{}' encodes differently the second time; was its source file changed while packing?",
+                entry.name
+            );
+        }
+        file.write_all(&stored.bytes)?;
+        written += entry.length;
+    }
+    for (bytes, at) in attached
         .iter()
-        .map(|t| t.offset)
-        .chain(manifest.attachments.iter().map(|a| a.offset));
-    for (bytes, at) in payloads.iter().zip(places) {
+        .zip(manifest.attachments.iter().map(|a| a.offset))
+    {
         pad(&mut file, data_offset + at, &mut written)?;
         file.write_all(bytes)?;
         written += bytes.len() as u64;
@@ -422,6 +416,81 @@ pub fn write(model: &ModelIR, options: &PackOptions, out: &Path) -> Result<PackS
             .filter(|t| t.encoding != Encoding::Identity)
             .count(),
     })
+}
+
+/// One tensor's payload as the file stores it.
+struct Stored {
+    /// The stored data type, when `store_selected` changed it from the source's.
+    dtype: Option<String>,
+    bytes: Vec<u8>,
+    encoding: Encoding,
+    /// Length of the payload before any compression.
+    decoded_len: usize,
+    /// SHA-256 of the payload before compression; set for `deflate` only.
+    decoded_sha256: Option<String>,
+}
+
+/// Encodes one tensor exactly as `write` stores it.
+fn encode_tensor(tensor: &TensorIR, options: &PackOptions) -> Result<Stored> {
+    let (dtype, bytes) = if options.store_selected {
+        let (dtype, bytes) = crate::exporter::encoded_payload(tensor)
+            .with_context(|| format!("Cannot pack tensor '{}'", tensor.name))?;
+        ((dtype != tensor.original_dtype).then_some(dtype), bytes)
+    } else {
+        let bytes = read_tensor_bytes(tensor)
+            .with_context(|| format!("Cannot pack tensor '{}'", tensor.name))?;
+        (None, bytes)
+    };
+    let decoded_len = bytes.len();
+    let (encoding, bytes, decoded_sha256) = match options.compress {
+        Some(Encoding::Deflate) => {
+            let packed = deflate_payload(&bytes)?;
+            if packed.len() < bytes.len() {
+                (Encoding::Deflate, packed, Some(compute_sha256(&bytes)))
+            } else {
+                (Encoding::Identity, bytes, None)
+            }
+        }
+        Some(Encoding::Identity) | None => (Encoding::Identity, bytes, None),
+    };
+    Ok(Stored {
+        dtype,
+        bytes,
+        encoding,
+        decoded_len,
+        decoded_sha256,
+    })
+}
+
+/// Writes zero bytes until the file is `to` bytes long.
+fn pad<W: Write>(file: &mut W, to: u64, written: &mut u64) -> Result<()> {
+    let gap = to
+        .checked_sub(*written)
+        .context("payload offsets go backwards")?;
+    file.write_all(&vec![0u8; usize::try_from(gap)?])?;
+    *written = to;
+    Ok(())
+}
+
+/// Memory-maps an `.epiph` file read-only. Payloads are sliced out of the map without a copy,
+/// so the operating system pages in only what a check touches.
+// shortcut: no file lock, so a file rewritten while it is mapped can show torn bytes; the
+// SHA-256 checks reject them. Upgrade to a lock if packs run beside readers.
+fn map_file(path: &Path) -> Result<Mmap> {
+    let file = File::open(path).with_context(|| format!("Failed to open {path:?}"))?;
+    // SAFETY: the map is only read, and THME never writes a file it has mapped. A change by
+    // another process is caught by the digests, as described above.
+    unsafe { Mmap::map(&file) }.with_context(|| format!("Failed to map {path:?}"))
+}
+
+/// `length` bytes at `at` in the file image; an error, never a panic, when they lie outside it.
+fn slice_of(image: &[u8], at: u64, length: u64) -> Result<&[u8]> {
+    let start = usize::try_from(at).context("payload offset exceeds addressable memory")?;
+    let len = usize::try_from(length).context("payload length exceeds addressable memory")?;
+    image
+        .get(start..)
+        .and_then(|rest| rest.get(..len))
+        .with_context(|| format!("payload of {length} bytes at {at} lies beyond the file"))
 }
 
 /// Header fields and manifest of a file, after the structural checks of the specification.
@@ -590,13 +659,6 @@ pub fn read(path: &Path) -> Result<(ModelIR, Manifest)> {
     Ok((model, manifest))
 }
 
-fn read_range(file: &mut File, at: u64, length: u64) -> Result<Vec<u8>> {
-    let mut bytes = vec![0u8; usize::try_from(length)?];
-    file.seek(SeekFrom::Start(at))?;
-    file.read_exact(&mut bytes)?;
-    Ok(bytes)
-}
-
 /// The calibration statistics attached to a file, if any (digest checked).
 pub fn read_calibration(path: &Path) -> Result<Option<CalibrationFile>> {
     read_attachments(path, "calibration")?
@@ -615,14 +677,14 @@ pub fn read_attachments(path: &Path, kind: &str) -> Result<Vec<(Option<String>, 
         data_offset,
         ..
     } = open(path)?;
-    let mut file = File::open(path)?;
+    let image = map_file(path)?;
     let mut out = Vec::new();
     for entry in manifest.attachments.iter().filter(|a| a.kind == kind) {
-        let bytes = read_range(&mut file, data_offset + entry.offset, entry.length)?;
-        if compute_sha256(&bytes) != entry.sha256 {
+        let bytes = slice_of(&image, data_offset + entry.offset, entry.length)?;
+        if compute_sha256(bytes) != entry.sha256 {
             bail!("{path:?}: attachment '{kind}' fails its SHA-256 check");
         }
-        out.push((entry.name.clone(), bytes));
+        out.push((entry.name.clone(), bytes.to_vec()));
     }
     Ok(out)
 }
@@ -714,17 +776,18 @@ pub struct VerifyReport {
 pub fn verify(path: &Path) -> Result<VerifyReport> {
     let (model, manifest) = read(path)?;
     let Opened { data_offset, .. } = open(path)?;
-    let mut file = File::open(path)?;
+    let image = map_file(path)?;
     let mut payload_bytes = 0u64;
     for (tensor, entry) in model.tensors.iter().zip(&manifest.tensors) {
-        let stored = read_range(&mut file, data_offset + entry.offset, entry.length)?;
-        if compute_sha256(&stored) != entry.sha256 {
+        let stored = slice_of(&image, data_offset + entry.offset, entry.length)?;
+        if compute_sha256(stored) != entry.sha256 {
             bail!("{path:?}: tensor '{}' fails its SHA-256 check", entry.name);
         }
-        let bytes = match entry.encoding {
+        let decoded;
+        let bytes: &[u8] = match entry.encoding {
             Encoding::Identity => stored,
             Encoding::Deflate => {
-                let decoded = inflate_payload(&stored, entry.decoded_len()).with_context(|| {
+                decoded = inflate_payload(stored, entry.decoded_len()).with_context(|| {
                     format!("{path:?}: tensor '{}' does not decode", entry.name)
                 })?;
                 if Some(compute_sha256(&decoded)) != entry.decoded_sha256 {
@@ -733,10 +796,10 @@ pub fn verify(path: &Path) -> Result<VerifyReport> {
                         entry.name
                     );
                 }
-                decoded
+                &decoded
             }
         };
-        decode_payload(&bytes, &tensor.original_dtype, tensor.numel).with_context(|| {
+        decode_payload(bytes, &tensor.original_dtype, tensor.numel).with_context(|| {
             format!(
                 "{path:?}: tensor '{}' does not match its shape and type",
                 entry.name
@@ -754,8 +817,8 @@ pub fn verify(path: &Path) -> Result<VerifyReport> {
             .with_context(|| format!("{path:?}: placement plan does not match the tensors"))?;
     }
     for entry in &manifest.attachments {
-        let bytes = read_range(&mut file, data_offset + entry.offset, entry.length)?;
-        if compute_sha256(&bytes) != entry.sha256 {
+        let bytes = slice_of(&image, data_offset + entry.offset, entry.length)?;
+        if compute_sha256(bytes) != entry.sha256 {
             bail!(
                 "{path:?}: attachment '{}' fails its SHA-256 check",
                 entry.kind
@@ -768,6 +831,49 @@ pub fn verify(path: &Path) -> Result<VerifyReport> {
         attachments: manifest.attachments.len(),
         payload_bytes,
         placement: manifest.placement,
+    })
+}
+
+/// What a reader shows about a file without reading any payload (the Studio's file view calls
+/// this). A quality entry is shown as a measurement only when its `evidence` is `measured`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Description {
+    pub version: String,
+    pub tool: String,
+    pub tool_version: String,
+    pub created_unix: u64,
+    pub sources: Vec<SourceFile>,
+    pub parents: Vec<String>,
+    pub quality: Vec<Value>,
+    pub tensors: usize,
+    /// Tensors stored with a payload encoding other than `identity`.
+    pub compressed_tensors: usize,
+    pub attachment_kinds: Vec<String>,
+    pub placed: bool,
+    /// Checked against the Epiphanes key; an invalid signature is an error.
+    pub signature: sign::SignatureStatus,
+}
+
+/// Summarises `path` from its header and manifest and checks its signature; no payload is read.
+pub fn describe(path: &Path) -> Result<Description> {
+    let Opened { manifest, .. } = open(path)?;
+    Ok(Description {
+        version: manifest.version,
+        tool: manifest.provenance.tool,
+        tool_version: manifest.provenance.tool_version,
+        created_unix: manifest.provenance.created_unix,
+        sources: manifest.provenance.sources,
+        parents: manifest.lineage.parents,
+        quality: manifest.quality,
+        tensors: manifest.tensors.len(),
+        compressed_tensors: manifest
+            .tensors
+            .iter()
+            .filter(|t| t.encoding != Encoding::Identity)
+            .count(),
+        attachment_kinds: manifest.attachments.into_iter().map(|a| a.kind).collect(),
+        placed: manifest.placement.is_some(),
+        signature: sign::check(path, None)?,
     })
 }
 

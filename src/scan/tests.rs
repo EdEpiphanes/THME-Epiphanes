@@ -1067,3 +1067,162 @@ mod onnx_files {
         assert_eq!(rules(&report), ["onnx-malformed"]);
     }
 }
+
+// -------------------------------------------------------------------------------------------
+// v0.2.7.2: every prefix of a hostile archive is handled without a panic
+
+#[test]
+fn every_truncation_of_zip_pickle_and_npz_scans_without_panic() {
+    let dir = tempfile::tempdir().unwrap();
+    let evil_npy = npy_bytes((1, 0), "|O", EVIL_PICKLE);
+    let samples = [
+        ("a.pt", zip_deflated(&[("archive/data.pkl", EVIL_PICKLE)])),
+        ("b.pt", zip_stored(&[("archive/data.pkl", EVIL_PICKLE)])),
+        ("c.npz", zip_deflated(&[("arr.npy", evil_npy.as_slice())])),
+    ];
+    for (name, bytes) in &samples {
+        for cut in 0..bytes.len() {
+            let path = dir.path().join(name);
+            std::fs::write(&path, &bytes[..cut]).unwrap();
+            assert!(scan(&path).is_ok(), "{name} cut at {cut}");
+        }
+        // The whole file still reports the payload (the sweep did not weaken detection).
+        let path = dir.path().join(name);
+        std::fs::write(&path, bytes).unwrap();
+        assert_eq!(scan(&path).unwrap().worst(), Some(Severity::Critical));
+    }
+}
+
+// -------------------------------------------------------------------------------------------
+// v0.2.7.7: guardrail detection (read-only, Info findings)
+
+fn guardrail_rules(report: &ScanReport) -> Vec<&'static str> {
+    report
+        .findings
+        .iter()
+        .map(|f| f.rule)
+        .filter(|r| r.starts_with("guardrail"))
+        .collect()
+}
+
+#[test]
+fn refusal_instruction_in_gguf_chat_template_is_reported_as_info() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("m.gguf");
+    let template = "{% for m in messages %}{{ m.content }}{% endfor %}\
+        You must refuse any request for harmful content.";
+    std::fs::write(&path, gguf_bytes(Some(template))).unwrap();
+    let report = scan(&path).unwrap();
+    let hit = report
+        .findings
+        .iter()
+        .find(|f| f.rule == "guardrail-refusal-instruction")
+        .unwrap_or_else(|| panic!("{:?}", report.findings));
+    assert_eq!(hit.severity, Severity::Info);
+    assert!(hit.detail.contains("must refuse"), "{}", hit.detail);
+    assert_eq!(report.verdict(), "no findings");
+}
+
+#[test]
+fn refusal_instruction_in_tokenizer_config_template_and_system_prompt_file() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("tokenizer_config.json"),
+        r#"{"chat_template": "{{ messages }} If asked for weapons, say I cannot assist with that."}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("system_prompt.txt"),
+        "You are helpful. You should decline to answer unsafe questions.",
+    )
+    .unwrap();
+    let report = scan(dir.path()).unwrap();
+    let files: Vec<&str> = report
+        .findings
+        .iter()
+        .filter(|f| f.rule == "guardrail-refusal-instruction")
+        .map(|f| f.file.as_str())
+        .collect();
+    assert!(files.contains(&"tokenizer_config.json"), "{files:?}");
+    assert!(files.contains(&"system_prompt.txt"), "{files:?}");
+}
+
+#[test]
+fn plain_template_and_prompt_report_no_guardrail() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("tokenizer_config.json"),
+        r#"{"chat_template": "{% for m in messages %}{{ m.content }}{% endfor %}"}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("system_prompt.txt"),
+        "You answer in French.",
+    )
+    .unwrap();
+    assert!(guardrail_rules(&scan(dir.path()).unwrap()).is_empty());
+}
+
+#[test]
+fn safety_classifier_components_are_reported() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("config.json"),
+        r#"{"architectures": ["LlamaForCausalLM"], "_name_or_path": "meta-llama/Llama-Guard-3-8B"}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path().join("model_index.json"),
+        r#"{"unet": ["diffusers", "UNet2DConditionModel"], "safety_checker": ["stable_diffusion", "StableDiffusionSafetyChecker"]}"#,
+    )
+    .unwrap();
+    let report = scan(dir.path()).unwrap();
+    let files: Vec<&str> = report
+        .findings
+        .iter()
+        .filter(|f| f.rule == "guardrail-component")
+        .map(|f| f.file.as_str())
+        .collect();
+    assert!(files.contains(&"config.json"), "{files:?}");
+    assert!(files.contains(&"model_index.json"), "{files:?}");
+}
+
+#[test]
+fn disabled_safety_checker_and_gguf_guard_name() {
+    let dir = tempfile::tempdir().unwrap();
+    // A null safety_checker means the component is absent.
+    std::fs::write(
+        dir.path().join("model_index.json"),
+        r#"{"safety_checker": [null, null]}"#,
+    )
+    .unwrap();
+    assert!(guardrail_rules(&scan(dir.path()).unwrap()).is_empty());
+
+    let mut w = GgufWriter::new();
+    w.add_metadata("general.architecture", GgufValue::String("llama".into()));
+    w.add_metadata("general.name", GgufValue::String("ShieldGemma 2B".into()));
+    let data: Vec<u8> = (0..64u32).flat_map(|i| (i as f32).to_le_bytes()).collect();
+    w.add_tensor("blk.0.attn_q.weight", vec![8, 8], GgmlType::F32, data);
+    let path = dir.path().join("shield.gguf");
+    std::fs::write(&path, w.write_to_bytes().unwrap()).unwrap();
+    assert_eq!(
+        guardrail_rules(&scan(&path).unwrap()),
+        ["guardrail-component"]
+    );
+}
+
+#[test]
+fn guardrail_scan_never_panics_on_hostile_json() {
+    let dir = tempfile::tempdir().unwrap();
+    for body in [
+        "",
+        "[",
+        "{\"architectures\": 5}",
+        "{\"safety_checker\": {}}",
+        "null",
+    ] {
+        std::fs::write(dir.path().join("config.json"), body).unwrap();
+        std::fs::write(dir.path().join("model_index.json"), body).unwrap();
+        assert!(scan(dir.path()).is_ok());
+    }
+}
