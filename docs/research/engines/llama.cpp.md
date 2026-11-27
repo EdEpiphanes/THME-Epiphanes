@@ -1,4 +1,4 @@
-# Survey: llama.cpp (clone at C:\Users\TechTroniX\engines\llama.cpp)
+# Survey: llama.cpp (clone at <engines>\llama.cpp)
 
 Read-only survey, 2026-11-27. Only paths I opened or listed are cited. "Unverified" = not opened.
 Effort S/M/L is my estimate, not measured. No source is copied here.

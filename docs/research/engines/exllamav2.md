@@ -1,6 +1,6 @@
 # ExLlamaV2 survey (for THME)
 
-Read-only survey of the shallow clone at `C:\Users\TechTroniX\engines\exllamav2`. Paths are relative to that folder. Every claim names a file that was opened; anything else is marked unverified. Effort sizes (S/M/L) are estimates, not measurements.
+Read-only survey of the shallow clone at `<engines>\exllamav2`. Paths are relative to that folder. Every claim names a file that was opened; anything else is marked unverified. Effort sizes (S/M/L) are estimates, not measurements.
 
 THME today (opened: `README.md`, `docs/subsystems.md`, `src/allocator/`, `src/engine/alloc.rs`, `src/inference/kv.rs`): per-tensor format choice by an exact multiple-choice DP over measured costs (`src/engine/alloc.rs`, "dynamic programming in O(items x options x capacity)"), a greedy solver and a sensitivity-threshold `ParetoAllocator` (`docs/subsystems.md` 5.3), a coupled DC-CCCP solver (`src/allocator/dc_cccp.rs`), GPTQ and AWQ transforms (`src/transform/gptq.rs`, `awq.rs`), per-group-32 int8/int4 KV (`src/inference/kv.rs`), Hadamard code in `src/engine/`.
 

@@ -118,7 +118,7 @@ def main():
     }
     proto["status"] = "measured"
     proto["pending"] = []
-    proto["provenance"] = {"thme": args.thme, "device": args.device}
+    proto["provenance"] = {"thme": os.path.basename(args.thme), "device": args.device}  # no local paths in committed reports
     with open(args.json, "w", encoding="utf-8", newline="\n") as f:
         json.dump(proto, f, indent=2)
         f.write("\n")

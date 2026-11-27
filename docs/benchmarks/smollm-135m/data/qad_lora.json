@@ -241,7 +241,7 @@
   },
   "pending": [],
   "provenance": {
-    "python": "C:/Users/TechTroniX/venvs/thme-train/Scripts/python.exe",
+    "python": "<venv>/thme-train/python",
     "trainer": "scripts/train/qad_lora.py",
     "device": "cuda"
   }

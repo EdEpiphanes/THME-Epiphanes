@@ -1,6 +1,6 @@
 # candle (Hugging Face) survey for THME
 
-Read-only survey of the shallow clone at `C:\Users\TechTroniX\engines\candle` (paths below are relative to it).
+Read-only survey of the shallow clone at `<engines>\candle` (paths below are relative to it).
 Effort sizes (S, M, L) are estimates, not measurements. Nothing here was run.
 
 ## 1. Licence

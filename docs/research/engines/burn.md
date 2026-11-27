@@ -1,6 +1,6 @@
 # burn (Tracel AI) survey for THME
 
-Read-only survey of the shallow clone at `C:\Users\TechTroniX\engines\burn` (paths relative to it).
+Read-only survey of the shallow clone at `<engines>\burn` (paths relative to it).
 S, M, L are estimates, not measurements. Nothing was run. The GPU kernels live in the external `cubecl` and `cubek` crates, which are NOT in this clone, so kernel claims are limited to what the burn crates say.
 
 ## 1. Licence

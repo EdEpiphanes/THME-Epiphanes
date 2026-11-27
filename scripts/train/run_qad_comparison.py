@@ -151,7 +151,7 @@ def main():
     })
     proto["status"] = "measured" if stability["accepted"] else "unstable"
     proto["pending"] = [] if stability["accepted"] else ["batch flagged unstable by the drift protocol: no verdict is used"]
-    proto["provenance"] = {"python": args.python, "trainer": "scripts/train/qad_lora.py", "device": "cuda"}
+    proto["provenance"] = {"python": os.path.basename(args.python), "trainer": "scripts/train/qad_lora.py", "device": "cuda"}  # no local paths in committed reports
     with open(args.json, "w", encoding="utf-8", newline="\n") as f:
         json.dump(proto, f, indent=2)
         f.write("\n")

@@ -22,7 +22,7 @@ text-summarising skill and contains no model training. It is not a source for th
 | `.epiph` with recipe, provenance, quality entries, attachments | `src/epiph/` | Tested; compression measured |
 | LoRA merge | `src/transform/` | Tested |
 | Real backward pass and LoRA training | `agent/v02-train` branch | In progress, not merged |
-| PyTorch and PEFT environment as an external trainer | `C:\Users\TechTroniX\venvs\thme-train` | Installing |
+| PyTorch and PEFT environment as an external trainer | `<venvs>/thme-train` | Installing |
 
 ## The pipeline
 

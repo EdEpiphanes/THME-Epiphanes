@@ -1,6 +1,6 @@
 # MLC LLM survey (for THME)
 
-Read-only survey of the shallow clone at `C:\Users\TechTroniX\engines\mlc-llm`. Paths are relative to that folder. Every claim names a file that was opened; anything else is marked unverified. Effort sizes (S/M/L) are estimates, not measurements.
+Read-only survey of the shallow clone at `<engines>\mlc-llm`. Paths are relative to that folder. Every claim names a file that was opened; anything else is marked unverified. Effort sizes (S/M/L) are estimates, not measurements.
 
 Important limit: the submodule folders `3rdparty/tvm` and `3rdparty/xgrammar` are empty in this clone (`ls` shows nothing; `.gitmodules` points TVM at `mlc-ai/relax`). TVM internals therefore cannot be read here; everything about TVM below comes from how `python/mlc_llm/` calls it and is marked where inferred.
 

@@ -1,6 +1,6 @@
 # vLLM survey (for THME)
 
-Read-only survey of the shallow clone at `C:\Users\TechTroniX\engines\vllm`. Paths below are relative to that folder. Every claim names a file that was opened; anything else is marked unverified. Effort sizes (S/M/L) are estimates, not measurements.
+Read-only survey of the shallow clone at `<engines>\vllm`. Paths below are relative to that folder. Every claim names a file that was opened; anything else is marked unverified. Effort sizes (S/M/L) are estimates, not measurements.
 
 THME today (opened: `README.md`, `docs/subsystems.md`, `src/`): single-sequence `KvCache` with f32/int8/int4 per-group-32 storage (`src/inference/kv.rs`), a CPU reference forward pass, GPU backends (CUDA PTX in `src/inference/gpu/kernels/decoder.ptx`, wgpu WGSL shaders in `src/inference/gpu/shaders/`), a speculative-decoding module (`src/speculative/`), a token sampler (`src/inference/sampler.rs`), and allocators (`src/allocator/`, `src/engine/alloc.rs`). A grep of `src/` found no paged KV, batching scheduler, prefix cache or grammar constraint.
 

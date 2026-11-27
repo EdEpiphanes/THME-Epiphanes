@@ -1,6 +1,6 @@
 # SGLang survey (for THME)
 
-Read-only survey of the shallow clone at `C:\Users\TechTroniX\engines\sglang`. Paths are relative to that folder. Every claim names a file that was opened; anything else is marked unverified. Effort sizes (S/M/L) are estimates, not measurements.
+Read-only survey of the shallow clone at `<engines>\sglang`. Paths are relative to that folder. Every claim names a file that was opened; anything else is marked unverified. Effort sizes (S/M/L) are estimates, not measurements.
 
 THME today (opened: `README.md`, `docs/subsystems.md`, `src/`): single-sequence `KvCache` with f32/int8/int4 storage (`src/inference/kv.rs`), CPU reference forward, CUDA PTX and wgpu WGSL GPU paths (`src/inference/gpu/`), a sampler chain derived from llama.cpp (`src/inference/sampler.rs`), a speculative module (`src/speculative/`). A grep of `src/` found no prefix cache, radix tree or grammar constraint.
 

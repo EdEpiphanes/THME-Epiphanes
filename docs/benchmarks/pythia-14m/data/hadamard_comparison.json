@@ -142,7 +142,7 @@
   },
   "pending": [],
   "provenance": {
-    "thme": "C:/Users/TechTroniX/Documents/GitHub/thme-wt/solidify/target-nodbg/release/thme.exe",
+    "thme": "target/release/thme",
     "device": "cpu"
   }
 }

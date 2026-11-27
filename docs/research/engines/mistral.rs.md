@@ -1,6 +1,6 @@
 # mistral.rs survey for THME
 
-Read-only survey of the shallow clone at `C:\Users\TechTroniX\engines\mistral.rs` (paths relative to it).
+Read-only survey of the shallow clone at `<engines>\mistral.rs` (paths relative to it).
 S, M, L are estimates, not measurements. Nothing was run. Many files were sized and skimmed by headings only; those are marked.
 
 ## 1. Licence
