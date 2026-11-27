@@ -28,33 +28,46 @@ sub-milestones further down:
 | Formats and calibration; recovery; runtime | [v0.2.2](#v022--formats-and-calibration), [v0.2.3](#v023--recovery-and-distillation), [v0.2.4](#v024--runtime-speed-and-kv-cache) |
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': {'fontFamily': 'Chakra Petch, Bahnschrift, Arial Narrow, sans-serif', 'primaryColor': '#ffffff', 'primaryTextColor': '#0b0b0b', 'primaryBorderColor': '#0b0b0b', 'lineColor': '#0b0b0b', 'secondaryColor': '#f6f6f4', 'tertiaryColor': '#ffffff', 'clusterBkg': '#f6f6f4', 'clusterBorder': '#0b0b0b', 'edgeLabelBackground': '#ffffff'}}}%%
+%%{init: {'theme': 'base', 'themeVariables': {'fontFamily': 'Chakra Petch, Bahnschrift, Arial Narrow, sans-serif', 'primaryColor': '#ffffff', 'primaryTextColor': '#0b0b0b', 'primaryBorderColor': '#0b0b0b', 'lineColor': '#0b0b0b', 'secondaryColor': '#f6f6f4', 'tertiaryColor': '#ffffff'}}}%%
 flowchart LR
     classDef done fill:#0b0b0b,stroke:#0b0b0b,stroke-width:2px,color:#ffffff;
     classDef now fill:#ffffff,stroke:#0b0b0b,stroke-width:4px,color:#0b0b0b;
     classDef later fill:#ffffff,stroke:#0b0b0b,stroke-width:1.5px,stroke-dasharray:4 3,color:#52514e;
 
     subgraph NOW["Now"]
-        N1["GPTQ-style rounding (real-model measurement pending)"]:::now
-        N2["llama.cpp check (synthetic)"]:::now
-        N3["Scanner: legacy Keras .h5"]:::now
+        N1["v0.3.0 plug and play workspace"]:::now
+        N2["Deferred v0.2 rows with small gaps"]:::now
+        N3["Unified engine port: first slices"]:::now
     end
     subgraph NEXT["Next"]
-        X1[".epiph placement plan"]:::later
-        X2[".epiph lossless compression"]:::later
-        X3["Native benchmark runner (model runs paused)"]:::later
+        X1["Full PS-16 transposition (gate v3)"]:::later
+        X2["Native benchmark runner"]:::later
+        X3["Runtime: kernels, memory, speed"]:::later
     end
     subgraph LATER["Later"]
         L1["Translation layer"]:::later
         L2["Routing and needles"]:::later
-        L3["Distillation and autonomy"]:::later
-        L4["GPU runtime and placement"]:::later
+        L3["CUDA backward pass (v0.5)"]:::later
+        L4["Studio visual checks (v0.4)"]:::later
         L5["Commercial release"]:::later
     end
-    D["Done this week:<br/>scanner coverage (deflate, NumPy,<br/>Keras, ONNX), toolchain 1.100,<br/>ODE steppers, optimal transport,<br/>ink-glass Studio GIFs"]:::done --> NOW --> NEXT --> LATER
+    D["Done 27 November 2026:<br/>v0.2 closed (61 of 90 done,<br/>29 deferred), GPTQ, Hadamard,<br/>QAD-LoRA, llama.cpp match,<br/>paper v5.1"]:::done --> NOW --> NEXT --> LATER
 ```
 
-### Done this week
+### Done on 27 November 2026
+
+| Item | What shipped | Evidence |
+| :--- | :--- | :--- |
+| v0.2 closure (THME-3104) | All 90 v0.2 rows Done (61) or Deferred with a named gap (29) | [docs/status/v0.2_closure.md](docs/status/v0.2_closure.md) |
+| GPTQ-style rounding (THME-2205) | Measured on both models against round-to-nearest, AWQ and the ceiling, pre-registered | `docs/benchmarks/*/data/gptq_comparison.json` |
+| Hadamard rotation (THME-2206) | Measured with and without; 4-bit and ternary arms unusable on both models, no benefit claimed | `docs/benchmarks/*/data/hadamard_comparison.json` |
+| Quantization-aware distillation and LoRA recovery | SmolLM-135M Q4_0 perplexity 23.70 to 20.41 (ceiling 19.80); PyTorch trainer with PEFT; Rust backward pass checked against Hugging Face to about 1e-12 | `docs/benchmarks/smollm-135m/data/qad_lora.json` |
+| llama.cpp compatibility | A THME export loads in llama.cpp (CPU, CUDA, Vulkan) and matches THME's greedy tokens; compatibility across THME CPU, CUDA-PTX, wgpu-Vulkan, DX12 | `llama_cpp_load.json`, `compatibility.json`, `engine_compare.json` |
+| Quality gate v2 (THME-3077) | Two regimes by baseline perplexity (absolute below 20, 2.25 percent relative at or above) | `configs/gates/thme-perplexity-v2.json` |
+| Research paper v5.1 | US EPA PS-16 acceptance bands transposed to the gate (section 3.8); threshold 20 kept for now | [docs/research/paper/](docs/research/paper/README.md) |
+| Repository cleanup | Active-only backlog, README highlights, research index | [docs/archive/](docs/archive/) |
+
+### Done earlier (14 to 20 November 2026)
 
 | Item | What shipped | Evidence |
 | :--- | :--- | :--- |
@@ -102,34 +115,32 @@ flowchart LR
 
 | Track | Item | Status | Depends on |
 | :--- | :--- | :--- | :--- |
-| Formats and calibration | **GPTQ-style rounding** (THME-2205): second-order rounding with a full-Hessian calibration step | Implemented for Q4_0 and Q8_0, tested on synthetic matrices; real-model measurement pending, K-quants not supported | Calibration |
-| Formats and calibration | **llama.cpp compatibility check** (THME-2208) on synthetic exported files; the runtime check runs only when a tool is configured | Not started | Exporter |
-| Security | **Scanner coverage** (THME-3022, v0.2.7.2): legacy HDF5 `.h5` Keras files | Done in part: `.h5` is searched for Lambda and custom layers; compressed or fragmented attributes can be missed | Scanner v1 |
-| Quality and evidence | **Benchmark runner, native and bridged modes** (v0.2.8.3, THME-3074 and 3075): one Rust process, model loaded once, progress and run metrics in every report | Not started | GPU perplexity path (done), run metrics |
-| Quality and evidence | **Quality gate v2** (THME-3077): relative margin for high-perplexity models, absolute for low | Not started | Gate versioning |
-| Memory and speed | **Memory experiments on Pythia-14M** (unified concept note, private): token-frequency count, per-row-band precision, vocabulary-subset drafting, int8 KV | Not started | KV cache (done), `.epiph` encodings (THME-3078) |
-| Plug and play workspace | **v0.3.0** (THME-3037 to 3042): discover, doctor and tokenizer are done, tested on fixtures; Studio chat, Hub download, bridges, first-run guide, notebook bridge and installs are open | Partly done | Reference forward pass |
+| Plug and play workspace | **v0.3.0** (THME-3037 to 3042): discover, doctor and tokenizer are done on fixtures; Studio chat, Hub download, bridges, first-run guide, notebook bridge and installs are open | Partly done | Reference forward pass |
+| Engine | **Unified engine port** (THME-3108, [plan](docs/research/unified-engine-port-plan.md)): first slice is rotate-before-quantize for the KV cache (Pythia-14M keys), second is imatrix and the missing encoders against local `llama-quantize` | Not started | Compatibility report |
+| Quality | **Deferred v0.2 rows with a small gap**: see the [closure table](docs/status/v0.2_closure.md) (quantized kernels, peak memory, KV sweep to 2,048, allocator on real cost tables) | Not started | [Drift protocol](docs/research/measurement-drift-protocol.md) |
+| Recovery | **PyTorch bridge** for the remaining v0.2.3 rows (calibration data, exit heads, dossier section) | Not started | QAD-LoRA pipeline (done) |
 
 ### Next: planned
 
 | Track | Item | Depends on |
 | :--- | :--- | :--- |
-| Epiphanes model format | `.epiph` GPU/CPU placement plan from the exact allocator (THME-3016) | Exact allocator |
-| Epiphanes model format | `.epiph` lossless payload compression with `flate2` (THME-3015) | Signature over compressed payloads |
-| Epiphanes model format | `.epiph` flexible encodings, critical and optional codecs (THME-3078) | Experiment on per-row-band precision |
+| Quality and evidence | **Full PS-16 transposition** (THME-3109): bias, variance and correlation tests, three operating levels, per-block paired losses; absolute threshold stays 20 until then | Per-block losses from `thme evaluate` |
+| Quality and evidence | Native and bridged benchmark runner (v0.2.8.3, THME-3074 and 3075) | GPU perplexity path (done) |
+| Memory and speed | Quantized kernels, peak memory, roofline calibration, speculative decoding end to end (v0.2.4.4 to .8) | Compatibility report |
+| Epiphanes model format | GPU weight budget wiring (THME-3090), flexible encodings (THME-3078) | Exact allocator |
+| Security | Permission record wired to a reverse-engineering feature; safety layers in serve, chat and MCP (v0.2.7.4, .8) | Architecture inference |
 
 ### Later: direction
 
 | Track | Item |
 | :--- | :--- |
-| Rust everywhere | Owner direction: engine, 3D visuals and speed in Rust. Done: charts (`engine::viz`) and the isometric kit core (`engine::iso`). Next: the kit's round parts, tubes and depth audit; `scripts/*.py` as Rust commands; parallel CPU paths with a pure-Rust thread pool; 3D model and manifold views in the Studio on its existing GPU stack. Every port is checked against the original's output and timed against it |
-| Epiphanes model format | Lossless compression (THME-3015); GPU/CPU placement plan from the exact allocator (THME-3016) |
-| Translation layer | Architecture-neutral graph, exact symmetries, weight layout, architecture inference, compatibility reports (dossier WP14-18), behind a permission record (WP19) |
+| Rust everywhere | Owner direction: engine, 3D visuals and speed in Rust; `scripts/*.py` as Rust commands over time |
+| Translation layer | Graph builders for GPT-NeoX and Gemma, executed graph, layout planner, architecture inference on real files (v0.2.9.1 to .5) |
 | Routing and needles | Calibration metrics, routers, hierarchical scoring, needle training (WP21-25) |
-| Distillation and autonomy | Teacher cache, losses, fidelity report, student planner, autonomy controller with budget caps (WP26-30) |
-| Security | Guardrail detection and refusal evaluation, read-only; optional safety layers THME adds (THME-3021) |
-| Runtime | GPU backends, measured speed, memory and KV cache (v0.2.4, v0.3) |
-| Release | Commercial release after the open-source foundations are complete; version to be decided. Reserved for it: the developer sandbox implementation (THME-3020; design public in [docs/sandbox.md](docs/sandbox.md)) and sandboxed `code` benchmark tasks |
+| Distillation and autonomy | Teacher cache, losses, fidelity report, student planner; hosted-teacher output is test-only until the provider's permission is held |
+| GPU | CUDA backward pass inside THME shelved to v0.5 (THME-3107); GPU runtime and placement |
+| Studio | Visual check of every tab and re-recorded screenshots (v0.4, THME-3069) |
+| Release | Commercial release after the open-source foundations are complete; version to be decided. Reserved: developer sandbox (THME-3020; [docs/sandbox.md](docs/sandbox.md)) |
 
 ### Pending measurement
 
@@ -137,11 +148,11 @@ Model runs are allowed on Pythia-14M and SmolLM-135M only, by decision, until re
 
 | Item | What is ready | What is pending |
 | :--- | :--- | :--- |
-| AWQ-style scaling (v0.2.2.4) | Measured on both models with controls (see Done this week) | C4 out-of-domain arm and the 8k and 131k size check |
+| AWQ-style scaling (v0.2.2.4) | Measured on both models with controls | C4 out-of-domain arm and the 8k and 131k size check |
 | Exact versus greedy allocation (THME-3002) | Implemented and tested | Comparison on real cost tables |
-| Hadamard rotation (v0.2.2.6) | Rule implemented | Measurement with and without rotation |
-| GPTQ-style rounding (THME-2205) | Implemented for Q4_0 and Q8_0 | Measurement against AWQ with the same controls |
-| Searched recipe report (THME-2004) | Done for both models; Pythia missed its 50 percent size budget | At least 5 placement seeds, fitted exit heads |
+| QAD-LoRA recovery | SmolLM-135M measured | Pythia-14M; a wider learning-rate grid (the pilot chose the grid edge 1e-3) |
+| Throughput and compatibility | Measured once | Repeats under the drift protocol |
+| KV cache precision | Both models measured | Cause of the Pythia-14M loss (keys); long-context quality |
 
 ### Out of scope
 
@@ -159,7 +170,12 @@ Model runs are allowed on Pythia-14M and SmolLM-135M only, by decision, until re
 - **Legal review.** Format-name trademark (THME-3017) and the commercial licence wording need a
   lawyer before any announcement.
 
-### Changes this update (20 November 2026)
+### Changes this update (27 November 2026)
+
+- Closed v0.2 (61 of 90 Done, 29 Deferred with named gaps) and rewrote Now, Next and Later from that table. Added the 27 November results to Done. Removed items that are finished (GPTQ, Hadamard, llama.cpp check, quality gate v2).
+- Decisions: PyTorch with PEFT as the v0.2.3 trainer now; CUDA backward pass shelved to v0.5; PS-16 absolute threshold stays 20 until the full transposition; hosted-teacher output is test-only.
+
+### Changes in the previous update (20 November 2026)
 
 - Done and measured: HF cross-check, KV cache decode speedups, GPU path and GPU perplexity, AWQ comparison on both models with controls, baseline re-measurement after the FP16 fix (details in Done this week). Every figure comes from a committed report; the CPU timings of the GPU comparison were taken on a shared machine and the reports say so.
 - Done (audit): VS Code extension, release pipeline, hygiene and subprocess timeout fixes (THME-3048 to 3054, part); allowed roots for MCP are documented as planned.
