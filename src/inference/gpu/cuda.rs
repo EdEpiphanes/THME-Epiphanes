@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! NVIDIA CUDA + cuBLAS Tensor Core acceleration backend for THME.
 
+use crate::engine::minifloat::f32_to_f16;
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::hash::{Hash, Hasher};
@@ -168,52 +169,14 @@ fn slice_hash(data: &[f32]) -> u64 {
     h.finish()
 }
 
-/// Converts IEEE 754 `f32` to `f16` bit pattern (round-to-nearest-even).
-fn f32_to_f16_bits(val: f32) -> u16 {
-    let bits = val.to_bits();
-    let sign = ((bits >> 16) & 0x8000) as u16;
-    let exp = ((bits >> 23) & 0xff) as i32;
-    let frac = bits & 0x007f_ffff;
-
-    if exp == 255 {
-        if frac == 0 {
-            return sign | 0x7c00;
-        }
-        return sign | 0x7e00 | ((frac >> 13) as u16);
-    }
-
-    let unbiased = exp - 127 + 15;
-    if unbiased >= 31 {
-        return sign | 0x7c00;
-    }
-    if unbiased <= 0 {
-        if unbiased < -10 {
-            return sign;
-        }
-        let mant = (frac | 0x0080_0000) >> (1 - unbiased);
-        let round_bit = (mant >> 12) & 1;
-        let sticky = (mant & 0x0fff) != 0;
-        let half_mant = (mant >> 13) as u16;
-        let lsb = half_mant & 1;
-        return sign | (half_mant + (round_bit & (sticky as u32 | lsb as u32)) as u16);
-    }
-
-    let round_bit = (frac >> 12) & 1;
-    let sticky = (frac & 0x0fff) != 0;
-    let half_mant = (frac >> 13) as u16;
-    let lsb = half_mant & 1;
-    let rounded = ((unbiased as u16) << 10) | half_mant;
-    sign | (rounded + (round_bit & (sticky as u32 | lsb as u32)) as u16)
-}
-
 fn convert_f32_slice_to_f16(w: &[f32]) -> Vec<u16> {
     const PARALLEL_THRESHOLD: usize = 65_536;
     if w.len() < PARALLEL_THRESHOLD {
-        return w.iter().copied().map(f32_to_f16_bits).collect();
+        return w.iter().copied().map(f32_to_f16).collect();
     }
     let threads = std::thread::available_parallelism().map_or(1, |n| n.get());
     if threads <= 1 {
-        return w.iter().copied().map(f32_to_f16_bits).collect();
+        return w.iter().copied().map(f32_to_f16).collect();
     }
     let chunk_size = w.len().div_ceil(threads).max(1);
     let mut out = vec![0u16; w.len()];
@@ -221,7 +184,7 @@ fn convert_f32_slice_to_f16(w: &[f32]) -> Vec<u16> {
         for (src, dst) in w.chunks(chunk_size).zip(out.chunks_mut(chunk_size)) {
             scope.spawn(move || {
                 for (s, d) in src.iter().zip(dst.iter_mut()) {
-                    *d = f32_to_f16_bits(*s);
+                    *d = f32_to_f16(*s);
                 }
             });
         }
@@ -410,7 +373,7 @@ impl CudaContext {
             }
             let d = amax / 7.0f32;
             let inv_d = if amax > 0.0 { 7.0f32 / amax } else { 0.0f32 };
-            *s_out = f32_to_f16_bits(d);
+            *s_out = f32_to_f16(d);
             for (word_idx, dst_word) in q_out.iter_mut().enumerate() {
                 let mut word = 0u32;
                 for k in 0..8 {
@@ -2422,13 +2385,25 @@ mod tests {
             .map(|i| ((i as f32) - 64.0) * 0.0625)
             .chain([0.0, -0.0, f32::INFINITY, f32::NEG_INFINITY, 1e-8, 65536.0])
             .collect();
-        let expected_small: Vec<u16> = small.iter().copied().map(f32_to_f16_bits).collect();
+        let expected_small: Vec<u16> = small.iter().copied().map(f32_to_f16).collect();
         assert_eq!(convert_f32_slice_to_f16(&small), expected_small);
 
         let large: Vec<f32> = (0..70_000)
             .map(|i| (((i * 17) % 1021) as f32 - 510.0) * 0.015625)
             .collect();
-        let expected_large: Vec<u16> = large.iter().copied().map(f32_to_f16_bits).collect();
+        let expected_large: Vec<u16> = large.iter().copied().map(f32_to_f16).collect();
         assert_eq!(convert_f32_slice_to_f16(&large), expected_large);
+    }
+
+    /// A value just above half of the smallest f16 subnormal (2^-25) rounds up to it; the old
+    /// hand-rolled converter flushed it to zero.
+    #[test]
+    fn f16_conversion_rounds_values_above_half_the_smallest_subnormal_up() {
+        assert_eq!(f32_to_f16(f32::from_bits(0x3300_0159)), 1);
+        assert_eq!(
+            f32_to_f16(f32::from_bits(0x3300_0000)),
+            0,
+            "exactly half rounds to even (zero)"
+        );
     }
 }
