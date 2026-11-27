@@ -288,6 +288,13 @@ closes it.
 - **Done means**: Each sub-milestone is either done (its own done-means text met, evidence committed) or closed with a dated reason (owner decision, missing hardware); `docs/status/v0.2_completion_plan.md` is current; v0.2.9.9 is closed by re-reading it.
 - **Progress** (27 November 2026): the plan groups the 44 items (CPU work, hardware, owner decisions, the training program) and fixes the order. No sub-milestone is changed yet.
 
+### [THME-3105] Teacher-to-student distillation pipeline (`thme distill`)
+
+- **Milestone**: v0.2.3 · **Roadmap**: v0.2.3.2 · **Priority**: p1 · **Area**: trainer · **Type**: feature · **Status**: triage
+- **Problem**: The headline use is a frontier model teaching a smaller open-weight model quickly, with THME measuring the result. THME has the teacher bridge, the gate, `.epiph` provenance and LoRA merge, but no pipeline joins them, and the trainer is synthetic until THME-3036 lands.
+- **Done means**: The design in `docs/research/distillation-pipeline-design.md` is built in its first slice: quantization-aware distillation on SmolLM-135M with the source as teacher, a held-out evaluation set whose hash is recorded and never used in training, a decision rule written before the run, cost accounting, and a committed report comparing the result with round-to-nearest and AWQ; then sequence-level distillation from a configured teacher command, with the teacher's identity and terms note recorded in the dataset.
+- **Progress** (27 November 2026): design written. Not built. Which hosted teachers are allowed is a licensing decision for the owner and counsel.
+
 ### [THME-3100] Calibrate the allocator link constant C
 
 - **Milestone**: v0.2.4 · **Roadmap**: unassigned · **Priority**: p2 · **Area**: research · **Type**: research · **Status**: triage
