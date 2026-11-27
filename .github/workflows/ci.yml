@@ -26,8 +26,8 @@ jobs:
 
       - name: No absolute developer paths
         run: |
-          # Windows (either slash), macOS and Linux home folders, and AppData paths.
-          if git grep -inE '(C:[/\]+Users[/\]+[A-Za-z0-9_-]|/Users/[A-Za-z0-9_-]|/home/[A-Za-z0-9_-]+|[/\]AppData[/\])' -- ':!*.png' ':!*.gif' ':!*.jpg' ':!*.ttf' ':!AGENTS.md'; then
+          # Windows (either slash), macOS and Linux home folders, and AppData paths. The paper folder is exempt: its appendix quotes a sandbox path as text (owner decision, 27 November 2026).
+          if git grep -inE '(C:[/\]+Users[/\]+[A-Za-z0-9_-]|/Users/[A-Za-z0-9_-]|/home/[A-Za-z0-9_-]+|[/\]AppData[/\])' -- ':!*.png' ':!*.gif' ':!*.jpg' ':!*.ttf' ':!AGENTS.md' ':!docs/research/paper/'; then
             echo "::error::Local username or absolute developer path found in tracked files"
             exit 1
           fi
