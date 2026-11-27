@@ -74,6 +74,19 @@ fn read_source_bytes(source: &thme::ir::tensor::TensorSource) -> Vec<u8> {
     bytes
 }
 
+/// A five-token byte-level BPE `tokenizer.json`, enough for the llama.cpp-layout checks.
+fn write_tiny_tokenizer(dir: &std::path::Path) -> std::path::PathBuf {
+    let path = dir.join("tokenizer.json");
+    std::fs::write(
+        &path,
+        r#"{"model":{"type":"BPE","vocab":{"<s>":0,"</s>":1,"a":2,"b":3,"ab":4},"merges":["a b"]},
+"added_tokens":[{"id":0,"content":"<s>","special":true},{"id":1,"content":"</s>","special":true}],
+"pre_tokenizer":{"type":"ByteLevel"},"decoder":{"type":"ByteLevel"}}"#,
+    )
+    .expect("write tiny tokenizer");
+    path
+}
+
 #[test]
 fn gguf_q8_export_preserves_payload_metadata_and_checksum() {
     let dir = tempfile::tempdir().expect("temp dir");
@@ -488,7 +501,7 @@ fn llama_cpp_layout_renames_converts_bf16_norms_permutes_qk_and_preserves_flag_o
             compute_checksum: false,
             llama_cpp_layout: true,
 
-            tokenizer_json_path: None,
+            tokenizer_json_path: Some(write_tiny_tokenizer(dir.path())),
         },
     )
     .expect("export llama.cpp layout GGUF");
@@ -613,7 +626,7 @@ fn llama_cpp_layout_renames_converts_bf16_norms_permutes_qk_and_preserves_flag_o
             compute_checksum: false,
             llama_cpp_layout: true,
 
-            tokenizer_json_path: None,
+            tokenizer_json_path: Some(write_tiny_tokenizer(dir.path())),
         },
     )
     .unwrap_err();
@@ -688,7 +701,7 @@ fn llama_cpp_layout_quantizes_qk_after_permuting_and_preserves_existing_rope_dim
             compute_checksum: false,
             llama_cpp_layout: true,
 
-            tokenizer_json_path: None,
+            tokenizer_json_path: Some(write_tiny_tokenizer(dir.path())),
         },
     )
     .expect("export Q8_0 llama.cpp layout GGUF");
@@ -748,7 +761,7 @@ fn llama_cpp_layout_quantizes_qk_after_permuting_and_preserves_existing_rope_dim
             compute_checksum: false,
             llama_cpp_layout: true,
 
-            tokenizer_json_path: None,
+            tokenizer_json_path: Some(write_tiny_tokenizer(dir.path())),
         },
     )
     .expect("export with existing rope.dimension_count");

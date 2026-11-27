@@ -60,6 +60,213 @@ pub fn check_gguf(bytes: &[u8]) -> Vec<Finding> {
     scan.findings
 }
 
+/// Checks `bytes` for consumer (`llama.cpp`) LLaMA-layout requirements:
+/// non-empty `tokenizer.ggml.tokens`, `tokenizer.ggml.model`, recognised GGML LLaMA tensor names,
+/// `F32` norm tensors, and `<arch>.rope.dimension_count`.
+pub fn check_llama_cpp_requirements(bytes: &[u8]) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    if let Err(err) = scan_llama_cpp_requirements(bytes, &mut findings) {
+        findings.push(Finding {
+            severity: Severity::Error,
+            rule: "truncated",
+            tensor: None,
+            message: format!("{err:#}"),
+        });
+    }
+    findings
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MetadataFieldState {
+    Missing,
+    Empty,
+    InvalidType,
+    Present,
+}
+
+fn scan_llama_cpp_requirements(bytes: &[u8], findings: &mut Vec<Finding>) -> Result<()> {
+    let mut reader = GgufReader::new(bytes);
+    let Some((tensor_count, kv_count)) = read_gguf_header(&mut reader, bytes, findings)? else {
+        return Ok(());
+    };
+
+    let mut keys = HashSet::new();
+    let mut architecture: Option<String> = None;
+    let mut tokens_state = MetadataFieldState::Missing;
+    let mut tokenizer_model_state = MetadataFieldState::Missing;
+
+    for _ in 0..kv_count {
+        let key = reader.read_string()?;
+        let value_type = reader.read_u32()?;
+        let value = reader.read_value(value_type)?;
+        match key.as_str() {
+            "general.architecture" => {
+                if let GgufValue::String(name) = value {
+                    architecture = Some(name);
+                }
+            }
+            "tokenizer.ggml.tokens" => {
+                tokens_state = match value {
+                    GgufValue::Array(items) if !items.is_empty() => MetadataFieldState::Present,
+                    GgufValue::Array(_) => MetadataFieldState::Empty,
+                    _ => MetadataFieldState::InvalidType,
+                };
+            }
+            "tokenizer.ggml.model" => {
+                tokenizer_model_state = match value {
+                    GgufValue::String(s) if !s.is_empty() => MetadataFieldState::Present,
+                    GgufValue::String(_) => MetadataFieldState::Empty,
+                    _ => MetadataFieldState::InvalidType,
+                };
+            }
+            _ => {}
+        }
+        keys.insert(key);
+    }
+
+    for _ in 0..tensor_count {
+        let name = reader.read_string()?;
+        let n_dims = reader.read_u32()?;
+        for _ in 0..n_dims {
+            reader.read_u64()?;
+        }
+        let ty = GgmlType::from_u32(reader.read_u32()?);
+        let _offset = reader.read_u64()?;
+
+        if !crate::exporter::ggml_names::is_recognised_llama_ggml_name(&name) {
+            findings.push(Finding {
+                severity: Severity::Error,
+                rule: "llama-cpp-tensor-name",
+                tensor: Some(name.clone()),
+                message: format!("tensor '{name}' is not a recognised GGML LLaMA name"),
+            });
+        }
+        if crate::exporter::ggml_names::is_norm_tensor(&name) && ty != GgmlType::F32 {
+            findings.push(Finding {
+                severity: Severity::Error,
+                rule: "llama-cpp-norm-dtype",
+                tensor: Some(name.clone()),
+                message: format!(
+                    "norm tensor '{name}' has type {}, expected F32",
+                    ty.type_name()
+                ),
+            });
+        }
+    }
+
+    match tokens_state {
+        MetadataFieldState::Present => {}
+        MetadataFieldState::Missing => findings.push(Finding {
+            severity: Severity::Error,
+            rule: "llama-cpp-tokenizer-tokens",
+            tensor: None,
+            message: "tokenizer.ggml.tokens is missing".to_string(),
+        }),
+        MetadataFieldState::Empty => findings.push(Finding {
+            severity: Severity::Error,
+            rule: "llama-cpp-tokenizer-tokens",
+            tensor: None,
+            message: "tokenizer.ggml.tokens is empty".to_string(),
+        }),
+        MetadataFieldState::InvalidType => findings.push(Finding {
+            severity: Severity::Error,
+            rule: "llama-cpp-tokenizer-tokens",
+            tensor: None,
+            message: "tokenizer.ggml.tokens is not an array".to_string(),
+        }),
+    }
+
+    match tokenizer_model_state {
+        MetadataFieldState::Present => {}
+        MetadataFieldState::Missing => findings.push(Finding {
+            severity: Severity::Error,
+            rule: "llama-cpp-tokenizer-model",
+            tensor: None,
+            message: "tokenizer.ggml.model is missing".to_string(),
+        }),
+        MetadataFieldState::Empty => findings.push(Finding {
+            severity: Severity::Error,
+            rule: "llama-cpp-tokenizer-model",
+            tensor: None,
+            message: "tokenizer.ggml.model is empty".to_string(),
+        }),
+        MetadataFieldState::InvalidType => findings.push(Finding {
+            severity: Severity::Error,
+            rule: "llama-cpp-tokenizer-model",
+            tensor: None,
+            message: "tokenizer.ggml.model is not a string".to_string(),
+        }),
+    }
+
+    match architecture.as_deref() {
+        Some(arch) => {
+            let rope_key = format!("{arch}.rope.dimension_count");
+            if !keys.contains(&rope_key) {
+                findings.push(Finding {
+                    severity: Severity::Error,
+                    rule: "llama-cpp-rope-dim",
+                    tensor: None,
+                    message: format!("{rope_key} is missing"),
+                });
+            }
+        }
+        None => findings.push(Finding {
+            severity: Severity::Error,
+            rule: "llama-cpp-rope-dim",
+            tensor: None,
+            message: "general.architecture is missing; cannot verify <arch>.rope.dimension_count"
+                .to_string(),
+        }),
+    }
+
+    Ok(())
+}
+
+fn read_gguf_header(
+    reader: &mut GgufReader<'_>,
+    bytes: &[u8],
+    findings: &mut Vec<Finding>,
+) -> Result<Option<(u64, u64)>> {
+    if bytes.get(..4) != Some(b"GGUF".as_slice()) {
+        findings.push(Finding {
+            severity: Severity::Error,
+            rule: "magic",
+            tensor: None,
+            message: "file does not start with the GGUF magic bytes".to_string(),
+        });
+        return Ok(None);
+    }
+    reader.read_bytes(4)?;
+
+    let version = reader.read_u32()?;
+    if version != 3 {
+        findings.push(Finding {
+            severity: Severity::Error,
+            rule: "version",
+            tensor: None,
+            message: format!("version is {version}; THME writes GGUF v3"),
+        });
+    }
+
+    let tensor_count = reader.read_u64()?;
+    let kv_count = reader.read_u64()?;
+    // Each entry takes at least 8 bytes, so a larger count cannot be real.
+    let max_count = (bytes.len() / 8) as u64;
+    if tensor_count > max_count || kv_count > max_count {
+        findings.push(Finding {
+            severity: Severity::Error,
+            rule: "counts",
+            tensor: None,
+            message: format!(
+                "tensor count {tensor_count} or metadata count {kv_count} exceeds {max_count}, the most this file can hold"
+            ),
+        });
+        return Ok(None);
+    }
+
+    Ok(Some((tensor_count, kv_count)))
+}
+
 /// One row of the tensor table. The data-section rules read `offset` and `table_end`.
 #[allow(dead_code)]
 struct TensorInfo {
@@ -116,41 +323,11 @@ impl Scan {
 /// Reads the header, metadata and tensor table. A reader error returns `Err` (reported as
 /// `truncated`); a bad magic, version or count is a finding and ends the scan with `Ok`.
 fn scan_table(bytes: &[u8], scan: &mut Scan) -> Result<()> {
-    if bytes.get(..4) != Some(b"GGUF".as_slice()) {
-        scan.push(
-            Severity::Error,
-            "magic",
-            None,
-            "file does not start with the GGUF magic bytes",
-        );
-        return Ok(());
-    }
     let mut reader = GgufReader::new(bytes);
-    reader.read_bytes(4)?;
-
-    let version = reader.read_u32()?;
-    if version != 3 {
-        scan.push(
-            Severity::Error,
-            "version",
-            None,
-            format!("version is {version}; THME writes GGUF v3"),
-        );
-    }
-
-    let tensor_count = reader.read_u64()?;
-    let kv_count = reader.read_u64()?;
-    // Each entry takes at least 8 bytes, so a larger count cannot be real.
-    let max_count = (bytes.len() / 8) as u64;
-    if tensor_count > max_count || kv_count > max_count {
-        scan.push(
-            Severity::Error,
-            "counts",
-            None,
-            format!("tensor count {tensor_count} or metadata count {kv_count} exceeds {max_count}, the most this file can hold"),
-        );
+    let Some((tensor_count, kv_count)) = read_gguf_header(&mut reader, bytes, &mut scan.findings)?
+    else {
         return Ok(());
-    }
+    };
 
     for _ in 0..kv_count {
         let key = reader.read_string()?;
@@ -735,5 +912,163 @@ mod tests {
             message: "bad magic".to_string(),
         };
         assert_eq!(finding.to_string(), "error[magic]: bad magic");
+    }
+
+    fn compliant_llama_cpp_writer(
+        include_tokens: Option<Vec<GgufValue>>,
+        include_tokenizer_model: bool,
+        include_rope_dim: bool,
+        norm_dtype: GgmlType,
+    ) -> GgufWriter {
+        let mut writer = metadata_writer("");
+        if include_rope_dim {
+            writer.add_u32("llama.rope.dimension_count", 4);
+        }
+        if include_tokenizer_model {
+            writer.add_string("tokenizer.ggml.model", "llama");
+        }
+        if let Some(tokens) = include_tokens {
+            writer.add_metadata("tokenizer.ggml.tokens", GgufValue::Array(tokens));
+        }
+        writer.add_tensor("token_embd.weight", vec![2, 4], GgmlType::F16, vec![0; 16]);
+        let norm_bytes = match norm_dtype {
+            GgmlType::F32 => vec![0; 16],
+            GgmlType::F16 | GgmlType::BF16 => vec![0; 8],
+            other => vec![0; other.type_size()],
+        };
+        writer.add_tensor("blk.0.attn_norm.weight", vec![4], norm_dtype, norm_bytes);
+        writer.add_tensor(
+            "blk.0.attn_q.weight",
+            vec![1, 32],
+            GgmlType::Q8_0,
+            vec![0; GgmlType::Q8_0.type_size()],
+        );
+        writer.add_tensor("blk.0.ffn_norm.weight", vec![4], GgmlType::F32, vec![0; 16]);
+        writer.add_tensor("output_norm.weight", vec![4], GgmlType::F32, vec![0; 16]);
+        writer.add_tensor("output.weight", vec![2, 4], GgmlType::F16, vec![0; 16]);
+        writer
+    }
+
+    fn default_tokens() -> Option<Vec<GgufValue>> {
+        Some(vec![
+            GgufValue::String("<s>".to_string()),
+            GgufValue::String("a".to_string()),
+        ])
+    }
+
+    #[test]
+    fn llama_cpp_compliant_file_has_no_findings() {
+        let bytes = compliant_llama_cpp_writer(default_tokens(), true, true, GgmlType::F32)
+            .write_to_bytes()
+            .expect("write compliant fixture");
+        assert_eq!(check_llama_cpp_requirements(&bytes), Vec::new());
+    }
+
+    #[test]
+    fn llama_cpp_missing_tokens_gives_one_finding() {
+        let bytes = compliant_llama_cpp_writer(None, true, true, GgmlType::F32)
+            .write_to_bytes()
+            .expect("write fixture");
+        let findings = check_llama_cpp_requirements(&bytes);
+        assert_eq!(
+            findings,
+            vec![Finding {
+                severity: Severity::Error,
+                rule: "llama-cpp-tokenizer-tokens",
+                tensor: None,
+                message: "tokenizer.ggml.tokens is missing".to_string(),
+            }]
+        );
+    }
+
+    #[test]
+    fn llama_cpp_empty_tokens_gives_one_finding() {
+        let bytes = compliant_llama_cpp_writer(Some(Vec::new()), true, true, GgmlType::F32)
+            .write_to_bytes()
+            .expect("write fixture");
+        let findings = check_llama_cpp_requirements(&bytes);
+        assert_eq!(
+            findings,
+            vec![Finding {
+                severity: Severity::Error,
+                rule: "llama-cpp-tokenizer-tokens",
+                tensor: None,
+                message: "tokenizer.ggml.tokens is empty".to_string(),
+            }]
+        );
+    }
+
+    #[test]
+    fn llama_cpp_missing_tokenizer_model_gives_one_finding() {
+        let bytes = compliant_llama_cpp_writer(default_tokens(), false, true, GgmlType::F32)
+            .write_to_bytes()
+            .expect("write fixture");
+        let findings = check_llama_cpp_requirements(&bytes);
+        assert_eq!(
+            findings,
+            vec![Finding {
+                severity: Severity::Error,
+                rule: "llama-cpp-tokenizer-model",
+                tensor: None,
+                message: "tokenizer.ggml.model is missing".to_string(),
+            }]
+        );
+    }
+
+    #[test]
+    fn llama_cpp_unrecognised_tensor_name_gives_one_finding() {
+        let mut writer = compliant_llama_cpp_writer(default_tokens(), true, true, GgmlType::F32);
+        writer.add_tensor(
+            "model.layers.0.self_attn.q_proj.weight",
+            vec![1, 32],
+            GgmlType::Q8_0,
+            vec![0; GgmlType::Q8_0.type_size()],
+        );
+        let bytes = writer.write_to_bytes().expect("write fixture");
+        let findings = check_llama_cpp_requirements(&bytes);
+        assert_eq!(
+            findings,
+            vec![Finding {
+                severity: Severity::Error,
+                rule: "llama-cpp-tensor-name",
+                tensor: Some("model.layers.0.self_attn.q_proj.weight".to_string()),
+                message: "tensor 'model.layers.0.self_attn.q_proj.weight' is not a recognised GGML LLaMA name".to_string(),
+            }]
+        );
+    }
+
+    #[test]
+    fn llama_cpp_non_f32_norm_gives_one_finding() {
+        let bytes = compliant_llama_cpp_writer(default_tokens(), true, true, GgmlType::BF16)
+            .write_to_bytes()
+            .expect("write fixture");
+        let findings = check_llama_cpp_requirements(&bytes);
+        assert_eq!(
+            findings,
+            vec![Finding {
+                severity: Severity::Error,
+                rule: "llama-cpp-norm-dtype",
+                tensor: Some("blk.0.attn_norm.weight".to_string()),
+                message: "norm tensor 'blk.0.attn_norm.weight' has type BF16, expected F32"
+                    .to_string(),
+            }]
+        );
+    }
+
+    #[test]
+    fn llama_cpp_missing_rope_dimension_count_gives_one_finding() {
+        let bytes = compliant_llama_cpp_writer(default_tokens(), true, false, GgmlType::F32)
+            .write_to_bytes()
+            .expect("write fixture");
+        let findings = check_llama_cpp_requirements(&bytes);
+        assert_eq!(
+            findings,
+            vec![Finding {
+                severity: Severity::Error,
+                rule: "llama-cpp-rope-dim",
+                tensor: None,
+                message: "llama.rope.dimension_count is missing".to_string(),
+            }]
+        );
     }
 }

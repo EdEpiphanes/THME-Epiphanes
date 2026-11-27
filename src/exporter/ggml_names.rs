@@ -40,6 +40,37 @@ pub fn is_norm_tensor(ggml_name: &str) -> bool {
         .any(|part| matches!(part, "attn_norm" | "ffn_norm" | "output_norm"))
 }
 
+/// Returns `true` when `ggml_name` is a recognised GGML LLaMA-family tensor name.
+pub fn is_recognised_llama_ggml_name(ggml_name: &str) -> bool {
+    if matches!(
+        ggml_name,
+        "token_embd.weight" | "output_norm.weight" | "output.weight"
+    ) {
+        return true;
+    }
+    let Some(rest) = ggml_name.strip_prefix("blk.") else {
+        return false;
+    };
+    let Some((layer_str, suffix)) = rest.split_once('.') else {
+        return false;
+    };
+    if layer_str.is_empty() || !layer_str.bytes().all(|b| b.is_ascii_digit()) {
+        return false;
+    }
+    matches!(
+        suffix,
+        "attn_norm.weight"
+            | "attn_q.weight"
+            | "attn_k.weight"
+            | "attn_v.weight"
+            | "attn_output.weight"
+            | "ffn_norm.weight"
+            | "ffn_gate.weight"
+            | "ffn_up.weight"
+            | "ffn_down.weight"
+    )
+}
+
 /// Permutes rows of a row-major `rows x cols` Q/K projection from split-half RoPE pairs
 /// `(i, i + head_dim / 2)` into interleaved pairs `(2i, 2i + 1)` per head.
 pub fn permute_rope_rows(
@@ -203,6 +234,43 @@ mod tests {
         assert!(!is_norm_tensor("output.weight"));
         assert!(!is_norm_tensor("token_embd.weight"));
         assert!(!is_norm_tensor("blk.0.attn_norm_extra.weight"));
+    }
+
+    #[test]
+    fn test_is_recognised_llama_ggml_name() {
+        for name in [
+            "token_embd.weight",
+            "output_norm.weight",
+            "output.weight",
+            "blk.0.attn_norm.weight",
+            "blk.0.attn_q.weight",
+            "blk.0.attn_k.weight",
+            "blk.0.attn_v.weight",
+            "blk.0.attn_output.weight",
+            "blk.0.ffn_norm.weight",
+            "blk.0.ffn_gate.weight",
+            "blk.15.ffn_up.weight",
+            "blk.2.ffn_down.weight",
+        ] {
+            assert!(
+                is_recognised_llama_ggml_name(name),
+                "expected true for {name}"
+            );
+        }
+        for name in [
+            "model.embed_tokens.weight",
+            "model.layers.0.self_attn.q_proj.weight",
+            "blk.x.attn_q.weight",
+            "blk..attn_q.weight",
+            "blk.0.attn_q.bias",
+            "blk.0.unknown.weight",
+            "",
+        ] {
+            assert!(
+                !is_recognised_llama_ggml_name(name),
+                "expected false for {name}"
+            );
+        }
     }
 
     #[test]

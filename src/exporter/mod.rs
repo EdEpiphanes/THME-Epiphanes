@@ -255,8 +255,8 @@ fn export_gguf(model: &ModelIR, config: &ExportConfig) -> Result<()> {
                     TensorPlan::Copy(target_ggml)
                 } else if matches!(
                     config.quant_type,
-                    ExportQuantType::Q8_0 | ExportQuantType::TQ1_0
-                ) && matches!(tensor.original_dtype.as_str(), "F16" | "F32")
+                    ExportQuantType::FP16 | ExportQuantType::Q8_0 | ExportQuantType::TQ1_0
+                ) && matches!(tensor.original_dtype.as_str(), "F16" | "F32" | "BF16")
                 {
                     let row_width = tensor.shape.last().copied().unwrap_or(1);
                     if !row_width.is_multiple_of(target_ggml.block_size()) {
@@ -329,6 +329,27 @@ fn export_gguf(model: &ModelIR, config: &ExportConfig) -> Result<()> {
     writer
         .write_to_file(&config.output_path)
         .with_context(|| format!("Failed writing GGUF to {:?}", config.output_path))?;
+    if config.llama_cpp_layout {
+        let file = File::open(&config.output_path).with_context(|| {
+            format!(
+                "Failed to open exported GGUF for llama.cpp validation: {:?}",
+                config.output_path
+            )
+        })?;
+        // SAFETY: File is opened read-only immediately after flushing and not mutated during mapping.
+        let mmap = unsafe { memmap2::Mmap::map(&file)? };
+        let errors: Vec<String> = gguf_check::check_llama_cpp_requirements(&mmap)
+            .into_iter()
+            .filter(|f| f.severity == gguf_check::Severity::Error)
+            .map(|f| f.to_string())
+            .collect();
+        if !errors.is_empty() {
+            anyhow::bail!(
+                "Exported GGUF failed llama.cpp compatibility check: {}",
+                errors.join("; ")
+            );
+        }
+    }
     Ok(())
 }
 
@@ -958,5 +979,47 @@ mod tests {
             meta.get("tokenizer.ggml.eos_token_id"),
             Some(&MV::Uint32(1))
         );
+    }
+
+    #[test]
+    fn export_llama_cpp_layout_fails_when_tokenizer_tokens_are_missing() {
+        use crate::parser::ModelImporter;
+
+        let dir = tempfile::tempdir().expect("temp dir");
+        let model_dir = dir.path().join("model");
+        std::fs::create_dir_all(&model_dir).expect("create model dir");
+
+        let one = 0x3C00u16.to_le_bytes();
+        let mut st = SafeTensorsWriter::new();
+        st.add_tensor(
+            "model.embed_tokens.weight",
+            "F16",
+            vec![5, 4],
+            one.repeat(20),
+        );
+        st.add_tensor("model.norm.weight", "F16", vec![4], one.repeat(4));
+        st.write_to_file(model_dir.join("model.safetensors"))
+            .expect("write safetensors");
+        std::fs::write(
+            model_dir.join("config.json"),
+            r#"{"architectures":["LlamaForCausalLM"],"hidden_size":4,"num_hidden_layers":1,"num_attention_heads":1,"num_key_value_heads":1,"vocab_size":5}"#,
+        )
+        .expect("write config.json");
+
+        let model = ModelImporter::import(&model_dir).expect("import model");
+        let err = ModelExporter::export(
+            &model,
+            &ExportConfig {
+                format: ExportFormat::GGUFv3,
+                quant_type: ExportQuantType::FP16,
+                output_path: dir.path().join("missing_tok.gguf"),
+                compute_checksum: false,
+                llama_cpp_layout: true,
+                tokenizer_json_path: None,
+            },
+        )
+        .unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("tokenizer.ggml.tokens"), "{msg}");
     }
 }
