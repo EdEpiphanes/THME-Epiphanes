@@ -1,0 +1,22 @@
+{
+  "what": "Lossless payload compression of a .epiph file (`thme epiph pack` with and without `--compress`, deflate), checked with `thme epiph verify`",
+  "date": "2026-11-27",
+  "command": "thme epiph pack MODEL --out OUT [--compress]; thme epiph verify OUT",
+  "device": "CPU, release build of the merged tree",
+  "known_gaps": [
+    "decode speed was not measured",
+    "pack times were taken while another CPU-heavy job ran, so they are inflated and only indicate the order of magnitude",
+    "one corpus-free measurement per model; ratio depends on the stored dtype of the source weights",
+    "binary-size effect of flate2 was not measured here"
+  ],
+  "model": "Pythia-14M",
+  "plain_bytes": 30412985,
+  "deflate_bytes": 28264761,
+  "ratio": 0.9294,
+  "pack_seconds_plain": 1.0,
+  "pack_seconds_deflate": 2.4,
+  "verify": {
+    "plain": "exit 0",
+    "deflate": "exit 0"
+  }
+}
