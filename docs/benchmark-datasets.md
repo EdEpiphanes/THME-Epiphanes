@@ -16,6 +16,8 @@ Last checked: 20 November 2026.
 | Dataset | Used for | Original source | Licence as stated by the source |
 | :--- | :--- | :--- | :--- |
 | WikiText-2 (raw v1) | Perplexity scoring on the test split; calibration statistics from the train split | Authors' download <https://wikitext.smerity.com/wikitext-2-raw-v1.zip>; dataset card <https://huggingface.co/datasets/Salesforce/wikitext> (paper: Merity et al., "Pointer Sentinel Mixture Models", arXiv 1609.07843) | CC BY-SA 3.0 and GFDL (the dataset card lists both; other pages label it CC BY-SA 4.0) |
+| WikiText-103 (raw v1), train split | Training text for the `.epiph` testbed (THME-3110); its validation split and the WikiText-2 test split stay held out | Dataset card <https://huggingface.co/datasets/Salesforce/wikitext> (same paper as WikiText-2); downloaded 27 November 2026, text kept outside the repository | CC BY-SA 3.0 and GFDL as stated on the dataset card; THME does not own or distribute it |
+| Pythia-14M weights and tokenizer | Starting weights for testbed arm B and the tokenizer for arms A and B | <https://huggingface.co/EleutherAI/pythia-14m> (EleutherAI) | Apache-2.0 as stated on the model card; kept outside the repository |
 
 How THME gets WikiText-2: `scripts/prepare_eval_tokens.py` downloads the raw zip from a mirror
 (<https://huggingface.co/datasets/ggml-org/ci>, file `wikitext-2-raw-v1.zip`) because it is a

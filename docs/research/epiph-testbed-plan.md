@@ -15,14 +15,23 @@ tied to a cause. It also gives something no pretrained model gives: the same wei
 Expectation, stated first: a 14M-parameter model trained on WikiText-103 will be much worse than the pretrained
 Pythia-14M (trained on the Pile). The testbed is for testing the math, not for quality.
 
-## Two arms
+## Three arms
 
 | Arm | What it is | Why |
 | :--- | :--- | :--- |
 | **A: scratch** | Pythia-14M's shape (6 layers, width 128, 4 heads, GPT-NeoX blocks), random initialisation with a fixed seed, trained by us | Fully ours; THME's existing GPT-NeoX forward pass runs it unchanged |
 | **B: Pythia start** | The same shape, initialised from the published Pythia-14M weights (Apache-2.0), trained on the same data | Control: separates the effect of the math from the effect of the data history |
 
-A third arm (own architecture, sized by the paper's parameters) waits until A and B show which parameters matter.
+| **C: bytes** | The same shape with a 256-entry vocabulary: the model reads and writes raw UTF-8 bytes, no tokenizer; scratch initialisation | Tests the math without a tokenizer. The gate compares by bits per content byte (paper section 3.1), which is tokenizer-invariant, so C and A are comparable. Sequences are about 4 to 5 times longer |
+
+A fourth arm (own architecture, sized by the paper's parameters) waits until the arms above show which parameters matter.
+
+## Models that talk without text (later)
+
+Two further ideas are recorded here and not yet planned in detail:
+
+- **Continuous exchange.** One model hands hidden states or its KV cache to another through a small trained adapter; text appears only at the final output head. Needs two trained checkpoints, so it follows stage 1.
+- **Learned binary code.** Two models trained together through a bit bottleneck (binary autoencoder or codebook) with a decoder back to text. Only worth trying if continuous exchange works. The gate has no reference text for a message, so a fidelity measure must be defined first and pre-registered.
 
 ## Data, in two stages
 
@@ -40,6 +49,24 @@ A third arm (own architecture, sized by the paper's parameters) waits until A an
   recipe field empty. The series is the testbed's main asset.
 - Each checkpoint is evaluated by `thme evaluate` (WikiText-2 test) and cross-checked against Hugging Face on a few
   prompts, so the engine and the trainer agree before any claim is made.
+
+## Run settings, registered before the first real run (27 November 2026)
+
+Smoke run first (scratch arm, 300 steps, seed 1234): validation loss 10.83 to 5.98; the checkpoint packs to `.epiph`, verifies,
+and THME matches Hugging Face on it (largest logit difference 0.0010, limit 0.005). Training speed 0.44 s per step at 32 windows
+of 1,024 tokens (micro-batch 8, exact gradient accumulation). Scaled dot-product attention was tried and gave NaN after the first
+optimizer step in this setup, so it is not used.
+
+| Setting | Arms A and B | Arm C (bytes) |
+| :--- | :--- | :--- |
+| Steps, checkpoint every | 12,000, 1,000 | 12,000, 1,000 |
+| Windows per step, length | 32, 1,024 tokens | 32, 2,048 bytes (about 45 percent of A's text per step; compared by bits per byte at matched bytes seen) |
+| Optimizer | AdamW, betas 0.9 and 0.95, weight decay 0.1, peak rate 1e-3, 200 warm-up steps, cosine to 10 percent, gradient clip 1.0 | same |
+| Seed | 1234 | 1234 |
+| Training data | WikiText-103 train, 118.7M Pythia ids (sha256 c81a6c24...) | same text as 539.3M bytes (sha256 1f9f77ec...) |
+| Held out | WikiText-103 validation for training curves; the committed WikiText-2 test tokens for every reported perplexity | same |
+
+Nothing here was tuned on the held-out data. If a setting changes after a result, the change and its reason are written next to the result.
 
 ## What it is used to test
 
@@ -66,9 +93,9 @@ it move into the paper as a new version.
 
 ## Order of work
 
-1. Fetch Pythia-14M and WikiText-103 into untracked folders; record hashes and licences in `docs/third-party.md`.
+1. Fetch Pythia-14M and WikiText-103 into untracked folders; record hashes and licences in `docs/third-party.md`. (Fetched 27 November 2026.)
 2. Trainer config for the shared shape; a short smoke run; HF versus THME cross-check on the smoke checkpoint.
-3. Arm A and arm B stage 1, checkpoint series as `.epiph`, committed evaluation reports.
+3. Arms A, B and C stage 1, checkpoint series as `.epiph`, committed evaluation reports.
 4. Paired per-block losses from `thme evaluate` (the missing piece for the gate and PS-16 work).
 5. The experiments in the table, one pre-registration at a time.
 6. Stage 2 lessons and the teaching experiment.

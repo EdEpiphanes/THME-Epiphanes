@@ -236,7 +236,7 @@ closes it.
 
 - **Milestone**: v0.3 · **Roadmap**: none · **Priority**: p1 · **Area**: research · **Type**: experiment · **Status**: ready
 - **Problem**: The paper's gate, allocator and recovery math is tested on two pretrained models whose training history is unknown, and several parameters are still open (gate range, switch point, link constant C, PS-16 limits). A model we train gives a known history and a checkpoint series.
-- **Done means**: Plan in `docs/research/epiph-testbed-plan.md` carried out through its first three steps: Pythia-14M-shaped arm A (scratch) and arm B (Pythia start) trained on WikiText-103, a checkpoint series as `.epiph` files, committed evaluation reports, and an HF versus THME cross-check. Findings and any proposed formula go in `docs/research/epiph-testbed-findings.md`, each pre-registered.
+- **Done means**: Plan in `docs/research/epiph-testbed-plan.md` carried out through its first three steps: Pythia-14M-shaped arm A (scratch), arm B (Pythia start) and arm C (raw bytes, no tokenizer) trained on WikiText-103, a checkpoint series as `.epiph` files, committed evaluation reports, and an HF versus THME cross-check. Findings and any proposed formula go in `docs/research/epiph-testbed-findings.md`, each pre-registered.
 - **Progress** (27 November 2026): owner chose both arms and two-stage data (WikiText-103, then Claude-written lessons, test-only and local). Plan written; nothing trained yet.
 
 ### [THME-3100] Calibrate the allocator link constant C
