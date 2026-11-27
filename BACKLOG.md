@@ -209,6 +209,60 @@ closes it.
 - **Not done**: tuning (two blocks per staged tile, scale folding, a wider tile); checking whether the driver issues one dp4a per `dot4I8Packed`; the dequantize-to-f16 route for the in-place cooperative kernel; Q4_K and the other K-quants.
 - **Done means**: Isolated TOPS and slice tokens per second against the rule above, with the perplexity change, in committed reports. Measured; rule not met.
 
+### [THME-3092] Gate code reaches the declared-range specification
+
+- **Milestone**: v0.2.4 · **Roadmap**: unassigned · **Priority**: p0 · **Area**: quality · **Type**: fix · **Status**: triage
+- **Problem**: the quality gate used an invalid upper e-process (see docs/research/THME_Paper_v5_Code_Review_2026-11-27.md item 1).
+- **Done means**: `hedged_epiphanes_bounds` takes a declared range, fails a block above it, reproduces paper Table 4, and has a coverage test; remaining: surface the range as a `thme validate` option and in the gate report.
+
+### [THME-3093] Run the Step 1 gate on real per-block losses
+
+- **Milestone**: v0.2.4 · **Roadmap**: unassigned · **Priority**: p0 · **Area**: quality · **Type**: feature · **Status**: triage
+- **Problem**: the gate has never run on a candidate; paper appendix E needs per-window loss files for a source and candidate (148 VAL windows, float32 logits, identity-form loss).
+- **Done means**: a committed gate report with decision, bounds, screens and the permutation and source-versus-source checks, labelled Measured.
+
+### [THME-3094] Measure BITCOS and BITCOS-2:4 accuracy
+
+- **Milestone**: v0.2.4 · **Roadmap**: unassigned · **Priority**: p0 · **Area**: formats · **Type**: research · **Status**: triage
+- **Problem**: no perplexity exists for either format and the GPU kernel on main only handles pre-expanded 2-bit signs.
+- **Done means**: a heterogeneous export with WikiText-2 perplexity against the source, and a GPU kernel decoding the real super-block (block_min, group scales, nz mask) with a CPU-oracle test.
+
+### [THME-3095] Q4_0 decode reaches the bandwidth ceiling
+
+- **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.3 · **Priority**: p0 · **Area**: gpu · **Type**: perf · **Status**: triage
+- **Problem**: reported Q4_0 decode is 16.88 tokens per second against 62.87 for F16, 5.6 percent of the 299.2 tokens per second ceiling (RTX 4060 Ti, 288 GB/s).
+- **Done means**: Q4_0 decode faster than F16 on the same prompt with the fraction of the ceiling reported, in a committed report.
+
+### [THME-3096] Commit JSON reports for the SmolLM2-1.7B GPU, decode and screening runs
+
+- **Milestone**: v0.2.4 · **Roadmap**: unassigned · **Priority**: p1 · **Area**: benchmarks · **Type**: chore · **Status**: triage
+- **Problem**: the 9,267.8 tokens per second prefill, 62.87 decode and AWQ 9.7125 figures exist only in handoff documents and were not re-run on main.
+- **Done means**: reports with the git commit recorded, so paper sections 11.1 to 11.3 can carry the Measured label.
+
+### [THME-3097] DC-CCCP sign split
+
+- **Milestone**: v0.2.4 · **Roadmap**: unassigned · **Priority**: p1 · **Area**: allocator · **Type**: fix · **Status**: triage
+- **Problem**: `src/allocator/dc_cccp.rs` majorizes every coupling entry; paper section 4.2 keeps negative-coefficient terms convex and majorizes only positive ones.
+- **Done means**: sign-split majorizer with a test that the surrogate is at least the objective at random points and equal at the expansion point, and monotone descent.
+
+### [THME-3098] Commit the paper and its check scripts
+
+- **Milestone**: v0.2.4 · **Roadmap**: unassigned · **Priority**: p1 · **Area**: docs · **Type**: chore · **Status**: triage
+- **Problem**: paper v5 cites checks/verify_all.py, checks/make_figures.py and figures/ that are not in the repository.
+- **Done means**: the paper source and scripts committed with licence headers, CI runs the verification script, paper labels updated for the merged code.
+
+### [THME-3099] Loop breaker behaviour matches its specification
+
+- **Milestone**: v0.2.4 · **Roadmap**: unassigned · **Priority**: p2 · **Area**: inference · **Type**: fix · **Status**: triage
+- **Problem**: paper section 7.9 says a detected loop raises temperature and resets DoLa; the code stops generation.
+- **Done means**: either the behaviour is implemented behind a setting or the paper text states stopping, with a test.
+
+### [THME-3100] Calibrate the allocator link constant C
+
+- **Milestone**: v0.2.4 · **Roadmap**: unassigned · **Priority**: p2 · **Area**: research · **Type**: research · **Status**: triage
+- **Problem**: the link between the allocator objective and logit divergence is a modelling assumption (paper section 12.2) and ternary effects are not additive (sum +1,509, joint +15,877,276 perplexity).
+- **Done means**: C estimated against joint measurements, or the surrogate replaced by an empirically bounded constant.
+
 ### [THME-3070] Incremental decoding with a KV cache
 
 - **Milestone**: v0.2.4 · **Roadmap**: v0.2.4.1 · **Priority**: p1 · **Area**: inference · **Type**: feature · **Status**: done
