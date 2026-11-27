@@ -6,7 +6,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.9"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.95"
 authors = ["Epiphanes <https://github.com/EdEpiphanes>"]
@@ -87,7 +87,7 @@ serde_json = { workspace = true }
 wgpu = { workspace = true }
 bytemuck = { workspace = true }
 pollster = { workspace = true }
-neutron-gpu = { path = "crates/neutron-gpu", version = "0.1.9" }
+neutron-gpu = { path = "crates/neutron-gpu", version = "0.2.0" }
 safetensors = "0.5"
 memmap2 = "0.9"
 comfy-table = "7.1"

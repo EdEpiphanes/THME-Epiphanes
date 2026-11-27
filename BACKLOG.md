@@ -259,6 +259,13 @@ closes it.
 - **Problem**: paper section 7.9 says a detected loop raises temperature and resets DoLa; the code stops generation.
 - **Done means**: either the behaviour is implemented behind a setting or the paper text states stopping, with a test.
 
+### [THME-3101] Repository-wide status overhaul: roadmap, charts, status files, labels
+
+- **Milestone**: v0.2.0 · **Roadmap**: none · **Priority**: p1 · **Area**: docs · **Type**: chore · **Status**: in progress
+- **Problem**: Several top-level files describe an older state: `TASKS.md` (last updated 10 November 2026), `TEST_READY.md` (milestone v0.1.7), roadmap state colours, README figures, status counts, and GitHub labels (only seven of 26 BACKLOG areas existed as labels).
+- **Done means**: ROADMAP "Where things stand" and each milestone state re-derived from BACKLOG statuses with no unsupported "done"; README numbers (tests, binary sizes, measured reports) taken from a command run on the merged tree and dated; `scripts/generate_status.py` and `scripts/generate_charts.py` rerun and their outputs committed; `TASKS.md`, `TEST_READY.md`, `PROJECT.md` refreshed or archived under `docs/archive/` with a pointer; GitHub labels cover every BACKLOG area and status; no release tag created (v0.2.0 is deferred by the owner).
+- **Progress** (27 November 2026): labels `area:*` for all BACKLOG areas and `status:in-progress|in-review|done|shelved` created on GitHub; status board regenerated.
+
 ### [THME-3100] Calibrate the allocator link constant C
 
 - **Milestone**: v0.2.4 · **Roadmap**: unassigned · **Priority**: p2 · **Area**: research · **Type**: research · **Status**: triage
@@ -750,6 +757,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Problem**: placement counts weights only.
 - **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
 - **Done means**: pure function from header + context + KV type to weights, KV and scratch bytes; table test against hand-computed LLaMA and GPT-NeoX shapes; no model read.
+- **Progress** (27 November 2026): `src/profiling/run_memory.rs` implements and tests the function (hand-computed literals checked independently). Not yet read from a real header, and the outside-engine reference audit above was not needed because the arithmetic is clean-room; status stays triage until `RunPlan` (THME-3057) uses it.
 
 ### [THME-3057] `RunPlan` type and decision order, CPU-only
 

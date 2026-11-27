@@ -4,6 +4,7 @@ pub mod hardware;
 pub mod intensity;
 pub mod kv_cache;
 pub mod roofline;
+pub mod run_memory;
 pub mod sensitivity;
 pub mod telemetry;
 pub mod thermal;
@@ -24,6 +25,7 @@ pub use roofline::{
     BoundClassification, LayerRooflinePoint, RooflineEngine, RooflineModel, RooflineProfileReport,
     RooflineReport,
 };
+pub use run_memory::{run_memory, KvType, ModelShape, RunMemory};
 pub use sensitivity::{LayerSensitivityReport, SensitivityProfiler};
 pub use telemetry::{
     CpuTelemetry, GpuTelemetry, SystemTelemetry, SystemTelemetrySnapshot, TelemetryError,
