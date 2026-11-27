@@ -99,6 +99,7 @@ pub fn kv_windowed_perplexity(
 mod tests {
     use super::*;
     use crate::inference::llama::tests::tiny_model;
+    use crate::inference::neox::tests::tiny as tiny_neox;
 
     /// A fixed token stream over the 40-token vocabulary of `tiny_model`.
     fn stream(n: usize) -> Vec<u32> {
@@ -109,6 +110,33 @@ mod tests {
                 ((x >> 33) % 40) as u32
             })
             .collect()
+    }
+
+    /// Compares per-position and mean NLLs from `window_nlls` at `precision` against `F32`,
+    /// returning `(max_pos_diff, mean_diff)` after checking all NLLs are finite.
+    fn nll_diffs_vs_f32(
+        model: &dyn CausalLm,
+        tokens: &[u32],
+        precision: KvPrecision,
+    ) -> (f64, f64) {
+        let (f32_nlls, _) = window_nlls(model, tokens, KvPrecision::F32).unwrap();
+        let (q_nlls, _) = window_nlls(model, tokens, precision).unwrap();
+        assert_eq!(f32_nlls.len(), q_nlls.len());
+        let mut max_diff = 0.0f64;
+        let mut f32_sum = 0.0f64;
+        let mut q_sum = 0.0f64;
+        for (pos, (&f, &q)) in f32_nlls.iter().zip(&q_nlls).enumerate() {
+            assert!(
+                f.is_finite() && q.is_finite(),
+                "{precision:?} produced non-finite NLL at position {pos}: f32={f}, q={q}"
+            );
+            max_diff = max_diff.max((q - f).abs());
+            f32_sum += f;
+            q_sum += q;
+        }
+        let n = f32_nlls.len() as f64;
+        let mean_diff = (q_sum / n - f32_sum / n).abs();
+        (max_diff, mean_diff)
     }
 
     /// Independent oracle: the NLL of `chunk[t]` from one full forward pass over `chunk[..t]`.
@@ -172,5 +200,52 @@ mod tests {
         assert!(kv_windowed_perplexity(&model, &tokens, 1, 1, KvPrecision::F32).is_err());
         assert!(kv_windowed_perplexity(&model, &tokens, 8, 0, KvPrecision::F32).is_err());
         assert!(kv_windowed_perplexity(&model, &tokens[..5], 8, 1, KvPrecision::F32).is_err());
+    }
+
+    #[test]
+    fn neox_int8_cache_stays_close_to_the_f32_cache() {
+        let model = tiny_neox(0.6);
+        let tokens: Vec<u32> = stream(12)
+            .into_iter()
+            .map(|t| t % model.vocab_size() as u32)
+            .collect();
+        let (max_diff, mean_diff) = nll_diffs_vs_f32(&model, &tokens, KvPrecision::Int8);
+        assert!(
+            max_diff < 0.05,
+            "NeoX Int8 max per-position NLL diff {max_diff} >= 0.05"
+        );
+        assert!(
+            mean_diff < 0.01,
+            "NeoX Int8 mean NLL diff {mean_diff} >= 0.01"
+        );
+    }
+
+    #[test]
+    fn llama_int8_cache_stays_close_to_the_f32_cache() {
+        let model = tiny_model(0.3);
+        let tokens = stream(12);
+        let (max_diff, mean_diff) = nll_diffs_vs_f32(&model, &tokens, KvPrecision::Int8);
+        assert!(
+            max_diff < 0.05,
+            "LLaMA Int8 max per-position NLL diff {max_diff} >= 0.05"
+        );
+        assert!(
+            mean_diff < 0.01,
+            "LLaMA Int8 mean NLL diff {mean_diff} >= 0.01"
+        );
+    }
+
+    #[test]
+    fn neox_int4_cache_is_finite_and_not_catastrophic() {
+        let model = tiny_neox(0.6);
+        let tokens: Vec<u32> = stream(12)
+            .into_iter()
+            .map(|t| t % model.vocab_size() as u32)
+            .collect();
+        let (_max_diff, mean_diff) = nll_diffs_vs_f32(&model, &tokens, KvPrecision::Int4);
+        assert!(
+            mean_diff < 0.5,
+            "NeoX Int4 mean NLL diff {mean_diff} >= 0.5"
+        );
     }
 }

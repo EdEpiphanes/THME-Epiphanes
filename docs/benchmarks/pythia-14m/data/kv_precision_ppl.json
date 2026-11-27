@@ -92,7 +92,7 @@
       }
     ]
   },
-  "reading": "Unlike SmolLM-135M (int8 within noise), Pythia-14M loses a lot with a quantized cache: int8 raises perplexity by 28 percent at 4x256 tokens (190.8 to 245.2) and 34 percent at one 2,048-token window (75.5 to 101.5); int4 collapses (5,805 and 10,350). The cause was not isolated. A group of 8 instead of 32 did not fix it (see experiment_not_committed), so coarse scales are not the whole story; a bug specific to the GPT-NeoX cache path has not been ruled out, and neither has a model that is simply very sensitive to key and value error.",
+  "reading": "Unlike SmolLM-135M (int8 within noise), Pythia-14M loses a lot with a quantized cache: int8 raises perplexity by 28 percent at 4x256 tokens (190.8 to 245.2) and 34 percent at one 2,048-token window (75.5 to 101.5); int4 collapses (5,805 and 10,350). The cause was not isolated. A group of 8 instead of 32 did not fix it (see experiment_not_committed), so coarse scales are not the whole story; tiny synthetic GPT-NeoX and LLaMA models show no cache problem in model-level tests (int8 within 0.05 nats per position), so the loss looks specific to this model's real weights; not proven.",
   "known_gaps": [
     "one corpus, one model per file; the SmolLM-135M report is separate",
     "cause not isolated; a smaller group (8) was tried once and did not fix it; no per-channel scale and no keys-only or values-only test",
