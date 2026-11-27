@@ -1,7 +1,7 @@
 {
   "report": "gptq_comparison",
   "report_version": 1,
-  "status": "preregistered",
+  "status": "measured",
   "status_note": "Registered on 2026-11-27 before any GPTQ perplexity of this comparison was measured. THME-2205, ROADMAP v0.2.2.5.",
   "model_name": "SmolLM-135M",
   "model_repo": "HuggingFaceTB/SmolLM-135M",
@@ -59,9 +59,57 @@
       "One corpus (WikiText-2 test), one model per file."
     ]
   },
-  "results": {},
-  "pending": [
-    "GPTQ run on this model"
-  ],
-  "provenance": {}
+  "results": {
+    "ceiling": 19.798421901137832,
+    "rtn": 23.698417820506624,
+    "awq_runs": [
+      22.01773298209894,
+      22.150777485260836,
+      21.97895939900617,
+      22.043166817346815,
+      22.021689694430176
+    ],
+    "awq_mean": 22.042465275628587,
+    "gptq": {
+      "baseline_perplexity": 19.798460460885472,
+      "perplexity": 22.23117505494233,
+      "delta_ppl": 2.4327145940568577,
+      "gate_accepted": false,
+      "thme_version": "0.2.0",
+      "logical_cpus": 12,
+      "device": {
+        "adapter": null,
+        "requested": "cpu",
+        "used": "cpu"
+      },
+      "backend": "THME reference CPU forward pass (f32, multithreaded)"
+    },
+    "gptq_gate_v2": {
+      "baseline_perplexity": 19.798460460885472,
+      "perplexity": 22.23117505494233,
+      "delta_ppl": 2.4327145940568577,
+      "gate_accepted": false,
+      "thme_version": "0.2.0",
+      "logical_cpus": 12,
+      "device": {
+        "adapter": null,
+        "requested": "cpu",
+        "used": "cpu"
+      },
+      "backend": "THME reference CPU forward pass (f32, multithreaded)"
+    },
+    "verdict": {
+      "sigma": 0.06482348031221556,
+      "rtn_minus_gptq": 1.4672427655642934,
+      "beats_rtn": true,
+      "awq_mean_minus_gptq": -0.18870977931374355,
+      "vs_awq": "gptq_worse"
+    },
+    "gptq_minus_ceiling": 2.432753153804498
+  },
+  "pending": [],
+  "provenance": {
+    "thme": "C:/Users/TechTroniX/Documents/GitHub/thme-wt/solidify/target-nodbg/release/thme.exe",
+    "device": "cpu"
+  }
 }
