@@ -6,6 +6,7 @@ pub mod kv_cache;
 pub mod roofline;
 pub mod run_memory;
 pub mod sensitivity;
+pub mod shrink;
 pub mod telemetry;
 pub mod thermal;
 pub mod token_flow;
@@ -27,6 +28,7 @@ pub use roofline::{
 };
 pub use run_memory::{run_memory, KvType, ModelShape, RunMemory};
 pub use sensitivity::{LayerSensitivityReport, SensitivityProfiler};
+pub use shrink::{shrink_to_budget, Fixed, RunSettings, ShrinkError, ShrinkLimits};
 pub use telemetry::{
     CpuTelemetry, GpuTelemetry, SystemTelemetry, SystemTelemetrySnapshot, TelemetryError,
 };

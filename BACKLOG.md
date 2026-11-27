@@ -773,6 +773,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
 - **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
 - **Done means**: property test: for any budget the result fits or errors; context never below the floor except by explicit user value; fixed flags unchanged.
+- **Progress** (27 November 2026): `src/profiling/shrink.rs` implements the order KV type, then context, then weights, with hand-worked literal tests and a 500-case deterministic property test (fits or errors, context bounds, fixed flags unchanged). Pure function over `run_memory`; not yet used by a CLI command (needs THME-3057).
 
 ### [THME-3059] Roofline decode estimate per device
 
