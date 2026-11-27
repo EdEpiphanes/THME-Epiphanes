@@ -258,6 +258,7 @@ closes it.
 - **Milestone**: v0.2.4 · **Roadmap**: unassigned · **Priority**: p2 · **Area**: inference · **Type**: fix · **Status**: triage
 - **Problem**: paper section 7.9 says a detected loop raises temperature and resets DoLa; the code stops generation.
 - **Done means**: either the behaviour is implemented behind a setting or the paper text states stopping, with a test.
+- **Progress** (27 November 2026): owner path chosen: the paper text states stopping. The rule (trailing 4-gram seen three times in the last 256) is pinned by tests in `src/inference/grounded_decode.rs`, and `docs/research/paper_v5_1_notes.md` gives the replacement sentence. Not done: the paper itself is not on disk, so its section 7.9 is not edited yet.
 
 ### [THME-3101] Repository-wide status overhaul: roadmap, charts, status files, labels
 
