@@ -343,11 +343,6 @@ pub fn solve_coupled_dc_cccp(
         }
         let Some((g, new_f, _, saved)) = best_move else {
             choice = init.choice.clone();
-            total_bytes = choice
-                .iter()
-                .enumerate()
-                .map(|(i, &f)| groups[i].bytes[f])
-                .sum();
             break;
         };
         choice[g] = new_f;
