@@ -92,10 +92,17 @@
       }
     ]
   },
-  "reading": "Unlike SmolLM-135M (int8 within noise), Pythia-14M loses a lot with a quantized cache: int8 raises perplexity by 28 percent at 4x256 tokens (190.8 to 245.2) and 34 percent at one 2,048-token window (75.5 to 101.5); int4 collapses (5,805 and 10,350). The cause was not isolated. A guess, not tested: large outlier values in the keys or values of this tiny model make the per-group scale (maximum divided by 127 or 7) too coarse for the other values in the group.",
+  "reading": "Unlike SmolLM-135M (int8 within noise), Pythia-14M loses a lot with a quantized cache: int8 raises perplexity by 28 percent at 4x256 tokens (190.8 to 245.2) and 34 percent at one 2,048-token window (75.5 to 101.5); int4 collapses (5,805 and 10,350). The cause was not isolated. A group of 8 instead of 32 did not fix it (see experiment_not_committed), so coarse scales are not the whole story; a bug specific to the GPT-NeoX cache path has not been ruled out, and neither has a model that is simply very sensitive to key and value error.",
   "known_gaps": [
     "one corpus, one model per file; the SmolLM-135M report is separate",
-    "cause not isolated; no smaller group size or per-channel scale was tried",
+    "cause not isolated; a smaller group (8) was tried once and did not fix it; no per-channel scale and no keys-only or values-only test",
     "no decode-speed figure"
-  ]
+  ],
+  "experiment_not_committed": {
+    "what": "same measurement (4 windows of 256 tokens) with the quantization group set to 8 values instead of 32 in a local, reverted build",
+    "int8_perplexity": 234.25359238626206,
+    "int4_perplexity": 4983.088113008206,
+    "f32_perplexity": 190.83438413447126,
+    "reading": "a four times finer group changed int8 from 245.2 to 234.3 and int4 from 5,805 to 4,983, so the group size does not explain the loss"
+  }
 }
