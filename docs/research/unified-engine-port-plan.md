@@ -39,10 +39,60 @@ does it cost to get?", not "what does this engine have?".
 
 ## Candidates and ranking
 
-Filled in from `docs/research/engines/*.md` once the three surveys finish. Each row will carry: feature,
-source engine and licence, source paths, THME's current state, effort, risk, oracle.
+Compiled on 27 November 2026 from nine read-only surveys (`docs/research/engines/*.md`). Effort is the
+surveys' estimate (S, M, L), not a measurement; each note marks what it did not verify. "Oracle" is the
+reference output the port must reproduce.
+
+### Tier 1: small, measurable, testable on this machine
+
+| # | Feature | From | THME today | Effort | Oracle |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| 1 | Hadamard rotation before KV-cache quantization (keys first) | exllamav2 (Q4 cache), vLLM (`int4_per_token_head.py`) | int8 and int4 KV and a Walsh-Hadamard transform exist; no rotation before quantizing. Measured: on Pythia-14M the keys cause all the quantization loss | S-M | perplexity with and without rotation (Pythia-14M int8 keys: 245.2 against 190.8 at f32) |
+| 2 | Importance-matrix (imatrix) collection and imatrix-weighted K-quants | llama.cpp, candle, mistral.rs | none (`src/inference/calibration.rs` overlap unverified) | S-M | `llama-imatrix` and `llama-quantize --imatrix` output (the binaries are on this machine) |
+| 3 | Missing encoders: Q2_K, Q3_K, Q4_1, Q5_0, Q5_1, IQ4_NL, IQ4_XS | llama.cpp | encodes Q4_K, Q5_K, Q6_K; refuses Q2_K | S-M | byte comparison with `llama-quantize` output |
+| 4 | Run-time RoPE scaling: linear, YaRN, longrope | llama.cpp | forward pass reads only the base frequency | S-M | `tests/test-rope.cpp` values and llama.cpp logits |
+| 5 | Remaining samplers: typical, XTC, DRY, penalties | llama.cpp | temperature, top-k, top-p, min-p, Mirostat | S each | `tests/test-sampling.cpp` |
+| 6 | Read Ollama's local manifest and blob store, Modelfile import | ollama | none | S each | `ollama show --modelfile` |
+
+### Tier 2: medium
+
+| # | Feature | From | Effort | Oracle |
+| :--- | :--- | :--- | :--- | :--- |
+| 7 | Speculative decoding runner with a rejection-sampling verifier (turns the "Model" status into "Measured") | mistral.rs | M | greedy output equals the target-only run |
+| 8 | Prefix cache (block hash map, radix tree); needs a block-structured KV cache first | vLLM, SGLang | M | greedy output with the cache equals output without it |
+| 9 | Constrained generation (a per-token logit mask is easy; compiling grammars is the hard part) and GBNF | llama.cpp, SGLang, vLLM | M-L | a schema validator on every output |
+| 10 | GPU backward pass built from forward operations (design only, for the LLaMA block) | burn, candle | M-L | `src/trainer/backward.rs` and the Hugging Face gradients (THME-3107) |
+
+### Tier 3: large, later
+
+Paged attention with a continuous-batching scheduler (vLLM, mistral.rs); intra-tensor mixed-bit formats
+and their GEMV kernels (EXL2); CUDA quantized-matmul kernels (candle, from llama.cpp); an HQQ-style
+quantizer and activation checkpointing as cheaper runners-up.
+
+### Not ported, and why
+
+- The `tch` and `pyo3`-based parts of SGLang, and anything that needs libtorch.
+- candle's model code and mistral.rs's model code: written against candle's tensor type, so only ideas travel.
+- Ollama's scheduler: useful only if THME gets a server. Ollama bundles a pinned llama.cpp, so it adds
+  packaging, not new numerics.
+- EXL2's simulated-annealing allocator: stochastic; THME's exact dynamic-programming allocator is better. Its
+  per-module output-error cost proxy and measurement file are worth reading.
+- burn as a dependency: its GPU kernels sit in separate pinned crates that were not available to check, and
+  it would break the size cap.
+
+### Licence cautions found by the surveys
+
+- The ExLlamaV2 MIT file and candle's `LICENSE-MIT` carry no copyright line, so the holder is unverified:
+  confirm it before copying anything from them.
+- MLC-LLM has a NOTICE file that must be carried into any derivative that includes it.
+- Apache-2.0 sources need their licence text and any NOTICE kept; candle's CUDA quantization kernels are
+  adapted from llama.cpp and would bring a second notice.
+- Nested licences exist (MIT and BSD-3 folders inside vLLM and SGLang); none was read beyond the survey.
 
 ## Scheduling
 
-After the v0.2 merge. First slice: the highest-ranked item that is small (S) and measurable, to correct the
-effort estimates before committing to the rest.
+After the v0.2 merge. First slice: item 1 (rotate before quantizing the KV cache). It is small, uses the
+harness and the failing case we already have (Pythia-14M keys), and has a clear pass test: int8-key perplexity
+moves from 245.2 toward the f32 value of 190.8. Second slice: items 2 and 3 together (imatrix and the missing
+encoders), tested against the `llama-quantize` binary already on this machine. The first slice's real effort
+corrects the estimates for the rest.
