@@ -1,0 +1,67 @@
+{
+  "report": "gptq_comparison",
+  "report_version": 1,
+  "status": "preregistered",
+  "status_note": "Registered on 2026-11-27 before any GPTQ perplexity of this comparison was measured. THME-2205, ROADMAP v0.2.2.5.",
+  "model_name": "SmolLM-135M",
+  "model_repo": "HuggingFaceTB/SmolLM-135M",
+  "format": "Q4_0",
+  "algorithm_id": "thme.gptq_q4_0",
+  "evaluation": {
+    "benchmark": {
+      "id": "wikitext2-raw",
+      "version": "1",
+      "split": "test"
+    },
+    "context_len": 1024,
+    "corpus_sha256": "173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08",
+    "token_count": 303415,
+    "token_file_sha256": "18e663b61dd00f49796c8a6ae498b7dbe009cac4a2eaf3c67fa7d81baf47d945",
+    "tokenizer_sha256": "9ca9acddb6525a194ec8ac7a87f24fbba7232a9a15ffa1af0c1224fcd888e47c",
+    "scoring_note": "Full test split in consecutive windows of 1024 (thme evaluate defaults), same protocol as the verification reports."
+  },
+  "calibration": {
+    "source": "the seed-1234 calibration token file of awq_calibration.json",
+    "seed": 1234,
+    "windows": 16,
+    "window_len": 2048,
+    "tokens": 32768,
+    "token_file_sha256": "9df5f3b1f5ad8706dbab932a38773dfdd6c4f6c14094d54dde39feb7310ce604"
+  },
+  "comparators": {
+    "file": "awq_calibration.json",
+    "arms": [
+      "ceiling",
+      "rtn",
+      "awq (five seeds)"
+    ],
+    "note": "Their perplexities are read from that file, not re-run."
+  },
+  "arms": [
+    {
+      "id": "gptq",
+      "description": "GPTQ-style Q4_0 rounding (thme.gptq_q4_0) on every weight matrix, calibration statistics from the seed-1234 file; deterministic, one run."
+    }
+  ],
+  "preregistration": {
+    "date": "2026-11-27",
+    "registered_before": "any measured GPTQ perplexity for this comparison",
+    "noise_scale": "sigma = sample standard deviation (n - 1) of the five AWQ-seed perplexities recorded in awq_calibration.json for this model and Q4_0.",
+    "decision_rule": [
+      "GPTQ beats round-to-nearest only if RTN perplexity minus GPTQ perplexity is greater than 2 x sigma.",
+      "GPTQ beats AWQ only if the mean AWQ perplexity over its five seeds minus GPTQ perplexity is greater than 2 x sigma; GPTQ is worse than AWQ only if GPTQ perplexity minus that mean is greater than 2 x sigma; otherwise the report says no difference was shown.",
+      "Gate: reported for the repository default (v1: at most 0.45 above the ceiling) and for gate v2 (configs/gates/thme-perplexity-v2.json).",
+      "A null or negative result is a valid result and is reported as one. Calibration seed, format, damping default, thresholds and this rule are fixed here and are not changed after any measured result is seen."
+    ],
+    "limits": [
+      "One calibration seed, so GPTQ's own seed variance is not measured; sigma comes from the AWQ arm.",
+      "Q4_0 only: K-quants are not supported by thme.gptq_*.",
+      "One corpus (WikiText-2 test), one model per file."
+    ]
+  },
+  "results": {},
+  "pending": [
+    "GPTQ run on this model"
+  ],
+  "provenance": {}
+}
