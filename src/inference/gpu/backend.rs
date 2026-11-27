@@ -15,6 +15,17 @@ use super::error::ThmeError;
 use super::tensor::{QuantDtype, QuantizedTensor};
 use crate::inference::llama::{linear, score_head, DepthExit};
 
+mod scratch;
+mod timestamp;
+mod weight_cache;
+
+pub(super) use scratch::ActivationCopy;
+use scratch::{Scratch, GEMM_V4_SHARED_BYTES};
+pub use timestamp::OpSample;
+pub(super) use timestamp::TimestampProbe;
+pub(super) use weight_cache::DeviceWeight;
+use weight_cache::{fingerprint, CachedWeight, WeightCache, WEIGHT_CACHE_BUDGET};
+
 #[derive(
     Debug,
     Clone,
@@ -160,28 +171,8 @@ pub enum WeightStorage {
     Q4_0,
 }
 
-/// Device time of one dispatch from a profiled decoder pass.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-pub struct OpSample {
-    /// Kernel name; linears carry their kernel and `rows x in x out` shape.
-    pub label: String,
-    pub ns: u64,
-}
-
 pub(super) fn bump(counter: &AtomicU64, since: Instant) {
     counter.fetch_add(since.elapsed().as_nanos() as u64, Ordering::Relaxed);
-}
-
-/// Scratch device buffers, grown on demand and reused across calls.
-struct Scratch {
-    input: wgpu::Buffer,
-    input_capacity: usize,
-    output: wgpu::Buffer,
-    output_capacity: usize,
-    staging: wgpu::Buffer,
-    staging_capacity: usize,
-    params: wgpu::Buffer,
-    params_capacity: usize,
 }
 
 /// Stride between per-dispatch parameter blocks (storage binding offsets must be aligned).
@@ -192,8 +183,6 @@ pub(super) const MAX_GROUPS: u32 = 65_535;
 pub(super) const GEMM_TILE: u32 = 64;
 /// Output rows and columns handled by one register-blocked (vec4) workgroup.
 pub(super) const GEMM_V4_TILE: u32 = 128;
-/// Shared memory the register-blocked kernel needs: two slices of 16 x 33 vec4.
-const GEMM_V4_SHARED_BYTES: u32 = 2 * 528 * 16;
 /// Row counts at or below this use the matrix-vector kernel per row: a 64-row tile mostly
 /// computes padding, and small grids leave the device idle.
 /// Kernel name reported for the cooperative product that reads f16 weights and activations in
@@ -203,28 +192,7 @@ pub(super) const COOP_DIRECT_KERNEL: &str = "gemm_coop_f16";
 /// activations first with `convert_activations`.
 pub(super) const Q8DOT_KERNEL: &str = "gemm_q8dot";
 
-/// Which activation copy a kernel reads at binding 1.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum ActivationCopy {
-    F16,
-    Int8,
-}
-
-impl ActivationCopy {
-    /// The copy the named kernel needs, if any.
-    pub(super) fn for_kernel(name: &str) -> Option<Self> {
-        match name {
-            COOP_DIRECT_KERNEL => Some(Self::F16),
-            Q8DOT_KERNEL => Some(Self::Int8),
-            _ => None,
-        }
-    }
-}
-
 pub(super) const GEMV_MAX_ROWS: usize = 8;
-/// Default weight bytes kept resident for slice-backed linears before LRU eviction;
-/// raise it with [`GpuContext::set_weight_budget`] when the card has the memory.
-const WEIGHT_CACHE_BUDGET: usize = 10 << 30;
 
 pub(super) fn storage_buffer(
     device: &wgpu::Device,
@@ -238,137 +206,6 @@ pub(super) fn storage_buffer(
         usage,
         mapped_at_creation: false,
     })
-}
-
-impl Scratch {
-    fn new(device: &wgpu::Device) -> Self {
-        let (x, y) = (256 << 10, 1 << 20);
-        let in_use = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST;
-        Self {
-            input: storage_buffer(device, "scratch_input", x, in_use),
-            input_capacity: x,
-            output: storage_buffer(
-                device,
-                "scratch_output",
-                y,
-                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-            ),
-            output_capacity: y,
-            staging: storage_buffer(
-                device,
-                "scratch_staging",
-                y,
-                wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            ),
-            staging_capacity: y,
-            params: storage_buffer(device, "scratch_params", 16 * PARAM_STRIDE, in_use),
-            params_capacity: 16 * PARAM_STRIDE,
-        }
-    }
-
-    fn ensure(&mut self, device: &wgpu::Device, x_bytes: usize, y_bytes: usize, p_bytes: usize) {
-        if x_bytes > self.input_capacity {
-            self.input_capacity = x_bytes.next_power_of_two();
-            self.input = storage_buffer(
-                device,
-                "scratch_input",
-                self.input_capacity,
-                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            );
-        }
-        if y_bytes > self.output_capacity {
-            self.output_capacity = y_bytes.next_power_of_two();
-            self.output = storage_buffer(
-                device,
-                "scratch_output",
-                self.output_capacity,
-                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-            );
-        }
-        if y_bytes > self.staging_capacity {
-            self.staging_capacity = y_bytes.next_power_of_two();
-            self.staging = storage_buffer(
-                device,
-                "scratch_staging",
-                self.staging_capacity,
-                wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            );
-        }
-        if p_bytes > self.params_capacity {
-            self.params_capacity = p_bytes.next_power_of_two();
-            self.params = storage_buffer(
-                device,
-                "scratch_params",
-                self.params_capacity,
-                wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            );
-        }
-    }
-}
-
-/// Two-slot timestamp query around a compute pass, with buffers to read it back.
-pub(super) struct TimestampProbe {
-    pub(super) queries: wgpu::QuerySet,
-    pub(super) resolve: wgpu::Buffer,
-    pub(super) staging: wgpu::Buffer,
-    period_ns: f32,
-}
-
-impl TimestampProbe {
-    fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
-        Self {
-            queries: device.create_query_set(&wgpu::QuerySetDescriptor {
-                label: Some("kernel_time"),
-                ty: wgpu::QueryType::Timestamp,
-                count: 2,
-            }),
-            resolve: storage_buffer(
-                device,
-                "kernel_time_resolve",
-                16,
-                wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
-            ),
-            staging: storage_buffer(
-                device,
-                "kernel_time_staging",
-                16,
-                wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            ),
-            period_ns: queue.get_timestamp_period(),
-        }
-    }
-}
-
-struct CachedWeight {
-    fingerprint: u64,
-    buffer: Arc<wgpu::Buffer>,
-    bytes: usize,
-    last_used: u64,
-}
-
-#[derive(Default)]
-struct WeightCache {
-    entries: HashMap<(usize, usize, u8), CachedWeight>,
-    bytes: usize,
-    tick: u64,
-}
-
-/// Cheap identity check for a weight slice: length plus 64 samples spread over it.
-/// Guards against a freed model's address being reused by different weights.
-fn fingerprint(w: &[f32]) -> u64 {
-    let step = (w.len() / 64).max(1);
-    let mut h: u64 = 0xcbf2_9ce4_8422_2325 ^ w.len() as u64;
-    for v in w.iter().step_by(step) {
-        h = (h ^ u64::from(v.to_bits())).wrapping_mul(0x0100_0000_01b3);
-    }
-    h
-}
-
-/// A weight matrix on the device with the storage format its kernel must decode.
-#[derive(Clone)]
-pub(super) struct DeviceWeight {
-    pub(super) buffer: Arc<wgpu::Buffer>,
-    pub(super) storage: WeightStorage,
 }
 
 /// One linear in a batched submission: `Y = X * W^T` for the shared input rows.

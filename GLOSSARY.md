@@ -111,3 +111,26 @@ _Avoid_: jail, generic container
 
 **Escape test**:
 A security validation test attempting forbidden host actions from within the sandbox and asserting execution failure.
+
+## Run planning and storage
+
+**Predicted**:
+An evidence label for a figure computed by arithmetic from a model header (for example the memory plan from `thme pathfinder`), not measured; nothing was run or measured.
+
+**Run plan**:
+The settings for one run (context length, KV cache precision, weight width) with the predicted weight, KV cache, and scratch bytes they need, from `thme pathfinder`.
+
+**Shrink order**:
+The order in which the planner lowers settings to fit a byte budget: KV cache precision first, then context length (never below the floor, never raised), then weight width. A setting the user fixed is never changed, and if nothing fits the planner reports what it tried.
+
+**KV cache precision**:
+How stored keys and values are encoded (f32, int8, or int4), chosen with `thme chat --kv-precision`. Both int8 and int4 use groups of 32 values with one f32 scale per group.
+
+**llama.cpp layout**:
+The GGUF form llama.cpp reads, written by `thme export --llama-cpp-layout`: GGML tensor names, norm weights as F32, q and k rows in interleaved-pair order, a rope dimension key, and the tokenizer. THME's own reader undoes the row order for llama-architecture files.
+
+**Switch point**:
+In quality gate v2, the baseline perplexity (20.0) below which only the absolute margin applies and at or above which only the relative margin applies.
+
+**Fallback norm epsilon**:
+The RMS-norm epsilon (1e-6) assumed, and written into exported GGUF files, when a model records none.

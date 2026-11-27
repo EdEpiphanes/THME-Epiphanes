@@ -10,7 +10,7 @@ use crate::surgery::{AgentBridgeConfig, CoSurgeryBudget, CoSurgeryController, Co
 
 #[derive(Args, Debug)]
 pub struct CoSurgeryArgs {
-    /// Source GGUF or SafeTensors model path (omit to run with a synthetic scaffold)
+    /// Source model path (SafeTensors, GGUF and .epiph; omit to run with a synthetic scaffold)
     #[arg(value_name = "MODEL_PATH")]
     pub model: Option<PathBuf>,
 

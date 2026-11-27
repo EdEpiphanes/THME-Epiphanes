@@ -1,0 +1,319 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+//! Perplexity with a KV cache at a chosen storage precision (THME-3082).
+//!
+//! `thme evaluate` scores whole windows in one pass, which never reads a stored key or value
+//! back. Here every window is fed one token at a time through a fresh cache, so each later token
+//! attends to the stored history, quantized when the precision is int8 or int4. The gap to the
+//! f32 result is what the cache precision costs in quality.
+
+use anyhow::{bail, Context, Result};
+
+use crate::inference::{CausalLm, KvPrecision};
+
+/// Result of [`kv_windowed_perplexity`] and [`kv_windowed_perplexity_mixed`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct KvPerplexity {
+    pub precision: KvPrecision,
+    pub key_precision: KvPrecision,
+    pub value_precision: KvPrecision,
+    pub window: usize,
+    pub windows: usize,
+    pub tokens_scored: usize,
+    pub perplexity: f64,
+    /// Bytes the cache held after the last window.
+    pub kv_cache_bytes: usize,
+}
+
+/// `-ln softmax(logits)[target]` in f64 with a stable log-sum-exp.
+fn nll(logits: &[f32], target: u32) -> Result<f64> {
+    let Some(&picked) = logits.get(target as usize) else {
+        bail!(
+            "token {target} is outside the vocabulary of {} logits",
+            logits.len()
+        );
+    };
+    let max = logits.iter().copied().fold(f32::NEG_INFINITY, f32::max) as f64;
+    let sum: f64 = logits.iter().map(|&l| (f64::from(l) - max).exp()).sum();
+    Ok(max + sum.ln() - f64::from(picked))
+}
+
+/// Negative log-likelihood of each token after the first in `chunk`, fed one token at a time
+/// through a fresh cache with separate key and value precisions; also returns the bytes held at
+/// the end.
+pub(crate) fn window_nlls_mixed(
+    model: &dyn CausalLm,
+    chunk: &[u32],
+    keys: KvPrecision,
+    values: KvPrecision,
+) -> Result<(Vec<f64>, usize)> {
+    let mut cache = model
+        .new_cache_with_precisions(keys, values)
+        .with_context(|| {
+            format!(
+                "this model has no KV cache for key precision {keys:?} and value precision {values:?}"
+            )
+        })?;
+    let mut out = Vec::with_capacity(chunk.len().saturating_sub(1));
+    for t in 0..chunk.len().saturating_sub(1) {
+        let logits = model.forward_extend(&mut cache, &chunk[t..=t])?;
+        out.push(nll(&logits, chunk[t + 1])?);
+    }
+    Ok((out, cache.bytes()))
+}
+
+/// Negative log-likelihood of each token after the first in `chunk`, fed one token at a time
+/// through a fresh cache at `precision`; also returns the bytes the cache held at the end.
+#[cfg(test)]
+pub(crate) fn window_nlls(
+    model: &dyn CausalLm,
+    chunk: &[u32],
+    precision: KvPrecision,
+) -> Result<(Vec<f64>, usize)> {
+    window_nlls_mixed(model, chunk, precision, precision)
+}
+
+/// Perplexity over up to `max_windows` consecutive, non-overlapping windows of `window` tokens,
+/// each fed one token at a time through a fresh cache with separate key and value precisions.
+pub fn kv_windowed_perplexity_mixed(
+    model: &dyn CausalLm,
+    tokens: &[u32],
+    window: usize,
+    max_windows: usize,
+    keys: KvPrecision,
+    values: KvPrecision,
+) -> Result<KvPerplexity> {
+    if window < 2 {
+        bail!("window must be at least 2 tokens, got {window}");
+    }
+    if max_windows == 0 {
+        bail!("max_windows must be at least 1");
+    }
+    if tokens.len() < window {
+        bail!(
+            "need at least one window of {window} tokens, the input has {}",
+            tokens.len()
+        );
+    }
+    let windows = (tokens.len() / window).min(max_windows);
+    let mut total = 0.0f64;
+    let mut scored = 0usize;
+    let mut kv_cache_bytes = 0usize;
+    for w in 0..windows {
+        let chunk = &tokens[w * window..(w + 1) * window];
+        let (nlls, bytes) = window_nlls_mixed(model, chunk, keys, values)?;
+        total += nlls.iter().sum::<f64>();
+        scored += nlls.len();
+        kv_cache_bytes = bytes;
+    }
+    let precision = if keys == values {
+        keys
+    } else if keys == KvPrecision::F32 {
+        values
+    } else {
+        keys
+    };
+    Ok(KvPerplexity {
+        precision,
+        key_precision: keys,
+        value_precision: values,
+        window,
+        windows,
+        tokens_scored: scored,
+        perplexity: (total / scored as f64).exp(),
+        kv_cache_bytes,
+    })
+}
+
+/// Perplexity over up to `max_windows` consecutive, non-overlapping windows of `window` tokens,
+/// each fed one token at a time through a fresh cache at `precision`.
+pub fn kv_windowed_perplexity(
+    model: &dyn CausalLm,
+    tokens: &[u32],
+    window: usize,
+    max_windows: usize,
+    precision: KvPrecision,
+) -> Result<KvPerplexity> {
+    kv_windowed_perplexity_mixed(model, tokens, window, max_windows, precision, precision)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::inference::llama::tests::tiny_model;
+    use crate::inference::neox::tests::tiny as tiny_neox;
+
+    /// A fixed token stream over the 40-token vocabulary of `tiny_model`.
+    fn stream(n: usize) -> Vec<u32> {
+        let mut x = 12345u64;
+        (0..n)
+            .map(|_| {
+                x = x.wrapping_mul(6364136223846793005).wrapping_add(1);
+                ((x >> 33) % 40) as u32
+            })
+            .collect()
+    }
+
+    /// Compares per-position and mean NLLs from `window_nlls` at `precision` against `F32`,
+    /// returning `(max_pos_diff, mean_diff)` after checking all NLLs are finite.
+    fn nll_diffs_vs_f32(
+        model: &dyn CausalLm,
+        tokens: &[u32],
+        precision: KvPrecision,
+    ) -> (f64, f64) {
+        let (f32_nlls, _) = window_nlls(model, tokens, KvPrecision::F32).unwrap();
+        let (q_nlls, _) = window_nlls(model, tokens, precision).unwrap();
+        assert_eq!(f32_nlls.len(), q_nlls.len());
+        let mut max_diff = 0.0f64;
+        let mut f32_sum = 0.0f64;
+        let mut q_sum = 0.0f64;
+        for (pos, (&f, &q)) in f32_nlls.iter().zip(&q_nlls).enumerate() {
+            assert!(
+                f.is_finite() && q.is_finite(),
+                "{precision:?} produced non-finite NLL at position {pos}: f32={f}, q={q}"
+            );
+            max_diff = max_diff.max((q - f).abs());
+            f32_sum += f;
+            q_sum += q;
+        }
+        let n = f32_nlls.len() as f64;
+        let mean_diff = (q_sum / n - f32_sum / n).abs();
+        (max_diff, mean_diff)
+    }
+
+    /// Independent oracle: the NLL of `chunk[t]` from one full forward pass over `chunk[..t]`.
+    /// The reference pass needs two tokens, so the first prediction (t = 1) has no oracle.
+    fn oracle_nll(model: &dyn CausalLm, chunk: &[u32], t: usize) -> f64 {
+        let logits = model.forward_logits(&chunk[..t]).unwrap();
+        let max = logits.iter().copied().fold(f32::NEG_INFINITY, f32::max) as f64;
+        let lse = max
+            + logits
+                .iter()
+                .map(|&l| (f64::from(l) - max).exp())
+                .sum::<f64>()
+                .ln();
+        lse - f64::from(logits[chunk[t] as usize])
+    }
+
+    #[test]
+    fn f32_cache_matches_the_prefix_by_prefix_oracle_at_every_position() {
+        let model = tiny_model(0.3);
+        let tokens = stream(8);
+        let (nlls, _) = window_nlls(&model, &tokens, KvPrecision::F32).unwrap();
+        assert_eq!(nlls.len(), 7);
+        for t in 2..8 {
+            let want = oracle_nll(&model, &tokens, t);
+            let got = nlls[t - 1];
+            assert!(
+                ((got - want) / want).abs() < 1e-4,
+                "t={t} got {got} want {want}"
+            );
+        }
+    }
+
+    #[test]
+    fn perplexity_is_exp_of_the_mean_window_nll() {
+        let model = tiny_model(0.3);
+        let tokens = stream(20);
+        let got = kv_windowed_perplexity(&model, &tokens, 8, 2, KvPrecision::F32).unwrap();
+        assert_eq!((got.windows, got.tokens_scored), (2, 14)); // 2 windows x 7 predictions
+        let (a, _) = window_nlls(&model, &tokens[..8], KvPrecision::F32).unwrap();
+        let (b, _) = window_nlls(&model, &tokens[8..16], KvPrecision::F32).unwrap();
+        let mean = (a.iter().sum::<f64>() + b.iter().sum::<f64>()) / 14.0;
+        assert!((got.perplexity - mean.exp()).abs() < 1e-9 * mean.exp());
+    }
+
+    #[test]
+    fn quantized_caches_are_finite_and_smaller_than_f32() {
+        let model = tiny_model(0.3);
+        let tokens = stream(16);
+        let f32r = kv_windowed_perplexity(&model, &tokens, 8, 1, KvPrecision::F32).unwrap();
+        for p in [KvPrecision::Int8, KvPrecision::Int4] {
+            let r = kv_windowed_perplexity(&model, &tokens, 8, 1, p).unwrap();
+            assert!(r.perplexity.is_finite() && r.perplexity > 0.0, "{p:?}");
+            assert!(r.kv_cache_bytes < f32r.kv_cache_bytes, "{p:?}");
+        }
+    }
+
+    #[test]
+    fn bad_arguments_are_errors() {
+        let model = tiny_model(0.3);
+        let tokens = stream(16);
+        assert!(kv_windowed_perplexity(&model, &tokens, 1, 1, KvPrecision::F32).is_err());
+        assert!(kv_windowed_perplexity(&model, &tokens, 8, 0, KvPrecision::F32).is_err());
+        assert!(kv_windowed_perplexity(&model, &tokens[..5], 8, 1, KvPrecision::F32).is_err());
+    }
+
+    #[test]
+    fn neox_int8_cache_stays_close_to_the_f32_cache() {
+        let model = tiny_neox(0.6);
+        let tokens: Vec<u32> = stream(12)
+            .into_iter()
+            .map(|t| t % model.vocab_size() as u32)
+            .collect();
+        let (max_diff, mean_diff) = nll_diffs_vs_f32(&model, &tokens, KvPrecision::Int8);
+        assert!(
+            max_diff < 0.05,
+            "NeoX Int8 max per-position NLL diff {max_diff} >= 0.05"
+        );
+        assert!(
+            mean_diff < 0.01,
+            "NeoX Int8 mean NLL diff {mean_diff} >= 0.01"
+        );
+    }
+
+    #[test]
+    fn llama_int8_cache_stays_close_to_the_f32_cache() {
+        let model = tiny_model(0.3);
+        let tokens = stream(12);
+        let (max_diff, mean_diff) = nll_diffs_vs_f32(&model, &tokens, KvPrecision::Int8);
+        assert!(
+            max_diff < 0.05,
+            "LLaMA Int8 max per-position NLL diff {max_diff} >= 0.05"
+        );
+        assert!(
+            mean_diff < 0.01,
+            "LLaMA Int8 mean NLL diff {mean_diff} >= 0.01"
+        );
+    }
+
+    #[test]
+    fn neox_int4_cache_is_finite_and_not_catastrophic() {
+        let model = tiny_neox(0.6);
+        let tokens: Vec<u32> = stream(12)
+            .into_iter()
+            .map(|t| t % model.vocab_size() as u32)
+            .collect();
+        let (_max_diff, mean_diff) = nll_diffs_vs_f32(&model, &tokens, KvPrecision::Int4);
+        assert!(
+            mean_diff < 0.5,
+            "NeoX Int4 mean NLL diff {mean_diff} >= 0.5"
+        );
+    }
+
+    #[test]
+    fn mixed_perplexity_matches_f32_and_places_f32_int8_bytes_between_f32_and_int8() {
+        let model = tiny_model(0.3);
+        let tokens = stream(16);
+        let f32r = kv_windowed_perplexity(&model, &tokens, 8, 1, KvPrecision::F32).unwrap();
+        let mixed_f32 =
+            kv_windowed_perplexity_mixed(&model, &tokens, 8, 1, KvPrecision::F32, KvPrecision::F32)
+                .unwrap();
+        assert_eq!(mixed_f32, f32r);
+
+        let int8r = kv_windowed_perplexity(&model, &tokens, 8, 1, KvPrecision::Int8).unwrap();
+        let f32_int8 = kv_windowed_perplexity_mixed(
+            &model,
+            &tokens,
+            8,
+            1,
+            KvPrecision::F32,
+            KvPrecision::Int8,
+        )
+        .unwrap();
+        assert!(f32_int8.perplexity.is_finite() && f32_int8.perplexity > 0.0);
+        assert_eq!(f32_int8.key_precision, KvPrecision::F32);
+        assert_eq!(f32_int8.value_precision, KvPrecision::Int8);
+        assert!(f32_int8.kv_cache_bytes < f32r.kv_cache_bytes);
+        assert!(f32_int8.kv_cache_bytes > int8r.kv_cache_bytes);
+    }
+}

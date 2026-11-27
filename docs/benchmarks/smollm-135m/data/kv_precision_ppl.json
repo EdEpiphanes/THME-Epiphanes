@@ -1,0 +1,66 @@
+{
+  "what": "Perplexity with the KV cache stored as f32, int8 or int4 (groups of 32 values, one f32 scale per group), every token fed one at a time so each later token reads the stored history",
+  "date": "2026-11-27",
+  "model": "SmolLM-135M (SafeTensors, weights as stored)",
+  "device": "CPU, release build",
+  "command": "cargo run --release --example kv_precision_ppl -- --model-path models/SmolLM-135M --tokens wikitext2_test.SmolLM-135M.u32 --window W --max-windows N",
+  "corpus": "WikiText-2 test split, first N non-overlapping windows of the committed-format token file",
+  "window_256": [
+    {
+      "kv_cache_bytes": 11750400,
+      "kv_precision": "f32",
+      "perplexity": 30.392239563443958,
+      "tokens_scored": 1020,
+      "window": 256,
+      "windows": 4
+    },
+    {
+      "kv_cache_bytes": 3304800,
+      "kv_precision": "int8",
+      "perplexity": 30.39691848214759,
+      "tokens_scored": 1020,
+      "window": 256,
+      "windows": 4
+    },
+    {
+      "kv_cache_bytes": 1836000,
+      "kv_precision": "int4",
+      "perplexity": 32.1533214395022,
+      "tokens_scored": 1020,
+      "window": 256,
+      "windows": 4
+    }
+  ],
+  "window_1024": [
+    {
+      "kv_cache_bytes": 47139840,
+      "kv_precision": "f32",
+      "perplexity": 16.094247420037657,
+      "tokens_scored": 2046,
+      "window": 1024,
+      "windows": 2
+    },
+    {
+      "kv_cache_bytes": 13258080,
+      "kv_precision": "int8",
+      "perplexity": 16.087473660160256,
+      "tokens_scored": 2046,
+      "window": 1024,
+      "windows": 2
+    },
+    {
+      "kv_cache_bytes": 7365600,
+      "kv_precision": "int4",
+      "perplexity": 17.18494736973037,
+      "tokens_scored": 2046,
+      "window": 1024,
+      "windows": 2
+    }
+  ],
+  "known_gaps": [
+    "Pythia-14M was measured separately and behaves very differently (docs/benchmarks/pythia-14m/data/kv_precision_ppl.json): int8 is not safe in general",
+    "4,096-token context not measured: SmolLM-135M and Pythia-14M are both trained for 2,048 positions, so a 4k run would test rope extrapolation, not the cache",
+    "windows are short (4 x 256 and 2 x 1,024 tokens) so the 256-token and 1,024-token perplexities are not comparable to each other or to the full-split figure; only the f32 versus int8 versus int4 difference inside one window setting is meaningful",
+    "no decode-speed measurement: reading the cache means decoding it for every token, the CPU path was not timed here"
+  ]
+}

@@ -14,7 +14,7 @@
 
 `Subsystems: Model Ingestion • Layer Sensitivity • SVD Spectral Decay • Threshold Allocator`
 
-> **Architectural Highlight**: Ingests GGUF v2/v3 and SafeTensors weights via OS memory mapping (`memmap2`) without full-memory copy overhead. Automatically profiles layer sensitivity curves $s(l)$ and assigns a format per tensor by comparing its sensitivity with fixed thresholds (`src/allocator/pareto.rs`). This is a fast heuristic. The measured search (`thme search`) chooses from a measured cost table with either a greedy allocator (`--solver greedy`, the default) or an exact dynamic program (`--solver dp`, `engine::alloc`), then refines globally.
+> **Architectural Highlight**: Ingests SafeTensors, GGUF v2/v3 and .epiph weights without full-memory copy overhead (using OS memory mapping via `memmap2` for SafeTensors and GGUF). Automatically profiles layer sensitivity curves $s(l)$ and assigns a format per tensor by comparing its sensitivity with fixed thresholds (`src/allocator/pareto.rs`). This is a fast heuristic. The measured search (`thme search`) chooses from a measured cost table with either a greedy allocator (`--solver greedy`, the default) or an exact dynamic program (`--solver dp`, `engine::alloc`), then refines globally.
 
 | Metric / Dimension | Production Engineering Specification |
 |---|---|
@@ -534,13 +534,13 @@ THME compiles to a standalone, zero-dependency 60 FPS graphical workstation (`th
 | Workspace Tab | Focus | Core Capabilities |
 |---|---|---|
 | **0. Master Dashboard** | Command Cockpit | Live 60 FPS neural token flow telemetry, model health cards, layer sensitivity curves, and recent audit activity. |
-| **1. Models Manager** | Inventory & Conversion | Multi-slot model manager with zero-copy GGUF/SafeTensors loaders, synthetic generator, and Universal 8 AI Paradigm Converter panel. |
+| **1. Models Manager** | Inventory & Conversion | Multi-slot model manager with zero-copy SafeTensors, GGUF and .epiph loaders, synthetic generator, and Universal 8 AI Paradigm Converter panel. |
 | **2. Layer Tweaker** | Fine-Grained Surgery | Layer-by-layer sequence mixer replacement (GQA, Gated DeltaNet, Phase Recurrence, Mamba-2), 8x8 weight slice matrix viewer, and 32-bin histograms. |
 | **3. Matrix Engine** | Linear Algebra & BYOA | Truncated SVD, Walsh-Hadamard rotation, SmoothQuant, BitNet b1.58, 2:4 sparsity, and the Automated Parameter Decision Engine. |
 | **4. Full Benchmarks** | Profiling & Roofline | 13-stage Transformer flow simulator, multi-context KV cache scaling, Speculative Decoding Deck, and interactive Roofline Profiler Deck. |
 | **5. History & Checkpoints** | Audit & Rollback | Immutable tuning session snapshots, before/after scorecard diffs, and one-click rollback state restoration. |
 | **6. Audit Log** | Structured Telemetry | Filterable chronological event stream with severity tags (`OPTIMIZE`, `SURGERY`, `BENCHMARK`, `WARN`), query search, and CSV export. |
-| **7. Export & Surgery** | Artifact Generation | Exports models to SafeTensors, GGUF, or THME bundles. Includes a declarative JSON recipe editor and executor. |
+| **7. Export & Surgery** | Artifact Generation | Exports models to SafeTensors, GGUF and .epiph. Includes a declarative JSON recipe editor and executor. |
 | **8. Dev Lab & Trainer** | Micro-Training | Dataset ingestion (text, JSONL, Alpaca, ShareGPT, CSV); experimental weight warps; on-device micro-trainer with AdamW, SignSGD, and EWHA loss. |
 
 ---
@@ -560,7 +560,7 @@ THME provides 12 commands with consistent options and machine-readable output:
 | `thme speculate` | `--model`, `--draft-layers`, `--bitnet`, `--horizon`, `--tree` | Telemetry report, draft JSON | Multi-token draft model synthesis and speculative speedup evaluation. |
 | `thme roofline` | `--model`, `--hardware`, `--batch-size`, `--seq-len`, `--flash-attn` | ASCII plot, cache telemetry | Operational arithmetic intensity profiler and hardware ceilings. |
 | `thme export` | `--strategy`, `--model`, `--dataset`, `--output-script`, `--cuda` | `train_cuda.py`, `config.json` | PyTorch CUDA training script generator and Hugging Face config exporter. |
-| `thme mcp` | `--model` | JSON-RPC 2024-11-05 standard I/O | Headless daemon for VS Code Copilot, Claude Desktop, and Cursor. |
+| `thme mcp` | `--model`, `--allow-root` | JSON-RPC 2024-11-05 standard I/O | Headless daemon for VS Code Copilot, Claude Desktop, and Cursor. |
 | `thme gui` | (No arguments required) | 60 FPS Native GUI | Launches the standalone desktop workstation. |
 | `thme report` | `<PLAN_PATH>`, `-m, --markdown <FILE>` | Markdown/terminal report | Exports comprehensive model profiling and audit report. |
 
@@ -570,7 +570,7 @@ THME provides 12 commands with consistent options and machine-readable output:
 ```bash
 # Detailed CLI Flags for thme roofline:
 thme roofline [OPTIONS]
-  -m, --model <PATH>          Path to GGUF or SafeTensors model [default: synthetic baseline]
+  -m, --model <PATH>          Path to SafeTensors, GGUF or .epiph model [default: synthetic baseline]
       --hardware <TARGET>     Hardware target: h100, rtx4090, m3_max, mi300x, emerald_rapids [default: h100]
   -b, --batch-size <NUM>      Inference batch size [default: 1]
   -s, --seq-len <NUM>         Context sequence length [default: 2048]

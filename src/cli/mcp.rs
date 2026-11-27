@@ -22,6 +22,11 @@ pub struct McpArgs {
     /// Optional default model file path to bind to the MCP session
     #[arg(short, long)]
     pub model: Option<String>,
+
+    /// Folder the tools may read models from; repeat for several. With none given, any path the
+    /// user account can read is allowed (the client is trusted).
+    #[arg(long = "allow-root", value_name = "DIR")]
+    pub allow_roots: Vec<std::path::PathBuf>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -45,6 +50,16 @@ struct JsonRpcResponse {
 }
 
 pub fn process_json_rpc(line: &str, active_model_path: &mut Option<String>) -> Option<String> {
+    process_json_rpc_with_roots(line, active_model_path, &[])
+}
+
+/// Like [`process_json_rpc`], but a tool call whose `model_path` argument resolves outside every
+/// folder in `allowed_roots` is refused before any tool runs. An empty list allows every path.
+pub fn process_json_rpc_with_roots(
+    line: &str,
+    active_model_path: &mut Option<String>,
+    allowed_roots: &[std::path::PathBuf],
+) -> Option<String> {
     let trimmed = line.trim();
     if trimmed.is_empty() {
         return None;
@@ -76,7 +91,7 @@ pub fn process_json_rpc(line: &str, active_model_path: &mut Option<String>) -> O
         "tools/list" => handle_tools_list(req_id),
         "tools/call" => {
             let params = req.params.unwrap_or(Value::Null);
-            handle_tools_call(req_id, params, active_model_path)
+            handle_tools_call(req_id, params, active_model_path, allowed_roots)
         }
         unknown => JsonRpcResponse {
             jsonrpc: "2.0".to_string(),
@@ -92,19 +107,41 @@ pub fn process_json_rpc(line: &str, active_model_path: &mut Option<String>) -> O
     serde_json::to_string(&response).ok()
 }
 
+/// Refuses `path` unless it resolves (symlinks and `..` followed) inside one of `roots`.
+/// No roots means no restriction. With roots, a path that cannot be resolved is refused too.
+fn check_allowed_root(path: &str, roots: &[std::path::PathBuf]) -> Result<(), String> {
+    if roots.is_empty() {
+        return Ok(());
+    }
+    let resolved = std::fs::canonicalize(path)
+        .map_err(|e| format!("Path '{path}' cannot be resolved ({e}); roots are enforced"))?;
+    let inside = roots
+        .iter()
+        .filter_map(|r| std::fs::canonicalize(r).ok())
+        .any(|r| resolved.starts_with(r));
+    if inside {
+        Ok(())
+    } else {
+        Err(format!("Path '{path}' is outside the allowed roots"))
+    }
+}
+
 pub fn execute(args: McpArgs) -> Result<()> {
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
     let reader = stdin.lock();
 
     let mut active_model_path = args.model;
+    let allowed_roots = args.allow_roots;
 
     for line in reader.lines() {
         let line = match line {
             Ok(l) => l,
             Err(_) => break,
         };
-        if let Some(resp) = process_json_rpc(&line, &mut active_model_path) {
+        if let Some(resp) =
+            process_json_rpc_with_roots(&line, &mut active_model_path, &allowed_roots)
+        {
             writeln!(stdout, "{}", resp)?;
             stdout.flush()?;
         }
@@ -139,11 +176,11 @@ fn handle_tools_list(id: Value) -> JsonRpcResponse {
     let tools = json!([
         {
             "name": "thme_inspect_model",
-            "description": "Inspects a SafeTensors or GGUF model zero-copy: returns layer count, hidden size, tensor shapes, memory footprint, and architectural topology.",
+            "description": "Inspects a SafeTensors, GGUF and .epiph model zero-copy: returns layer count, hidden size, tensor shapes, memory footprint, and architectural topology.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "model_path": { "type": "string", "description": "Path to the model file (.safetensors or .gguf). Omit to inspect synthetic baseline." }
+                    "model_path": { "type": "string", "description": "Path to the model (SafeTensors, GGUF and .epiph). Omit to inspect synthetic baseline." }
                 }
             }
         },
@@ -263,7 +300,7 @@ fn handle_tools_list(id: Value) -> JsonRpcResponse {
                 "properties": {
                     "model_path": {
                         "type": "string",
-                        "description": "Optional model path (.safetensors or .gguf). Omit to use synthetic baseline."
+                        "description": "Optional model path (SafeTensors, GGUF and .epiph). Omit to use synthetic baseline."
                     },
                     "hardware": {
                         "type": "string",
@@ -320,6 +357,7 @@ fn handle_tools_call(
     id: Value,
     params: Value,
     active_model_path: &mut Option<String>,
+    allowed_roots: &[std::path::PathBuf],
 ) -> JsonRpcResponse {
     let name = match params.get("name").and_then(|v| v.as_str()) {
         Some(n) => n,
@@ -335,7 +373,13 @@ fn handle_tools_call(
 
     let args = params.get("arguments").cloned().unwrap_or(json!({}));
 
+    let root_check = match args.get("model_path").and_then(Value::as_str) {
+        Some(path) => check_allowed_root(path, allowed_roots),
+        None => Ok(()),
+    };
+
     let tool_result = match name {
+        _ if root_check.is_err() => root_check.map(|()| String::new()),
         "thme_inspect_model" => tool_inspect_model(&args, active_model_path),
         "thme_auto_decide" => tool_auto_decide(&args, active_model_path),
         "thme_apply_surgery" => tool_apply_surgery(&args, active_model_path),
@@ -1354,5 +1398,67 @@ mod tests {
         assert!(text.contains("[simulated]"));
         assert!(text.contains("(Est. Speedup: "));
         assert!(text.contains("x [simulated])"));
+    }
+
+    fn call_inspect(model_path: &str, roots: &[std::path::PathBuf]) -> String {
+        let req = json!({
+            "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+            "params": { "name": "thme_inspect_model", "arguments": { "model_path": model_path } }
+        });
+        let mut active = None;
+        process_json_rpc_with_roots(&req.to_string(), &mut active, roots).expect("response")
+    }
+
+    #[test]
+    fn a_path_outside_the_allowed_roots_is_refused_before_any_tool_runs() {
+        let allowed = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let file = outside.path().join("m.gguf");
+        std::fs::write(&file, b"x").unwrap();
+        let reply = call_inspect(file.to_str().unwrap(), &[allowed.path().to_path_buf()]);
+        assert!(reply.contains("outside the allowed roots"), "{reply}");
+        assert!(reply.contains("\"isError\":true"), "{reply}");
+    }
+
+    #[test]
+    fn a_path_inside_an_allowed_root_gets_past_the_check() {
+        let allowed = tempfile::tempdir().unwrap();
+        let file = allowed.path().join("m.gguf");
+        std::fs::write(&file, b"x").unwrap();
+        let reply = call_inspect(file.to_str().unwrap(), &[allowed.path().to_path_buf()]);
+        assert!(!reply.contains("outside the allowed roots"), "{reply}");
+    }
+
+    #[test]
+    fn dot_dot_cannot_climb_out_of_an_allowed_root() {
+        let allowed = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let file = outside.path().join("m.gguf");
+        std::fs::write(&file, b"x").unwrap();
+        let sneaky = allowed
+            .path()
+            .join("..")
+            .join(outside.path().file_name().unwrap())
+            .join("m.gguf");
+        let reply = call_inspect(sneaky.to_str().unwrap(), &[allowed.path().to_path_buf()]);
+        assert!(reply.contains("outside the allowed roots"), "{reply}");
+    }
+
+    #[test]
+    fn a_path_that_cannot_be_resolved_is_refused_when_roots_are_set() {
+        let allowed = tempfile::tempdir().unwrap();
+        let missing = allowed.path().join("nope.gguf");
+        let reply = call_inspect(missing.to_str().unwrap(), &[allowed.path().to_path_buf()]);
+        assert!(reply.contains("cannot be resolved"), "{reply}");
+    }
+
+    #[test]
+    fn without_roots_nothing_changes() {
+        let outside = tempfile::tempdir().unwrap();
+        let file = outside.path().join("m.gguf");
+        std::fs::write(&file, b"x").unwrap();
+        let reply = call_inspect(file.to_str().unwrap(), &[]);
+        assert!(!reply.contains("outside the allowed roots"), "{reply}");
+        assert!(!reply.contains("cannot be resolved"), "{reply}");
     }
 }

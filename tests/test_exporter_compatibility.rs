@@ -47,6 +47,8 @@ fn safetensors_export_loads_with_independent_safetensors_consumer() {
             quant_type: ExportQuantType::FP16,
             output_path: output.clone(),
             compute_checksum: true,
+            llama_cpp_layout: false,
+            tokenizer_json_path: None,
         },
     )
     .expect("export SafeTensors");
@@ -134,6 +136,8 @@ fn exported_gguf_runs_in_configured_llama_cpp_and_ollama() {
             quant_type: ExportQuantType::FP16,
             output_path: exported.clone(),
             compute_checksum: false,
+            llama_cpp_layout: false,
+            tokenizer_json_path: None,
         },
     )
     .expect("export compatibility model to GGUF");

@@ -13,7 +13,7 @@ use super::gpu::{
     dispatch_linear_array, dispatch_linear_slice, dispatch_score_head_slice, DecoderPlan,
     GpuBackend, LayerWeights,
 };
-use super::kv::{KvCache, KvLayer};
+use super::kv::{KvCache, KvLayer, KvPrecision};
 use super::probe::{
     dead_fraction, rms, update_ratio, ForwardTrace, InputChannelStats, LayerTrace, TensorActivity,
 };
@@ -36,6 +36,10 @@ pub struct LlamaConfig {
     pub rope_theta: f32,
 }
 
+/// RMS-norm epsilon assumed when a model records none. The GGUF exporter writes the same value
+/// in that case, so a file the engine reads back behaves like the source (THME-3091).
+pub const FALLBACK_RMS_NORM_EPS: f32 = 1e-6;
+
 impl LlamaConfig {
     /// Builds a config from the IR. Epsilon and RoPE base come from the model's recorded
     /// values (`config.json` or GGUF metadata), falling back to LLaMA defaults.
@@ -45,7 +49,7 @@ impl LlamaConfig {
             hidden_size: model.hidden_size,
             num_heads: model.num_attention_heads,
             num_kv_heads: model.num_key_value_heads,
-            rms_norm_eps: model.norm_eps.unwrap_or(1e-6),
+            rms_norm_eps: model.norm_eps.unwrap_or(FALLBACK_RMS_NORM_EPS),
             rope_theta: model.rope_theta.unwrap_or(10_000.0),
         }
     }
@@ -181,6 +185,17 @@ pub fn find_tensor<'a>(model: &'a ModelIR, name: &str) -> Option<&'a TensorIR> {
     None
 }
 
+/// True when `tensor` is a q or k projection from a GGUF whose architecture is `llama`. Those
+/// files store the rows in the interleaved-pair order llama.cpp rotates, not the Hugging Face
+/// `rotate_half` order this forward pass uses (THME-3103).
+fn is_llama_cpp_rope_tensor(model: &ModelIR, tensor: &TensorIR) -> bool {
+    let from_llama_gguf = matches!(
+        model.source_gguf_metadata.get("general.architecture"),
+        Some(crate::ir::model::ModelMetadataValue::String(arch)) if arch == "llama"
+    );
+    from_llama_gguf && (tensor.name.contains("attn_q.") || tensor.name.contains("attn_k."))
+}
+
 pub(crate) fn load_tensor(
     tensor: &TensorIR,
     expected: usize,
@@ -264,7 +279,23 @@ impl LlamaModel {
         for index in 0..config.num_layers {
             let fetch = |suffix: &str, expected: usize| -> Result<Vec<f32>> {
                 let name = format!("model.layers.{index}.{suffix}");
-                load_tensor(required(&name)?, expected, precision)
+                let tensor = required(&name)?;
+                let values = load_tensor(tensor, expected, precision)?;
+                if !is_llama_cpp_rope_tensor(model, tensor) {
+                    return Ok(values);
+                }
+                let heads = if suffix.contains("q_proj") {
+                    config.num_heads
+                } else {
+                    config.num_kv_heads
+                };
+                crate::exporter::ggml_names::unpermute_rope_rows(
+                    &values,
+                    values.len() / d,
+                    d,
+                    heads,
+                )
+                .map_err(|e| anyhow::anyhow!("Tensor '{}': {e}", tensor.name))
             };
             layers.push(LlamaLayer {
                 attn_norm: fetch("input_layernorm.weight", d)?,
@@ -401,9 +432,20 @@ impl LlamaModel {
         self.config.hidden_size / self.config.num_heads * self.config.num_kv_heads
     }
 
-    /// An empty KV cache sized for this model's layers and key/value width.
+    /// An empty F32 KV cache sized for this model's layers and key/value width.
     pub fn new_cache(&self) -> KvCache {
-        KvCache::new(self.layers.len(), self.kv_dim())
+        self.new_cache_with_precision(KvPrecision::F32)
+    }
+
+    /// An empty KV cache sized for this model's layers and key/value width at `precision`.
+    pub fn new_cache_with_precision(&self, precision: KvPrecision) -> KvCache {
+        self.new_cache_with_precisions(precision, precision)
+    }
+
+    /// An empty KV cache sized for this model's layers and key/value width with separate key and
+    /// value precisions.
+    pub fn new_cache_with_precisions(&self, keys: KvPrecision, values: KvPrecision) -> KvCache {
+        KvCache::with_precisions(self.layers.len(), self.kv_dim(), keys, values)
     }
 
     /// Appends `tokens` after the positions already in `cache`, computing only the new rows,
@@ -711,13 +753,16 @@ impl LlamaModel {
             cache.append(&k, &v);
         }
         let (keys, values) = match kv.as_deref() {
-            Some(cache) => (cache.keys(), cache.values()),
-            None => (&k[..], &v[..]),
+            Some(cache) => (cache.keys_f32(), cache.values_f32()),
+            None => (
+                std::borrow::Cow::Borrowed(&k[..]),
+                std::borrow::Cow::Borrowed(&v[..]),
+            ),
         };
         let mixed = attention(&AttentionInputs {
             q: &q,
-            k: keys,
-            v: values,
+            k: &keys,
+            v: &values,
             num_heads: cfg.num_heads,
             num_kv_heads: cfg.num_kv_heads,
             head_dim,
@@ -873,140 +918,7 @@ fn matmul(w: &[f32], xs: &[f32], ys: &mut [f32], in_dim: usize, out_dim: usize) 
 
 /// AVX2 + FMA kernels. Every function requires the caller to have verified both features.
 #[cfg(target_arch = "x86_64")]
-mod simd {
-    use super::{BLOCK, LANES};
-    use std::arch::x86_64::{
-        __m256, _mm256_add_ps, _mm256_fmadd_ps, _mm256_loadu_ps, _mm256_set1_ps, _mm256_setzero_ps,
-        _mm256_storeu_ps,
-    };
-
-    #[inline]
-    #[target_feature(enable = "avx2,fma")]
-    unsafe fn horizontal_sum(v: __m256) -> f32 {
-        let mut lanes = [0.0f32; LANES];
-        // SAFETY: `lanes` holds exactly eight f32 values.
-        unsafe { _mm256_storeu_ps(lanes.as_mut_ptr(), v) };
-        lanes.iter().sum()
-    }
-
-    #[inline]
-    #[target_feature(enable = "avx2,fma")]
-    pub(super) unsafe fn dot(a: &[f32], b: &[f32]) -> f32 {
-        let len = a.len().min(b.len());
-        let vector_len = len / LANES * LANES;
-        let mut acc0 = _mm256_setzero_ps();
-        let mut acc1 = _mm256_setzero_ps();
-        let mut i = 0;
-        while i + 2 * LANES <= vector_len {
-            // SAFETY: `i + 16 <= vector_len <= len`, so all four loads are in bounds.
-            unsafe {
-                acc0 = _mm256_fmadd_ps(
-                    _mm256_loadu_ps(a.as_ptr().add(i)),
-                    _mm256_loadu_ps(b.as_ptr().add(i)),
-                    acc0,
-                );
-                acc1 = _mm256_fmadd_ps(
-                    _mm256_loadu_ps(a.as_ptr().add(i + LANES)),
-                    _mm256_loadu_ps(b.as_ptr().add(i + LANES)),
-                    acc1,
-                );
-            }
-            i += 2 * LANES;
-        }
-        if i < vector_len {
-            // SAFETY: `i + 8 <= vector_len <= len`.
-            unsafe {
-                acc0 = _mm256_fmadd_ps(
-                    _mm256_loadu_ps(a.as_ptr().add(i)),
-                    _mm256_loadu_ps(b.as_ptr().add(i)),
-                    acc0,
-                );
-            }
-        }
-        // SAFETY: the caller verified AVX2 and FMA.
-        let mut sum = unsafe { horizontal_sum(_mm256_add_ps(acc0, acc1)) };
-        for (x, y) in a[vector_len..len].iter().zip(&b[vector_len..len]) {
-            sum += x * y;
-        }
-        sum
-    }
-
-    /// `y += alpha * x`
-    #[inline]
-    #[target_feature(enable = "avx2,fma")]
-    pub(super) unsafe fn axpy(alpha: f32, x: &[f32], y: &mut [f32]) {
-        let len = x.len().min(y.len());
-        let vector_len = len / LANES * LANES;
-        let scale = _mm256_set1_ps(alpha);
-        let mut i = 0;
-        while i < vector_len {
-            // SAFETY: `i + 8 <= vector_len <= len` for both slices.
-            unsafe {
-                let updated = _mm256_fmadd_ps(
-                    scale,
-                    _mm256_loadu_ps(x.as_ptr().add(i)),
-                    _mm256_loadu_ps(y.as_ptr().add(i)),
-                );
-                _mm256_storeu_ps(y.as_mut_ptr().add(i), updated);
-            }
-            i += LANES;
-        }
-        for (o, v) in y[vector_len..len].iter_mut().zip(&x[vector_len..len]) {
-            *o += alpha * v;
-        }
-    }
-
-    #[target_feature(enable = "avx2,fma")]
-    pub(super) unsafe fn matmul(
-        w: &[f32],
-        xs: &[f32],
-        ys: &mut [f32],
-        in_dim: usize,
-        out_dim: usize,
-    ) {
-        let vector_len = in_dim / LANES * LANES;
-        let mut x_blocks = xs.chunks_exact(BLOCK * in_dim);
-        let mut y_blocks = ys.chunks_exact_mut(BLOCK * out_dim);
-        for (xb, yb) in (&mut x_blocks).zip(&mut y_blocks) {
-            for (o, w_row) in w.chunks_exact(in_dim).enumerate() {
-                let mut acc = [_mm256_setzero_ps(); BLOCK];
-                let mut i = 0;
-                while i < vector_len {
-                    // SAFETY: `w_row` has `in_dim` values and `xb` has `BLOCK * in_dim`;
-                    // `i + 8 <= vector_len <= in_dim` keeps every load in bounds.
-                    unsafe {
-                        let wv = _mm256_loadu_ps(w_row.as_ptr().add(i));
-                        for (b, a) in acc.iter_mut().enumerate() {
-                            let xv = _mm256_loadu_ps(xb.as_ptr().add(b * in_dim + i));
-                            *a = _mm256_fmadd_ps(wv, xv, *a);
-                        }
-                    }
-                    i += LANES;
-                }
-                for (b, a) in acc.iter().enumerate() {
-                    // SAFETY: the caller verified AVX2 and FMA.
-                    let mut sum = unsafe { horizontal_sum(*a) };
-                    let x_row = &xb[b * in_dim..(b + 1) * in_dim];
-                    for (wv, xv) in w_row[vector_len..].iter().zip(&x_row[vector_len..]) {
-                        sum += wv * xv;
-                    }
-                    yb[b * out_dim + o] = sum;
-                }
-            }
-        }
-        let x_rest = x_blocks.remainder();
-        let y_rest = y_blocks.into_remainder();
-        for (x, y) in x_rest
-            .chunks_exact(in_dim)
-            .zip(y_rest.chunks_exact_mut(out_dim))
-        {
-            for (w_row, out) in w.chunks_exact(in_dim).zip(y.iter_mut()) {
-                // SAFETY: the caller verified AVX2 and FMA.
-                *out = unsafe { dot(w_row, x) };
-            }
-        }
-    }
-}
+mod simd;
 
 fn matmul_portable(w: &[f32], xs: &[f32], ys: &mut [f32], in_dim: usize, out_dim: usize) {
     let mut x_blocks = xs.chunks_exact(BLOCK * in_dim);
@@ -1521,6 +1433,41 @@ pub(crate) mod tests {
                 gap < crate::inference::kv::tests::INCREMENTAL_TOLERANCE,
                 "gap {gap}"
             );
+        }
+    }
+
+    #[test]
+    fn int8_cache_reports_packed_bytes_and_finite_logits() {
+        let model = tiny_model(0.6);
+        let tokens: [u32; 5] = [3, 17, 8, 25, 1];
+        // tiny_model has layers = 2 and kv_dim = (16 / 4) * 2 = 8.
+        // For kv_dim = 8 in Int8 (group size 32), each row is 8 i8 values + 1 f32 scale = 12 bytes.
+        // After N = 5 positions, layers * 2 * positions * row_bytes = 2 * 2 * 5 * 12 = 240 bytes.
+        // F32 stores 8 * 4 = 32 bytes per row, so 2 * 2 * 5 * 32 = 640 bytes.
+        let mut int8_cache = model.new_cache_with_precision(KvPrecision::Int8);
+        for chunk in [&tokens[..3], &tokens[3..4], &tokens[4..5]] {
+            let logits = model.forward_extend(&mut int8_cache, chunk).unwrap();
+            assert_eq!(logits.len(), model.vocab_size());
+            assert!(logits.iter().all(|v| v.is_finite()), "non-finite logit");
+        }
+        assert_eq!(int8_cache.len(), 5);
+        assert_eq!(int8_cache.bytes(), 240);
+
+        let mut f32_cache = model.new_cache();
+        let f32_logits = model.forward_extend(&mut f32_cache, &tokens).unwrap();
+        assert!(f32_logits.iter().all(|v| v.is_finite()));
+        assert_eq!(f32_cache.bytes(), 640);
+        assert!(int8_cache.bytes() < f32_cache.bytes());
+    }
+
+    #[test]
+    fn quantized_kv_cache_logit_gap_is_finite() {
+        let model = tiny_model(0.6);
+        let tokens: Vec<u32> = vec![3, 17, 8, 25, 1, 30];
+        for precision in [KvPrecision::Int8, KvPrecision::Int4] {
+            let gap =
+                crate::inference::kv::tests::kv_precision_logit_gap(&model, &tokens, precision);
+            assert!(gap.is_finite(), "{precision:?} gap is not finite: {gap}");
         }
     }
 

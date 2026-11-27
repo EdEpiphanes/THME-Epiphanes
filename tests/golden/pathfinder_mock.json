@@ -1,0 +1,44 @@
+{
+  "model": "mock_llama",
+  "settings": {
+    "context": 4096,
+    "kv": "F16",
+    "weight_bytes_per_param": 2.0
+  },
+  "memory": {
+    "weights": 24252928,
+    "kv": 8388608,
+    "scratch": 143360
+  },
+  "budget_bytes": null,
+  "basis": [
+    {
+      "decision": "context",
+      "basis": "predicted"
+    },
+    {
+      "decision": "kv",
+      "basis": "predicted"
+    },
+    {
+      "decision": "weight_bytes_per_param",
+      "basis": "predicted"
+    },
+    {
+      "decision": "memory.weights",
+      "basis": "predicted"
+    },
+    {
+      "decision": "memory.kv",
+      "basis": "predicted"
+    },
+    {
+      "decision": "memory.scratch",
+      "basis": "predicted"
+    },
+    {
+      "decision": "memory.total",
+      "basis": "predicted"
+    }
+  ]
+}

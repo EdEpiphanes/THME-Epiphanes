@@ -11,7 +11,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use super::gpu::{dispatch_linear_slice, dispatch_score_head_slice, GpuBackend};
-use super::kv::{KvCache, KvLayer};
+use super::kv::{KvCache, KvLayer, KvPrecision};
 use super::llama::{
     add_in_place, attention, find_tensor, linear, load_tensor, AttentionInputs, DepthExit,
     RopeTable, WeightPrecision,
@@ -349,9 +349,20 @@ impl NeoxModel {
         ))
     }
 
-    /// An empty KV cache sized for this model's layers (no grouped-query attention here).
+    /// An empty F32 KV cache sized for this model's layers (no grouped-query attention here).
     pub fn new_cache(&self) -> KvCache {
-        KvCache::new(self.layers.len(), self.config.hidden_size)
+        self.new_cache_with_precision(KvPrecision::F32)
+    }
+
+    /// An empty KV cache sized for this model's layers at `precision` (no grouped-query attention here).
+    pub fn new_cache_with_precision(&self, precision: KvPrecision) -> KvCache {
+        self.new_cache_with_precisions(precision, precision)
+    }
+
+    /// An empty KV cache sized for this model's layers with separate key and value precisions
+    /// (no grouped-query attention here).
+    pub fn new_cache_with_precisions(&self, keys: KvPrecision, values: KvPrecision) -> KvCache {
+        KvCache::with_precisions(self.layers.len(), self.config.hidden_size, keys, values)
     }
 
     /// Appends `tokens` after the positions already in `cache`, computing only the new rows,
@@ -538,13 +549,16 @@ impl NeoxModel {
             cache.append(&k, &v);
         }
         let (keys, values) = match kv.as_deref() {
-            Some(cache) => (cache.keys(), cache.values()),
-            None => (&k[..], &v[..]),
+            Some(cache) => (cache.keys_f32(), cache.values_f32()),
+            None => (
+                std::borrow::Cow::Borrowed(&k[..]),
+                std::borrow::Cow::Borrowed(&v[..]),
+            ),
         };
         let mixed = attention(&AttentionInputs {
             q: &q,
-            k: keys,
-            v: values,
+            k: &keys,
+            v: &values,
             num_heads: heads,
             num_kv_heads: heads,
             head_dim: hd,
@@ -788,6 +802,17 @@ pub(crate) mod tests {
                     "parallel={parallel_residual} prefill={prefill} gap {gap}"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn quantized_kv_cache_logit_gap_is_finite() {
+        let model = tiny(0.6);
+        let tokens: Vec<u32> = vec![3, 17, 8, 20, 1, 9];
+        for precision in [KvPrecision::Int8, KvPrecision::Int4] {
+            let gap =
+                crate::inference::kv::tests::kv_precision_logit_gap(&model, &tokens, precision);
+            assert!(gap.is_finite(), "{precision:?} gap is not finite: {gap}");
         }
     }
 }

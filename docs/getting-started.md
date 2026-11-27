@@ -89,7 +89,7 @@ Nothing here has been tried on a clean machine yet.
    thme doctor
    ```
 
-3. **Inspect a model.** Give it a model folder, a `.gguf` file or a `.safetensors` file. It reads
+3. **Inspect a model.** Give it a model folder or a SafeTensors, GGUF or `.epiph` file. It reads
    the header; it does not copy the weights. `profile` adds the layer sensitivity table and how the
    KV cache grows with the context length.
 
@@ -113,6 +113,20 @@ Nothing here has been tried on a clean machine yet.
    thme gui
    ```
 
+6. **Plan memory before you run.** `thme pathfinder` reads the model header and prints the predicted memory plan (weights, KV cache, and scratch) for a target budget, context length, and KV precision. Every figure is labelled `predicted`; nothing is run or measured.
+
+   ```bash
+   thme pathfinder path/to/model [--budget-gb F] [--context N] [--kv f32|f16|int8|int4] [--json]
+   ```
+
+7. **KV cache precision.** `thme chat --kv-precision f32|int8|int4` stores the KV cache at that precision on the CPU path (default `f32`); `--json` output includes `kv_precision` and `kv_cache_bytes`.
+
+   ```bash
+   thme chat path/to/model --kv-precision int8 --json
+   ```
+
+   Measured on SmolLM-135M (WikiText-2, CPU, short windows; report `docs/benchmarks/smollm-135m/data/kv_precision_ppl.json`, one model): `int8` is within noise of `f32` (30.392 against 30.397 at 4x256 tokens, 16.094 against 16.087 at 2x1024), while `int4` has about 6 to 7 percent higher perplexity (32.153 and 17.185), with caches 3.6 and 6.4 times smaller. On Pythia-14M the same cache is much worse (perplexity 190.8 at f32, 245.2 at int8, 5,805 at int4 over 4 windows of 256 tokens; report `docs/benchmarks/pythia-14m/data/kv_precision_ppl.json`), so check your own model before using `int8` or `int4`. Reproduce with `cargo run --release --example kv_precision_ppl -- --model-path DIR --tokens FILE.u32 --window N --max-windows N`.
+
 ## AI engineer: scan, convert, export, serve to editors and agents
 
 1. **Scan a model before you open it.** The scan looks for code that would run on load, hidden
@@ -126,11 +140,19 @@ Nothing here has been tried on a clean machine yet.
    A clean scan is not proof that a model is safe.
 
 2. **Export to GGUF or SafeTensors.** `--quant` picks the weight type (`fp16`, `q8_0`,
-   `bitnet-b1.58`, or `per-tensor`). Add `--checksum` to print a SHA-256 of the result.
+   `bitnet-b1.58`, or `per-tensor`). `--quant fp16` and `--quant q8_0` accept BF16 checkpoints. Add `--checksum` to print a SHA-256 of the result.
 
    ```bash
    thme export path/to/model -o model.gguf --format gguf --quant q8_0 --checksum
    ```
+
+   **Export for llama.cpp.** Add `--llama-cpp-layout` to write a GGUF in llama.cpp's layout: GGML tensor names, norm weights as F32, `q` and `k` rows permuted for llama.cpp's rotary order, `rope.dimension_count`, and the tokenizer from a `tokenizer.json` next to the model. It needs that `tokenizer.json`, refuses to write a file that fails THME's llama.cpp requirement checks, and leaves default exports unchanged. THME's own reader undoes the permutation when reading such a file (`llama` architecture only).
+
+   ```bash
+   thme export path/to/model -o out.gguf --quant fp16 --llama-cpp-layout
+   ```
+
+   Measured once: SmolLM-135M exported this way (F16) loaded in llama.cpp b12584 on the CPU and produced the same 20 greedy tokens as THME's own forward pass (report `docs/benchmarks/smollm-135m/data/llama_cpp_load.json`; one model, one prompt). llama.cpp warns that the file has no pre-tokenizer type (open ticket THME-3102).
 
    `thme convert --to llm|lcm|lam|moe|vlm|slm|mlm|sam` is a different job: it reshapes the model's
    topology between paradigms and reports the size change. Without `--model` it uses a built-in
@@ -142,8 +164,10 @@ Nothing here has been tried on a clean machine yet.
    which uses the command `thme` with the argument `mcp`.
 
    ```bash
-   thme mcp --model path/to/model
+   thme mcp --model path/to/model --allow-root path/to/models
    ```
+
+   `--allow-root` (repeatable) limits which folders the MCP tools may read models from; the VS Code extension passes one per workspace folder.
 
 4. **Download a model from the Hugging Face hub.** **Planned, not built yet** (ROADMAP v0.3.0.5).
    Until it lands, download the model with your own tools and point THME at the folder.
@@ -166,8 +190,9 @@ Nothing here has been tried on a clean machine yet.
    thme forward path/to/model --tokens 1,2,3 --json
    ```
 
-   THME has no published real-model measurements yet. Results from these commands are measurement
-   pending until a committed report under `docs/benchmarks/` backs them.
+   Results from these commands are measurement pending until a committed report under `docs/benchmarks/`
+   backs them (such as `docs/benchmarks/smollm-135m/data/llama_cpp_load.json` for a single-prompt
+   CPU forward pass on SmolLM-135M).
 
 3. **Check a result against a gate.** `thme validate` compares a baseline and a candidate, either as
    benchmark scores or as perplexities:
@@ -176,6 +201,10 @@ Nothing here has been tried on a clean machine yet.
    thme validate --baseline 84.5 --candidate 83.9
    thme validate --baseline-ppl 10.0 --candidate-ppl 10.2 --json
    ```
+
+   `thme evaluate` accepts `--gate configs/gates/thme-perplexity-v2.json` to use quality gate v2 (the default stays
+   v1): a baseline perplexity below 20 uses an absolute margin of 0.45, and at or above 20 uses a
+   relative margin of 2.25 percent of the baseline.
 
 4. **Write and apply a recipe.** A recipe is a JSON file; its format is in
    [docs/schemas/surgery-recipe-v1.json](schemas/surgery-recipe-v1.json). `thme tweak` applies one to a

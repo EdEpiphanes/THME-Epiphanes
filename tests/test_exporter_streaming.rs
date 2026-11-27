@@ -45,6 +45,10 @@ fn source_backed_gguf_export_preserves_tensor_bytes() {
         quant_type: ExportQuantType::FP16,
         output_path: output_path.clone(),
         compute_checksum: true,
+
+        llama_cpp_layout: false,
+
+        tokenizer_json_path: None,
     };
     let report = ModelExporter::export(&model, &config).expect("stream GGUF export");
     assert_eq!(report.total_tensors, 1);
@@ -75,6 +79,10 @@ fn source_backed_q8_gguf_export_preserves_quantized_blocks() {
         quant_type: ExportQuantType::Q8_0,
         output_path: output_path.clone(),
         compute_checksum: false,
+
+        llama_cpp_layout: false,
+
+        tokenizer_json_path: None,
     };
     ModelExporter::export(&model, &config).expect("stream Q8_0 export");
 
@@ -116,6 +124,10 @@ fn source_backed_safetensors_export_preserves_tensor_bytes() {
         quant_type: ExportQuantType::FP16,
         output_path: output_path.clone(),
         compute_checksum: false,
+
+        llama_cpp_layout: false,
+
+        tokenizer_json_path: None,
     };
     ModelExporter::export(&model, &config).expect("stream SafeTensors export");
 
@@ -151,6 +163,10 @@ fn model_export_rejects_missing_sources_and_unsupported_conversion() {
         quant_type: ExportQuantType::Q8_0,
         output_path: dir.path().join("unsupported.safetensors"),
         compute_checksum: false,
+
+        llama_cpp_layout: false,
+
+        tokenizer_json_path: None,
     };
     assert!(ModelExporter::export(&sourced_model, &config)
         .unwrap_err()

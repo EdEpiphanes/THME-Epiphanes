@@ -1,0 +1,140 @@
+{
+  "what": "Perplexity with the KV cache stored as f32, int8 or int4 (groups of 32 values, one f32 scale per group), token by token through the cache",
+  "date": "2026-11-27",
+  "model": "Pythia-14M (GPT-NeoX, SafeTensors)",
+  "device": "CPU, release build",
+  "command": "cargo run --release --example kv_precision_ppl -- --model-path models/pythia-14m --tokens wikitext2_test.pythia-14m.u32 --window W --max-windows N",
+  "token_file": {
+    "corpus": "WikiText-2 (raw) test split",
+    "corpus_sha256": "173c87a53759e0201f33e0ccf978e510c2042d7f2cb78229d9a50d79b9e7dd08",
+    "tokenizer_repo": "EleutherAI/pythia-14m",
+    "tokenizer_sha256": "870f4e2baa6b683221fa52004d5d6f40ab8c9d31961617304b78c910c2c3caf2",
+    "token_count": 287159,
+    "token_file_sha256": "973595d9c7c580360a39eedde7297ec050f362a521940f7527eca4a00ea85278"
+  },
+  "results": {
+    "window_256": [
+      {
+        "kv_precision": "f32",
+        "kv_cache_bytes": 1566720,
+        "perplexity": 190.83438413447126,
+        "windows": 4,
+        "tokens_scored": 1020,
+        "window": 256
+      },
+      {
+        "kv_precision": "int8",
+        "kv_cache_bytes": 440640,
+        "perplexity": 245.2240369624809,
+        "windows": 4,
+        "tokens_scored": 1020,
+        "window": 256
+      },
+      {
+        "kv_precision": "int4",
+        "kv_cache_bytes": 244800,
+        "perplexity": 5805.371986308604,
+        "windows": 4,
+        "tokens_scored": 1020,
+        "window": 256
+      }
+    ],
+    "window_1024": [
+      {
+        "kv_precision": "f32",
+        "kv_cache_bytes": 6285312,
+        "perplexity": 92.70742474707113,
+        "windows": 2,
+        "tokens_scored": 2046,
+        "window": 1024
+      },
+      {
+        "kv_precision": "int8",
+        "kv_cache_bytes": 1767744,
+        "perplexity": 122.35096303334686,
+        "windows": 2,
+        "tokens_scored": 2046,
+        "window": 1024
+      },
+      {
+        "kv_precision": "int4",
+        "kv_cache_bytes": 982080,
+        "perplexity": 11371.348629238943,
+        "windows": 2,
+        "tokens_scored": 2046,
+        "window": 1024
+      }
+    ],
+    "window_2048": [
+      {
+        "kv_precision": "f32",
+        "kv_cache_bytes": 12576768,
+        "perplexity": 75.52589919064016,
+        "windows": 1,
+        "tokens_scored": 2047,
+        "window": 2048
+      },
+      {
+        "kv_precision": "int8",
+        "kv_cache_bytes": 3537216,
+        "perplexity": 101.54684448266917,
+        "windows": 1,
+        "tokens_scored": 2047,
+        "window": 2048
+      },
+      {
+        "kv_precision": "int4",
+        "kv_cache_bytes": 1965120,
+        "perplexity": 10349.646770209005,
+        "windows": 1,
+        "tokens_scored": 2047,
+        "window": 2048
+      }
+    ]
+  },
+  "reading": "Unlike SmolLM-135M (int8 within noise), Pythia-14M loses a lot with a quantized cache: int8 raises perplexity by 28 percent at 4x256 tokens (190.8 to 245.2) and 34 percent at one 2,048-token window (75.5 to 101.5); int4 collapses (5,805 and 10,350). The cause was not isolated. A group of 8 instead of 32 did not fix it (see experiment_not_committed), so coarse scales are not the whole story; tiny synthetic GPT-NeoX and LLaMA models show no cache problem in model-level tests (int8 within 0.05 nats per position), so the loss looks specific to this model's real weights; not proven. A later run that quantized only the keys or only the values showed that the keys cause all of the loss (only keys: int8 236.1, int4 7,349; only values: int8 190.9, int4 190.7). With separate key and value precision (`--key-precision f32 --value-precision int4`) the loss disappears: perplexity 190.66 against 190.83 at f32, with a cache 1.7 times smaller (905,760 against 1,566,720 bytes); int8 keys with int4 values still lose (237.0).",
+  "known_gaps": [
+    "one corpus, one model per file; the SmolLM-135M report is separate",
+    "cause narrowed to the keys; why (outlier channels in the keys is a guess) and whether a per-channel key scale fixes it were not tested; group 8 did not fix it",
+    "no decode-speed figure"
+  ],
+  "experiment_not_committed": {
+    "what": "same measurement (4 windows of 256 tokens) with the quantization group set to 8 values instead of 32 in a local, reverted build",
+    "int8_perplexity": 234.25359238626206,
+    "int4_perplexity": 4983.088113008206,
+    "f32_perplexity": 190.83438413447126,
+    "reading": "a four times finer group changed int8 from 245.2 to 234.3 and int4 from 5,805 to 4,983, so the group size does not explain the loss"
+  },
+  "experiment_keys_versus_values_not_committed": {
+    "what": "4 windows of 256 tokens, local reverted build where one of keys or values stayed f32 and the other used the chosen precision (group of 32)",
+    "f32_perplexity": 190.83438413447126,
+    "only_keys_quantized": {
+      "int8": 236.07,
+      "int4": 7349.4
+    },
+    "only_values_quantized": {
+      "int8": 190.9,
+      "int4": 190.66
+    },
+    "reading": "All of the loss comes from quantizing the keys. Quantizing only the values is free on this model, even at int4."
+  },
+  "mixed_precision_4x256": [
+    {
+      "keys": "f32",
+      "values": "int4",
+      "perplexity": 190.66007294676544,
+      "kv_cache_bytes": 905760,
+      "f32_cache_bytes": 1566720,
+      "windows": 4,
+      "window": 256
+    },
+    {
+      "keys": "int8",
+      "values": "int4",
+      "perplexity": 237.01877403351563,
+      "kv_cache_bytes": 342720,
+      "windows": 4,
+      "window": 256
+    }
+  ]
+}

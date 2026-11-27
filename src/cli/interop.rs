@@ -32,7 +32,7 @@ pub struct InteropArgs {
     #[arg(long)]
     pub output_config: Option<PathBuf>,
 
-    /// Optional local model file (.safetensors or .gguf) to inspect for config generation
+    /// Optional local model (SafeTensors, GGUF and .epiph) to inspect for config generation
     #[arg(long)]
     pub model_file: Option<PathBuf>,
 

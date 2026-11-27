@@ -4,7 +4,10 @@ pub mod hardware;
 pub mod intensity;
 pub mod kv_cache;
 pub mod roofline;
+pub mod run_memory;
+pub mod run_plan;
 pub mod sensitivity;
+pub mod shrink;
 pub mod telemetry;
 pub mod thermal;
 pub mod token_flow;
@@ -24,7 +27,10 @@ pub use roofline::{
     BoundClassification, LayerRooflinePoint, RooflineEngine, RooflineModel, RooflineProfileReport,
     RooflineReport,
 };
+pub use run_memory::{run_memory, KvType, ModelShape, RunMemory};
+pub use run_plan::{plan_run, shape_from_ir, Basis, BasisLabel, RunPlan};
 pub use sensitivity::{LayerSensitivityReport, SensitivityProfiler};
+pub use shrink::{shrink_to_budget, Fixed, RunSettings, ShrinkError, ShrinkLimits};
 pub use telemetry::{
     CpuTelemetry, GpuTelemetry, SystemTelemetry, SystemTelemetrySnapshot, TelemetryError,
 };

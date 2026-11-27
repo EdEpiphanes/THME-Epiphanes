@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! NVIDIA CUDA + cuBLAS Tensor Core acceleration backend for THME.
 
-use std::collections::HashMap;
+use crate::engine::minifloat::f32_to_f16;
 use std::ffi::c_void;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
@@ -9,8 +9,8 @@ use std::sync::{Arc, Mutex};
 use cudarc::cublas::sys as cublas_sys;
 use cudarc::cublas::CudaBlas;
 use cudarc::driver::{
-    sys as driver_sys, CudaContext as DriverContext, CudaFunction, CudaGraph, CudaSlice,
-    CudaStream, CudaView, DevicePtr, DevicePtrMut, LaunchConfig, PushKernelArg,
+    sys as driver_sys, CudaContext as DriverContext, CudaFunction, CudaSlice, CudaStream, CudaView,
+    DevicePtr, DevicePtrMut, LaunchConfig, PushKernelArg,
 };
 use cudarc::nvrtc::Ptx;
 
@@ -19,8 +19,12 @@ use super::decoder::DecoderPlan;
 use super::error::ThmeError;
 use super::tensor::{QuantDtype, QuantizedTensor};
 
-/// Default weight bytes kept resident on CUDA before LRU eviction (10 GiB).
-const WEIGHT_CACHE_BUDGET: usize = 10 << 30;
+mod weight_cache;
+mod workspace;
+
+use weight_cache::{CachedBuffer, CachedEntry, WeightCache};
+use workspace::{CudaWorkspace, CudaWorkspaceKey, SendCudaGraph};
+
 /// Maximum logits elements buffered per NLL chunk (128 MiB in FP16).
 const NLL_CHUNK_MAX_ELEMS: usize = 64 * 1024 * 1024;
 const BLOCK_256: u32 = 256;
@@ -28,95 +32,6 @@ const BLOCK_256: u32 = 256;
 const CUBLAS_WORKSPACE_BYTES: usize = 32 << 20;
 
 type Q4Resident = (Arc<CudaSlice<u16>>, Arc<CudaSlice<u32>>);
-
-#[derive(Clone)]
-enum CachedBuffer {
-    F16(Arc<CudaSlice<u16>>),
-    F32(Arc<CudaSlice<f32>>),
-    Q4_0 {
-        scales: Arc<CudaSlice<u16>>,
-        qs: Arc<CudaSlice<u32>>,
-    },
-}
-
-struct CachedEntry {
-    fingerprint: u64,
-    buffer: CachedBuffer,
-    bytes: usize,
-    last_used: u64,
-}
-
-#[derive(Default)]
-struct WeightCache {
-    entries: HashMap<(usize, usize, u8), CachedEntry>,
-    bytes: usize,
-    tick: u64,
-}
-
-impl WeightCache {
-    fn evict_if_needed(&mut self, incoming: usize) {
-        while self.bytes + incoming > WEIGHT_CACHE_BUDGET && !self.entries.is_empty() {
-            let Some(oldest_key) = self
-                .entries
-                .iter()
-                .min_by_key(|(_, entry)| entry.last_used)
-                .map(|(k, _)| *k)
-            else {
-                break;
-            };
-            if let Some(removed) = self.entries.remove(&oldest_key) {
-                self.bytes = self.bytes.saturating_sub(removed.bytes);
-            }
-        }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-struct CudaWorkspaceKey {
-    t: usize,
-    d: usize,
-    kv_dim: usize,
-    inter: usize,
-    vocab: usize,
-    nll_mode: bool,
-    head_dim: usize,
-}
-
-struct SendCudaGraph(CudaGraph);
-// SAFETY: `CudaGraph` is only accessed while holding `CudaContext::workspace` and launched on `self.stream`.
-unsafe impl Send for SendCudaGraph {}
-unsafe impl Sync for SendCudaGraph {}
-
-struct CudaWorkspace {
-    x_a: CudaSlice<f32>,
-    x_b: CudaSlice<f32>,
-    x16: CudaSlice<u16>,
-    q16: CudaSlice<u16>,
-    k16: CudaSlice<u16>,
-    v16: CudaSlice<u16>,
-    attn_scores: CudaSlice<f32>,
-    attn_probs16: CudaSlice<u16>,
-    q: CudaSlice<f32>,
-    k: CudaSlice<f32>,
-    v: CudaSlice<f32>,
-    mixed: CudaSlice<f32>,
-    tmp: CudaSlice<f32>,
-    tmp16: CudaSlice<u16>,
-    gate: CudaSlice<f32>,
-    gate16: CudaSlice<u16>,
-    up: CudaSlice<f32>,
-    up16: CudaSlice<u16>,
-    last: CudaSlice<f32>,
-    logits: CudaSlice<f32>,
-    logits16: CudaSlice<u16>,
-    scores: CudaSlice<f32>,
-    targets: CudaSlice<u32>,
-    cos: CudaSlice<f32>,
-    sin: CudaSlice<f32>,
-    cos_hash: u64,
-    sin_hash: u64,
-    graph: Option<(u64, SendCudaGraph)>,
-}
 
 /// CUDA + cuBLAS compute backend implementing [`GpuBackend`].
 pub struct CudaContext {
@@ -168,52 +83,14 @@ fn slice_hash(data: &[f32]) -> u64 {
     h.finish()
 }
 
-/// Converts IEEE 754 `f32` to `f16` bit pattern (round-to-nearest-even).
-fn f32_to_f16_bits(val: f32) -> u16 {
-    let bits = val.to_bits();
-    let sign = ((bits >> 16) & 0x8000) as u16;
-    let exp = ((bits >> 23) & 0xff) as i32;
-    let frac = bits & 0x007f_ffff;
-
-    if exp == 255 {
-        if frac == 0 {
-            return sign | 0x7c00;
-        }
-        return sign | 0x7e00 | ((frac >> 13) as u16);
-    }
-
-    let unbiased = exp - 127 + 15;
-    if unbiased >= 31 {
-        return sign | 0x7c00;
-    }
-    if unbiased <= 0 {
-        if unbiased < -10 {
-            return sign;
-        }
-        let mant = (frac | 0x0080_0000) >> (1 - unbiased);
-        let round_bit = (mant >> 12) & 1;
-        let sticky = (mant & 0x0fff) != 0;
-        let half_mant = (mant >> 13) as u16;
-        let lsb = half_mant & 1;
-        return sign | (half_mant + (round_bit & (sticky as u32 | lsb as u32)) as u16);
-    }
-
-    let round_bit = (frac >> 12) & 1;
-    let sticky = (frac & 0x0fff) != 0;
-    let half_mant = (frac >> 13) as u16;
-    let lsb = half_mant & 1;
-    let rounded = ((unbiased as u16) << 10) | half_mant;
-    sign | (rounded + (round_bit & (sticky as u32 | lsb as u32)) as u16)
-}
-
 fn convert_f32_slice_to_f16(w: &[f32]) -> Vec<u16> {
     const PARALLEL_THRESHOLD: usize = 65_536;
     if w.len() < PARALLEL_THRESHOLD {
-        return w.iter().copied().map(f32_to_f16_bits).collect();
+        return w.iter().copied().map(f32_to_f16).collect();
     }
     let threads = std::thread::available_parallelism().map_or(1, |n| n.get());
     if threads <= 1 {
-        return w.iter().copied().map(f32_to_f16_bits).collect();
+        return w.iter().copied().map(f32_to_f16).collect();
     }
     let chunk_size = w.len().div_ceil(threads).max(1);
     let mut out = vec![0u16; w.len()];
@@ -221,7 +98,7 @@ fn convert_f32_slice_to_f16(w: &[f32]) -> Vec<u16> {
         for (src, dst) in w.chunks(chunk_size).zip(out.chunks_mut(chunk_size)) {
             scope.spawn(move || {
                 for (s, d) in src.iter().zip(dst.iter_mut()) {
-                    *d = f32_to_f16_bits(*s);
+                    *d = f32_to_f16(*s);
                 }
             });
         }
@@ -410,7 +287,7 @@ impl CudaContext {
             }
             let d = amax / 7.0f32;
             let inv_d = if amax > 0.0 { 7.0f32 / amax } else { 0.0f32 };
-            *s_out = f32_to_f16_bits(d);
+            *s_out = f32_to_f16(d);
             for (word_idx, dst_word) in q_out.iter_mut().enumerate() {
                 let mut word = 0u32;
                 for k in 0..8 {
@@ -2005,6 +1882,11 @@ impl GpuBackend for CudaContext {
         if !cache.has_device_state() && !cache.is_empty() {
             return Ok(None);
         }
+        let both_f32 = cache.key_precision() == crate::inference::KvPrecision::F32
+            && cache.value_precision() == crate::inference::KvPrecision::F32;
+        if !both_f32 {
+            return Ok(None);
+        }
 
         struct CudaKvState {
             capacity: usize,
@@ -2422,13 +2304,25 @@ mod tests {
             .map(|i| ((i as f32) - 64.0) * 0.0625)
             .chain([0.0, -0.0, f32::INFINITY, f32::NEG_INFINITY, 1e-8, 65536.0])
             .collect();
-        let expected_small: Vec<u16> = small.iter().copied().map(f32_to_f16_bits).collect();
+        let expected_small: Vec<u16> = small.iter().copied().map(f32_to_f16).collect();
         assert_eq!(convert_f32_slice_to_f16(&small), expected_small);
 
         let large: Vec<f32> = (0..70_000)
             .map(|i| (((i * 17) % 1021) as f32 - 510.0) * 0.015625)
             .collect();
-        let expected_large: Vec<u16> = large.iter().copied().map(f32_to_f16_bits).collect();
+        let expected_large: Vec<u16> = large.iter().copied().map(f32_to_f16).collect();
         assert_eq!(convert_f32_slice_to_f16(&large), expected_large);
+    }
+
+    /// A value just above half of the smallest f16 subnormal (2^-25) rounds up to it; the old
+    /// hand-rolled converter flushed it to zero.
+    #[test]
+    fn f16_conversion_rounds_values_above_half_the_smallest_subnormal_up() {
+        assert_eq!(f32_to_f16(f32::from_bits(0x3300_0159)), 1);
+        assert_eq!(
+            f32_to_f16(f32::from_bits(0x3300_0000)),
+            0,
+            "exactly half rounds to even (zero)"
+        );
     }
 }

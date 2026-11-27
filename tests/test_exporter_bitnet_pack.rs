@@ -139,6 +139,10 @@ fn test_export_config_and_report_json_serde() {
         quant_type: ExportQuantType::BitNetB158,
         output_path: std::path::PathBuf::from("models/exported_model.gguf"),
         compute_checksum: true,
+
+        llama_cpp_layout: false,
+
+        tokenizer_json_path: None,
     };
 
     let json_str = serde_json::to_string_pretty(&config).expect("Serialize config");
@@ -156,6 +160,7 @@ fn test_export_config_and_report_json_serde() {
         sha256_checksum: Some(
             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string(),
         ),
+        warnings: Vec::new(),
     };
 
     let report_json = serde_json::to_string(&report).expect("Serialize report");

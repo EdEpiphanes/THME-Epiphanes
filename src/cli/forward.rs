@@ -12,7 +12,7 @@ use crate::inference::perplexity::read_token_file;
 
 #[derive(Args, Debug)]
 pub struct ForwardArgs {
-    /// Model file or directory (GGUF, SafeTensors)
+    /// Model file or directory (SafeTensors, GGUF and .epiph)
     #[arg(value_name = "MODEL_PATH")]
     pub model: PathBuf,
 

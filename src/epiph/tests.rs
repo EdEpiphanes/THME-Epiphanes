@@ -149,6 +149,8 @@ fn epiph_converts_to_gguf_like_its_source() {
             quant_type: crate::exporter::ExportQuantType::PerTensor,
             output_path: path.clone(),
             compute_checksum: false,
+            llama_cpp_layout: false,
+            tokenizer_json_path: None,
         };
         crate::exporter::ModelExporter::export(m, &config).unwrap();
         std::fs::read(path).unwrap()
@@ -217,6 +219,8 @@ fn quantized_pack_runs_like_the_candidate() {
             quant_type: crate::exporter::ExportQuantType::PerTensor,
             output_path: path.clone(),
             compute_checksum: false,
+            llama_cpp_layout: false,
+            tokenizer_json_path: None,
         };
         crate::exporter::ModelExporter::export(m, &config).unwrap();
         std::fs::read(path).unwrap()
@@ -291,6 +295,8 @@ fn gguf_metadata_survives_the_round_trip() {
             quant_type: crate::exporter::ExportQuantType::PerTensor,
             output_path: path.clone(),
             compute_checksum: false,
+            llama_cpp_layout: false,
+            tokenizer_json_path: None,
         };
         crate::exporter::ModelExporter::export(m, &config).unwrap();
         path
@@ -864,6 +870,8 @@ fn compressed_file_converts_to_the_same_gguf_bytes() {
             quant_type: quant,
             output_path: path.clone(),
             compute_checksum: false,
+            llama_cpp_layout: false,
+            tokenizer_json_path: None,
         };
         crate::exporter::ModelExporter::export(m, &config).unwrap();
         std::fs::read(path).unwrap()

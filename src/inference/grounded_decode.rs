@@ -171,6 +171,25 @@ mod tests {
     }
 
     #[test]
+    fn loop_breaker_fires_on_the_third_repeat_of_a_four_gram_and_not_before() {
+        // Tokens 1,2,3,4 repeated. The 4-gram (1,2,3,4) ends at positions 4, 8 and 12; every
+        // other 4-gram (2,3,4,1), (3,4,1,2), (4,1,2,3) ends at 5/9, 6/10 and 7/11, so only
+        // position 12 sees a gram for the third time.
+        let mut breaker = NgramLoopBreaker::new(256);
+        let fired: Vec<usize> = (0..12)
+            .filter(|i| breaker.push_and_check_loop([1u32, 2, 3, 4][i % 4]))
+            .map(|i| i + 1)
+            .collect();
+        assert_eq!(fired, vec![12]);
+    }
+
+    #[test]
+    fn loop_breaker_ignores_a_sequence_with_no_repeated_four_gram() {
+        let mut breaker = NgramLoopBreaker::new(256);
+        assert!((1u32..=40).all(|t| !breaker.push_and_check_loop(t)));
+    }
+
+    #[test]
     fn semantic_entropy_is_zero_when_all_agree_and_positive_when_split() {
         let a = [1.0_f32, 0.0];
         let b = [0.0_f32, 1.0];

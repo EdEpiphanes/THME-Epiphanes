@@ -79,6 +79,10 @@ fn clean_machine_standalone_export_and_inspection() {
         quant_type: ExportQuantType::FP16,
         output_path: export_dest.clone(),
         compute_checksum: true,
+
+        llama_cpp_layout: false,
+
+        tokenizer_json_path: None,
     };
     let rep = ModelExporter::export(&model, &cfg).expect("export to clean path");
     assert!(rep.exported_bytes > 0);

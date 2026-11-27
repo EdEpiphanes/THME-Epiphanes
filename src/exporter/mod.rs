@@ -7,12 +7,14 @@
 pub mod bitnet_pack;
 pub mod calibration;
 pub mod conversion;
+pub mod ggml_names;
 pub mod gguf_check;
 pub mod gguf_writer;
 pub mod kquant;
 pub mod metadata;
 pub mod safetensors_writer;
 pub mod streaming_writer;
+pub mod tokenizer_meta;
 
 pub use bitnet_pack::{BitNetPacker, PackedBitNetTensor};
 pub use gguf_writer::{GgufTensor, GgufWriter};
@@ -96,6 +98,10 @@ pub struct ExportConfig {
     pub quant_type: ExportQuantType,
     pub output_path: PathBuf,
     pub compute_checksum: bool,
+    #[serde(default)]
+    pub llama_cpp_layout: bool,
+    #[serde(default)]
+    pub tokenizer_json_path: Option<PathBuf>,
 }
 
 /// Statistical telemetry report produced following export
@@ -108,6 +114,9 @@ pub struct ExportReport {
     pub exported_bytes: u64,
     pub compression_ratio: f32,
     pub sha256_checksum: Option<String>,
+    /// Things the file lacks that the user should know about; empty for a default export.
+    #[serde(default)]
+    pub warnings: Vec<String>,
 }
 
 /// Unified binary model serialization engine
@@ -123,112 +132,8 @@ impl ModelExporter {
         }
 
         match config.format {
-            ExportFormat::GGUFv3 if config.quant_type == ExportQuantType::PerTensor => {
-                let mut writer = GgufWriter::new();
-                GgufMetadataSynchronizer::synchronize_into_writer(
-                    &mut writer,
-                    model,
-                    config.quant_type,
-                );
-                for tensor in &model.tensors {
-                    let source = tensor.source.clone().with_context(|| format!(
-                        "Tensor '{}' has no file-backed payload; parse a model from disk before exporting", tensor.name
-                    ))?;
-                    match per_tensor_plan(tensor)? {
-                        TensorPlan::Copy(ggml_type) => {
-                            ensure_source_dtype(tensor, &tensor.original_dtype)?;
-                            writer.add_tensor_source(
-                                &tensor.name,
-                                tensor.shape.clone(),
-                                ggml_type,
-                                source,
-                            );
-                        }
-                        TensorPlan::Convert(ggml_type) => {
-                            if source.byte_len != u64::try_from(tensor.byte_size)? {
-                                anyhow::bail!("Tensor '{}' source payload length does not match recorded byte size", tensor.name);
-                            }
-                            writer.add_converted_tensor_source(
-                                &tensor.name,
-                                tensor.shape.clone(),
-                                ggml_type,
-                                source,
-                                tensor.original_dtype.clone(),
-                            );
-                        }
-                    }
-                }
-                writer
-                    .write_to_file(&config.output_path)
-                    .with_context(|| format!("Failed writing GGUF to {:?}", config.output_path))?;
-            }
             ExportFormat::GGUFv3 => {
-                let target_type = match config.quant_type {
-                    ExportQuantType::FP16 => ("F16", GgmlType::F16),
-                    ExportQuantType::Q8_0 => ("Q8_0", GgmlType::Q8_0),
-                    ExportQuantType::TQ1_0 => ("TQ1_0", GgmlType::TQ1_0),
-                    ExportQuantType::BitNetB158 => anyhow::bail!(
-                        "BitNet conversion is not available for source-backed export; choose a matching FP16 or Q8_0 source"
-                    ),
-                    ExportQuantType::PerTensor => anyhow::bail!("per-tensor export is handled by its own branch"),
-                };
-                let mut writer = GgufWriter::new();
-                GgufMetadataSynchronizer::synchronize_into_writer(
-                    &mut writer,
-                    model,
-                    config.quant_type,
-                );
-
-                for tensor in &model.tensors {
-                    let source = tensor.source.clone().with_context(|| format!(
-                        "Tensor '{}' has no file-backed payload; parse a model from disk before exporting", tensor.name
-                    ))?;
-                    if tensor.original_dtype == target_type.0 {
-                        ensure_source_dtype(tensor, target_type.0)?;
-                        writer.add_tensor_source(
-                            &tensor.name,
-                            tensor.shape.clone(),
-                            target_type.1,
-                            source,
-                        );
-                    } else if matches!(
-                        config.quant_type,
-                        ExportQuantType::Q8_0 | ExportQuantType::TQ1_0
-                    ) && matches!(tensor.original_dtype.as_str(), "F16" | "F32")
-                    {
-                        let row_width = tensor.shape.last().copied().unwrap_or(1);
-                        if !row_width.is_multiple_of(target_type.1.block_size()) {
-                            anyhow::bail!(
-                                "Tensor '{}' row width {} must be divisible by {} for {}",
-                                tensor.name,
-                                row_width,
-                                target_type.1.block_size(),
-                                target_type.0
-                            );
-                        }
-                        if source.byte_len != u64::try_from(tensor.byte_size)? {
-                            anyhow::bail!("Tensor '{}' source payload length does not match recorded byte size", tensor.name);
-                        }
-                        writer.add_converted_tensor_source(
-                            &tensor.name,
-                            tensor.shape.clone(),
-                            target_type.1,
-                            source,
-                            tensor.original_dtype.clone(),
-                        );
-                    } else {
-                        anyhow::bail!(
-                            "Tensor '{}' has source dtype {}, cannot export as {}",
-                            tensor.name,
-                            tensor.original_dtype,
-                            target_type.0
-                        );
-                    }
-                }
-
-                writer
-                    .write_to_file(&config.output_path)
-                    .with_context(|| format!("Failed writing GGUF to {:?}", config.output_path))?;
+                export_gguf(model, config)?;
             }
             ExportFormat::SafeTensors => {
                 if config.quant_type != ExportQuantType::FP16 {
@@ -276,6 +181,14 @@ impl ModelExporter {
             None
         };
 
+        let mut warnings = Vec::new();
+        if config.llama_cpp_layout && config.tokenizer_json_path.is_some() {
+            warnings.push(
+                "No tokenizer.ggml.pre was written; llama.cpp will use its default pre-tokenizer and may warn that quality is degraded (THME-3102)."
+                    .to_string(),
+            );
+        }
+
         Ok(ExportReport {
             format: config.format,
             quant_type: config.quant_type,
@@ -284,8 +197,282 @@ impl ModelExporter {
             exported_bytes,
             compression_ratio,
             sha256_checksum,
+            warnings,
         })
     }
+}
+
+fn export_gguf(model: &ModelIR, config: &ExportConfig) -> Result<()> {
+    let target_type = match config.quant_type {
+        ExportQuantType::PerTensor => None,
+        ExportQuantType::FP16 => Some(("F16", GgmlType::F16)),
+        ExportQuantType::Q8_0 => Some(("Q8_0", GgmlType::Q8_0)),
+        ExportQuantType::TQ1_0 => Some(("TQ1_0", GgmlType::TQ1_0)),
+        ExportQuantType::BitNetB158 => anyhow::bail!(
+            "BitNet conversion is not available for source-backed export; choose a matching FP16 or Q8_0 source"
+        ),
+    };
+
+    let mut writer = GgufWriter::new();
+    GgufMetadataSynchronizer::synchronize_into_writer(&mut writer, model, config.quant_type);
+    if config.llama_cpp_layout {
+        add_missing_rope_dimension_count(&mut writer, model)?;
+        add_tokenizer_metadata(&mut writer, config)?;
+    }
+
+    for tensor in &model.tensors {
+        let source = tensor.source.clone().with_context(|| {
+            format!(
+                "Tensor '{}' has no file-backed payload; parse a model from disk before exporting",
+                tensor.name
+            )
+        })?;
+        let export_name = if config.llama_cpp_layout {
+            ggml_names::ggml_tensor_name(&tensor.name).with_context(|| {
+                format!(
+                    "Tensor '{}' has no GGML tensor name mapping for llama.cpp layout",
+                    tensor.name
+                )
+            })?
+        } else {
+            tensor.name.clone()
+        };
+
+        if config.llama_cpp_layout && ggml_names::is_norm_tensor(&export_name) {
+            if source.byte_len != u64::try_from(tensor.byte_size)? {
+                anyhow::bail!(
+                    "Tensor '{}' source payload length does not match recorded byte size",
+                    tensor.name
+                );
+            }
+            if tensor.original_dtype == "F32" {
+                writer.add_tensor_source(&export_name, tensor.shape.clone(), GgmlType::F32, source);
+            } else {
+                let values = crate::inference::read_tensor_f32(tensor)?;
+                writer.add_tensor(
+                    &export_name,
+                    tensor.shape.clone(),
+                    GgmlType::F32,
+                    f32_slice_to_le_bytes(&values),
+                );
+            }
+            continue;
+        }
+
+        let plan = match target_type {
+            None => per_tensor_plan(tensor)?,
+            Some((target_name, target_ggml)) => {
+                if tensor.original_dtype == target_name {
+                    ensure_source_dtype(tensor, target_name)?;
+                    TensorPlan::Copy(target_ggml)
+                } else if matches!(
+                    config.quant_type,
+                    ExportQuantType::FP16 | ExportQuantType::Q8_0 | ExportQuantType::TQ1_0
+                ) && matches!(tensor.original_dtype.as_str(), "F16" | "F32" | "BF16")
+                {
+                    let row_width = tensor.shape.last().copied().unwrap_or(1);
+                    if !row_width.is_multiple_of(target_ggml.block_size()) {
+                        anyhow::bail!(
+                            "Tensor '{}' row width {} must be divisible by {} for {}",
+                            tensor.name,
+                            row_width,
+                            target_ggml.block_size(),
+                            target_name
+                        );
+                    }
+                    if source.byte_len != u64::try_from(tensor.byte_size)? {
+                        anyhow::bail!(
+                            "Tensor '{}' source payload length does not match recorded byte size",
+                            tensor.name
+                        );
+                    }
+                    TensorPlan::Convert(target_ggml)
+                } else {
+                    anyhow::bail!(
+                        "Tensor '{}' has source dtype {}, cannot export as {}",
+                        tensor.name,
+                        tensor.original_dtype,
+                        target_name
+                    );
+                }
+            }
+        };
+
+        if config.llama_cpp_layout {
+            if let Some(n_heads) = rope_head_count(&export_name, model) {
+                if source.byte_len != u64::try_from(tensor.byte_size)? {
+                    anyhow::bail!(
+                        "Tensor '{}' source payload length does not match recorded byte size",
+                        tensor.name
+                    );
+                }
+                let target = match plan {
+                    TensorPlan::Copy(ggml_type) | TensorPlan::Convert(ggml_type) => ggml_type,
+                };
+                let payload = encode_permuted_rope_tensor(tensor, &export_name, n_heads, target)?;
+                writer.add_tensor(&export_name, tensor.shape.clone(), target, payload);
+                continue;
+            }
+        }
+
+        match plan {
+            TensorPlan::Copy(ggml_type) => {
+                ensure_source_dtype(tensor, &tensor.original_dtype)?;
+                writer.add_tensor_source(&export_name, tensor.shape.clone(), ggml_type, source);
+            }
+            TensorPlan::Convert(ggml_type) => {
+                if source.byte_len != u64::try_from(tensor.byte_size)? {
+                    anyhow::bail!(
+                        "Tensor '{}' source payload length does not match recorded byte size",
+                        tensor.name
+                    );
+                }
+                writer.add_converted_tensor_source(
+                    &export_name,
+                    tensor.shape.clone(),
+                    ggml_type,
+                    source,
+                    tensor.original_dtype.clone(),
+                );
+            }
+        }
+    }
+
+    writer
+        .write_to_file(&config.output_path)
+        .with_context(|| format!("Failed writing GGUF to {:?}", config.output_path))?;
+    if config.llama_cpp_layout {
+        let file = File::open(&config.output_path).with_context(|| {
+            format!(
+                "Failed to open exported GGUF for llama.cpp validation: {:?}",
+                config.output_path
+            )
+        })?;
+        // SAFETY: File is opened read-only immediately after flushing and not mutated during mapping.
+        let mmap = unsafe { memmap2::Mmap::map(&file)? };
+        let errors: Vec<String> = gguf_check::check_llama_cpp_requirements(&mmap)
+            .into_iter()
+            .filter(|f| f.severity == gguf_check::Severity::Error)
+            .map(|f| f.to_string())
+            .collect();
+        if !errors.is_empty() {
+            anyhow::bail!(
+                "Exported GGUF failed llama.cpp compatibility check: {}",
+                errors.join("; ")
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Writes `{arch}.rope.dimension_count = hidden_size / head_count` when absent from metadata.
+fn add_missing_rope_dimension_count(writer: &mut GgufWriter, model: &ModelIR) -> Result<()> {
+    let arch = GgufMetadataSynchronizer::architecture_prefix(&model.architecture);
+    let key = format!("{arch}.rope.dimension_count");
+    if writer.metadata().iter().any(|(k, _)| k == &key) {
+        return Ok(());
+    }
+    if model.num_attention_heads == 0 {
+        anyhow::bail!("Cannot compute {key}: model has 0 attention heads");
+    }
+    let dim = u32::try_from(model.hidden_size / model.num_attention_heads)
+        .with_context(|| format!("{key} exceeds u32"))?;
+    writer.add_u32(key, dim);
+    Ok(())
+}
+
+fn add_tokenizer_metadata(writer: &mut GgufWriter, config: &ExportConfig) -> Result<()> {
+    let Some(tok_path) = config.tokenizer_json_path.as_deref() else {
+        return Ok(());
+    };
+    let tokenizer_json = std::fs::read_to_string(tok_path)
+        .with_context(|| format!("Failed to read tokenizer.json from {:?}", tok_path))?;
+    let config_json = tok_path
+        .parent()
+        .map(|dir| dir.join("config.json"))
+        .filter(|path| path.is_file())
+        .map(|path| {
+            std::fs::read_to_string(&path)
+                .with_context(|| format!("Failed to read config.json from {:?}", path))
+        })
+        .transpose()?;
+    for (key, value) in tokenizer_meta::tokenizer_metadata(&tokenizer_json, config_json.as_deref())?
+    {
+        writer.add_metadata(key, value);
+    }
+    Ok(())
+}
+
+fn rope_head_count(ggml_name: &str, model: &ModelIR) -> Option<usize> {
+    if ggml_name.starts_with("blk.") && ggml_name.ends_with(".attn_q.weight") {
+        Some(model.num_attention_heads)
+    } else if ggml_name.starts_with("blk.") && ggml_name.ends_with(".attn_k.weight") {
+        Some(model.num_key_value_heads)
+    } else {
+        None
+    }
+}
+
+fn encode_permuted_rope_tensor(
+    tensor: &crate::ir::TensorIR,
+    ggml_name: &str,
+    n_heads: usize,
+    target: GgmlType,
+) -> Result<Vec<u8>> {
+    if tensor.shape.len() != 2 {
+        anyhow::bail!(
+            "Tensor '{}' must be 2-D to apply RoPE row permutation, got shape {:?}",
+            tensor.name,
+            tensor.shape
+        );
+    }
+    let (rows, cols) = (tensor.shape[0], tensor.shape[1]);
+    let values = crate::inference::read_tensor_f32(tensor)?;
+    let permuted = ggml_names::permute_rope_rows(&values, rows, cols, n_heads).map_err(|err| {
+        anyhow::anyhow!(
+            "Failed to permute RoPE rows for tensor '{}' ({ggml_name}): {err}",
+            tensor.name
+        )
+    })?;
+    encode_f32_values(&permuted, target, &tensor.name)
+}
+
+fn encode_f32_values(values: &[f32], target: GgmlType, tensor_name: &str) -> Result<Vec<u8>> {
+    match target {
+        GgmlType::F32 => Ok(f32_slice_to_le_bytes(values)),
+        GgmlType::BF16 => Ok(values
+            .iter()
+            .flat_map(|&v| crate::engine::minifloat::f32_to_bf16(v).to_le_bytes())
+            .collect()),
+        _ if conversion::is_conversion_target(target) => {
+            let f32_bytes = f32_slice_to_le_bytes(values);
+            let mut out = Vec::new();
+            conversion::encode_float_source(
+                &mut std::io::Cursor::new(f32_bytes),
+                &mut out,
+                "F32",
+                target,
+                values.len(),
+            )
+            .with_context(|| {
+                format!(
+                    "Cannot encode tensor '{}' as {}",
+                    tensor_name,
+                    target.type_name()
+                )
+            })?;
+            Ok(out)
+        }
+        other => anyhow::bail!(
+            "Tensor '{}' targets {}, which is not supported after RoPE row permutation",
+            tensor_name,
+            other.type_name()
+        ),
+    }
+}
+
+fn f32_slice_to_le_bytes(values: &[f32]) -> Vec<u8> {
+    values.iter().flat_map(|v| v.to_le_bytes()).collect()
 }
 
 /// A tensor's payload in its selected format, by the same plan the per-tensor GGUF export uses:
@@ -631,5 +818,231 @@ mod tests {
         hasher.update(&bytes[130..]);
 
         assert_eq!(hasher.finish(), compute_sha256(&bytes));
+    }
+
+    #[test]
+    fn export_llama_cpp_layout_writes_tokenizer_keys_and_flag_off_keeps_output_unchanged() {
+        use crate::ir::model::ModelMetadataValue as MV;
+        use crate::parser::gguf::GgufParser;
+        use crate::parser::ModelImporter;
+
+        let dir = tempfile::tempdir().expect("temp dir");
+        let model_dir = dir.path().join("model");
+        std::fs::create_dir_all(&model_dir).expect("create model dir");
+
+        let one = 0x3C00u16.to_le_bytes();
+        let mut st = SafeTensorsWriter::new();
+        st.add_tensor(
+            "model.embed_tokens.weight",
+            "F16",
+            vec![5, 4],
+            one.repeat(20),
+        );
+        st.add_tensor(
+            "model.layers.0.self_attn.q_proj.weight",
+            "F16",
+            vec![4, 4],
+            one.repeat(16),
+        );
+        st.add_tensor(
+            "model.layers.0.self_attn.k_proj.weight",
+            "F16",
+            vec![4, 4],
+            one.repeat(16),
+        );
+        st.add_tensor(
+            "model.layers.0.input_layernorm.weight",
+            "F16",
+            vec![4],
+            one.repeat(4),
+        );
+        st.add_tensor("model.norm.weight", "F16", vec![4], one.repeat(4));
+        st.write_to_file(model_dir.join("model.safetensors"))
+            .expect("write safetensors");
+
+        std::fs::write(
+            model_dir.join("config.json"),
+            r#"{"architectures":["LlamaForCausalLM"],"hidden_size":4,"num_hidden_layers":1,"num_attention_heads":1,"num_key_value_heads":1,"vocab_size":5,"bos_token_id":0,"eos_token_id":1}"#,
+        )
+        .expect("write config.json");
+        let tok_path = model_dir.join("tokenizer.json");
+        std::fs::write(
+            &tok_path,
+            r#"{
+                "added_tokens": [
+                    {"id": 0, "content": "<s>", "special": true},
+                    {"id": 1, "content": "</s>", "special": true}
+                ],
+                "pre_tokenizer": {"type": "ByteLevel"},
+                "decoder": {"type": "ByteLevel"},
+                "model": {
+                    "type": "BPE",
+                    "vocab": {"<s>": 0, "</s>": 1, "a": 2, "b": 3, "ab": 4},
+                    "merges": ["a b"]
+                }
+            }"#,
+        )
+        .expect("write tokenizer.json");
+
+        let model = ModelImporter::import(&model_dir).expect("import model");
+
+        let out_off_none = dir.path().join("off_none.gguf");
+        let out_off_with_path = dir.path().join("off_with_path.gguf");
+        let out_on = dir.path().join("on.gguf");
+
+        let off_report = ModelExporter::export(
+            &model,
+            &ExportConfig {
+                format: ExportFormat::GGUFv3,
+                quant_type: ExportQuantType::FP16,
+                output_path: out_off_none.clone(),
+                compute_checksum: false,
+                llama_cpp_layout: false,
+                tokenizer_json_path: None,
+            },
+        )
+        .expect("export off none");
+        ModelExporter::export(
+            &model,
+            &ExportConfig {
+                format: ExportFormat::GGUFv3,
+                quant_type: ExportQuantType::FP16,
+                output_path: out_off_with_path.clone(),
+                compute_checksum: false,
+                llama_cpp_layout: false,
+                tokenizer_json_path: Some(tok_path.clone()),
+            },
+        )
+        .expect("export off with path");
+        assert_eq!(
+            std::fs::read(&out_off_none).expect("read off_none"),
+            std::fs::read(&out_off_with_path).expect("read off_with_path"),
+            "llama_cpp_layout=false must ignore tokenizer_json_path"
+        );
+
+        let on_report = ModelExporter::export(
+            &model,
+            &ExportConfig {
+                format: ExportFormat::GGUFv3,
+                quant_type: ExportQuantType::FP16,
+                output_path: out_on.clone(),
+                compute_checksum: false,
+                llama_cpp_layout: true,
+                tokenizer_json_path: Some(tok_path),
+            },
+        )
+        .expect("export with llama_cpp_layout");
+        assert!(
+            off_report.warnings.is_empty(),
+            "default export warns: {:?}",
+            off_report.warnings
+        );
+        assert_eq!(on_report.warnings.len(), 1, "{:?}", on_report.warnings);
+        assert!(
+            on_report.warnings[0].contains("tokenizer.ggml.pre"),
+            "{:?}",
+            on_report.warnings
+        );
+
+        let bytes = std::fs::read(&out_on).expect("read exported gguf");
+        let findings = gguf_check::check_gguf(&bytes);
+        assert!(
+            !findings
+                .iter()
+                .any(|f| f.severity == gguf_check::Severity::Error),
+            "unexpected gguf errors: {:?}",
+            findings
+        );
+
+        let parsed = GgufParser::parse_from_file(&out_on).expect("parse exported gguf");
+        let meta = &parsed.source_gguf_metadata;
+        assert_eq!(
+            meta.get("tokenizer.ggml.model"),
+            Some(&MV::String("gpt2".to_string()))
+        );
+        assert_eq!(
+            meta.get("tokenizer.ggml.tokens"),
+            Some(&MV::Array(vec![
+                MV::String("<s>".to_string()),
+                MV::String("</s>".to_string()),
+                MV::String("a".to_string()),
+                MV::String("b".to_string()),
+                MV::String("ab".to_string()),
+            ]))
+        );
+        assert_eq!(
+            meta.get("tokenizer.ggml.scores"),
+            Some(&MV::Array(vec![
+                MV::Float32(0.0),
+                MV::Float32(0.0),
+                MV::Float32(0.0),
+                MV::Float32(0.0),
+                MV::Float32(0.0),
+            ]))
+        );
+        assert_eq!(
+            meta.get("tokenizer.ggml.token_type"),
+            Some(&MV::Array(vec![
+                MV::Int32(3),
+                MV::Int32(3),
+                MV::Int32(1),
+                MV::Int32(1),
+                MV::Int32(1),
+            ]))
+        );
+        assert_eq!(
+            meta.get("tokenizer.ggml.merges"),
+            Some(&MV::Array(vec![MV::String("a b".to_string())]))
+        );
+        assert_eq!(
+            meta.get("tokenizer.ggml.bos_token_id"),
+            Some(&MV::Uint32(0))
+        );
+        assert_eq!(
+            meta.get("tokenizer.ggml.eos_token_id"),
+            Some(&MV::Uint32(1))
+        );
+    }
+
+    #[test]
+    fn export_llama_cpp_layout_fails_when_tokenizer_tokens_are_missing() {
+        use crate::parser::ModelImporter;
+
+        let dir = tempfile::tempdir().expect("temp dir");
+        let model_dir = dir.path().join("model");
+        std::fs::create_dir_all(&model_dir).expect("create model dir");
+
+        let one = 0x3C00u16.to_le_bytes();
+        let mut st = SafeTensorsWriter::new();
+        st.add_tensor(
+            "model.embed_tokens.weight",
+            "F16",
+            vec![5, 4],
+            one.repeat(20),
+        );
+        st.add_tensor("model.norm.weight", "F16", vec![4], one.repeat(4));
+        st.write_to_file(model_dir.join("model.safetensors"))
+            .expect("write safetensors");
+        std::fs::write(
+            model_dir.join("config.json"),
+            r#"{"architectures":["LlamaForCausalLM"],"hidden_size":4,"num_hidden_layers":1,"num_attention_heads":1,"num_key_value_heads":1,"vocab_size":5}"#,
+        )
+        .expect("write config.json");
+
+        let model = ModelImporter::import(&model_dir).expect("import model");
+        let err = ModelExporter::export(
+            &model,
+            &ExportConfig {
+                format: ExportFormat::GGUFv3,
+                quant_type: ExportQuantType::FP16,
+                output_path: dir.path().join("missing_tok.gguf"),
+                compute_checksum: false,
+                llama_cpp_layout: true,
+                tokenizer_json_path: None,
+            },
+        )
+        .unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("tokenizer.ggml.tokens"), "{msg}");
     }
 }

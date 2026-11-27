@@ -1,0 +1,77 @@
+{
+  "what": "THME-3091 check: llama.cpp loads a GGUF written by `thme export --quant fp16 --llama-cpp-layout` and continues a prompt with the same greedy tokens as THME's own forward pass",
+  "date": "2026-11-27",
+  "model": "SmolLM-135M (SafeTensors checkpoint)",
+  "llama_cpp": {
+    "build": "b12584-8e7862411",
+    "binary": "llama-completion",
+    "flags": "-n 20 -ngl 0 --temp 0 -no-cnv (CPU only)"
+  },
+  "export": {
+    "command": "thme export <model dir> -o smol-f16-llama.gguf --quant fp16 --llama-cpp-layout",
+    "bytes": 271081632,
+    "sha256": "74a4cf2bb199baf9364154fe51c9517757dfc686dcfd638a7ab3950a8e34d43b",
+    "tensors": 272
+  },
+  "prompt": "The capital of France is",
+  "prompt_token_ids": [
+    504,
+    3575,
+    282,
+    4649,
+    314
+  ],
+  "greedy_token_ids_thme_forward": [
+    7042,
+    30,
+    657,
+    314,
+    260,
+    3995,
+    2240,
+    281,
+    4649,
+    284,
+    260,
+    1796,
+    3995,
+    281,
+    260,
+    905,
+    30,
+    657,
+    314,
+    597
+  ],
+  "greedy_token_ids_llama_cpp": [
+    7042,
+    30,
+    657,
+    314,
+    260,
+    3995,
+    2240,
+    281,
+    4649,
+    284,
+    260,
+    1796,
+    3995,
+    281,
+    260,
+    905,
+    30,
+    657,
+    314,
+    597
+  ],
+  "matching_tokens": 20,
+  "compared_tokens": 20,
+  "llama_cpp_text": "The capital of France is Paris. It is the largest city in France and the second largest in the world. It is also",
+  "control_without_rope_permutation": "The capital of France is Paris.\nThe capital of France is the capital of France.\nThe capital of France. (repeats; not identical)",
+  "known_gaps": [
+    "the file has no tokenizer.ggml.pre; llama.cpp warns 'missing pre-tokenizer type, using default' (token ids matched for this prompt only)",
+    "one model, one prompt, F16 only, CPU only",
+    "THME's own GGUF reader does not undo the q/k row permutation, so reading a llama.cpp layout file with `thme forward` gives different logits (top1 logit 7.53 against 13.06 for the checkpoint, same top token for this prompt)"
+  ]
+}

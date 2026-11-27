@@ -4,7 +4,8 @@
 //! Solves coupled mixed-precision allocation over hardware-fused execution groups
 //! (`[Wq; Wk; Wv]`, `[Wgate; Wup]`, `Wo`, `Wdown`) preserving both harmful
 //! amplification (`Gamma_+`) and beneficial cross-layer compensation (`Gamma_-`)
-//! using the exact AM-GM convex majorizer and `delta0`-smoothed subgradients.
+//! using the sign-split majorizer of the dossier (positive coupling terms bounded by AM-GM,
+//! negative ones kept exactly) and a monotone majorize-minimize descent.
 
 use crate::engine::alloc::{min_cost_choice, Choice};
 use crate::engine::error::{EngineError, EngineResult};
@@ -63,6 +64,110 @@ pub fn evaluate_coupled_objective(
     }
 
     obj
+}
+
+/// `s_G = sqrt(eps_G + delta0)` of the selected format of every group.
+fn selected_roots(groups: &[FusedGroupSpec], choice: &[usize]) -> Vec<f64> {
+    choice
+        .iter()
+        .enumerate()
+        .map(|(g, &f)| (groups[g].eps[f].max(0.0) + DELTA_SMOOTH).sqrt())
+        .collect()
+}
+
+/// Sign-split majorizer of [`evaluate_coupled_objective`] at `x`, expanded around `x_t`
+/// (dossier v5 section 4.2, equations 15 to 17).
+///
+/// With `C = gamma_plus - sum_r u_r u_r^T` off the diagonal, the objective is
+/// `sum_G (J_G^2 eps_G - sum_r u_rG^2 s_G^2) + sum_{G != G'} C_GG' s_G s_G'`. A term with
+/// `C > 0` is bounded above by the AM-GM inequality around `x_t`; a term with `C <= 0` is convex
+/// in the relaxed variables and is kept exactly. The result is at least the objective for every
+/// `x` and equals it at `x = x_t`, so a step that lowers it lowers the objective.
+pub fn sign_split_surrogate(
+    groups: &[FusedGroupSpec],
+    x: &[usize],
+    x_t: &[usize],
+    gamma_plus: &[Vec<f64>],
+    gamma_minus_factors: &[Vec<f64>],
+) -> f64 {
+    let n = groups.len();
+    let s = selected_roots(groups, x);
+    let s_t = selected_roots(groups, x_t);
+    let mut surrogate = 0.0_f64;
+    for g in 0..n {
+        let e = groups[g].eps[x[g]].max(0.0);
+        let u_sq: f64 = gamma_minus_factors.iter().map(|u| u[g] * u[g]).sum();
+        surrogate += groups[g].j_eff * groups[g].j_eff * e - u_sq * s[g] * s[g];
+    }
+    for i in 0..n {
+        for j in 0..n {
+            if i == j {
+                continue;
+            }
+            let c = gamma_plus[i][j] - gamma_minus_factors.iter().map(|u| u[i] * u[j]).sum::<f64>();
+            if c > 0.0 {
+                let ratio = s_t[j] / s_t[i];
+                surrogate += 0.5 * c * (ratio * s[i] * s[i] + s[j] * s[j] / ratio);
+            } else {
+                surrogate += c * s[i] * s[j];
+            }
+        }
+    }
+    surrogate
+}
+
+/// Majorize-minimize descent over discrete choices: each step moves one group to the format that
+/// lowers the sign-split surrogate most within `budget_bytes`. Because the surrogate bounds the
+/// objective from above and is tight at the current point, the objective never increases.
+/// Returns the final choice and the objective after every step (first entry is the start).
+pub fn mm_descend(
+    groups: &[FusedGroupSpec],
+    gamma_plus: &[Vec<f64>],
+    gamma_minus_factors: &[Vec<f64>],
+    start: &[usize],
+    budget_bytes: u64,
+) -> (Vec<usize>, Vec<f64>) {
+    let mut choice = start.to_vec();
+    let mut bytes: u64 = choice
+        .iter()
+        .enumerate()
+        .map(|(g, &f)| groups[g].bytes[f])
+        .sum();
+    let mut current = evaluate_coupled_objective(groups, &choice, gamma_plus, gamma_minus_factors);
+    let mut trace = vec![current];
+    for _ in 0..(8 * groups.len() + 8) {
+        let expansion = choice.clone();
+        let mut best: Option<(usize, usize, f64)> = None;
+        for g in 0..groups.len() {
+            for f in 0..groups[g].bytes.len() {
+                if f == choice[g] {
+                    continue;
+                }
+                let next_bytes = bytes - groups[g].bytes[choice[g]] + groups[g].bytes[f];
+                if next_bytes > budget_bytes {
+                    continue;
+                }
+                let mut candidate = expansion.clone();
+                candidate[g] = f;
+                let value = sign_split_surrogate(
+                    groups,
+                    &candidate,
+                    &expansion,
+                    gamma_plus,
+                    gamma_minus_factors,
+                );
+                if value + 1e-12 < current && best.is_none_or(|(_, _, v)| value < v) {
+                    best = Some((g, f, value));
+                }
+            }
+        }
+        let Some((g, f, _)) = best else { break };
+        bytes = bytes - groups[g].bytes[choice[g]] + groups[g].bytes[f];
+        choice[g] = f;
+        current = evaluate_coupled_objective(groups, &choice, gamma_plus, gamma_minus_factors);
+        trace.push(current);
+    }
+    (choice, trace)
 }
 
 /// Solves coupled allocation via DP initialization, AM-GM `DC-CCCP` homotopy
@@ -238,16 +343,26 @@ pub fn solve_coupled_dc_cccp(
         }
         let Some((g, new_f, _, saved)) = best_move else {
             choice = init.choice.clone();
-            total_bytes = choice
-                .iter()
-                .enumerate()
-                .map(|(i, &f)| groups[i].bytes[f])
-                .sum();
             break;
         };
         choice[g] = new_f;
         total_bytes -= saved;
     }
+
+    // Step 3b: majorize-minimize descent on the sign-split surrogate (monotone, in budget).
+    let (descended, _) = mm_descend(
+        groups,
+        gamma_plus,
+        gamma_minus_factors,
+        &choice,
+        budget_bytes,
+    );
+    choice = descended;
+    total_bytes = choice
+        .iter()
+        .enumerate()
+        .map(|(g, &f)| groups[g].bytes[f])
+        .sum();
 
     // Step 4: 1-swap Tabu polish strictly within budget_bytes.
     let mut cur_obj = evaluate_coupled_objective(groups, &choice, gamma_plus, gamma_minus_factors);
@@ -315,5 +430,122 @@ mod tests {
         let alloc = solve_coupled_dc_cccp(&groups, &gamma_plus, &gamma_minus, 800).unwrap();
         assert!(alloc.total_bytes <= 800);
         assert!(alloc.coupled_objective.is_finite());
+    }
+
+    /// Deterministic splitmix64 stream in [0, 1) for reproducible random instances.
+    fn unit_stream(seed: u64) -> impl FnMut() -> f64 {
+        let mut state = seed;
+        move || {
+            state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut z = state;
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            ((z ^ (z >> 31)) >> 11) as f64 / (1_u64 << 53) as f64
+        }
+    }
+
+    /// A random instance whose gamma_plus has negative off-diagonal entries (a PSD projection
+    /// can), which is why the majorizer needs the sign split of dossier v5 section 4.2.
+    fn random_instance(
+        next: &mut impl FnMut() -> f64,
+        n: usize,
+    ) -> (Vec<FusedGroupSpec>, Vec<Vec<f64>>, Vec<Vec<f64>>) {
+        let groups: Vec<FusedGroupSpec> = (0..n)
+            .map(|_| FusedGroupSpec {
+                j_eff: 0.5 + 2.0 * next(),
+                eps: vec![
+                    0.005 + 0.02 * next(),
+                    0.03 + 0.1 * next(),
+                    0.15 + 0.3 * next(),
+                ],
+                bytes: vec![800, 400, 200],
+            })
+            .collect();
+        let gamma_plus: Vec<Vec<f64>> = (0..n)
+            .map(|i| {
+                (0..n)
+                    .map(|j| if i == j { 0.0 } else { 0.6 * next() - 0.2 })
+                    .collect()
+            })
+            .collect();
+        let factors: Vec<Vec<f64>> = (0..2)
+            .map(|_| (0..n).map(|_| 0.4 * next() - 0.2).collect())
+            .collect();
+        (groups, gamma_plus, factors)
+    }
+
+    /// The surrogate is at least the objective everywhere and equals it at the expansion point.
+    #[test]
+    fn sign_split_surrogate_majorizes_the_objective() {
+        let mut next = unit_stream(20_261_127);
+        for _ in 0..200 {
+            let (groups, gp, gm) = random_instance(&mut next, 5);
+            let pick = |next: &mut dyn FnMut() -> f64| -> Vec<usize> {
+                (0..5).map(|_| (next() * 3.0) as usize % 3).collect()
+            };
+            let x_t = pick(&mut next);
+            let x = pick(&mut next);
+            let obj_x = evaluate_coupled_objective(&groups, &x, &gp, &gm);
+            let sur_x = sign_split_surrogate(&groups, &x, &x_t, &gp, &gm);
+            assert!(
+                sur_x >= obj_x - 1e-9,
+                "surrogate {sur_x} below objective {obj_x}"
+            );
+            let obj_t = evaluate_coupled_objective(&groups, &x_t, &gp, &gm);
+            let sur_t = sign_split_surrogate(&groups, &x_t, &x_t, &gp, &gm);
+            assert!(
+                (sur_t - obj_t).abs() < 1e-9,
+                "not tight at the expansion point"
+            );
+        }
+    }
+
+    /// Majorize-minimize steps never increase the objective, and stay inside the budget.
+    #[test]
+    fn mm_descent_is_monotone_and_budget_feasible() {
+        let mut next = unit_stream(7_777);
+        for _ in 0..40 {
+            let (groups, gp, gm) = random_instance(&mut next, 6);
+            let start = vec![1_usize; 6];
+            let budget = 6 * 400;
+            let (choice, trace) = mm_descend(&groups, &gp, &gm, &start, budget);
+            assert!(
+                trace.windows(2).all(|w| w[1] <= w[0] + 1e-9),
+                "objective rose: {trace:?}"
+            );
+            let bytes: u64 = choice
+                .iter()
+                .enumerate()
+                .map(|(g, &f)| groups[g].bytes[f])
+                .sum();
+            assert!(bytes <= budget);
+        }
+    }
+
+    /// The solver is never worse than its own diagonal-DP starting point.
+    #[test]
+    fn solver_matches_or_beats_the_independent_dp_choice() {
+        let mut next = unit_stream(31_337);
+        for _ in 0..20 {
+            let (groups, gp, gm) = random_instance(&mut next, 5);
+            let budget = 5 * 400;
+            let alloc = solve_coupled_dc_cccp(&groups, &gp, &gm, budget).unwrap();
+            let dp_items: Vec<Vec<Choice>> = groups
+                .iter()
+                .map(|g| {
+                    g.eps
+                        .iter()
+                        .zip(&g.bytes)
+                        .map(|(&e, &b)| Choice {
+                            weight: b,
+                            cost: g.j_eff * g.j_eff * e,
+                        })
+                        .collect()
+                })
+                .collect();
+            let dp = min_cost_choice(&dp_items, budget).unwrap();
+            let dp_obj = evaluate_coupled_objective(&groups, &dp.choice, &gp, &gm);
+            assert!(alloc.coupled_objective <= dp_obj + 1e-9);
+        }
     }
 }

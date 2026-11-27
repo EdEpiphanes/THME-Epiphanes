@@ -2,7 +2,7 @@
   "servers": {
     "thme-mcp": {
       "command": "${workspaceFolder}/target/release/thme",
-      "args": ["mcp"],
+      "args": ["mcp", "--allow-root", "${workspaceFolder}"],
       "env": {}
     }
   }

@@ -63,7 +63,7 @@ Build once with `cargo build --release --bin thme`, then point the config at the
   "servers": {
     "thme-mcp": {
       "command": "${workspaceFolder}/target/release/thme",
-      "args": ["mcp"],
+      "args": ["mcp", "--allow-root", "${workspaceFolder}"],
       "env": {}
     }
   }
@@ -75,7 +75,7 @@ Or with an installed binary:
   "servers": {
     "thme-mcp": {
       "command": "thme",
-      "args": ["mcp"],
+      "args": ["mcp", "--allow-root", "/path/to/your/models"],
       "env": {}
     }
   }

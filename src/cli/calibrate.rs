@@ -12,7 +12,7 @@ use crate::parser::ModelImporter;
 
 #[derive(Args, Debug)]
 pub struct CalibrateArgs {
-    /// SafeTensors model directory or GGUF file
+    /// Model path (SafeTensors, GGUF and .epiph)
     #[arg(value_name = "MODEL_PATH")]
     pub model: PathBuf,
 

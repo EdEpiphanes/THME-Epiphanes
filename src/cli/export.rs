@@ -8,7 +8,7 @@ use crate::parser::ModelImporter;
 
 #[derive(Args, Debug)]
 pub struct ExportArgs {
-    /// Source GGUF file or SafeTensors model directory
+    /// Source model path (SafeTensors, GGUF and .epiph)
     #[arg(value_name = "MODEL_PATH")]
     pub model: PathBuf,
 
@@ -36,6 +36,10 @@ pub struct ExportArgs {
     /// Compute SHA-256 checksum after export
     #[arg(long)]
     pub checksum: bool,
+
+    /// Export using llama.cpp GGUF layout (GGML tensor names, F32 norms, RoPE row permutation, and rope.dimension_count)
+    #[arg(long)]
+    pub llama_cpp_layout: bool,
 }
 
 fn parse_quant_type(value: &str) -> std::result::Result<ExportQuantType, String> {
@@ -69,6 +73,11 @@ pub fn execute(args: ExportArgs) -> Result<()> {
             (model, ExportQuantType::PerTensor)
         }
     };
+    let tokenizer_json_path = if args.llama_cpp_layout {
+        find_tokenizer_json(&args.model)
+    } else {
+        None
+    };
     let report = ModelExporter::export(
         &model,
         &ExportConfig {
@@ -76,6 +85,8 @@ pub fn execute(args: ExportArgs) -> Result<()> {
             quant_type: quant,
             output_path: args.output.clone(),
             compute_checksum: args.checksum,
+            llama_cpp_layout: args.llama_cpp_layout,
+            tokenizer_json_path,
         },
     )?;
 
@@ -83,10 +94,23 @@ pub fn execute(args: ExportArgs) -> Result<()> {
         "Exported {} tensors to {:?} ({} bytes)",
         report.total_tensors, args.output, report.exported_bytes
     );
+    for warning in &report.warnings {
+        eprintln!("Warning: {warning}");
+    }
     if let Some(checksum) = report.sha256_checksum {
         println!("SHA-256: {checksum}");
     }
     Ok(())
+}
+
+fn find_tokenizer_json(model_path: &std::path::Path) -> Option<PathBuf> {
+    let dir = if model_path.is_file() {
+        model_path.parent()?
+    } else {
+        model_path
+    };
+    let path = dir.join("tokenizer.json");
+    path.is_file().then_some(path)
 }
 
 /// Applies a recipe exactly as `thme evaluate --recipe` does, returning the model whose
@@ -169,6 +193,8 @@ mod tests {
                 quant_type: ExportQuantType::PerTensor,
                 output_path: out.clone(),
                 compute_checksum: false,
+                llama_cpp_layout: false,
+                tokenizer_json_path: None,
             },
         )
         .unwrap();
@@ -257,6 +283,8 @@ mod tests {
             quant_type: ExportQuantType::PerTensor,
             output_path: out.clone(),
             compute_checksum: false,
+            llama_cpp_layout: false,
+            tokenizer_json_path: None,
         };
         ModelExporter::export(&model, &config).unwrap();
 
@@ -291,5 +319,56 @@ mod tests {
         narrow_model.tensors[0].selected_format = TensorFormat::Custom("thme.hadamard_int4".into());
         let error = ModelExporter::export(&narrow_model, &config).unwrap_err();
         assert!(format!("{error:#}").contains("BYOA"), "{error:#}");
+    }
+
+    #[test]
+    fn llama_cpp_layout_flag_defaults_false_and_parses() {
+        use clap::Parser;
+        let default_cli = crate::cli::Cli::try_parse_from([
+            "thme",
+            "export",
+            "model.safetensors",
+            "-o",
+            "out.gguf",
+        ])
+        .unwrap();
+        let crate::cli::Commands::Export(default_args) = default_cli.command else {
+            panic!("expected export command");
+        };
+        assert!(!default_args.llama_cpp_layout);
+
+        let opt_in_cli = crate::cli::Cli::try_parse_from([
+            "thme",
+            "export",
+            "model.safetensors",
+            "-o",
+            "out.gguf",
+            "--llama-cpp-layout",
+        ])
+        .unwrap();
+        let crate::cli::Commands::Export(opt_in_args) = opt_in_cli.command else {
+            panic!("expected export command");
+        };
+        assert!(opt_in_args.llama_cpp_layout);
+    }
+
+    #[test]
+    fn find_tokenizer_json_checks_model_dir_and_sibling_file() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(find_tokenizer_json(dir.path()), None);
+        let weights = dir.path().join("model.safetensors");
+        std::fs::write(&weights, b"").unwrap();
+        assert_eq!(find_tokenizer_json(&weights), None);
+
+        let tok = dir.path().join("tokenizer.json");
+        std::fs::write(&tok, b"{}").unwrap();
+        assert_eq!(
+            find_tokenizer_json(dir.path()).as_deref(),
+            Some(tok.as_path())
+        );
+        assert_eq!(
+            find_tokenizer_json(&weights).as_deref(),
+            Some(tok.as_path())
+        );
     }
 }

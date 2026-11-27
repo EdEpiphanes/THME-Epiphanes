@@ -171,7 +171,11 @@ impl GgufMetadataSynchronizer {
         }
         meta.push((
             format!("{arch}.attention.layer_norm_rms_epsilon"),
-            GgufValue::Float32(model.norm_eps.unwrap_or(1e-5)),
+            GgufValue::Float32(
+                model
+                    .norm_eps
+                    .unwrap_or(crate::inference::llama::FALLBACK_RMS_NORM_EPS),
+            ),
         ));
 
         // 5. Vocabulary metadata
@@ -284,6 +288,22 @@ mod tests {
         assert_eq!(
             GgufMetadataSynchronizer::file_type_code(ExportQuantType::BitNetB158),
             0
+        );
+    }
+
+    #[test]
+    fn the_epsilon_written_when_the_source_has_none_is_the_one_the_engine_assumes() {
+        let mut model = make_test_model();
+        model.norm_eps = None;
+        let meta = GgufMetadataSynchronizer::build_metadata(&model, ExportQuantType::Q8_0);
+        let written = meta
+            .iter()
+            .find(|(k, _)| k == "llama.attention.layer_norm_rms_epsilon")
+            .map(|(_, v)| v.clone());
+        let engine = crate::inference::LlamaConfig::from_model_ir(&model).rms_norm_eps;
+        assert!(
+            matches!(written, Some(GgufValue::Float32(v)) if v == engine),
+            "written {written:?}, engine assumes {engine}"
         );
     }
 

@@ -187,6 +187,8 @@ pub fn run_verification(args: &VerificationArgs) -> Result<ProductionVerificatio
             quant_type: ExportQuantType::Q8_0,
             output_path: gguf_dest.clone(),
             compute_checksum: true,
+            llama_cpp_layout: false,
+            tokenizer_json_path: None,
         };
         let export_rep = ModelExporter::export(&model, &export_cfg)?;
         println!(
