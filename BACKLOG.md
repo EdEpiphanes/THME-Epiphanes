@@ -232,6 +232,13 @@ closes it.
 - **Done means**: Criteria accept an ordered list of bands (from, relative and absolute limits) validated and hashed like the rest of the gate file; v1 and v2 files and hashes unchanged; a gate v3 file with the owner's confirmed limits; tests on both sides of every band edge; a documented table of the committed results re-judged.
 - **Progress** (27 November 2026): the owner named US EPA Performance Specification 16; its text was read and its numbers are in `docs/research/ps16-transposition.md` (RATA 10 percent above 100, 20 percent from 100 to 10, absolute 2 below 10; audit absolute at 20 or less; bias, F-test and correlation 0.8; nine runs at three levels) with a mapping to the Epiphanes gate. The committed results were re-judged under the literal bands. Not built. Waiting for the owner on: absolute threshold 10 or 20, the absolute limit in perplexity units, and whether to adopt the bias, variance and correlation tests and the three levels. Owner decision, 27 November 2026: the absolute threshold stays 20 for now; the full transposition (bias, variance, correlation, levels, gate v3) is done later.
 
+### [THME-3110] Small .epiph testbed for the Epiphanes math
+
+- **Milestone**: v0.3 · **Roadmap**: none · **Priority**: p1 · **Area**: research · **Type**: experiment · **Status**: ready
+- **Problem**: The paper's gate, allocator and recovery math is tested on two pretrained models whose training history is unknown, and several parameters are still open (gate range, switch point, link constant C, PS-16 limits). A model we train gives a known history and a checkpoint series.
+- **Done means**: Plan in `docs/research/epiph-testbed-plan.md` carried out through its first three steps: Pythia-14M-shaped arm A (scratch) and arm B (Pythia start) trained on WikiText-103, a checkpoint series as `.epiph` files, committed evaluation reports, and an HF versus THME cross-check. Findings and any proposed formula go in `docs/research/epiph-testbed-findings.md`, each pre-registered.
+- **Progress** (27 November 2026): owner chose both arms and two-stage data (WikiText-103, then Claude-written lessons, test-only and local). Plan written; nothing trained yet.
+
 ### [THME-3100] Calibrate the allocator link constant C
 
 - **Milestone**: v0.2.4 · **Roadmap**: unassigned · **Priority**: p2 · **Area**: research · **Type**: research · **Status**: triage
