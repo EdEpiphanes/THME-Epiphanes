@@ -19,6 +19,8 @@ pub mod minifloat;
 pub mod numfmt;
 pub mod ode;
 pub mod policy_select;
+pub mod projection;
+pub mod registry;
 pub mod transport;
 pub mod viz;
 
