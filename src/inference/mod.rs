@@ -24,6 +24,7 @@ pub mod polar_kv;
 pub mod probe;
 pub mod sampler;
 pub mod smoothing;
+pub mod symmetry;
 pub mod weights;
 
 pub use arch::{load_reference_model, ArchConfig, CausalLm};
