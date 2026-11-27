@@ -67,6 +67,14 @@ pub struct ChatArgs {
     #[arg(long, value_enum, default_value_t = KvPrecisionArg::F32)]
     pub kv_precision: KvPrecisionArg,
 
+    /// KV cache storage precision for keys (defaults to --kv-precision)
+    #[arg(long, value_enum)]
+    pub kv_key_precision: Option<KvPrecisionArg>,
+
+    /// KV cache storage precision for values (defaults to --kv-precision)
+    #[arg(long, value_enum)]
+    pub kv_value_precision: Option<KvPrecisionArg>,
+
     /// Output structured JSON with timing and token counts
     #[arg(long)]
     pub json: bool,
@@ -83,7 +91,9 @@ fn reply_json(
         "model": model_name,
         "architecture": arch,
         "device": format!("{:?}", device).to_lowercase(),
-        "kv_precision": reply.kv_precision.as_str(),
+        "kv_precision": reply.kv_precision,
+        "kv_key_precision": reply.kv_key_precision,
+        "kv_value_precision": reply.kv_value_precision,
         "kv_cache_bytes": reply.kv_cache_bytes,
         "prompt_tokens": reply.prompt_tokens,
         "generated_tokens": reply.token_ids.len(),
@@ -120,6 +130,10 @@ pub fn execute(args: ChatArgs) -> Result<()> {
         plain_text: use_plain,
         max_new_tokens: args.max_new_tokens,
         kv_precision: args.kv_precision.into_kv_precision(),
+        kv_key_precision: args.kv_key_precision.map(KvPrecisionArg::into_kv_precision),
+        kv_value_precision: args
+            .kv_value_precision
+            .map(KvPrecisionArg::into_kv_precision),
     };
     let cancel = AtomicBool::new(false);
     let reply = generate(
@@ -151,11 +165,19 @@ pub fn execute(args: ChatArgs) -> Result<()> {
             model_ir.name,
             arch_cfg.family()
         );
+        let kv_label = if reply.kv_key_precision == reply.kv_value_precision {
+            reply.kv_precision.clone()
+        } else {
+            format!(
+                "mixed (k={}, v={})",
+                reply.kv_key_precision, reply.kv_value_precision
+            )
+        };
         println!(
             "Prompt: {} tok | Generated: {} tok | KV: {} ({} B) | Wall: {:.3}s (prefill {:.3}s) | Total: {:.2} tok/s | Decode: {:.2} tok/s | Stop: {}",
             reply.prompt_tokens,
             reply.token_ids.len(),
-            reply.kv_precision.as_str(),
+            kv_label,
             reply.kv_cache_bytes,
             reply.wall_secs,
             reply.prefill_secs,
@@ -204,6 +226,25 @@ mod tests {
     }
 
     #[test]
+    fn kv_key_and_value_precision_flags_parse_optionally() {
+        let cli = Cli::try_parse_from([
+            "thme",
+            "chat",
+            "model.gguf",
+            "--kv-key-precision",
+            "f32",
+            "--kv-value-precision",
+            "int4",
+        ])
+        .unwrap();
+        let Commands::Chat(args) = cli.command else {
+            panic!("expected chat command");
+        };
+        assert_eq!(args.kv_key_precision, Some(KvPrecisionArg::F32));
+        assert_eq!(args.kv_value_precision, Some(KvPrecisionArg::Int4));
+    }
+
+    #[test]
     fn reply_json_includes_kv_precision_and_kv_cache_bytes() {
         let reply = Reply {
             prompt: "user: hi\nassistant:".to_string(),
@@ -214,7 +255,9 @@ mod tests {
             prefill_secs: 0.2,
             tokens_per_sec: 4.0,
             decode_tokens_per_sec: 3.33,
-            kv_precision: KvPrecision::Int8,
+            kv_precision: "int8".to_string(),
+            kv_key_precision: "int8".to_string(),
+            kv_value_precision: "int8".to_string(),
             kv_cache_bytes: 240,
             finish: Finish::MaxTokens,
         };
@@ -223,6 +266,8 @@ mod tests {
         assert_eq!(out["architecture"], "LLaMA");
         assert_eq!(out["device"], "cpu");
         assert_eq!(out["kv_precision"], "int8");
+        assert_eq!(out["kv_key_precision"], "int8");
+        assert_eq!(out["kv_value_precision"], "int8");
         assert_eq!(out["kv_cache_bytes"], 240);
         assert_eq!(out["prompt_tokens"], 4);
         assert_eq!(out["generated_tokens"], 2);
@@ -232,5 +277,16 @@ mod tests {
         assert_eq!(out["decode_tokens_per_sec"], 3.33);
         assert_eq!(out["finish"], "max_tokens");
         assert_eq!(out["text"], "ok");
+
+        let mixed = Reply {
+            kv_precision: "mixed".to_string(),
+            kv_key_precision: "f32".to_string(),
+            kv_value_precision: "int4".to_string(),
+            ..reply
+        };
+        let mixed_out = reply_json("tiny-llama", "LLaMA", DeviceArg::Cpu, &mixed, "max_tokens");
+        assert_eq!(mixed_out["kv_precision"], "mixed");
+        assert_eq!(mixed_out["kv_key_precision"], "f32");
+        assert_eq!(mixed_out["kv_value_precision"], "int4");
     }
 }

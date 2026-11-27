@@ -15,9 +15,10 @@ use clap::Parser;
 use serde_json::json;
 use std::path::PathBuf;
 
+use thme::cli::chat::KvPrecisionArg;
 use thme::inference::{read_token_file, ArchConfig, KvPrecision, WeightPrecision};
 use thme::parser::ModelImporter;
-use thme::quality::kv_perplexity::kv_windowed_perplexity;
+use thme::quality::kv_perplexity::kv_windowed_perplexity_mixed;
 
 #[derive(Parser, Debug)]
 #[command(name = "kv_precision_ppl", about = "Perplexity per KV-cache precision")]
@@ -37,6 +38,14 @@ struct Args {
     /// Most windows to score per precision
     #[arg(long, default_value_t = 4)]
     max_windows: usize,
+
+    /// Optional KV-cache precision for keys (f32, int8, int4; defaults to f32 when value is set)
+    #[arg(long, value_enum)]
+    key_precision: Option<KvPrecisionArg>,
+
+    /// Optional KV-cache precision for values (f32, int8, int4; defaults to f32 when key is set)
+    #[arg(long, value_enum)]
+    value_precision: Option<KvPrecisionArg>,
 }
 
 fn main() -> Result<()> {
@@ -46,19 +55,42 @@ fn main() -> Result<()> {
     let tokens = read_token_file(&args.tokens)?;
     let config = ArchConfig::detect(&source, &args.model_path)?;
     let model = config.load(&source, WeightPrecision::AsStored)?;
-    for precision in [KvPrecision::F32, KvPrecision::Int8, KvPrecision::Int4] {
-        let r = kv_windowed_perplexity(
+    let pairs: Vec<(KvPrecision, KvPrecision)> =
+        if args.key_precision.is_some() || args.value_precision.is_some() {
+            vec![(
+                args.key_precision
+                    .map_or(KvPrecision::F32, KvPrecisionArg::into_kv_precision),
+                args.value_precision
+                    .map_or(KvPrecision::F32, KvPrecisionArg::into_kv_precision),
+            )]
+        } else {
+            vec![
+                (KvPrecision::F32, KvPrecision::F32),
+                (KvPrecision::Int8, KvPrecision::Int8),
+                (KvPrecision::Int4, KvPrecision::Int4),
+            ]
+        };
+    for (keys, values) in pairs {
+        let r = kv_windowed_perplexity_mixed(
             model.as_ref(),
             &tokens,
             args.window,
             args.max_windows,
-            precision,
+            keys,
+            values,
         )?;
+        let kv_precision = if keys == values {
+            keys.as_str()
+        } else {
+            "mixed"
+        };
         println!(
             "{}",
             json!({
                 "model": args.model_path.file_name().map(|n| n.to_string_lossy().into_owned()),
-                "kv_precision": precision.as_str(),
+                "kv_precision": kv_precision,
+                "kv_key_precision": keys.as_str(),
+                "kv_value_precision": values.as_str(),
                 "window": r.window,
                 "windows": r.windows,
                 "tokens_scored": r.tokens_scored,

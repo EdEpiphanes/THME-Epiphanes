@@ -59,6 +59,15 @@ pub trait CausalLm: Send + Sync {
         }
     }
 
+    /// An empty KV cache with separate key and value precisions, or `None` when unsupported.
+    fn new_cache_with_precisions(&self, keys: KvPrecision, values: KvPrecision) -> Option<KvCache> {
+        if keys == values {
+            self.new_cache_with_precision(keys)
+        } else {
+            None
+        }
+    }
+
     /// Appends `tokens` after the positions in `cache` and returns the logits of the last one.
     /// Equal to `forward_logits` over the whole sequence; only architectures with a cache implement it.
     fn forward_extend(&self, _cache: &mut KvCache, _tokens: &[u32]) -> Result<Vec<f32>> {
@@ -100,6 +109,9 @@ impl CausalLm for LlamaModel {
     fn new_cache_with_precision(&self, precision: KvPrecision) -> Option<KvCache> {
         Some(LlamaModel::new_cache_with_precision(self, precision))
     }
+    fn new_cache_with_precisions(&self, keys: KvPrecision, values: KvPrecision) -> Option<KvCache> {
+        Some(LlamaModel::new_cache_with_precisions(self, keys, values))
+    }
     fn forward_extend(&self, cache: &mut KvCache, tokens: &[u32]) -> Result<Vec<f32>> {
         LlamaModel::forward_extend(self, cache, tokens)
     }
@@ -138,6 +150,9 @@ impl CausalLm for NeoxModel {
     }
     fn new_cache_with_precision(&self, precision: KvPrecision) -> Option<KvCache> {
         Some(NeoxModel::new_cache_with_precision(self, precision))
+    }
+    fn new_cache_with_precisions(&self, keys: KvPrecision, values: KvPrecision) -> Option<KvCache> {
+        Some(NeoxModel::new_cache_with_precisions(self, keys, values))
     }
     fn forward_extend(&self, cache: &mut KvCache, tokens: &[u32]) -> Result<Vec<f32>> {
         NeoxModel::forward_extend(self, cache, tokens)
@@ -316,5 +331,25 @@ mod tests {
         assert!(model.new_cache_with_precision(KvPrecision::F32).is_some());
         assert!(model.new_cache_with_precision(KvPrecision::Int8).is_none());
         assert!(model.new_cache_with_precision(KvPrecision::Int4).is_none());
+    }
+
+    #[test]
+    fn default_new_cache_with_precisions_returns_none_for_mixed_precisions() {
+        let model = F32OnlyCacheModel;
+        assert!(model
+            .new_cache_with_precisions(KvPrecision::F32, KvPrecision::F32)
+            .is_some());
+        assert!(model
+            .new_cache_with_precisions(KvPrecision::F32, KvPrecision::Int8)
+            .is_none());
+        assert!(model
+            .new_cache_with_precisions(KvPrecision::Int8, KvPrecision::F32)
+            .is_none());
+        assert!(model
+            .new_cache_with_precisions(KvPrecision::Int8, KvPrecision::Int4)
+            .is_none());
+        assert!(model
+            .new_cache_with_precisions(KvPrecision::Int8, KvPrecision::Int8)
+            .is_none());
     }
 }

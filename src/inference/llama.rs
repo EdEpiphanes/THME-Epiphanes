@@ -439,7 +439,13 @@ impl LlamaModel {
 
     /// An empty KV cache sized for this model's layers and key/value width at `precision`.
     pub fn new_cache_with_precision(&self, precision: KvPrecision) -> KvCache {
-        KvCache::with_precision(self.layers.len(), self.kv_dim(), precision)
+        self.new_cache_with_precisions(precision, precision)
+    }
+
+    /// An empty KV cache sized for this model's layers and key/value width with separate key and
+    /// value precisions.
+    pub fn new_cache_with_precisions(&self, keys: KvPrecision, values: KvPrecision) -> KvCache {
+        KvCache::with_precisions(self.layers.len(), self.kv_dim(), keys, values)
     }
 
     /// Appends `tokens` after the positions already in `cache`, computing only the new rows,

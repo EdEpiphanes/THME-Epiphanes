@@ -242,6 +242,8 @@ fn run_job(
         plain_text: job.plain_text,
         max_new_tokens: job.max_new_tokens,
         kv_precision: crate::inference::KvPrecision::F32,
+        kv_key_precision: None,
+        kv_value_precision: None,
     };
     let reply = core::generate(
         loaded.model.as_ref(),

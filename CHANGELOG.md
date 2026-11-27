@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - v0.2.0 Measured Core
 
 ### Added
+- **Separate KV cache precision for keys and values** (27 November 2026, THME-3082 part 4): `thme chat --kv-key-precision` and `--kv-value-precision`. On Pythia-14M, f32 keys with int4 values keep perplexity (190.66 against 190.83) in a cache 1.7 times smaller, where int8 keys lose.
 - **KV precision loss on Pythia-14M traced to the keys** (27 November 2026, THME-3082): quantizing only the values leaves perplexity unchanged even at int4, quantizing only the keys causes all of the loss. No code change; a separate key and value precision is a candidate follow-up.
 - **KV precision is model dependent** (27 November 2026, THME-3082): on Pythia-14M an int8 cache raised perplexity by about 28 percent (190.8 to 245.2) and int4 broke it (5,805), unlike SmolLM-135M; the default stays f32 and docs, ADR and notes now say so. Report: `docs/benchmarks/pythia-14m/data/kv_precision_ppl.json`.
 - **`thme export --llama-cpp-layout` warns when the pre-tokenizer type is missing** (27 November 2026, THME-3102 part): `ExportReport.warnings` carries it and the CLI prints it.

@@ -38,7 +38,9 @@ pub struct Reply {
     pub prefill_secs: f64,
     pub tokens_per_sec: f64,
     pub decode_tokens_per_sec: f64,
-    pub kv_precision: KvPrecision,
+    pub kv_precision: String,
+    pub kv_key_precision: String,
+    pub kv_value_precision: String,
     pub kv_cache_bytes: usize,
     pub finish: Finish,
 }
@@ -52,6 +54,10 @@ pub struct Request<'a> {
     pub plain_text: bool,
     pub max_new_tokens: usize,
     pub kv_precision: KvPrecision,
+    /// Optional key-cache precision override (`None` uses `kv_precision`).
+    pub kv_key_precision: Option<KvPrecision>,
+    /// Optional value-cache precision override (`None` uses `kv_precision`).
+    pub kv_value_precision: Option<KvPrecision>,
 }
 
 /// Renders the prompt, then greedy-decodes until end-of-sequence, the token budget, or `cancel`.
@@ -82,11 +88,16 @@ pub fn generate(
     // With a KV cache the prompt is prefilled once and each reply token is one step. Without one
     // (no cached path for this architecture) every step reruns the whole sequence; non-F32
     // precisions require a cache path supporting them.
-    let mut cache = model.new_cache_with_precision(request.kv_precision);
-    if cache.is_none() && request.kv_precision != KvPrecision::F32 {
+    let kv_key_precision = request.kv_key_precision.unwrap_or(request.kv_precision);
+    let kv_value_precision = request.kv_value_precision.unwrap_or(request.kv_precision);
+    let mut cache = model.new_cache_with_precisions(kv_key_precision, kv_value_precision);
+    if cache.is_none()
+        && (kv_key_precision != KvPrecision::F32 || kv_value_precision != KvPrecision::F32)
+    {
         bail!(
-            "This model has no KV-cache path for precision {}",
-            request.kv_precision.as_str()
+            "This model has no KV-cache path for key precision {} and value precision {}",
+            kv_key_precision.as_str(),
+            kv_value_precision.as_str()
         );
     }
     let mut fed = 0;
@@ -136,6 +147,11 @@ pub fn generate(
         tokens_per_sec
     };
     let text = tokenizer.decode(&token_ids)?;
+    let kv_precision = if kv_key_precision == kv_value_precision {
+        kv_key_precision.as_str().to_string()
+    } else {
+        "mixed".to_string()
+    };
     Ok(Reply {
         prompt,
         prompt_tokens,
@@ -145,7 +161,9 @@ pub fn generate(
         prefill_secs,
         tokens_per_sec,
         decode_tokens_per_sec,
-        kv_precision: request.kv_precision,
+        kv_precision,
+        kv_key_precision: kv_key_precision.as_str().to_string(),
+        kv_value_precision: kv_value_precision.as_str().to_string(),
         kv_cache_bytes,
         finish,
     })
@@ -277,6 +295,8 @@ mod tests {
             plain_text: false,
             max_new_tokens: max,
             kv_precision: KvPrecision::F32,
+            kv_key_precision: None,
+            kv_value_precision: None,
         }
     }
 
@@ -467,12 +487,31 @@ mod tests {
         let int8_reply = run_prec(KvPrecision::Int8);
         let int4_reply = run_prec(KvPrecision::Int4);
 
-        assert_eq!(f32_reply.kv_precision, KvPrecision::F32);
-        assert_eq!(int8_reply.kv_precision, KvPrecision::Int8);
-        assert_eq!(int4_reply.kv_precision, KvPrecision::Int4);
+        assert_eq!(f32_reply.kv_precision, "f32");
+        assert_eq!(int8_reply.kv_precision, "int8");
+        assert_eq!(int4_reply.kv_precision, "int4");
+        assert_eq!(f32_reply.kv_key_precision, "f32");
+        assert_eq!(f32_reply.kv_value_precision, "f32");
         assert!(int4_reply.kv_cache_bytes > 0);
         assert!(int4_reply.kv_cache_bytes < int8_reply.kv_cache_bytes);
         assert!(int8_reply.kv_cache_bytes < f32_reply.kv_cache_bytes);
+
+        let mut mixed_req = request(&dir, &messages, 3);
+        mixed_req.kv_key_precision = Some(KvPrecision::F32);
+        mixed_req.kv_value_precision = Some(KvPrecision::Int8);
+        let mixed_reply = generate(
+            model.as_ref(),
+            &tok,
+            &mixed_req,
+            &AtomicBool::new(false),
+            &mut |_| {},
+        )
+        .unwrap();
+        assert_eq!(mixed_reply.kv_precision, "mixed");
+        assert_eq!(mixed_reply.kv_key_precision, "f32");
+        assert_eq!(mixed_reply.kv_value_precision, "int8");
+        assert!(mixed_reply.kv_cache_bytes > int8_reply.kv_cache_bytes);
+        assert!(mixed_reply.kv_cache_bytes < f32_reply.kv_cache_bytes);
     }
 
     #[test]
@@ -525,5 +564,22 @@ mod tests {
                 "expected error naming '{expected_name}', got: {err}"
             );
         }
+
+        let mut mixed_req = request(&dir, &messages, 2);
+        mixed_req.kv_key_precision = Some(KvPrecision::F32);
+        mixed_req.kv_value_precision = Some(KvPrecision::Int8);
+        let err = generate(
+            &model,
+            &tok,
+            &mixed_req,
+            &AtomicBool::new(false),
+            &mut |_| {},
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(
+            err.contains("f32") && err.contains("int8"),
+            "expected error naming both 'f32' and 'int8', got: {err}"
+        );
     }
 }

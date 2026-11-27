@@ -1882,7 +1882,9 @@ impl GpuBackend for CudaContext {
         if !cache.has_device_state() && !cache.is_empty() {
             return Ok(None);
         }
-        if cache.precision() != crate::inference::KvPrecision::F32 {
+        let both_f32 = cache.key_precision() == crate::inference::KvPrecision::F32
+            && cache.value_precision() == crate::inference::KvPrecision::F32;
+        if !both_f32 {
             return Ok(None);
         }
 

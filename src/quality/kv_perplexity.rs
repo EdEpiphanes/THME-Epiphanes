@@ -10,10 +10,12 @@ use anyhow::{bail, Context, Result};
 
 use crate::inference::{CausalLm, KvPrecision};
 
-/// Result of [`kv_windowed_perplexity`].
+/// Result of [`kv_windowed_perplexity`] and [`kv_windowed_perplexity_mixed`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct KvPerplexity {
     pub precision: KvPrecision,
+    pub key_precision: KvPrecision,
+    pub value_precision: KvPrecision,
     pub window: usize,
     pub windows: usize,
     pub tokens_scored: usize,
@@ -36,15 +38,21 @@ fn nll(logits: &[f32], target: u32) -> Result<f64> {
 }
 
 /// Negative log-likelihood of each token after the first in `chunk`, fed one token at a time
-/// through a fresh cache at `precision`; also returns the bytes the cache held at the end.
-pub(crate) fn window_nlls(
+/// through a fresh cache with separate key and value precisions; also returns the bytes held at
+/// the end.
+pub(crate) fn window_nlls_mixed(
     model: &dyn CausalLm,
     chunk: &[u32],
-    precision: KvPrecision,
+    keys: KvPrecision,
+    values: KvPrecision,
 ) -> Result<(Vec<f64>, usize)> {
     let mut cache = model
-        .new_cache_with_precision(precision)
-        .with_context(|| format!("this model has no KV cache at precision {precision:?}"))?;
+        .new_cache_with_precisions(keys, values)
+        .with_context(|| {
+            format!(
+                "this model has no KV cache for key precision {keys:?} and value precision {values:?}"
+            )
+        })?;
     let mut out = Vec::with_capacity(chunk.len().saturating_sub(1));
     for t in 0..chunk.len().saturating_sub(1) {
         let logits = model.forward_extend(&mut cache, &chunk[t..=t])?;
@@ -53,14 +61,26 @@ pub(crate) fn window_nlls(
     Ok((out, cache.bytes()))
 }
 
+/// Negative log-likelihood of each token after the first in `chunk`, fed one token at a time
+/// through a fresh cache at `precision`; also returns the bytes the cache held at the end.
+#[cfg(test)]
+pub(crate) fn window_nlls(
+    model: &dyn CausalLm,
+    chunk: &[u32],
+    precision: KvPrecision,
+) -> Result<(Vec<f64>, usize)> {
+    window_nlls_mixed(model, chunk, precision, precision)
+}
+
 /// Perplexity over up to `max_windows` consecutive, non-overlapping windows of `window` tokens,
-/// each fed one token at a time through a fresh cache at `precision`.
-pub fn kv_windowed_perplexity(
+/// each fed one token at a time through a fresh cache with separate key and value precisions.
+pub fn kv_windowed_perplexity_mixed(
     model: &dyn CausalLm,
     tokens: &[u32],
     window: usize,
     max_windows: usize,
-    precision: KvPrecision,
+    keys: KvPrecision,
+    values: KvPrecision,
 ) -> Result<KvPerplexity> {
     if window < 2 {
         bail!("window must be at least 2 tokens, got {window}");
@@ -80,19 +100,40 @@ pub fn kv_windowed_perplexity(
     let mut kv_cache_bytes = 0usize;
     for w in 0..windows {
         let chunk = &tokens[w * window..(w + 1) * window];
-        let (nlls, bytes) = window_nlls(model, chunk, precision)?;
+        let (nlls, bytes) = window_nlls_mixed(model, chunk, keys, values)?;
         total += nlls.iter().sum::<f64>();
         scored += nlls.len();
         kv_cache_bytes = bytes;
     }
+    let precision = if keys == values {
+        keys
+    } else if keys == KvPrecision::F32 {
+        values
+    } else {
+        keys
+    };
     Ok(KvPerplexity {
         precision,
+        key_precision: keys,
+        value_precision: values,
         window,
         windows,
         tokens_scored: scored,
         perplexity: (total / scored as f64).exp(),
         kv_cache_bytes,
     })
+}
+
+/// Perplexity over up to `max_windows` consecutive, non-overlapping windows of `window` tokens,
+/// each fed one token at a time through a fresh cache at `precision`.
+pub fn kv_windowed_perplexity(
+    model: &dyn CausalLm,
+    tokens: &[u32],
+    window: usize,
+    max_windows: usize,
+    precision: KvPrecision,
+) -> Result<KvPerplexity> {
+    kv_windowed_perplexity_mixed(model, tokens, window, max_windows, precision, precision)
 }
 
 #[cfg(test)]
@@ -247,5 +288,32 @@ mod tests {
             mean_diff < 0.5,
             "NeoX Int4 mean NLL diff {mean_diff} >= 0.5"
         );
+    }
+
+    #[test]
+    fn mixed_perplexity_matches_f32_and_places_f32_int8_bytes_between_f32_and_int8() {
+        let model = tiny_model(0.3);
+        let tokens = stream(16);
+        let f32r = kv_windowed_perplexity(&model, &tokens, 8, 1, KvPrecision::F32).unwrap();
+        let mixed_f32 =
+            kv_windowed_perplexity_mixed(&model, &tokens, 8, 1, KvPrecision::F32, KvPrecision::F32)
+                .unwrap();
+        assert_eq!(mixed_f32, f32r);
+
+        let int8r = kv_windowed_perplexity(&model, &tokens, 8, 1, KvPrecision::Int8).unwrap();
+        let f32_int8 = kv_windowed_perplexity_mixed(
+            &model,
+            &tokens,
+            8,
+            1,
+            KvPrecision::F32,
+            KvPrecision::Int8,
+        )
+        .unwrap();
+        assert!(f32_int8.perplexity.is_finite() && f32_int8.perplexity > 0.0);
+        assert_eq!(f32_int8.key_precision, KvPrecision::F32);
+        assert_eq!(f32_int8.value_precision, KvPrecision::Int8);
+        assert!(f32_int8.kv_cache_bytes < f32r.kv_cache_bytes);
+        assert!(f32_int8.kv_cache_bytes > int8r.kv_cache_bytes);
     }
 }

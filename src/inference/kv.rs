@@ -222,11 +222,11 @@ pub(crate) struct KvLayer {
 }
 
 impl KvLayer {
-    fn new(kv_dim: usize, precision: KvPrecision) -> Self {
+    fn new(kv_dim: usize, keys: KvPrecision, values: KvPrecision) -> Self {
         Self {
             kv_dim,
-            keys: KvStorage::new(precision),
-            values: KvStorage::new(precision),
+            keys: KvStorage::new(keys),
+            values: KvStorage::new(values),
         }
     }
 
@@ -263,7 +263,8 @@ pub(crate) struct DeviceKvHandle {
 /// The cached keys and values of every layer for one sequence.
 pub struct KvCache {
     kv_dim: usize,
-    precision: KvPrecision,
+    key_precision: KvPrecision,
+    value_precision: KvPrecision,
     layers: Vec<KvLayer>,
     device: Option<DeviceKvHandle>,
 }
@@ -276,11 +277,22 @@ impl KvCache {
 
     /// An empty cache for `num_layers` layers with the specified storage precision.
     pub fn with_precision(num_layers: usize, kv_dim: usize, precision: KvPrecision) -> Self {
+        Self::with_precisions(num_layers, kv_dim, precision, precision)
+    }
+
+    /// An empty cache for `num_layers` layers with separate storage precisions for keys and values.
+    pub fn with_precisions(
+        num_layers: usize,
+        kv_dim: usize,
+        keys: KvPrecision,
+        values: KvPrecision,
+    ) -> Self {
         Self {
             kv_dim,
-            precision,
+            key_precision: keys,
+            value_precision: values,
             layers: (0..num_layers)
-                .map(|_| KvLayer::new(kv_dim, precision))
+                .map(|_| KvLayer::new(kv_dim, keys, values))
                 .collect(),
             device: None,
         }
@@ -307,9 +319,26 @@ impl KvCache {
         self.kv_dim
     }
 
-    /// Storage precision configured for this cache.
+    /// Storage precision configured for cached keys.
+    pub fn key_precision(&self) -> KvPrecision {
+        self.key_precision
+    }
+
+    /// Storage precision configured for cached values.
+    pub fn value_precision(&self) -> KvPrecision {
+        self.value_precision
+    }
+
+    /// Storage precision configured for this cache; returns [`KvPrecision::F32`] only when
+    /// both keys and values are `F32`, otherwise prefers the key precision.
     pub fn precision(&self) -> KvPrecision {
-        self.precision
+        if self.key_precision == self.value_precision {
+            self.key_precision
+        } else if self.key_precision == KvPrecision::F32 {
+            self.value_precision
+        } else {
+            self.key_precision
+        }
     }
 
     /// Bytes of key and value storage held right now, for measured KV-cache reports.
@@ -569,6 +598,32 @@ pub(crate) mod tests {
         }
         assert_eq!(int4.len(), 3);
         assert_eq!(int4.bytes(), 168);
+    }
+
+    #[test]
+    fn mixed_precision_cache_bytes_match_packed_layout() {
+        let row = [0.25f32; 40];
+
+        let mut f32_int8 = KvCache::with_precisions(1, 40, KvPrecision::F32, KvPrecision::Int8);
+        assert_eq!(f32_int8.key_precision(), KvPrecision::F32);
+        assert_eq!(f32_int8.value_precision(), KvPrecision::Int8);
+        assert_eq!(f32_int8.precision(), KvPrecision::Int8);
+        for _ in 0..3 {
+            f32_int8.layer_mut(0).unwrap().append(&row, &row);
+        }
+        assert_eq!(f32_int8.len(), 3);
+        // Keys: 40 * 4 = 160 B/row; values: 40 + 2 * 4 = 48 B/row; 3 * (160 + 48) = 624.
+        assert_eq!(f32_int8.bytes(), 624);
+
+        let mut int8_f32 = KvCache::with_precisions(1, 40, KvPrecision::Int8, KvPrecision::F32);
+        assert_eq!(int8_f32.key_precision(), KvPrecision::Int8);
+        assert_eq!(int8_f32.value_precision(), KvPrecision::F32);
+        assert_eq!(int8_f32.precision(), KvPrecision::Int8);
+        for _ in 0..3 {
+            int8_f32.layer_mut(0).unwrap().append(&row, &row);
+        }
+        assert_eq!(int8_f32.len(), 3);
+        assert_eq!(int8_f32.bytes(), 624);
     }
 
     #[test]
