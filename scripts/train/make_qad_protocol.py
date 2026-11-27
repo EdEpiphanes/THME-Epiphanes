@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+"""Writes the pre-registration of the QAD-LoRA comparison (docs/benchmarks/smollm-135m/data/qad_lora.json).
+
+The numbers it reads (ceiling, round-to-nearest, AWQ, GPTQ) come from committed reports. Run once, commit
+the result, and only then run scripts/train/run_qad_comparison.py.
+"""
+
+import json
+import statistics
+
+DATA = "docs/benchmarks/smollm-135m/data/"
+awq = json.load(open(DATA + "awq_calibration.json", encoding="utf-8"))
+gptq = json.load(open(DATA + "gptq_comparison.json", encoding="utf-8"))
+runs = [r["perplexity"] for r in awq["results"]["Q4_0"]["awq"]["runs"]]
+
+doc = {
+    "report": "qad_lora",
+    "report_version": 1,
+    "status": "preregistered",
+    "status_note": "Registered on 2026-11-27 before any QAD-LoRA perplexity was measured. ROADMAP v0.2.3.2 and v0.2.3.3, THME-3105 first slice. The teacher is the unquantized source model; no hosted teacher is used.",
+    "model_name": awq["model_name"],
+    "model_repo": awq["model_repo"],
+    "student": "SmolLM-135M with every weight matrix THME's Q4_0 round-to-nearest recipe touches (q, k, v, o, gate, up, down of every layer, 210 tensors) replaced by its Q4_0 round trip (scripts/train/quant.py, checked bit for bit against THME's own function); embeddings, norms and lm_head unchanged; frozen",
+    "teacher": "the unquantized SmolLM-135M in float32",
+    "method": {
+        "adapter": "LoRA on the seven linear roles, rank 16, alpha 32, no dropout, no bias",
+        "loss": "KL(teacher next-token distribution || student), mean over every position of every window",
+        "optimizer": "AdamW, weight decay 0, constant learning rate, no warm-up, no clipping",
+        "steps": 256,
+        "batch_windows": 8,
+        "window_tokens": 1024,
+        "device": "cuda",
+        "teacher_dtype": "float32",
+        "trainer": "scripts/train/qad_lora.py",
+        "orchestrator": "scripts/train/run_qad_comparison.py",
+    },
+    "data": {
+        "train": {
+            "file": "qad_train_main.u32",
+            "tokens": 2490368,
+            "sha256": "242fc7ef8cf62575782aead99e80c25e744bc0b0be6b3f08ad7841c801948708",
+            "origin": "the first 2,490,368 tokens (2,432 windows of 1,024) of the WikiText-2 raw TRAIN split tokenized with the SmolLM-135M tokenizer (scripts/prepare_eval_tokens.py --split train --calibration-windows 0)",
+            "full_train_file_sha256": "fa622f34d4b2b9463f9b2e305f614ee8144235d721987e1281a3f0f57106229d",
+            "corpus_sha256": "6707892fa3788b5ab9ed78ab5ff37d9fe825f6011a2ad4fcd6a6d467f0e7da57",
+        },
+        "validation": {
+            "file": "qad_validation.u32",
+            "tokens": 65536,
+            "sha256": "186dfa6898254bea3048d00d6d737c1c4c974eb4846b384ca2d2342d2230f0c4",
+            "origin": "the last 65,536 tokens of the same train file; never trained on; used only to pick the learning rate",
+        },
+        "test": awq["evaluation"],
+        "disjointness": "train and validation come from the WikiText-2 train split and do not overlap each other; the test split is a different split of the corpus (different corpus member, different corpus hash) and is read only by the replication gate (two adapter-free numbers) and the three scored runs",
+    },
+    "comparators": {
+        "file": "awq_calibration.json and gptq_comparison.json",
+        "ceiling": awq["results"]["Q4_0"]["ceiling"]["perplexity"],
+        "rtn_q4_0": awq["results"]["Q4_0"]["rtn"]["perplexity"],
+        "awq_q4_0_runs": runs,
+        "awq_q4_0_mean": statistics.mean(runs),
+        "awq_q4_0_sd": statistics.stdev(runs),
+        "gptq_q4_0": gptq["results"]["gptq"]["perplexity"],
+        "note": "Read from committed reports, not re-run. They were measured on THME's reference path (CPU for RTN and AWQ and GPTQ); this run is measured in PyTorch with THME's windowing, so the replication gate below must pass first.",
+    },
+    "preregistration": {
+        "date": "2026-11-27",
+        "registered_before": "any measured QAD-LoRA perplexity",
+        "replication_gate": [
+            "Before any verdict, the pilot run's own measurements of the unquantized teacher and of the plain Q4_0 student (no adapter) on the TEST file must reproduce THME's committed numbers within 1 percent: ceiling 19.798421901137832 and Q4_0 round-to-nearest 23.698417820506624.",
+            "This 1 percent is tighter than the owner's general 5 percent tolerance on purpose: the effects to be detected are 1 to 7 percent, so a 5 percent replication band could not tell a correct replica from a wrong one. The owner may change it before the run.",
+            "If the gate fails, no verdict is given and the report states the gap.",
+        ],
+        "pilot": {
+            "purpose": "choose the learning rate",
+            "seed": 0,
+            "learning_rates": [0.0001, 0.0003, 0.001],
+            "score": "perplexity on the validation file after training (lowest wins; ties go to the smaller learning rate)",
+            "note": "The test file is read in the pilot only by the replication gate's two adapter-free numbers.",
+        },
+        "scored_runs": {
+            "seeds": [1, 2, 3],
+            "learning_rate": "the pilot winner, frozen",
+            "metric": "perplexity on the full test split with THME's windowing, student with the adapter (fp32 compute, adapter not merged into Q4_0)",
+        },
+        "noise_scale": "sigma = max(sample SD (n-1) of the three scored perplexities, the sample SD of the five AWQ seeds recorded above)",
+        "decision_rule": [
+            "QAD-LoRA beats round-to-nearest only if RTN minus the mean of the three scored perplexities is greater than 2 x sigma.",
+            "QAD-LoRA beats AWQ only if the mean AWQ perplexity minus the QAD-LoRA mean is greater than 2 x sigma; it is worse than AWQ only if the QAD-LoRA mean minus the AWQ mean is greater than 2 x sigma; otherwise no difference is shown. The same two tests apply to GPTQ.",
+            "Gate: reported for the repository default (v1, at most 0.45 above the ceiling) and for gate v2; the verdict of the gate is read, not judged here.",
+            "Drift protocol (docs/research/measurement-drift-protocol.md): the three scored runs are the replicates, the teacher perplexity measured by the first and the last scored run is the reference check against the nominal 19.798421901137832, tolerance 5 percent; a batch outside it is flagged unstable and gives no verdict.",
+            "A null or negative result is a valid result and is reported as one. Hyperparameters, seeds, data, the pilot grid, thresholds and this rule are fixed here and are not changed after any scored result is seen; a second configuration would be a new registered run.",
+        ],
+        "cost_accounting": "adapter bytes, trainable parameters, training seconds and tokens seen (steps x batch x window) are recorded for every run; the recovered model is Q4_0 base plus a floating-point adapter, so it is larger than Q4_0 alone and is not a same-size comparison",
+        "cross_check": "after the scored runs, THME's own thme evaluate is run once on the merged float16 model of seed 1 with an FP16 identity recipe on the same test file; its perplexity should agree with the PyTorch figure of that run within 1 percent (the merged file also carries float16 rounding), which checks the PyTorch evaluation against THME's",
+        "limits": [
+            "one model, one corpus, one configuration; no hyperparameter search beyond the learning-rate pilot",
+            "the adapter is not folded back into 4-bit weights, so this measures recovery with an adapter, not a smaller file",
+            "training scores every position of a window while evaluation drops the first token of each window (a stated small mismatch)",
+            "three seeds measure training noise only; evaluation is deterministic",
+        ],
+    },
+    "results": {},
+    "pending": ["pilot", "scored runs"],
+    "provenance": {},
+}
+
+with open(DATA + "qad_lora.json", "w", encoding="utf-8", newline="\n") as f:
+    json.dump(doc, f, indent=2)
+    f.write("\n")
+print("written")
