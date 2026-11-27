@@ -1,7 +1,7 @@
 {
   "report": "gptq_comparison",
   "report_version": 1,
-  "status": "preregistered",
+  "status": "measured",
   "status_note": "Registered on 2026-11-27 before any GPTQ perplexity of this comparison was measured. THME-2205, ROADMAP v0.2.2.5.",
   "model_name": "pythia-14m",
   "model_repo": "EleutherAI/pythia-14m",
@@ -59,9 +59,57 @@
       "One corpus (WikiText-2 test), one model per file."
     ]
   },
-  "results": {},
-  "pending": [
-    "GPTQ run on this model"
-  ],
-  "provenance": {}
+  "results": {
+    "ceiling": 114.28620839585075,
+    "rtn": 193.00280711915582,
+    "awq_runs": [
+      172.72876575620236,
+      168.00413748950712,
+      173.571877513255,
+      171.64176998309856,
+      167.5658710929535
+    ],
+    "awq_mean": 170.7024843670033,
+    "gptq": {
+      "baseline_perplexity": 114.28620839585075,
+      "perplexity": 180.5455484065106,
+      "delta_ppl": 66.25934001065984,
+      "gate_accepted": false,
+      "thme_version": "0.2.0",
+      "logical_cpus": 12,
+      "device": {
+        "adapter": null,
+        "requested": "cpu",
+        "used": "cpu"
+      },
+      "backend": "THME reference CPU forward pass (f32, multithreaded)"
+    },
+    "gptq_gate_v2": {
+      "baseline_perplexity": 114.28620839585075,
+      "perplexity": 180.5455484065106,
+      "delta_ppl": 66.25934001065984,
+      "gate_accepted": false,
+      "thme_version": "0.2.0",
+      "logical_cpus": 12,
+      "device": {
+        "adapter": null,
+        "requested": "cpu",
+        "used": "cpu"
+      },
+      "backend": "THME reference CPU forward pass (f32, multithreaded)"
+    },
+    "verdict": {
+      "sigma": 2.754129148515597,
+      "rtn_minus_gptq": 12.457258712645228,
+      "beats_rtn": true,
+      "awq_mean_minus_gptq": -9.843064039507283,
+      "vs_awq": "gptq_worse"
+    },
+    "gptq_minus_ceiling": 66.25934001065984
+  },
+  "pending": [],
+  "provenance": {
+    "thme": "C:/Users/TechTroniX/Documents/GitHub/thme-wt/solidify/target-nodbg/release/thme.exe",
+    "device": "cpu"
+  }
 }
