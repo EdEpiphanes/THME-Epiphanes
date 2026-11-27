@@ -5,7 +5,7 @@ monitoring systems, 40 CFR Part 60 Appendix B) and its relative accuracy audits 
 THME should set tolerances, "transposed in our own terms", which is what the Epiphanes math does. This
 note records what PS-16 says, how each piece maps to THME, what the committed results look like under
 its numbers, and what is not computed yet. It replaces the assumptions in
-`docs/research/rata-style-tolerance-check.md`, which guessed the bands before the text was read.
+`docs/research/archive/rata-style-tolerance-check.md`, which guessed the bands before the text was read.
 
 ## What PS-16 says (section numbers of the version dated 3/29/2023)
 
