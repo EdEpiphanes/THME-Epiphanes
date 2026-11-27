@@ -310,6 +310,13 @@ closes it.
 - **Done means**: Backward kernels for the LLaMA block on the embedded-PTX and cuBLAS path (matmul gradients through cuBLAS; RMSNorm, rotary, attention and SwiGLU kernels), each tested against the CPU backward pass and the Hugging Face oracle (`tests/fixtures/torch_gradients_tiny.json`), then a measured speed against PyTorch on the same model.
 - **Progress** (27 November 2026): none. Shelved. No evidence found that NVIDIA has opened CUDA to other GPUs; third-party layers (ZLUDA, SCALE) are untested with THME's PTX.
 
+### [THME-3108] Unified engine port: add what THME is missing from the top permissive engines
+
+- **Milestone**: v0.3.0 · **Roadmap**: unassigned · **Priority**: p1 · **Area**: engine · **Type**: feature · **Status**: in progress
+- **Problem**: The best features of the top open-source inference engines (llama.cpp, candle, mistral.rs, burn, vLLM, SGLang, exllamav2, MLC-LLM, ollama) overlap with and exceed THME's engine in places. The owner wants the missing good parts in one Rust codebase to cut coding, testing and research time.
+- **Done means**: Each ported feature meets the process in `docs/research/unified-engine-port-plan.md`: a gap THME actually has, a permissive licence read from the LICENSE file, an attribution row, a test whose expected values come from the source engine, the full gate, and a measured effect under the drift protocol; the ranked candidate list exists and its first slice is done; the binary stays under its size caps.
+- **Progress** (27 November 2026): nine engines cloned shallowly outside the repository (`C:/Users/TechTroniX/engines`); licences read from their LICENSE files (llama.cpp, mistral.rs, ollama, exllamav2 MIT; candle, burn, vLLM, SGLang, MLC-LLM Apache-2.0). Three survey agents are writing `docs/research/engines/*.md`. Nothing is ported yet. Scheduled after the v0.2 merge.
+
 ### [THME-3100] Calibrate the allocator link constant C
 
 - **Milestone**: v0.2.4 · **Roadmap**: unassigned · **Priority**: p2 · **Area**: research · **Type**: research · **Status**: triage
