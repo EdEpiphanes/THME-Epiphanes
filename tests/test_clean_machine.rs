@@ -81,6 +81,8 @@ fn clean_machine_standalone_export_and_inspection() {
         compute_checksum: true,
 
         llama_cpp_layout: false,
+
+        tokenizer_json_path: None,
     };
     let rep = ModelExporter::export(&model, &cfg).expect("export to clean path");
     assert!(rep.exported_bytes > 0);

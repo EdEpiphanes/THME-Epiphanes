@@ -85,6 +85,8 @@ fn gguf_q8_export_preserves_payload_metadata_and_checksum() {
         output_path: output.clone(),
         compute_checksum: true,
         llama_cpp_layout: false,
+
+        tokenizer_json_path: None,
     };
 
     let report = ModelExporter::export(&model, &config).expect("export source-backed GGUF");
@@ -175,6 +177,8 @@ fn gguf_export_preserves_full_tokenizer_metadata_and_normalizes_export_fields() 
             output_path: output.clone(),
             compute_checksum: false,
             llama_cpp_layout: false,
+
+            tokenizer_json_path: None,
         },
     )
     .expect("export with source tokenizer metadata");
@@ -229,6 +233,8 @@ fn safetensors_fp16_export_preserves_payload_and_roundtrips() {
         output_path: output.clone(),
         compute_checksum: true,
         llama_cpp_layout: false,
+
+        tokenizer_json_path: None,
     };
 
     let report = ModelExporter::export(&model, &config).expect("export source-backed SafeTensors");
@@ -257,6 +263,8 @@ fn unsupported_quantization_and_missing_sources_fail_closed() {
         output_path: output.clone(),
         compute_checksum: false,
         llama_cpp_layout: false,
+
+        tokenizer_json_path: None,
     };
     let error = ModelExporter::export(&model, &config)
         .unwrap_err()
@@ -282,6 +290,8 @@ fn unsupported_quantization_and_missing_sources_fail_closed() {
         output_path: missing_output.clone(),
         compute_checksum: false,
         llama_cpp_layout: false,
+
+        tokenizer_json_path: None,
     };
     let error = ModelExporter::export(&source_less_model, &config)
         .unwrap_err()
@@ -425,6 +435,8 @@ fn llama_cpp_layout_renames_converts_bf16_norms_permutes_qk_and_preserves_flag_o
         output_path: off_path.clone(),
         compute_checksum: false,
         llama_cpp_layout: false,
+
+        tokenizer_json_path: None,
     };
     ModelExporter::export(&model, &off_cfg).expect("export flag-off GGUF");
     let off_bytes = std::fs::read(&off_path).expect("read flag-off GGUF");
@@ -475,6 +487,8 @@ fn llama_cpp_layout_renames_converts_bf16_norms_permutes_qk_and_preserves_flag_o
             output_path: on_path.clone(),
             compute_checksum: false,
             llama_cpp_layout: true,
+
+            tokenizer_json_path: None,
         },
     )
     .expect("export llama.cpp layout GGUF");
@@ -598,6 +612,8 @@ fn llama_cpp_layout_renames_converts_bf16_norms_permutes_qk_and_preserves_flag_o
             output_path: dir.path().join("unmappable.gguf"),
             compute_checksum: false,
             llama_cpp_layout: true,
+
+            tokenizer_json_path: None,
         },
     )
     .unwrap_err();
@@ -671,6 +687,8 @@ fn llama_cpp_layout_quantizes_qk_after_permuting_and_preserves_existing_rope_dim
             output_path: out_path.clone(),
             compute_checksum: false,
             llama_cpp_layout: true,
+
+            tokenizer_json_path: None,
         },
     )
     .expect("export Q8_0 llama.cpp layout GGUF");
@@ -729,6 +747,8 @@ fn llama_cpp_layout_quantizes_qk_after_permuting_and_preserves_existing_rope_dim
             output_path: preserve_path.clone(),
             compute_checksum: false,
             llama_cpp_layout: true,
+
+            tokenizer_json_path: None,
         },
     )
     .expect("export with existing rope.dimension_count");

@@ -44,6 +44,8 @@ fn source_backed_f32_exports_to_standard_q8_0_blocks() {
             compute_checksum: false,
 
             llama_cpp_layout: false,
+
+            tokenizer_json_path: None,
         },
     )
     .expect("export Q8_0");
@@ -82,6 +84,8 @@ fn source_backed_f32_exports_to_standard_tq1_0_blocks() {
             compute_checksum: false,
 
             llama_cpp_layout: false,
+
+            tokenizer_json_path: None,
         },
     )
     .expect("export TQ1_0");
@@ -132,6 +136,8 @@ fn positive_tq1_scale_underflowing_fp16_fails_export() {
             compute_checksum: false,
 
             llama_cpp_layout: false,
+
+            tokenizer_json_path: None,
         },
     )
     .unwrap_err();
@@ -154,6 +160,8 @@ fn quantized_rows_must_not_cross_ggml_block_boundaries() {
             compute_checksum: false,
 
             llama_cpp_layout: false,
+
+            tokenizer_json_path: None,
         },
     )
     .unwrap_err();

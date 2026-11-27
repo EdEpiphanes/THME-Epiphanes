@@ -87,6 +87,7 @@ impl THMEApp {
                         output_path,
                         compute_checksum: self.export_checksum,
                         llama_cpp_layout: false,
+                        tokenizer_json_path: None,
                     };
 
                     if let Some(source_model) = source_model {

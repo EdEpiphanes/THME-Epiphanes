@@ -14,6 +14,7 @@ pub mod kquant;
 pub mod metadata;
 pub mod safetensors_writer;
 pub mod streaming_writer;
+pub mod tokenizer_meta;
 
 pub use bitnet_pack::{BitNetPacker, PackedBitNetTensor};
 pub use gguf_writer::{GgufTensor, GgufWriter};
@@ -99,6 +100,8 @@ pub struct ExportConfig {
     pub compute_checksum: bool,
     #[serde(default)]
     pub llama_cpp_layout: bool,
+    #[serde(default)]
+    pub tokenizer_json_path: Option<PathBuf>,
 }
 
 /// Statistical telemetry report produced following export
@@ -202,6 +205,7 @@ fn export_gguf(model: &ModelIR, config: &ExportConfig) -> Result<()> {
     GgufMetadataSynchronizer::synchronize_into_writer(&mut writer, model, config.quant_type);
     if config.llama_cpp_layout {
         add_missing_rope_dimension_count(&mut writer, model)?;
+        add_tokenizer_metadata(&mut writer, config)?;
     }
 
     for tensor in &model.tensors {
@@ -341,6 +345,28 @@ fn add_missing_rope_dimension_count(writer: &mut GgufWriter, model: &ModelIR) ->
     let dim = u32::try_from(model.hidden_size / model.num_attention_heads)
         .with_context(|| format!("{key} exceeds u32"))?;
     writer.add_u32(key, dim);
+    Ok(())
+}
+
+fn add_tokenizer_metadata(writer: &mut GgufWriter, config: &ExportConfig) -> Result<()> {
+    let Some(tok_path) = config.tokenizer_json_path.as_deref() else {
+        return Ok(());
+    };
+    let tokenizer_json = std::fs::read_to_string(tok_path)
+        .with_context(|| format!("Failed to read tokenizer.json from {:?}", tok_path))?;
+    let config_json = tok_path
+        .parent()
+        .map(|dir| dir.join("config.json"))
+        .filter(|path| path.is_file())
+        .map(|path| {
+            std::fs::read_to_string(&path)
+                .with_context(|| format!("Failed to read config.json from {:?}", path))
+        })
+        .transpose()?;
+    for (key, value) in tokenizer_meta::tokenizer_metadata(&tokenizer_json, config_json.as_deref())?
+    {
+        writer.add_metadata(key, value);
+    }
     Ok(())
 }
 
@@ -759,5 +785,178 @@ mod tests {
         hasher.update(&bytes[130..]);
 
         assert_eq!(hasher.finish(), compute_sha256(&bytes));
+    }
+
+    #[test]
+    fn export_llama_cpp_layout_writes_tokenizer_keys_and_flag_off_keeps_output_unchanged() {
+        use crate::ir::model::ModelMetadataValue as MV;
+        use crate::parser::gguf::GgufParser;
+        use crate::parser::ModelImporter;
+
+        let dir = tempfile::tempdir().expect("temp dir");
+        let model_dir = dir.path().join("model");
+        std::fs::create_dir_all(&model_dir).expect("create model dir");
+
+        let one = 0x3C00u16.to_le_bytes();
+        let mut st = SafeTensorsWriter::new();
+        st.add_tensor(
+            "model.embed_tokens.weight",
+            "F16",
+            vec![5, 4],
+            one.repeat(20),
+        );
+        st.add_tensor(
+            "model.layers.0.self_attn.q_proj.weight",
+            "F16",
+            vec![4, 4],
+            one.repeat(16),
+        );
+        st.add_tensor(
+            "model.layers.0.self_attn.k_proj.weight",
+            "F16",
+            vec![4, 4],
+            one.repeat(16),
+        );
+        st.add_tensor(
+            "model.layers.0.input_layernorm.weight",
+            "F16",
+            vec![4],
+            one.repeat(4),
+        );
+        st.add_tensor("model.norm.weight", "F16", vec![4], one.repeat(4));
+        st.write_to_file(model_dir.join("model.safetensors"))
+            .expect("write safetensors");
+
+        std::fs::write(
+            model_dir.join("config.json"),
+            r#"{"architectures":["LlamaForCausalLM"],"hidden_size":4,"num_hidden_layers":1,"num_attention_heads":1,"num_key_value_heads":1,"vocab_size":5,"bos_token_id":0,"eos_token_id":1}"#,
+        )
+        .expect("write config.json");
+        let tok_path = model_dir.join("tokenizer.json");
+        std::fs::write(
+            &tok_path,
+            r#"{
+                "added_tokens": [
+                    {"id": 0, "content": "<s>", "special": true},
+                    {"id": 1, "content": "</s>", "special": true}
+                ],
+                "pre_tokenizer": {"type": "ByteLevel"},
+                "decoder": {"type": "ByteLevel"},
+                "model": {
+                    "type": "BPE",
+                    "vocab": {"<s>": 0, "</s>": 1, "a": 2, "b": 3, "ab": 4},
+                    "merges": ["a b"]
+                }
+            }"#,
+        )
+        .expect("write tokenizer.json");
+
+        let model = ModelImporter::import(&model_dir).expect("import model");
+
+        let out_off_none = dir.path().join("off_none.gguf");
+        let out_off_with_path = dir.path().join("off_with_path.gguf");
+        let out_on = dir.path().join("on.gguf");
+
+        ModelExporter::export(
+            &model,
+            &ExportConfig {
+                format: ExportFormat::GGUFv3,
+                quant_type: ExportQuantType::FP16,
+                output_path: out_off_none.clone(),
+                compute_checksum: false,
+                llama_cpp_layout: false,
+                tokenizer_json_path: None,
+            },
+        )
+        .expect("export off none");
+        ModelExporter::export(
+            &model,
+            &ExportConfig {
+                format: ExportFormat::GGUFv3,
+                quant_type: ExportQuantType::FP16,
+                output_path: out_off_with_path.clone(),
+                compute_checksum: false,
+                llama_cpp_layout: false,
+                tokenizer_json_path: Some(tok_path.clone()),
+            },
+        )
+        .expect("export off with path");
+        assert_eq!(
+            std::fs::read(&out_off_none).expect("read off_none"),
+            std::fs::read(&out_off_with_path).expect("read off_with_path"),
+            "llama_cpp_layout=false must ignore tokenizer_json_path"
+        );
+
+        ModelExporter::export(
+            &model,
+            &ExportConfig {
+                format: ExportFormat::GGUFv3,
+                quant_type: ExportQuantType::FP16,
+                output_path: out_on.clone(),
+                compute_checksum: false,
+                llama_cpp_layout: true,
+                tokenizer_json_path: Some(tok_path),
+            },
+        )
+        .expect("export with llama_cpp_layout");
+
+        let bytes = std::fs::read(&out_on).expect("read exported gguf");
+        let findings = gguf_check::check_gguf(&bytes);
+        assert!(
+            !findings
+                .iter()
+                .any(|f| f.severity == gguf_check::Severity::Error),
+            "unexpected gguf errors: {:?}",
+            findings
+        );
+
+        let parsed = GgufParser::parse_from_file(&out_on).expect("parse exported gguf");
+        let meta = &parsed.source_gguf_metadata;
+        assert_eq!(
+            meta.get("tokenizer.ggml.model"),
+            Some(&MV::String("gpt2".to_string()))
+        );
+        assert_eq!(
+            meta.get("tokenizer.ggml.tokens"),
+            Some(&MV::Array(vec![
+                MV::String("<s>".to_string()),
+                MV::String("</s>".to_string()),
+                MV::String("a".to_string()),
+                MV::String("b".to_string()),
+                MV::String("ab".to_string()),
+            ]))
+        );
+        assert_eq!(
+            meta.get("tokenizer.ggml.scores"),
+            Some(&MV::Array(vec![
+                MV::Float32(0.0),
+                MV::Float32(0.0),
+                MV::Float32(0.0),
+                MV::Float32(0.0),
+                MV::Float32(0.0),
+            ]))
+        );
+        assert_eq!(
+            meta.get("tokenizer.ggml.token_type"),
+            Some(&MV::Array(vec![
+                MV::Int32(3),
+                MV::Int32(3),
+                MV::Int32(1),
+                MV::Int32(1),
+                MV::Int32(1),
+            ]))
+        );
+        assert_eq!(
+            meta.get("tokenizer.ggml.merges"),
+            Some(&MV::Array(vec![MV::String("a b".to_string())]))
+        );
+        assert_eq!(
+            meta.get("tokenizer.ggml.bos_token_id"),
+            Some(&MV::Uint32(0))
+        );
+        assert_eq!(
+            meta.get("tokenizer.ggml.eos_token_id"),
+            Some(&MV::Uint32(1))
+        );
     }
 }

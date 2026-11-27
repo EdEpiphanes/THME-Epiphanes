@@ -141,6 +141,8 @@ fn test_export_config_and_report_json_serde() {
         compute_checksum: true,
 
         llama_cpp_layout: false,
+
+        tokenizer_json_path: None,
     };
 
     let json_str = serde_json::to_string_pretty(&config).expect("Serialize config");
