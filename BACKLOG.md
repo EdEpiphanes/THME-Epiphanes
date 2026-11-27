@@ -284,10 +284,10 @@ closes it.
 
 ### [THME-3104] Finish every v0.2 sub-milestone
 
-- **Milestone**: v0.2.9 · **Roadmap**: v0.2.9.9 · **Priority**: p1 · **Area**: docs · **Type**: chore · **Status**: in progress
+- **Milestone**: v0.2.9 · **Roadmap**: v0.2.9.9 · **Priority**: p1 · **Area**: docs · **Type**: chore · **Status**: done
 - **Problem**: 44 of the 90 sub-milestones of v0.2.0 to v0.2.9 are not marked done. Some are small measurements, some need hardware or an owner decision, and v0.2.3 is a training program.
 - **Done means**: Each sub-milestone is either done (its own done-means text met, evidence committed) or closed with a dated reason (owner decision, missing hardware); `docs/status/v0.2_completion_plan.md` is current; v0.2.9.9 is closed by re-reading it.
-- **Progress** (27 November 2026): the plan groups the 44 items (CPU work, hardware, owner decisions, the training program) and fixes the order. No sub-milestone is changed yet.
+- **Progress** (27 November 2026): the plan groups the 44 items (CPU work, hardware, owner decisions, the training program) and fixes the order. Closed the same day: 61 of 90 Done, 29 Deferred with named gaps (`docs/status/v0.2_closure.md`).
 
 ### [THME-3105] Teacher-to-student distillation pipeline (`thme distill`)
 
