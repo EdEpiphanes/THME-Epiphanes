@@ -11,7 +11,7 @@ use super::kv::{KvCache, KvPrecision};
 use super::llama::{DepthExit, LlamaConfig, LlamaModel, WeightPrecision};
 use super::neox::{NeoxConfig, NeoxModel};
 use super::probe::ForwardTrace;
-use crate::ir::ModelIR;
+use crate::ir::{ModelArchitecture, ModelIR};
 
 /// A causal language model the reference implementation can run.
 pub trait CausalLm: Send + Sync {
@@ -289,9 +289,197 @@ pub fn load_reference_model(
     Ok((model_ir, arch_cfg, runnable))
 }
 
+/// Architecture family read from tensor names (v0.2.9.4, WP17).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InferredFamily {
+    Llama,
+    NeoX,
+    Gemma,
+    Unknown,
+}
+
+/// How sure an inference is about its family.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Confidence {
+    /// Every tensor the family's forward pass reads in layer 0 is present.
+    High,
+    /// The family's distinctive tensors are present, but some required ones are missing.
+    Medium,
+    /// Only the architecture name recorded in the model points at the family.
+    Low,
+    /// No evidence for any family.
+    None,
+}
+
+/// A family guess with its confidence and the evidence behind it, one line each.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArchInference {
+    pub family: InferredFamily,
+    pub confidence: Confidence,
+    pub evidence: Vec<String>,
+}
+
+/// Infers the family from tensor names alone, without reading any weight or `config.json`.
+/// Shapes cannot give the head count (any divisor of the hidden width fits), so the evidence
+/// always says so.
+pub fn infer(model: &ModelIR) -> ArchInference {
+    let has = |fragment: &str| model.tensors.iter().any(|t| t.name.contains(fragment));
+    let mut evidence = vec![
+        "attention head count is not readable from tensor shapes; take it from config.json".into(),
+    ];
+    for sig in SIGNATURES {
+        let marker = sig.markers.iter().find(|m| m.iter().all(|f| has(f)));
+        let Some(marker) = marker else { continue };
+        evidence.push(format!("found {}", marker.join(" and ")));
+        // Judge completeness against the naming scheme that is most complete.
+        let missing = sig
+            .schemes
+            .iter()
+            .map(|scheme| {
+                scheme
+                    .iter()
+                    .copied()
+                    .filter(|f| !has(f))
+                    .collect::<Vec<_>>()
+            })
+            .min_by_key(Vec::len)
+            .unwrap_or_default();
+        let confidence = if missing.is_empty() {
+            Confidence::High
+        } else {
+            evidence.push(format!("missing layer-0 tensors: {}", missing.join(", ")));
+            Confidence::Medium
+        };
+        return ArchInference {
+            family: sig.family,
+            confidence,
+            evidence,
+        };
+    }
+    let from_name = match model.architecture {
+        ModelArchitecture::Gemma => Some(InferredFamily::Gemma),
+        ModelArchitecture::Llama | ModelArchitecture::Mistral | ModelArchitecture::Qwen => {
+            Some(InferredFamily::Llama)
+        }
+        _ => None,
+    };
+    match from_name {
+        Some(family) => {
+            evidence.push(format!(
+                "no tensor evidence; the recorded architecture is {}",
+                model.architecture.display_name()
+            ));
+            ArchInference {
+                family,
+                confidence: Confidence::Low,
+                evidence,
+            }
+        }
+        None => ArchInference {
+            family: InferredFamily::Unknown,
+            confidence: Confidence::None,
+            evidence,
+        },
+    }
+}
+
+/// Tensor names that mark a family, and the layer-0 tensors each naming scheme needs.
+struct Signature {
+    family: InferredFamily,
+    /// Any one of these alternatives, all of whose fragments must appear, marks the family.
+    markers: &'static [&'static [&'static str]],
+    /// Each naming scheme lists the fragments one complete layout must contain.
+    schemes: &'static [&'static [&'static str]],
+}
+
+/// Checked in the same order as [`ArchConfig::detect`], so Gemma's GGUF names win over LLaMA's.
+const SIGNATURES: [Signature; 3] = [
+    Signature {
+        family: InferredFamily::Gemma,
+        markers: &[
+            &["attn_q_norm"],
+            &["post_attention_norm"],
+            &["post_ffw_norm"],
+        ],
+        schemes: &[&[
+            "token_embd",
+            "blk.0.attn_norm",
+            "blk.0.attn_q.",
+            "blk.0.attn_q_norm",
+            "blk.0.attn_k.",
+            "blk.0.attn_k_norm",
+            "blk.0.attn_v.",
+            "blk.0.attn_output",
+            "blk.0.post_attention_norm",
+            "blk.0.ffn_norm",
+            "blk.0.ffn_gate",
+            "blk.0.ffn_up",
+            "blk.0.ffn_down",
+            "blk.0.post_ffw_norm",
+            "output_norm",
+        ]],
+    },
+    Signature {
+        family: InferredFamily::NeoX,
+        markers: &[&["query_key_value", "dense_h_to_4h"]],
+        schemes: &[&[
+            "embed_in",
+            "layers.0.input_layernorm",
+            "layers.0.post_attention_layernorm",
+            "layers.0.attention.query_key_value",
+            "layers.0.attention.dense.",
+            "layers.0.mlp.dense_h_to_4h",
+            "layers.0.mlp.dense_4h_to_h",
+            "final_layer_norm",
+        ]],
+    },
+    Signature {
+        family: InferredFamily::Llama,
+        markers: &[&["q_proj", "gate_proj"], &["attn_q", "ffn_gate"]],
+        schemes: &[
+            &[
+                "model.embed_tokens",
+                "layers.0.input_layernorm",
+                "layers.0.self_attn.q_proj",
+                "layers.0.self_attn.k_proj",
+                "layers.0.self_attn.v_proj",
+                "layers.0.self_attn.o_proj",
+                "layers.0.post_attention_layernorm",
+                "layers.0.mlp.gate_proj",
+                "layers.0.mlp.up_proj",
+                "layers.0.mlp.down_proj",
+                "model.norm",
+            ],
+            &[
+                "token_embd",
+                "blk.0.attn_norm",
+                "blk.0.attn_q.",
+                "blk.0.attn_k.",
+                "blk.0.attn_v.",
+                "blk.0.attn_output",
+                "blk.0.ffn_norm",
+                "blk.0.ffn_gate",
+                "blk.0.ffn_up",
+                "blk.0.ffn_down",
+                "output_norm",
+            ],
+        ],
+    },
+];
+
+/// Imports a model file and infers its family. Refuses unless the model has a permission
+/// record (see [`crate::permission::require`]); reverse-engineering features go through here.
+pub fn infer_from_file(path: &Path) -> Result<ArchInference> {
+    crate::permission::require(path)?;
+    let model = crate::parser::ModelImporter::import(path)
+        .with_context(|| format!("Failed to import model {path:?}"))?;
+    Ok(infer(&model))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ir::{ModelArchitecture, TensorIR};
 
     struct F32OnlyCacheModel;
 
@@ -351,5 +539,194 @@ mod tests {
         assert!(model
             .new_cache_with_precisions(KvPrecision::Int8, KvPrecision::Int8)
             .is_none());
+    }
+
+    /// Names only: inference never reads shapes or data, so every tensor gets shape `[1]`.
+    fn model_named(names: &[&str], architecture: ModelArchitecture) -> ModelIR {
+        let tensors = names
+            .iter()
+            .map(|n| TensorIR::new(n.to_string(), vec![1], "F32".into(), 4))
+            .collect();
+        ModelIR::new("m".into(), architecture, 1, 16, 4, 2, 40, 128, tensors)
+    }
+
+    /// Hugging Face LLaMA layout for one layer, written out by hand.
+    const LLAMA_HF: &[&str] = &[
+        "model.embed_tokens.weight",
+        "model.layers.0.input_layernorm.weight",
+        "model.layers.0.self_attn.q_proj.weight",
+        "model.layers.0.self_attn.k_proj.weight",
+        "model.layers.0.self_attn.v_proj.weight",
+        "model.layers.0.self_attn.o_proj.weight",
+        "model.layers.0.post_attention_layernorm.weight",
+        "model.layers.0.mlp.gate_proj.weight",
+        "model.layers.0.mlp.up_proj.weight",
+        "model.layers.0.mlp.down_proj.weight",
+        "model.norm.weight",
+        "lm_head.weight",
+    ];
+
+    /// GGUF Gemma layout for one block, as the Gemma loader reads it.
+    const GEMMA_GGUF: &[&str] = &[
+        "token_embd.weight",
+        "blk.0.attn_norm.weight",
+        "blk.0.attn_q.weight",
+        "blk.0.attn_q_norm.weight",
+        "blk.0.attn_k.weight",
+        "blk.0.attn_k_norm.weight",
+        "blk.0.attn_v.weight",
+        "blk.0.attn_output.weight",
+        "blk.0.post_attention_norm.weight",
+        "blk.0.ffn_norm.weight",
+        "blk.0.ffn_gate.weight",
+        "blk.0.ffn_up.weight",
+        "blk.0.ffn_down.weight",
+        "blk.0.post_ffw_norm.weight",
+        "output_norm.weight",
+    ];
+
+    /// Hugging Face GPT-NeoX layout for one layer.
+    const NEOX_HF: &[&str] = &[
+        "embed_in.weight",
+        "layers.0.input_layernorm.weight",
+        "layers.0.post_attention_layernorm.weight",
+        "layers.0.attention.query_key_value.weight",
+        "layers.0.attention.dense.weight",
+        "layers.0.mlp.dense_h_to_4h.weight",
+        "layers.0.mlp.dense_4h_to_h.weight",
+        "final_layer_norm.weight",
+        "embed_out.weight",
+    ];
+
+    #[test]
+    fn full_llama_layout_is_llama_with_high_confidence() {
+        let m = model_named(LLAMA_HF, ModelArchitecture::Llama);
+        let r = infer(&m);
+        assert_eq!(r.family, InferredFamily::Llama);
+        assert_eq!(r.confidence, Confidence::High);
+    }
+
+    #[test]
+    fn llama_missing_o_proj_is_medium_and_names_the_gap() {
+        let names: Vec<&str> = LLAMA_HF
+            .iter()
+            .copied()
+            .filter(|n| !n.contains("o_proj"))
+            .collect();
+        let r = infer(&model_named(&names, ModelArchitecture::Llama));
+        assert_eq!(r.family, InferredFamily::Llama);
+        assert_eq!(r.confidence, Confidence::Medium);
+        assert!(r.evidence.iter().any(|e| e.contains("self_attn.o_proj")));
+    }
+
+    #[test]
+    fn full_gguf_gemma_layout_is_gemma_with_high_confidence() {
+        let r = infer(&model_named(
+            GEMMA_GGUF,
+            ModelArchitecture::Unknown("gemma".into()),
+        ));
+        assert_eq!(r.family, InferredFamily::Gemma);
+        assert_eq!(r.confidence, Confidence::High);
+    }
+
+    #[test]
+    fn full_neox_layout_is_neox_with_high_confidence() {
+        let r = infer(&model_named(
+            NEOX_HF,
+            ModelArchitecture::Unknown("gpt_neox".into()),
+        ));
+        assert_eq!(r.family, InferredFamily::NeoX);
+        assert_eq!(r.confidence, Confidence::High);
+    }
+
+    #[test]
+    fn gguf_llama_layout_is_llama_not_gemma() {
+        // GGUF LLaMA shares attn_q and ffn_gate with Gemma but has no Gemma-only norms.
+        let names = [
+            "token_embd.weight",
+            "blk.0.attn_norm.weight",
+            "blk.0.attn_q.weight",
+            "blk.0.attn_k.weight",
+            "blk.0.attn_v.weight",
+            "blk.0.attn_output.weight",
+            "blk.0.ffn_norm.weight",
+            "blk.0.ffn_gate.weight",
+            "blk.0.ffn_up.weight",
+            "blk.0.ffn_down.weight",
+            "output_norm.weight",
+        ];
+        let r = infer(&model_named(&names, ModelArchitecture::Llama));
+        assert_eq!(r.family, InferredFamily::Llama);
+        assert_eq!(r.confidence, Confidence::High);
+    }
+
+    #[test]
+    fn architecture_name_alone_is_low_confidence() {
+        let r = infer(&model_named(&["foo.weight"], ModelArchitecture::Gemma));
+        assert_eq!(r.family, InferredFamily::Gemma);
+        assert_eq!(r.confidence, Confidence::Low);
+    }
+
+    #[test]
+    fn no_evidence_is_unknown_with_no_confidence() {
+        let r = infer(&model_named(
+            &["foo.weight"],
+            ModelArchitecture::Unknown("x".into()),
+        ));
+        assert_eq!(r.family, InferredFamily::Unknown);
+        assert_eq!(r.confidence, Confidence::None);
+    }
+
+    #[test]
+    fn every_inference_says_head_count_is_not_in_the_shapes() {
+        let r = infer(&model_named(LLAMA_HF, ModelArchitecture::Llama));
+        assert!(r.evidence.iter().any(|e| e.contains("head count")));
+    }
+
+    #[test]
+    fn inference_agrees_with_the_forward_pass_detector() {
+        let dir = tempfile::tempdir().unwrap();
+        let cases = [
+            (LLAMA_HF, ModelArchitecture::Llama, "LLaMA"),
+            (
+                NEOX_HF,
+                ModelArchitecture::Unknown("gpt_neox".into()),
+                "GPT-NeoX",
+            ),
+            (
+                GEMMA_GGUF,
+                ModelArchitecture::Unknown("gemma".into()),
+                "Gemma",
+            ),
+        ];
+        for (names, arch, family) in cases {
+            let m = model_named(names, arch);
+            let detected = ArchConfig::detect(&m, dir.path()).unwrap().family();
+            assert_eq!(detected, family);
+            assert_ne!(infer(&m).family, InferredFamily::Unknown);
+        }
+    }
+
+    #[test]
+    fn inference_from_file_is_refused_without_a_permission_record() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("m.bin");
+        std::fs::write(&path, b"abc").unwrap();
+        let err = infer_from_file(&path).unwrap_err();
+        assert!(
+            format!("{err:#}").contains("no permission record"),
+            "{err:#}"
+        );
+    }
+
+    #[test]
+    fn inference_from_file_checks_permission_before_importing() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("m.bin");
+        std::fs::write(&path, b"abc").unwrap();
+        crate::permission::grant(&path, crate::permission::Basis::Owner, "unit test", 1).unwrap();
+        // The bytes are not a model, so the import fails, but not on the permission check.
+        let err = infer_from_file(&path).unwrap_err();
+        assert!(!format!("{err:#}").contains("permission record"), "{err:#}");
     }
 }
