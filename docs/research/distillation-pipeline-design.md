@@ -46,6 +46,25 @@ text-summarising skill and contains no model training. It is not a source for th
 6. **Package.** An `.epiph` holding the student, the adapter, the recipe, the teacher identity, the
    dataset hash and the quality entries with their evidence labels.
 
+## Teachers and subjects
+
+The student goes to class: it has several subjects, and each subject can have its own teacher.
+
+- **First teacher: Claude.** Decided by the owner on 27 November 2026. Claude answers the prompts of a
+  subject, either through a command the teacher bridge runs (for example the `claude` command line in
+  print mode, with a timeout) or through the session that drives THME over MCP. Claude gives text, not
+  probabilities, so Claude-taught subjects use sequence-level distillation.
+- **Several teachers later.** A teacher registry file lists each teacher: an id, its kind (command,
+  open-weight model THME runs, mock for tests), the subjects it teaches, a timeout, and a terms note.
+- **A curriculum.** A list of subjects. Each subject has its own seed prompts, its own teacher, its own
+  mixing weight, and its own held-out evaluation set. Dataset records carry the subject and the teacher.
+- **Report per subject.** The gate result is reported for each subject separately and for the mix, so a
+  teacher or a subject that does not help is visible instead of averaged away.
+
+Open question for the owner and counsel, recorded rather than assumed: the usage terms of the teacher's
+provider may restrict training other models on its outputs. The pipeline will not run a hosted teacher
+unless its terms note is filled in. The first slice below does not need a hosted teacher.
+
 ## Where the speed comes from
 
 Small student; LoRA instead of full fine-tuning; short sequences; cached teacher outputs; the GPU
