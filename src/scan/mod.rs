@@ -25,10 +25,13 @@
 //!   metadata strings, and large encoded blobs.
 //! - **Code shipped with a model**: `auto_map` (runs with `trust_remote_code`), scripts and
 //!   executables in the folder.
+//! - **Guardrails** (`guardrail`, read-only): safety classifiers and refusal wording in templates
+//!   and system prompts are reported as `Info`; nothing is changed or measured.
 //! - **`.epiph` integrity**: every digest and tensor checked.
 //!
 //! A clean result means no rule fired. It is not proof that a file is safe.
 
+mod guardrail;
 mod hdf5;
 pub mod onnx;
 pub mod pickle;
@@ -235,9 +238,19 @@ fn scan_file(path: &Path, rel: &str, remote_code: bool, report: &mut ScanReport)
             (Severity::Medium, "code file shipped with the model")
         };
         report.add(severity, "code-file", rel, detail.to_string());
-    } else if name == "config.json" || name == "tokenizer_config.json" {
+    } else if name == "config.json" || name == "tokenizer_config.json" || name == "model_index.json"
+    {
         if let Some(json) = read_json(path) {
             check_hf_json(&name, &json, rel, report);
+        }
+    } else if name.starts_with("system_prompt") && matches!(ext.as_str(), "txt" | "md") {
+        if let Ok(bytes) = read_limited(path, 1 << 20) {
+            guardrail::check_refusal(
+                &String::from_utf8_lossy(&bytes),
+                rel,
+                "system prompt",
+                report,
+            );
         }
     }
 }
@@ -328,10 +341,13 @@ fn check_hf_json(name: &str, json: &serde_json::Value, rel: &str, report: &mut S
                 format!("auto_map {map} executes custom Python when loaded with trust_remote_code"),
             );
         }
+        guardrail::check_config(json, rel, report);
     } else if name == "tokenizer_config.json" {
         if let Some(template) = json.get("chat_template") {
             check_text(&template.to_string(), rel, "chat_template", true, report);
         }
+    } else if name == "model_index.json" {
+        guardrail::check_model_index(json, rel, report);
     }
 }
 
@@ -376,6 +392,11 @@ fn check_gguf_metadata(
         let mut strings = Vec::new();
         collect_strings(value, &mut strings);
         let is_template = key.contains("chat_template");
+        if matches!(key.as_str(), "general.name" | "general.basename") {
+            if let ModelMetadataValue::String(name) = value {
+                guardrail::check_name(name, rel, key, report);
+            }
+        }
         for s in strings {
             check_text(&s, rel, key, is_template, report);
         }
@@ -1316,6 +1337,9 @@ const CODE_PATTERNS: [&str; 16] = [
 
 /// Checks one metadata string. In a chat template, code patterns are template injection.
 pub fn check_text(text: &str, rel: &str, key: &str, is_template: bool, report: &mut ScanReport) {
+    if is_template {
+        guardrail::check_refusal(text, rel, key, report);
+    }
     let lower = text.to_ascii_lowercase();
     let hits: Vec<&str> = CODE_PATTERNS
         .iter()
