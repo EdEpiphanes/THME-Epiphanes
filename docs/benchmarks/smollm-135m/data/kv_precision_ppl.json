@@ -58,7 +58,7 @@
     }
   ],
   "known_gaps": [
-    "one model; Pythia-14M not run",
+    "Pythia-14M was measured separately and behaves very differently (docs/benchmarks/pythia-14m/data/kv_precision_ppl.json): int8 is not safe in general",
     "4,096-token context not measured: SmolLM-135M and Pythia-14M are both trained for 2,048 positions, so a 4k run would test rope extrapolation, not the cache",
     "windows are short (4 x 256 and 2 x 1,024 tokens) so the 256-token and 1,024-token perplexities are not comparable to each other or to the full-split figure; only the f32 versus int8 versus int4 difference inside one window setting is meaningful",
     "no decode-speed measurement: reading the cache means decoding it for every token, the CPU path was not timed here"

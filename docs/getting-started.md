@@ -125,7 +125,7 @@ Nothing here has been tried on a clean machine yet.
    thme chat path/to/model --kv-precision int8 --json
    ```
 
-   Measured on SmolLM-135M (WikiText-2, CPU, short windows; report `docs/benchmarks/smollm-135m/data/kv_precision_ppl.json`, one model): `int8` is within noise of `f32` (30.392 against 30.397 at 4x256 tokens, 16.094 against 16.087 at 2x1024), while `int4` has about 6 to 7 percent higher perplexity (32.153 and 17.185), with caches 3.6 and 6.4 times smaller. Reproduce with `cargo run --release --example kv_precision_ppl -- --model-path DIR --tokens FILE.u32 --window N --max-windows N`.
+   Measured on SmolLM-135M (WikiText-2, CPU, short windows; report `docs/benchmarks/smollm-135m/data/kv_precision_ppl.json`, one model): `int8` is within noise of `f32` (30.392 against 30.397 at 4x256 tokens, 16.094 against 16.087 at 2x1024), while `int4` has about 6 to 7 percent higher perplexity (32.153 and 17.185), with caches 3.6 and 6.4 times smaller. On Pythia-14M the same cache is much worse (perplexity 190.8 at f32, 245.2 at int8, 5,805 at int4 over 4 windows of 256 tokens; report `docs/benchmarks/pythia-14m/data/kv_precision_ppl.json`), so check your own model before using `int8` or `int4`. Reproduce with `cargo run --release --example kv_precision_ppl -- --model-path DIR --tokens FILE.u32 --window N --max-windows N`.
 
 ## AI engineer: scan, convert, export, serve to editors and agents
 

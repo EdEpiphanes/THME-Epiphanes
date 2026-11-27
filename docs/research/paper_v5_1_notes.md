@@ -47,6 +47,8 @@ repository; each entry gives the code reference and a replacement sentence.
 - **Paper says:** Check the paper text against this.
 - **Code and measurement:** Measured on SmolLM-135M, WikiText-2, CPU, token by token through the cache: 4 windows of 256 tokens give perplexity 30.392 (`f32`), 30.397 (`int8`), and 32.153 (`int4`); 2 windows of 1,024 tokens give 16.094 (`f32`), 16.087 (`int8`), and 17.185 (`int4`); cache bytes at 256 tokens are 11.75 MB (`f32`), 3.30 MB (`int8`), and 1.84 MB (`int4`). Not measured: 4,096 context (the model is trained for 2,048), other models, and decode speed (report `docs/benchmarks/smollm-135m/data/kv_precision_ppl.json`; ADR `docs/adr/0012-kv-cache-precision.md`).
 - **Suggested sentence:** "Evaluated token by token through the cache on SmolLM-135M (WikiText-2, CPU), `f32`, `int8`, and `int4` KV cache precisions give perplexities of 30.392, 30.397, and 32.153 across 4 windows of 256 tokens (cache bytes 11.75 MB, 3.30 MB, and 1.84 MB) and 16.094, 16.087, and 17.185 across 2 windows of 1,024 tokens; 4,096 context (the model is trained for 2,048), other models, and decode speed were not measured."
+- **Second model:** on Pythia-14M the same measurement gives 190.8 (f32), 245.2 (int8), 5,805 (int4) at 4 windows of 256 tokens and 75.5, 101.5, 10,350 at one 2,048-token window (`docs/benchmarks/pythia-14m/data/kv_precision_ppl.json`); any sentence about KV cache precision must say the result depends on the model.
+
 
 ## Softmax precision (not verified)
 
