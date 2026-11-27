@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use crate::inference::grounded_decode::NgramLoopBreaker;
-use crate::inference::CausalLm;
+use crate::inference::{CausalLm, KvCache, KvPrecision};
 use crate::text::{eos_token, has_chat_template, render_chat_template, ChatMessage, Tokenizer};
 
 /// Why a reply stopped.
@@ -38,6 +38,8 @@ pub struct Reply {
     pub prefill_secs: f64,
     pub tokens_per_sec: f64,
     pub decode_tokens_per_sec: f64,
+    pub kv_precision: KvPrecision,
+    pub kv_cache_bytes: usize,
     pub finish: Finish,
 }
 
@@ -49,6 +51,7 @@ pub struct Request<'a> {
     /// Plain text mode: the turns are joined as text, with no chat template.
     pub plain_text: bool,
     pub max_new_tokens: usize,
+    pub kv_precision: KvPrecision,
 }
 
 /// Renders the prompt, then greedy-decodes until end-of-sequence, the token budget, or `cancel`.
@@ -77,8 +80,15 @@ pub fn generate(
     let mut token_ids = Vec::new();
     let mut loop_breaker = NgramLoopBreaker::new(256);
     // With a KV cache the prompt is prefilled once and each reply token is one step. Without one
-    // (no cached path for this architecture) every step reruns the whole sequence.
-    let mut cache = model.new_cache();
+    // (no cached path for this architecture) every step reruns the whole sequence; non-F32
+    // precisions require a cache path supporting them.
+    let mut cache = model.new_cache_with_precision(request.kv_precision);
+    if cache.is_none() && request.kv_precision != KvPrecision::F32 {
+        bail!(
+            "This model has no KV-cache path for precision {}",
+            request.kv_precision.as_str()
+        );
+    }
     let mut fed = 0;
     let started = Instant::now();
     let mut after_first: Option<Instant> = None;
@@ -111,6 +121,7 @@ pub fn generate(
             break Finish::LoopBroken;
         }
     };
+    let kv_cache_bytes = cache.as_ref().map_or(0, KvCache::bytes);
     let wall_secs = started.elapsed().as_secs_f64();
     let prefill_secs = after_first.map_or(wall_secs, |t| t.duration_since(started).as_secs_f64());
     let decode_secs = (wall_secs - prefill_secs).max(0.0);
@@ -134,6 +145,8 @@ pub fn generate(
         prefill_secs,
         tokens_per_sec,
         decode_tokens_per_sec,
+        kv_precision: request.kv_precision,
+        kv_cache_bytes,
         finish,
     })
 }
@@ -263,6 +276,7 @@ mod tests {
             messages,
             plain_text: false,
             max_new_tokens: max,
+            kv_precision: KvPrecision::F32,
         }
     }
 
@@ -429,5 +443,87 @@ mod tests {
         // The loop breaker may cut a degenerate repeat short, never change the tokens before the cut.
         assert!(!reply.token_ids.is_empty());
         assert_eq!(reply.token_ids, expected[..reply.token_ids.len()]);
+    }
+
+    #[test]
+    fn generate_with_int8_and_int4_records_smaller_cache_bytes() {
+        let (_root, dir) = mock_folder(None);
+        let messages = [msg("user", "hello world")];
+        let (model, tok) = load(&dir);
+        let run_prec = |kv_precision: KvPrecision| {
+            let mut req = request(&dir, &messages, 3);
+            req.kv_precision = kv_precision;
+            generate(
+                model.as_ref(),
+                &tok,
+                &req,
+                &AtomicBool::new(false),
+                &mut |_| {},
+            )
+            .unwrap()
+        };
+
+        let f32_reply = run_prec(KvPrecision::F32);
+        let int8_reply = run_prec(KvPrecision::Int8);
+        let int4_reply = run_prec(KvPrecision::Int4);
+
+        assert_eq!(f32_reply.kv_precision, KvPrecision::F32);
+        assert_eq!(int8_reply.kv_precision, KvPrecision::Int8);
+        assert_eq!(int4_reply.kv_precision, KvPrecision::Int4);
+        assert!(int4_reply.kv_cache_bytes > 0);
+        assert!(int4_reply.kv_cache_bytes < int8_reply.kv_cache_bytes);
+        assert!(int8_reply.kv_cache_bytes < f32_reply.kv_cache_bytes);
+    }
+
+    #[test]
+    fn generate_errors_when_model_lacks_requested_kv_precision() {
+        use crate::inference::llama::DepthExit;
+        use crate::inference::probe::ForwardTrace;
+
+        struct NoCacheModel;
+        impl CausalLm for NoCacheModel {
+            fn vocab_size(&self) -> usize {
+                64
+            }
+            fn num_layers(&self) -> usize {
+                1
+            }
+            fn forward_scheduled(
+                &self,
+                _tokens: &[u32],
+                _schedule: &[usize],
+                _exits: &[usize],
+            ) -> anyhow::Result<Vec<DepthExit>> {
+                Ok(Vec::new())
+            }
+            fn forward_traced(
+                &self,
+                _tokens: &[u32],
+                _schedule: &[usize],
+            ) -> anyhow::Result<(DepthExit, ForwardTrace)> {
+                anyhow::bail!("unused in test")
+            }
+            fn forward_logits(&self, _tokens: &[u32]) -> anyhow::Result<Vec<f32>> {
+                Ok(vec![0.0; 64])
+            }
+        }
+
+        let (_root, dir) = mock_folder(None);
+        let tok = Tokenizer::from_model_dir(&dir).unwrap();
+        let messages = [msg("user", "hello world")];
+        let model = NoCacheModel;
+
+        for (precision, expected_name) in [(KvPrecision::Int8, "int8"), (KvPrecision::Int4, "int4")]
+        {
+            let mut req = request(&dir, &messages, 2);
+            req.kv_precision = precision;
+            let err = generate(&model, &tok, &req, &AtomicBool::new(false), &mut |_| {})
+                .unwrap_err()
+                .to_string();
+            assert!(
+                err.contains(expected_name),
+                "expected error naming '{expected_name}', got: {err}"
+            );
+        }
     }
 }

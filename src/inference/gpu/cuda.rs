@@ -1882,6 +1882,9 @@ impl GpuBackend for CudaContext {
         if !cache.has_device_state() && !cache.is_empty() {
             return Ok(None);
         }
+        if cache.precision() != crate::inference::KvPrecision::F32 {
+            return Ok(None);
+        }
 
         struct CudaKvState {
             capacity: usize,

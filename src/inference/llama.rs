@@ -13,7 +13,7 @@ use super::gpu::{
     dispatch_linear_array, dispatch_linear_slice, dispatch_score_head_slice, DecoderPlan,
     GpuBackend, LayerWeights,
 };
-use super::kv::{KvCache, KvLayer};
+use super::kv::{KvCache, KvLayer, KvPrecision};
 use super::probe::{
     dead_fraction, rms, update_ratio, ForwardTrace, InputChannelStats, LayerTrace, TensorActivity,
 };
@@ -401,9 +401,14 @@ impl LlamaModel {
         self.config.hidden_size / self.config.num_heads * self.config.num_kv_heads
     }
 
-    /// An empty KV cache sized for this model's layers and key/value width.
+    /// An empty F32 KV cache sized for this model's layers and key/value width.
     pub fn new_cache(&self) -> KvCache {
-        KvCache::new(self.layers.len(), self.kv_dim())
+        self.new_cache_with_precision(KvPrecision::F32)
+    }
+
+    /// An empty KV cache sized for this model's layers and key/value width at `precision`.
+    pub fn new_cache_with_precision(&self, precision: KvPrecision) -> KvCache {
+        KvCache::with_precision(self.layers.len(), self.kv_dim(), precision)
     }
 
     /// Appends `tokens` after the positions already in `cache`, computing only the new rows,
@@ -1391,6 +1396,41 @@ pub(crate) mod tests {
                 gap < crate::inference::kv::tests::INCREMENTAL_TOLERANCE,
                 "gap {gap}"
             );
+        }
+    }
+
+    #[test]
+    fn int8_cache_reports_packed_bytes_and_finite_logits() {
+        let model = tiny_model(0.6);
+        let tokens: [u32; 5] = [3, 17, 8, 25, 1];
+        // tiny_model has layers = 2 and kv_dim = (16 / 4) * 2 = 8.
+        // For kv_dim = 8 in Int8 (group size 32), each row is 8 i8 values + 1 f32 scale = 12 bytes.
+        // After N = 5 positions, layers * 2 * positions * row_bytes = 2 * 2 * 5 * 12 = 240 bytes.
+        // F32 stores 8 * 4 = 32 bytes per row, so 2 * 2 * 5 * 32 = 640 bytes.
+        let mut int8_cache = model.new_cache_with_precision(KvPrecision::Int8);
+        for chunk in [&tokens[..3], &tokens[3..4], &tokens[4..5]] {
+            let logits = model.forward_extend(&mut int8_cache, chunk).unwrap();
+            assert_eq!(logits.len(), model.vocab_size());
+            assert!(logits.iter().all(|v| v.is_finite()), "non-finite logit");
+        }
+        assert_eq!(int8_cache.len(), 5);
+        assert_eq!(int8_cache.bytes(), 240);
+
+        let mut f32_cache = model.new_cache();
+        let f32_logits = model.forward_extend(&mut f32_cache, &tokens).unwrap();
+        assert!(f32_logits.iter().all(|v| v.is_finite()));
+        assert_eq!(f32_cache.bytes(), 640);
+        assert!(int8_cache.bytes() < f32_cache.bytes());
+    }
+
+    #[test]
+    fn quantized_kv_cache_logit_gap_is_finite() {
+        let model = tiny_model(0.6);
+        let tokens: Vec<u32> = vec![3, 17, 8, 25, 1, 30];
+        for precision in [KvPrecision::Int8, KvPrecision::Int4] {
+            let gap =
+                crate::inference::kv::tests::kv_precision_logit_gap(&model, &tokens, precision);
+            assert!(gap.is_finite(), "{precision:?} gap is not finite: {gap}");
         }
     }
 

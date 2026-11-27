@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - v0.2.0 Measured Core
 
 ### Added
+- **`thme chat --kv-precision`** (27 November 2026, THME-3082 part 2): choose f32, int8 or int4 KV storage on the CPU path; the JSON reports the precision and the real cache bytes.
 - **BF16 checkpoints export with `--quant fp16` and `--quant q8_0`; llama.cpp requirements check** (27 November 2026, THME-3091 slice 4): BF16 sources were rejected before. `--llama-cpp-layout` now refuses a GGUF without tokenizer, recognised tensor names, F32 norms or rope dimension.
 - **Tokenizer in the llama.cpp-layout GGUF** (27 November 2026, THME-3091 slice 3): `--llama-cpp-layout` writes the vocabulary, merges, token types and special ids from `tokenizer.json`. Not yet tried in llama.cpp.
 - **`thme export --llama-cpp-layout`** (27 November 2026, THME-3091 slice 2): opt-in GGUF layout with GGML tensor names, F32 norms, rope-permuted q/k rows and `rope.dimension_count`. Default exports are unchanged. No tokenizer yet, and not yet tried in llama.cpp.

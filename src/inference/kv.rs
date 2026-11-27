@@ -20,6 +20,17 @@ pub enum KvPrecision {
     Int4,
 }
 
+impl KvPrecision {
+    /// Lowercase CLI/JSON name for this KV cache precision.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::F32 => "f32",
+            Self::Int8 => "int8",
+            Self::Int4 => "int4",
+        }
+    }
+}
+
 fn group_scale(group: &[f32], q_max: f32) -> f32 {
     let max_abs = group.iter().fold(0.0_f32, |acc, &v| acc.max(v.abs()));
     if max_abs == 0.0 || !max_abs.is_finite() {
@@ -252,6 +263,7 @@ pub(crate) struct DeviceKvHandle {
 /// The cached keys and values of every layer for one sequence.
 pub struct KvCache {
     kv_dim: usize,
+    precision: KvPrecision,
     layers: Vec<KvLayer>,
     device: Option<DeviceKvHandle>,
 }
@@ -266,6 +278,7 @@ impl KvCache {
     pub fn with_precision(num_layers: usize, kv_dim: usize, precision: KvPrecision) -> Self {
         Self {
             kv_dim,
+            precision,
             layers: (0..num_layers)
                 .map(|_| KvLayer::new(kv_dim, precision))
                 .collect(),
@@ -292,6 +305,11 @@ impl KvCache {
     /// Width of one key (or value) row: KV heads times head dimension.
     pub fn kv_dim(&self) -> usize {
         self.kv_dim
+    }
+
+    /// Storage precision configured for this cache.
+    pub fn precision(&self) -> KvPrecision {
+        self.precision
     }
 
     /// Bytes of key and value storage held right now, for measured KV-cache reports.
@@ -374,6 +392,37 @@ pub(crate) mod tests {
         }
         assert_eq!(cache.len(), tokens.len());
         Ok(worst)
+    }
+
+    /// Feeds `tokens` step by step into a cache of `precision` and an F32 cache, returning the
+    /// largest absolute logit gap across all positions (or `NaN` if any logit is non-finite).
+    pub(crate) fn kv_precision_logit_gap(
+        model: &dyn CausalLm,
+        tokens: &[u32],
+        precision: KvPrecision,
+    ) -> f32 {
+        assert!(!tokens.is_empty());
+        let mut q_cache = model
+            .new_cache_with_precision(precision)
+            .expect("model supports requested KV precision");
+        let mut f_cache = model
+            .new_cache_with_precision(KvPrecision::F32)
+            .expect("model supports F32 KV cache");
+        let mut worst = 0.0f32;
+        for &tok in tokens {
+            let q_logits = model.forward_extend(&mut q_cache, &[tok]).unwrap();
+            let f_logits = model.forward_extend(&mut f_cache, &[tok]).unwrap();
+            assert_eq!(q_logits.len(), f_logits.len());
+            for (a, b) in q_logits.iter().zip(&f_logits) {
+                if !a.is_finite() || !b.is_finite() {
+                    return f32::NAN;
+                }
+                worst = worst.max((a - b).abs());
+            }
+        }
+        assert_eq!(q_cache.len(), tokens.len());
+        assert_eq!(f_cache.len(), tokens.len());
+        worst
     }
 
     #[test]
