@@ -781,7 +781,7 @@ active backlog above; Sprints 10 to 13 describe work deferred to v0.3 and later 
 - **Problem**: Models are loaded with fixed settings; the run planner (docs/research/engine-autotuning.md, section 5) needs this piece.
 - **Before building**: reference audit of the outside engines named in docs/research/engine-autotuning.md (licence, clean-room or integrate).
 - **Done means**: `thme pathfinder --model X` prints the plan for a header, with basis labels, using only `predicted`; golden-file test for a mock model (`examples/generate_mock_model.rs`).
-- **Progress** (27 November 2026): `thme pathfinder <MODEL_PATH> [--budget-gb] [--context] [--kv] [--json]` and `profiling::run_plan` exist, every decision labelled `predicted`; golden test `tests/test_pathfinder.rs` with `tests/golden/pathfinder_mock.json` (numbers checked by hand: KV 8,388,608, scratch 143,360, weights 24,252,928 for the mock LLaMA). Not done: the command is not in the man page or manual yet, and the plan does not drive a real run.
+- **Progress** (27 November 2026): `thme pathfinder <MODEL_PATH> [--budget-gb] [--context] [--kv] [--json]` and `profiling::run_plan` exist, every decision labelled `predicted`; golden test `tests/test_pathfinder.rs` with `tests/golden/pathfinder_mock.json` (numbers checked by hand: KV 8,388,608, scratch 143,360, weights 24,252,928 for the mock LLaMA). The man page and manual now list every subcommand, generated from `thme --help` (27 November 2026). Not done: the plan does not drive a real run.
 
 ### [THME-3058] Shrink loop
 

@@ -10,46 +10,97 @@ thme \- Topological Heterogeneous Manifold Engine for LLM Optimization
 .SH SUBCOMMANDS
 .TP
 \fBgui\fR, \fBui\fR
-Launch the 60 FPS interactive native Desktop Studio GUI.
+Launch the THME Studio (the separate thme-gui program next to this one)
 .TP
-\fBinspect\fR \fIMODEL\fR
-Inspect SafeTensors, GGUF and .epiph tensor shapes, dtypes, and metadata zero-copy.
+\fBinspect\fR
+Inspect model weights, tensor shapes, and architecture zero-copy
 .TP
-\fBprofile\fR \fIMODEL\fR
-Profile layer topological sensitivity, SVD decay spectra, and KV-cache scaling.
+\fBprofile\fR
+Profile layer sensitivity and KV-cache memory scaling
 .TP
-\fBplan\fR \fIMODEL\fR
-Generate heterogeneous precision Pareto allocation plans.
+\fBplan\fR
+Generate heterogeneous precision Pareto allocation plan
+.TP
+\fBpathfinder\fR
+Plan run settings (context, KV precision, predicted memory) from a model header
+.TP
+\fBevaluate\fR
+Measure a surgery recipe's perplexity cost with the reference forward pass
+.TP
+\fBforward\fR
+Run authentic reference forward pass on token sequence and output logits
+.TP
+\fBchat\fR
+Chat with a model using incremental KV-cached greedy decoding
+.TP
+\fBsearch\fR
+Search for a mixed-precision recipe from measured costs under a size budget
+.TP
+\fBcalibrate\fR
+Record per-input-channel activation statistics on calibration tokens
 .TP
 \fBvalidate\fR, \fBcheck\fR
-Run quality gate perplexity validation between baseline and candidate models.
+Run quality gate check between baseline and candidate
 .TP
-\fBtweak\fR, \fBsurgery\fR \fIMODEL\fR \fIRECIPE\fR
-Apply declarative surgery recipes to model weights.
+\fBtweak\fR, \fBsurgery\fR
+Apply Teacher LLM surgery recipe or restructuring plan
 .TP
 \fBreport\fR
-Export optimization and sensitivity summary reports in Markdown or JSON.
+View or export optimization plan reports
 .TP
 \fBconvert\fR
-Cross-convert model topology across 8 specialized AI paradigms.
+Cross-convert model topology across 8 specialized AI paradigms (LLM, LCM, LAM, MoE, VLM, SLM, MLM, SAM)
+.TP
+\fBcluster\fR
+Classify multi-PC interconnects (Thunderbolt / Ethernet / Wi-Fi) and partition layers
 .TP
 \fBspeculate\fR
-Synthesize draft models and evaluate multi-token speculative decoding speedups.
+Synthesize draft models and evaluate multi-token speculative decoding speedups
 .TP
 \fBroofline\fR
-Profile model operational intensity against empirical hardware ceilings.
+Profile model layers against empirical hardware roofline ceilings and cache hierarchy
 .TP
-\fBexport\fR \fIMODEL\fR \fB--output\fR \fIOUT\fR
-Export source-backed model as GGUF v3 or SafeTensors.
+\fBexport\fR
+Export a source-backed model as GGUF or SafeTensors
+.TP
+\fBepiph\fR
+Pack or verify Epiphanes model files (.epiph): weights plus all their metadata
+.TP
+\fBscan\fR
+Security scan of a model file or folder for code execution, hidden payloads and malformed headers
+.TP
+\fBdiscover\fR
+List models already on this machine (Hugging Face, Ollama, LM Studio, llama.cpp); read-only
+.TP
+\fBdoctor\fR
+Say what works on this machine (OS, memory, disk, GPU adapter, models) and what to try next
+.TP
+\fBbench\fR
+Benchmark registry: list and check task files and result records
+.TP
+\fBfigure\fR
+Draw a model as an isometric figure: one tray per layer, one block per tensor
 .TP
 \fBinterop\fR
-Generate PyTorch fine-tuning scripts and Hugging Face configuration files.
+Generate PyTorch / CUDA fine-tuning scripts or Hugging Face configurations
 .TP
 \fBmcp\fR, \fBdaemon\fR
-Run Model Context Protocol JSON-RPC daemon for AI agent connectivity.
+Run Model Context Protocol (MCP) server for VS Code, Copilot & AI agents
 .TP
 \fBco-surgery\fR, \fBcosurgery\fR
-Run autonomous closed-loop Teacher-Student co-surgery optimization.
+Run autonomous Closed-Loop Teacher-Student Co-Surgery optimization
+.TP
+\fBtelemetry\fR
+Query real-time CPU, RAM, and discrete GPU hardware telemetry
+.TP
+\fBtokenize\fR
+Encode text with a model's tokenizer.json and decode it back
+.TP
+\fBchat-template\fR
+Render a model's own chat template for a JSON list of messages
+.TP
+\fBdownload\fR
+Download a model from the Hugging Face hub, then run the safety scan on it
 .SH OPTIONS
 .TP
 \fB\-h\fR, \fB\-\-help\fR

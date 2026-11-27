@@ -19,22 +19,41 @@ thme <SUBCOMMAND> [OPTIONS]
 
 ### 2.1 Subcommands Reference
 
+Generated from `thme --help` on 27 November 2026; run `thme <subcommand> --help` for each one's options.
+
 | Subcommand | Alias | Purpose |
 | :--- | :--- | :--- |
-| `gui` | `ui` | Launch the 60 FPS interactive Native Desktop Studio GUI. |
-| `inspect` | — | Zero-copy inspection of SafeTensors, GGUF and .epiph tensors, shapes, and header metadata. |
-| `profile` | — | Layerwise topological sensitivity analysis, condition numbers, and KV-cache scaling. |
-| `plan` | — | Dynamic programming heterogeneous Pareto precision allocation plan generator. |
-| `validate` | `check` | Perplexity gate verification against baseline across WikiText-2, C4, PTB. |
-| `tweak` | `surgery`| Apply declarative JSON surgery recipes to model architectures in-place. |
-| `report` | — | Export optimization and sensitivity summary reports in Markdown or JSON. |
-| `convert` | — | Cross-convert model topology across 8 specialized AI paradigms (LLM, MoE, SLM, etc.). |
-| `speculate` | — | Extract prefix manifolds and evaluate multi-token speculative draft speedups. |
-| `roofline` | — | Profile operational arithmetic intensity against empirical hardware roofs. |
-| `export` | — | Export source-backed model as GGUF v3 (32-byte aligned) or SafeTensors. |
-| `interop` | — | Generate PyTorch fine-tuning scripts and Hugging Face configuration files. |
-| `mcp` | `daemon` | Launch Model Context Protocol JSON-RPC server for VS Code and Copilot. |
-| `co-surgery`| `cosurgery` | Run closed-loop autonomous Teacher-Student co-surgery optimization loop. |
+| `gui` | `ui` | Launch the THME Studio (the separate `thme-gui` program next to this one) |
+| `inspect` | - | Inspect model weights, tensor shapes, and architecture zero-copy |
+| `profile` | - | Profile layer sensitivity and KV-cache memory scaling |
+| `plan` | - | Generate heterogeneous precision Pareto allocation plan |
+| `pathfinder` | - | Plan run settings (context, KV precision, predicted memory) from a model header |
+| `evaluate` | - | Measure a surgery recipe's perplexity cost with the reference forward pass |
+| `forward` | - | Run authentic reference forward pass on token sequence and output logits |
+| `chat` | - | Chat with a model using incremental KV-cached greedy decoding |
+| `search` | - | Search for a mixed-precision recipe from measured costs under a size budget |
+| `calibrate` | - | Record per-input-channel activation statistics on calibration tokens |
+| `validate` | `check` | Run quality gate check between baseline and candidate |
+| `tweak` | `surgery` | Apply Teacher LLM surgery recipe or restructuring plan |
+| `report` | - | View or export optimization plan reports |
+| `convert` | - | Cross-convert model topology across 8 specialized AI paradigms (LLM, LCM, LAM, MoE, VLM, SLM, MLM, SAM) |
+| `cluster` | - | Classify multi-PC interconnects (Thunderbolt / Ethernet / Wi-Fi) and partition layers |
+| `speculate` | - | Synthesize draft models and evaluate multi-token speculative decoding speedups |
+| `roofline` | - | Profile model layers against empirical hardware roofline ceilings and cache hierarchy |
+| `export` | - | Export a source-backed model as GGUF or SafeTensors |
+| `epiph` | - | Pack or verify Epiphanes model files (.epiph): weights plus all their metadata |
+| `scan` | - | Security scan of a model file or folder for code execution, hidden payloads and malformed headers |
+| `discover` | - | List models already on this machine (Hugging Face, Ollama, LM Studio, llama.cpp); read-only |
+| `doctor` | - | Say what works on this machine (OS, memory, disk, GPU adapter, models) and what to try next |
+| `bench` | - | Benchmark registry: list and check task files and result records |
+| `figure` | - | Draw a model as an isometric figure: one tray per layer, one block per tensor |
+| `interop` | - | Generate PyTorch / CUDA fine-tuning scripts or Hugging Face configurations |
+| `mcp` | `daemon` | Run Model Context Protocol (MCP) server for VS Code, Copilot & AI agents |
+| `co-surgery` | `cosurgery` | Run autonomous Closed-Loop Teacher-Student Co-Surgery optimization |
+| `telemetry` | - | Query real-time CPU, RAM, and discrete GPU hardware telemetry |
+| `tokenize` | - | Encode text with a model's tokenizer.json and decode it back |
+| `chat-template` | - | Render a model's own chat template for a JSON list of messages |
+| `download` | - | Download a model from the Hugging Face hub, then run the safety scan on it |
 
 ---
 

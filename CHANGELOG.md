@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - v0.2.0 Measured Core
 
 ### Added
+- **Man page and manual list every subcommand** (27 November 2026): both were missing 14 commands, including `pathfinder`, `chat`, `evaluate` and `epiph`; the lists are now taken from `thme --help`.
 - **A llama.cpp-layout GGUF loads in llama.cpp and matches THME** (27 November 2026, THME-3091): SmolLM-135M exported with `--llama-cpp-layout` produced the same 20 greedy tokens in llama.cpp b12584 as THME's forward pass (CPU, one model, F16); report `docs/benchmarks/smollm-135m/data/llama_cpp_load.json`. Two follow-ups are open: the pre-tokenizer key (THME-3102) and reading such files back (THME-3103).
 - **VS Code MCP terminal limits the server to the workspace folders** (27 November 2026, THME-3054 part): the extension passes one `--allow-root` per workspace folder; example configs and docs show the flag.
 - **`thme mcp --allow-root DIR`** (27 November 2026, THME-3054 part): optional folders outside which a tool call's `model_path` is refused, symlinks and `..` resolved. Without it nothing changes.
