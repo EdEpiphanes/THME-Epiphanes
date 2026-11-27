@@ -217,6 +217,7 @@ pub fn measure_artifact(candidate: &ModelIR, keep: Option<&Path>) -> Value {
             quant_type: ExportQuantType::PerTensor,
             output_path: path.clone(),
             compute_checksum: !temporary,
+            llama_cpp_layout: false,
         },
     );
     let value = match result {

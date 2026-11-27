@@ -86,6 +86,7 @@ impl THMEApp {
                         quant_type: self.export_quant,
                         output_path,
                         compute_checksum: self.export_checksum,
+                        llama_cpp_layout: false,
                     };
 
                     if let Some(source_model) = source_model {

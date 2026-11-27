@@ -97,6 +97,8 @@ pub struct ExportConfig {
     pub quant_type: ExportQuantType,
     pub output_path: PathBuf,
     pub compute_checksum: bool,
+    #[serde(default)]
+    pub llama_cpp_layout: bool,
 }
 
 /// Statistical telemetry report produced following export
@@ -124,112 +126,8 @@ impl ModelExporter {
         }
 
         match config.format {
-            ExportFormat::GGUFv3 if config.quant_type == ExportQuantType::PerTensor => {
-                let mut writer = GgufWriter::new();
-                GgufMetadataSynchronizer::synchronize_into_writer(
-                    &mut writer,
-                    model,
-                    config.quant_type,
-                );
-                for tensor in &model.tensors {
-                    let source = tensor.source.clone().with_context(|| format!(
-                        "Tensor '{}' has no file-backed payload; parse a model from disk before exporting", tensor.name
-                    ))?;
-                    match per_tensor_plan(tensor)? {
-                        TensorPlan::Copy(ggml_type) => {
-                            ensure_source_dtype(tensor, &tensor.original_dtype)?;
-                            writer.add_tensor_source(
-                                &tensor.name,
-                                tensor.shape.clone(),
-                                ggml_type,
-                                source,
-                            );
-                        }
-                        TensorPlan::Convert(ggml_type) => {
-                            if source.byte_len != u64::try_from(tensor.byte_size)? {
-                                anyhow::bail!("Tensor '{}' source payload length does not match recorded byte size", tensor.name);
-                            }
-                            writer.add_converted_tensor_source(
-                                &tensor.name,
-                                tensor.shape.clone(),
-                                ggml_type,
-                                source,
-                                tensor.original_dtype.clone(),
-                            );
-                        }
-                    }
-                }
-                writer
-                    .write_to_file(&config.output_path)
-                    .with_context(|| format!("Failed writing GGUF to {:?}", config.output_path))?;
-            }
             ExportFormat::GGUFv3 => {
-                let target_type = match config.quant_type {
-                    ExportQuantType::FP16 => ("F16", GgmlType::F16),
-                    ExportQuantType::Q8_0 => ("Q8_0", GgmlType::Q8_0),
-                    ExportQuantType::TQ1_0 => ("TQ1_0", GgmlType::TQ1_0),
-                    ExportQuantType::BitNetB158 => anyhow::bail!(
-                        "BitNet conversion is not available for source-backed export; choose a matching FP16 or Q8_0 source"
-                    ),
-                    ExportQuantType::PerTensor => anyhow::bail!("per-tensor export is handled by its own branch"),
-                };
-                let mut writer = GgufWriter::new();
-                GgufMetadataSynchronizer::synchronize_into_writer(
-                    &mut writer,
-                    model,
-                    config.quant_type,
-                );
-
-                for tensor in &model.tensors {
-                    let source = tensor.source.clone().with_context(|| format!(
-                        "Tensor '{}' has no file-backed payload; parse a model from disk before exporting", tensor.name
-                    ))?;
-                    if tensor.original_dtype == target_type.0 {
-                        ensure_source_dtype(tensor, target_type.0)?;
-                        writer.add_tensor_source(
-                            &tensor.name,
-                            tensor.shape.clone(),
-                            target_type.1,
-                            source,
-                        );
-                    } else if matches!(
-                        config.quant_type,
-                        ExportQuantType::Q8_0 | ExportQuantType::TQ1_0
-                    ) && matches!(tensor.original_dtype.as_str(), "F16" | "F32")
-                    {
-                        let row_width = tensor.shape.last().copied().unwrap_or(1);
-                        if !row_width.is_multiple_of(target_type.1.block_size()) {
-                            anyhow::bail!(
-                                "Tensor '{}' row width {} must be divisible by {} for {}",
-                                tensor.name,
-                                row_width,
-                                target_type.1.block_size(),
-                                target_type.0
-                            );
-                        }
-                        if source.byte_len != u64::try_from(tensor.byte_size)? {
-                            anyhow::bail!("Tensor '{}' source payload length does not match recorded byte size", tensor.name);
-                        }
-                        writer.add_converted_tensor_source(
-                            &tensor.name,
-                            tensor.shape.clone(),
-                            target_type.1,
-                            source,
-                            tensor.original_dtype.clone(),
-                        );
-                    } else {
-                        anyhow::bail!(
-                            "Tensor '{}' has source dtype {}, cannot export as {}",
-                            tensor.name,
-                            tensor.original_dtype,
-                            target_type.0
-                        );
-                    }
-                }
-
-                writer
-                    .write_to_file(&config.output_path)
-                    .with_context(|| format!("Failed writing GGUF to {:?}", config.output_path))?;
+                export_gguf(model, config)?;
             }
             ExportFormat::SafeTensors => {
                 if config.quant_type != ExportQuantType::FP16 {
@@ -287,6 +185,235 @@ impl ModelExporter {
             sha256_checksum,
         })
     }
+}
+
+fn export_gguf(model: &ModelIR, config: &ExportConfig) -> Result<()> {
+    let target_type = match config.quant_type {
+        ExportQuantType::PerTensor => None,
+        ExportQuantType::FP16 => Some(("F16", GgmlType::F16)),
+        ExportQuantType::Q8_0 => Some(("Q8_0", GgmlType::Q8_0)),
+        ExportQuantType::TQ1_0 => Some(("TQ1_0", GgmlType::TQ1_0)),
+        ExportQuantType::BitNetB158 => anyhow::bail!(
+            "BitNet conversion is not available for source-backed export; choose a matching FP16 or Q8_0 source"
+        ),
+    };
+
+    let mut writer = GgufWriter::new();
+    GgufMetadataSynchronizer::synchronize_into_writer(&mut writer, model, config.quant_type);
+    if config.llama_cpp_layout {
+        add_missing_rope_dimension_count(&mut writer, model)?;
+    }
+
+    for tensor in &model.tensors {
+        let source = tensor.source.clone().with_context(|| {
+            format!(
+                "Tensor '{}' has no file-backed payload; parse a model from disk before exporting",
+                tensor.name
+            )
+        })?;
+        let export_name = if config.llama_cpp_layout {
+            ggml_names::ggml_tensor_name(&tensor.name).with_context(|| {
+                format!(
+                    "Tensor '{}' has no GGML tensor name mapping for llama.cpp layout",
+                    tensor.name
+                )
+            })?
+        } else {
+            tensor.name.clone()
+        };
+
+        if config.llama_cpp_layout && ggml_names::is_norm_tensor(&export_name) {
+            if source.byte_len != u64::try_from(tensor.byte_size)? {
+                anyhow::bail!(
+                    "Tensor '{}' source payload length does not match recorded byte size",
+                    tensor.name
+                );
+            }
+            if tensor.original_dtype == "F32" {
+                writer.add_tensor_source(&export_name, tensor.shape.clone(), GgmlType::F32, source);
+            } else {
+                let values = crate::inference::read_tensor_f32(tensor)?;
+                writer.add_tensor(
+                    &export_name,
+                    tensor.shape.clone(),
+                    GgmlType::F32,
+                    f32_slice_to_le_bytes(&values),
+                );
+            }
+            continue;
+        }
+
+        let plan = match target_type {
+            None => per_tensor_plan(tensor)?,
+            Some((target_name, target_ggml)) => {
+                if tensor.original_dtype == target_name {
+                    ensure_source_dtype(tensor, target_name)?;
+                    TensorPlan::Copy(target_ggml)
+                } else if matches!(
+                    config.quant_type,
+                    ExportQuantType::Q8_0 | ExportQuantType::TQ1_0
+                ) && matches!(tensor.original_dtype.as_str(), "F16" | "F32")
+                {
+                    let row_width = tensor.shape.last().copied().unwrap_or(1);
+                    if !row_width.is_multiple_of(target_ggml.block_size()) {
+                        anyhow::bail!(
+                            "Tensor '{}' row width {} must be divisible by {} for {}",
+                            tensor.name,
+                            row_width,
+                            target_ggml.block_size(),
+                            target_name
+                        );
+                    }
+                    if source.byte_len != u64::try_from(tensor.byte_size)? {
+                        anyhow::bail!(
+                            "Tensor '{}' source payload length does not match recorded byte size",
+                            tensor.name
+                        );
+                    }
+                    TensorPlan::Convert(target_ggml)
+                } else {
+                    anyhow::bail!(
+                        "Tensor '{}' has source dtype {}, cannot export as {}",
+                        tensor.name,
+                        tensor.original_dtype,
+                        target_name
+                    );
+                }
+            }
+        };
+
+        if config.llama_cpp_layout {
+            if let Some(n_heads) = rope_head_count(&export_name, model) {
+                if source.byte_len != u64::try_from(tensor.byte_size)? {
+                    anyhow::bail!(
+                        "Tensor '{}' source payload length does not match recorded byte size",
+                        tensor.name
+                    );
+                }
+                let target = match plan {
+                    TensorPlan::Copy(ggml_type) | TensorPlan::Convert(ggml_type) => ggml_type,
+                };
+                let payload = encode_permuted_rope_tensor(tensor, &export_name, n_heads, target)?;
+                writer.add_tensor(&export_name, tensor.shape.clone(), target, payload);
+                continue;
+            }
+        }
+
+        match plan {
+            TensorPlan::Copy(ggml_type) => {
+                ensure_source_dtype(tensor, &tensor.original_dtype)?;
+                writer.add_tensor_source(&export_name, tensor.shape.clone(), ggml_type, source);
+            }
+            TensorPlan::Convert(ggml_type) => {
+                if source.byte_len != u64::try_from(tensor.byte_size)? {
+                    anyhow::bail!(
+                        "Tensor '{}' source payload length does not match recorded byte size",
+                        tensor.name
+                    );
+                }
+                writer.add_converted_tensor_source(
+                    &export_name,
+                    tensor.shape.clone(),
+                    ggml_type,
+                    source,
+                    tensor.original_dtype.clone(),
+                );
+            }
+        }
+    }
+
+    writer
+        .write_to_file(&config.output_path)
+        .with_context(|| format!("Failed writing GGUF to {:?}", config.output_path))?;
+    Ok(())
+}
+
+/// Writes `{arch}.rope.dimension_count = hidden_size / head_count` when absent from metadata.
+fn add_missing_rope_dimension_count(writer: &mut GgufWriter, model: &ModelIR) -> Result<()> {
+    let arch = GgufMetadataSynchronizer::architecture_prefix(&model.architecture);
+    let key = format!("{arch}.rope.dimension_count");
+    if writer.metadata().iter().any(|(k, _)| k == &key) {
+        return Ok(());
+    }
+    if model.num_attention_heads == 0 {
+        anyhow::bail!("Cannot compute {key}: model has 0 attention heads");
+    }
+    let dim = u32::try_from(model.hidden_size / model.num_attention_heads)
+        .with_context(|| format!("{key} exceeds u32"))?;
+    writer.add_u32(key, dim);
+    Ok(())
+}
+
+fn rope_head_count(ggml_name: &str, model: &ModelIR) -> Option<usize> {
+    if ggml_name.starts_with("blk.") && ggml_name.ends_with(".attn_q.weight") {
+        Some(model.num_attention_heads)
+    } else if ggml_name.starts_with("blk.") && ggml_name.ends_with(".attn_k.weight") {
+        Some(model.num_key_value_heads)
+    } else {
+        None
+    }
+}
+
+fn encode_permuted_rope_tensor(
+    tensor: &crate::ir::TensorIR,
+    ggml_name: &str,
+    n_heads: usize,
+    target: GgmlType,
+) -> Result<Vec<u8>> {
+    if tensor.shape.len() != 2 {
+        anyhow::bail!(
+            "Tensor '{}' must be 2-D to apply RoPE row permutation, got shape {:?}",
+            tensor.name,
+            tensor.shape
+        );
+    }
+    let (rows, cols) = (tensor.shape[0], tensor.shape[1]);
+    let values = crate::inference::read_tensor_f32(tensor)?;
+    let permuted = ggml_names::permute_rope_rows(&values, rows, cols, n_heads).map_err(|err| {
+        anyhow::anyhow!(
+            "Failed to permute RoPE rows for tensor '{}' ({ggml_name}): {err}",
+            tensor.name
+        )
+    })?;
+    encode_f32_values(&permuted, target, &tensor.name)
+}
+
+fn encode_f32_values(values: &[f32], target: GgmlType, tensor_name: &str) -> Result<Vec<u8>> {
+    match target {
+        GgmlType::F32 => Ok(f32_slice_to_le_bytes(values)),
+        GgmlType::BF16 => Ok(values
+            .iter()
+            .flat_map(|&v| crate::engine::minifloat::f32_to_bf16(v).to_le_bytes())
+            .collect()),
+        _ if conversion::is_conversion_target(target) => {
+            let f32_bytes = f32_slice_to_le_bytes(values);
+            let mut out = Vec::new();
+            conversion::encode_float_source(
+                &mut std::io::Cursor::new(f32_bytes),
+                &mut out,
+                "F32",
+                target,
+                values.len(),
+            )
+            .with_context(|| {
+                format!(
+                    "Cannot encode tensor '{}' as {}",
+                    tensor_name,
+                    target.type_name()
+                )
+            })?;
+            Ok(out)
+        }
+        other => anyhow::bail!(
+            "Tensor '{}' targets {}, which is not supported after RoPE row permutation",
+            tensor_name,
+            other.type_name()
+        ),
+    }
+}
+
+fn f32_slice_to_le_bytes(values: &[f32]) -> Vec<u8> {
+    values.iter().flat_map(|v| v.to_le_bytes()).collect()
 }
 
 /// A tensor's payload in its selected format, by the same plan the per-tensor GGUF export uses:

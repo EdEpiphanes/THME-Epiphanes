@@ -42,6 +42,8 @@ fn source_backed_f32_exports_to_standard_q8_0_blocks() {
             quant_type: ExportQuantType::Q8_0,
             output_path: output.clone(),
             compute_checksum: false,
+
+            llama_cpp_layout: false,
         },
     )
     .expect("export Q8_0");
@@ -78,6 +80,8 @@ fn source_backed_f32_exports_to_standard_tq1_0_blocks() {
             quant_type: ExportQuantType::TQ1_0,
             output_path: output.clone(),
             compute_checksum: false,
+
+            llama_cpp_layout: false,
         },
     )
     .expect("export TQ1_0");
@@ -126,6 +130,8 @@ fn positive_tq1_scale_underflowing_fp16_fails_export() {
             quant_type: ExportQuantType::TQ1_0,
             output_path: output,
             compute_checksum: false,
+
+            llama_cpp_layout: false,
         },
     )
     .unwrap_err();
@@ -146,6 +152,8 @@ fn quantized_rows_must_not_cross_ggml_block_boundaries() {
             quant_type: ExportQuantType::Q8_0,
             output_path: output.clone(),
             compute_checksum: false,
+
+            llama_cpp_layout: false,
         },
     )
     .unwrap_err();
