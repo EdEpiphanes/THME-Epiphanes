@@ -5,6 +5,13 @@
 //! - Training Loss Types: Cross-Entropy, Knowledge Distillation (against Teacher LLMs), and EWHA Energy-Regularized loss.
 //! - Optimizers: AdamW, SignSGD (for 1-bit / BitNet ternary weights), and standard SGD with momentum.
 //! - Metrics: Step loss, Perplexity ($PPL = \exp(\mathcal{L})$), throughput (tokens/sec), and estimated energy (mJ).
+//!
+//! The real backward pass for the LLaMA reference forward pass is in [`backward`], and LoRA
+//! training with AdamW is in [`lora`]. `MicroTrainer` below is synthetic: it has no real
+//! gradients through the model.
+
+pub mod backward;
+pub mod lora;
 
 use serde::{Deserialize, Serialize};
 
