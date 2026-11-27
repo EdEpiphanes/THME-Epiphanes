@@ -204,9 +204,13 @@ impl GateSpec {
             .find(|c| c.metric == metric)
             .and_then(|c| c.max_rel.or(c.max_abs))
             .unwrap_or(0.05);
-        let (low_rel, high_rel, _) =
-            crate::quality::epiphanes::hedged_epiphanes_bounds(block_drifts, eta, tau_ra)
-                .map_err(|e| anyhow::anyhow!("{e}"))?;
+        let (low_rel, high_rel, _) = crate::quality::epiphanes::hedged_epiphanes_bounds(
+            block_drifts,
+            eta,
+            tau_ra,
+            crate::quality::epiphanes::DEFAULT_DECLARED_RANGE,
+        )
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
         let scale = baseline_mean.abs().max(1e-12);
         let measure = Measure::with_interval(
             metric,
