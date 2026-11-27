@@ -62,12 +62,24 @@ def greedy(thme, source, ids, env, device):
 
 
 def first_difference(a, b):
+    """Index of the first differing token over the common length, or None if they agree there."""
     if a is None or b is None:
         return None
     for i, (x, y) in enumerate(zip(a, b)):
         if x != y:
             return i
-    return None if len(a) == len(b) else min(len(a), len(b))
+    return None
+
+
+def length_note(a, b, whitespace_ids):
+    """Explains a length difference: llama.cpp's text has its trailing newlines stripped before it is
+    re-encoded, so extra THME tokens that are only newlines are not a disagreement."""
+    if a is None or b is None or len(a) == len(b):
+        return None
+    longer = a if len(a) > len(b) else b
+    extra = longer[min(len(a), len(b)):]
+    return {"thme_epiph_tokens": len(a), "llama_cpp_tokens": len(b), "extra_tokens": extra,
+            "extra_tokens_are_only_newlines": all(x in whitespace_ids for x in extra)}
 
 
 def main():
@@ -105,6 +117,9 @@ def main():
     if all(s["exit_code"] == 0 for s in steps.values()) and len(steps) == 3:
         for text in PROMPTS:
             ids = encode(args.thme, args.model_dir, text)
+            whitespace_ids = set()
+            for run in ("\n", "\n\n", "\n\n\n"):
+                whitespace_ids.update(encode(args.thme, args.model_dir, run))
             a, ea = greedy(args.thme, args.model_dir, ids, env, args.device)
             b, eb = greedy(args.thme, epiph, ids, env, args.device)
             row = {"prompt": text, "prompt_token_ids": ids, "thme_safetensors": a, "thme_epiph": b,
@@ -121,13 +136,17 @@ def main():
                 txt = re.sub(r"\x1b\[[0-9;]*m", "", out)
                 toks = encode(args.thme, args.model_dir, text + txt.rstrip("\n"))[len(ids):][:NEW]
                 row["llama_cpp"][name] = {"tokens": toks, "text": txt.strip()[:200],
-                                          "epiph_vs_llama_first_difference": first_difference(b, toks)}
+                                          "epiph_vs_llama_first_difference": first_difference(b, toks),
+                                          "length_difference": length_note(b, toks, whitespace_ids)}
             doc["prompts"].append(row)
         diffs = [p["safetensors_vs_epiph_first_difference"] for p in doc["prompts"]]
         doc["summary"] = {
             "safetensors_equals_epiph_on_every_prompt": all(d is None for d in diffs),
-            "llama_cpp_equals_epiph": {n: sum(1 for p in doc["prompts"] if p["llama_cpp"].get(n, {}).get("epiph_vs_llama_first_difference", 0) is None)
-                                       for n in ("cuda-build-cpu", "cuda-build-gpu", "vulkan-build-gpu")},
+            "llama_cpp_equals_epiph_on_the_common_length": {n: sum(1 for p in doc["prompts"] if p["llama_cpp"].get(n, {}).get("epiph_vs_llama_first_difference", 0) is None)
+                                                            for n in ("cuda-build-cpu", "cuda-build-gpu", "vulkan-build-gpu")},
+            "llama_cpp_length_differences_that_are_not_only_newlines": sum(
+                1 for p in doc["prompts"] for v in p["llama_cpp"].values()
+                if v.get("length_difference") and not v["length_difference"]["extra_tokens_are_only_newlines"]),
             "prompts": len(doc["prompts"])}
         doc["epiph_sha256"] = hashlib.sha256(open(epiph, "rb").read()).hexdigest()
     with open(args.out, "w", encoding="utf-8", newline="\n") as f:
