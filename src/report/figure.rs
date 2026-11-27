@@ -22,7 +22,14 @@ use crate::engine::iso::{
     Theme, Tone, AZIMUTH, ELEVATION,
 };
 use crate::ir::model::ModelIR;
-use crate::ir::tensor::{TensorIR, TensorRole};
+use crate::ir::tensor::TensorIR;
+
+mod splash;
+mod steps;
+
+use splash::splash_svg;
+pub use splash::{ink_splash_geometry, InkDrop, InkSplash};
+pub use steps::{forward_order, forward_steps, layer_indices, Highlight};
 
 const W: f64 = 720.0;
 const H: f64 = 440.0;
@@ -52,10 +59,6 @@ const CALM_OPACITY: &str = "0.45";
 const ARROW_SHAFT: f64 = 0.55;
 const ARROW_HALF: f64 = 2.4;
 const ARROW_HEAD: f64 = 4.2;
-/// Scale of the core of a two-tone splash inside its outer edge.
-const CORE_SCALE: f64 = 0.72;
-/// Droplets drawn on a two-tone splash.
-const CORE_DROPS: usize = 9;
 const SANS: &str = "'Chakra Petch',ui-sans-serif,system-ui,sans-serif";
 
 /// One block to draw. `index` is the tensor's index in the model.
@@ -89,22 +92,6 @@ fn measured_bits(t: &TensorIR) -> f64 {
         0.0
     } else {
         t.byte_size as f64 * 8.0 / t.numel as f64
-    }
-}
-
-fn role_rank(role: &TensorRole) -> usize {
-    use TensorRole::*;
-    match role {
-        LayerNorm => 0,
-        AttentionQ => 1,
-        AttentionQkv => 1,
-        AttentionK => 2,
-        AttentionV => 3,
-        AttentionOut => 4,
-        MlpGate => 5,
-        MlpUp => 6,
-        MlpDown => 7,
-        _ => 8,
     }
 }
 
@@ -737,266 +724,6 @@ pub fn model_figure_svg(model: &ModelIR, theme: Theme) -> String {
     )
 }
 
-/// What to light in one animation frame.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Highlight {
-    /// Index into the model's tensors of the tensor the splash is thrown from (the first lit).
-    pub active: usize,
-    /// Indices into the model's tensors of every lit tensor (one, or a run of consecutive ones).
-    pub lit: Vec<usize>,
-    /// 0 at the start of this frame's turn, 1 at the end.
-    pub phase: f64,
-}
-
-/// Tensor indices in forward-pass order: tensors outside the layers that come first (the
-/// embedding), then each layer's tensors in role order, then the rest (final norm, head).
-pub fn forward_order(model: &ModelIR) -> Vec<usize> {
-    let mut idx: Vec<usize> = (0..model.tensors.len()).collect();
-    let key = |i: &usize| {
-        let t = &model.tensors[*i];
-        let stage = match (t.layer_index, &t.role) {
-            (None, TensorRole::Embedding) => 0,
-            (Some(_), _) => 1,
-            _ => 2,
-        };
-        (
-            stage,
-            t.layer_index.unwrap_or(0),
-            role_rank(&t.role),
-            t.name.clone(),
-        )
-    };
-    idx.sort_by_key(key);
-    idx
-}
-
-/// The forward-pass animation frames, at most [`FORWARD_MAX_FRAMES`] in total. Each tensor gets
-/// up to [`FORWARD_STEPS`] frames, fewer for a bigger model (never below one). Only when there
-/// are more tensors than frames do consecutive tensors light together, in forward order.
-pub fn forward_steps(model: &ModelIR) -> Vec<Highlight> {
-    let order = forward_order(model);
-    let mut out = Vec::new();
-    if order.len() <= FORWARD_MAX_FRAMES {
-        // As many frames per tensor as the cap allows: at most FORWARD_STEPS, never below 1.
-        let per = (FORWARD_MAX_FRAMES / order.len().max(1)).clamp(1, FORWARD_STEPS);
-        for &active in &order {
-            for step in 0..per {
-                out.push(Highlight {
-                    active,
-                    lit: vec![active],
-                    phase: (step as f64 + 0.5) / per as f64,
-                });
-            }
-        }
-    } else {
-        let run = order.len().div_ceil(FORWARD_MAX_FRAMES);
-        let runs: Vec<&[usize]> = order.chunks(run).collect();
-        let steps = (FORWARD_MAX_FRAMES / runs.len()).max(1);
-        for chunk in runs {
-            let Some(&active) = chunk.first() else {
-                continue;
-            };
-            for step in 0..steps {
-                out.push(Highlight {
-                    active,
-                    lit: chunk.to_vec(),
-                    phase: (step as f64 + 0.5) / steps as f64,
-                });
-            }
-        }
-    }
-    out
-}
-
-/// One flung droplet of an ink splash: an ellipse stretched along its flight, rotated `deg`.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct InkDrop {
-    pub x: f64,
-    pub y: f64,
-    pub rx: f64,
-    pub ry: f64,
-    pub deg: f64,
-}
-
-/// A manga ink splash in the caller's 2D coordinates: an organic blot with tendrils (closed
-/// quadratic curve through `blot`, see [`InkSplash::outline`]), flung droplets and tapered speed
-/// lines (triangles). Shared by the SVG figure and the Studio's live view.
-#[derive(Debug, Clone, PartialEq)]
-pub struct InkSplash {
-    /// Opacity: 1 while the splash grows, fading to 0 over the last 30% of the phase.
-    pub fade: f64,
-    pub blot: Vec<(f64, f64)>,
-    pub drops: Vec<InkDrop>,
-    pub lines: Vec<[(f64, f64); 3]>,
-}
-
-/// Ink splash geometry around (`cx`, `cy`) with radius `r`, growing with `phase` (0..1).
-/// `squash` foreshortens the vertical axis (1 = none), `unit` scales droplet and line sizes
-/// (1 = the figure's pixels). Seeded by `seed`, so every frame is reproducible.
-pub fn ink_splash_geometry(
-    cx: f64,
-    cy: f64,
-    r: f64,
-    squash: f64,
-    unit: f64,
-    seed: usize,
-    phase: f64,
-) -> InkSplash {
-    use crate::bench::stats::SplitMix64;
-    use std::f64::consts::TAU;
-    let t = phase.clamp(0.0, 1.0);
-    let grow = 1.0 - (1.0 - t).powi(3);
-    let fade = if t < 0.7 {
-        1.0
-    } else {
-        (1.0 - (t - 0.7) / 0.3).max(0.0)
-    };
-    let at = |a: f64, k: f64| (cx + k * a.cos(), cy + k * squash * a.sin());
-    let mut rng = SplitMix64::new(0x9e37_79b9 ^ (seed as u64).wrapping_mul(0x2545_f491));
-
-    // Blot: jittered points around the centre, a few pushed out into tendrils.
-    let n = 26;
-    let blot = (0..n)
-        .map(|i| {
-            let a = i as f64 / n as f64 * TAU + rng.unit() * 0.12;
-            let tendril = if rng.unit() < 0.22 {
-                1.0 + 0.9 * rng.unit()
-            } else {
-                0.0
-            };
-            let k = r * grow * (0.42 + 0.22 * rng.unit() + 0.38 * tendril);
-            at(a, k)
-        })
-        .collect();
-
-    // Droplets flung outward; the farther ones are smaller and stretched along their flight.
-    let drops = (0..22)
-        .map(|_| {
-            let a = rng.unit() * TAU;
-            let reach = 0.7 + 1.1 * rng.unit();
-            let (x, y) = at(a, r * reach * grow);
-            let size = (1.4 + 4.2 * rng.unit()) * (1.25 - 0.45 * reach / 1.8) * unit;
-            let stretch = 1.0 + 1.6 * (reach - 0.7) * grow;
-            let deg = (a.sin() * squash).atan2(a.cos()).to_degrees();
-            InkDrop {
-                x,
-                y,
-                rx: size * stretch,
-                ry: size,
-                deg,
-            }
-        })
-        .collect();
-
-    // Speed lines: tapered wedges radiating from the blot, thick at the base, sharp at the tip.
-    let lines = (0..16)
-        .map(|_| {
-            let a = rng.unit() * TAU;
-            let (r0, r1) = (
-                r * (0.55 + 0.15 * rng.unit()),
-                r * (1.05 + 0.75 * rng.unit()) * (0.5 + 0.5 * grow),
-            );
-            let half = (0.8 + 1.8 * rng.unit()) * (0.6 + 0.4 * grow) * unit;
-            let (bx, by) = at(a, r0);
-            let tip = at(a, r1);
-            let (nx, ny) = (-(a.sin() * squash), a.cos());
-            let len = (nx * nx + ny * ny).sqrt().max(1e-9);
-            let (nx, ny) = (nx / len * half, ny / len * half);
-            [(bx + nx, by + ny), (bx - nx, by - ny), tip]
-        })
-        .collect();
-    InkSplash {
-        fade,
-        blot,
-        drops,
-        lines,
-    }
-}
-
-impl InkSplash {
-    /// The blot as a closed polygon: each quadratic segment (between midpoints of neighbouring
-    /// blot points, controlled by the point itself) sampled `steps` times.
-    pub fn outline(&self, steps: usize) -> Vec<(f64, f64)> {
-        let n = self.blot.len();
-        let mid = |a: (f64, f64), b: (f64, f64)| ((a.0 + b.0) / 2.0, (a.1 + b.1) / 2.0);
-        let mut out = Vec::with_capacity(n * steps.max(1));
-        for i in 0..n {
-            let (p0, c, p1) = (
-                mid(self.blot[(i + n - 1) % n], self.blot[i]),
-                self.blot[i],
-                mid(self.blot[i], self.blot[(i + 1) % n]),
-            );
-            for s in 0..steps.max(1) {
-                let t = s as f64 / steps.max(1) as f64;
-                let u = 1.0 - t;
-                out.push((
-                    u * u * p0.0 + 2.0 * u * t * c.0 + t * t * p1.0,
-                    u * u * p0.1 + 2.0 * u * t * c.1 + t * t * p1.1,
-                ));
-            }
-        }
-        out
-    }
-}
-
-/// The closed quadratic path through a blot's points (midpoints as the on-curve points).
-fn blot_d(pts: &[Flat]) -> String {
-    let n = pts.len();
-    let mid = |a: Flat, b: Flat| ((a.0 + b.0) / 2.0, (a.1 + b.1) / 2.0);
-    let start = mid(pts[n - 1], pts[0]);
-    let mut d = format!("M{:.1} {:.1}", start.0, start.1);
-    for i in 0..n {
-        let m = mid(pts[i], pts[(i + 1) % n]);
-        d += &format!("Q{:.1} {:.1} {:.1} {:.1}", pts[i].0, pts[i].1, m.0, m.1);
-    }
-    d
-}
-
-/// An ink splash centred on `centre` with radius `r`, as SVG. The light theme is one black
-/// blot; the dark theme is blood-red: a near-black red edge with a deep red core (`CORE_SCALE`
-/// of the blot) and a few red droplets.
-fn splash_svg(centre: Flat, r: f64, seed: usize, phase: f64, m: &Manga) -> String {
-    let g = ink_splash_geometry(centre.0, centre.1, r, 0.55, 1.0, seed, phase);
-    let two_tone = m.splash != m.splash_edge;
-    let mut out = format!(
-        "<g fill=\"{}\" stroke=\"none\" opacity=\"{:.3}\">",
-        m.splash_edge, g.fade
-    );
-    out += &format!("<path d=\"{}Z\"/>", blot_d(&g.blot));
-    if two_tone {
-        let core: Vec<Flat> = g
-            .blot
-            .iter()
-            .map(|&(x, y)| {
-                (
-                    centre.0 + (x - centre.0) * CORE_SCALE,
-                    centre.1 + (y - centre.1) * CORE_SCALE,
-                )
-            })
-            .collect();
-        out += &format!("<path fill=\"{}\" d=\"{}Z\"/>", m.splash, blot_d(&core));
-    }
-    let drops = g
-        .drops
-        .iter()
-        .take(if two_tone { CORE_DROPS } else { usize::MAX });
-    let fill = if two_tone {
-        format!(" fill=\"{}\"", m.splash)
-    } else {
-        String::new()
-    };
-    for InkDrop { x, y, rx, ry, deg } in drops {
-        out += &format!(
-            "<ellipse{fill} cx=\"{x:.1}\" cy=\"{y:.1}\" rx=\"{rx:.2}\" ry=\"{ry:.2}\" transform=\"rotate({deg:.1} {x:.1} {y:.1})\"/>"
-        );
-    }
-    for [(ax, ay), (bx, by), (tx, ty)] in &g.lines {
-        out += &format!("<path d=\"M{ax:.1} {ay:.1}L{bx:.1} {by:.1}L{tx:.1} {ty:.1}Z\"/>");
-    }
-    out.push_str("</g>");
-    out
-}
-
 /// Bytes as KiB, MiB or GiB with one decimal.
 fn human_bytes(n: usize) -> String {
     let n = n as f64;
@@ -1044,14 +771,6 @@ pub fn model_figure_frame(model: &ModelIR, theme: Theme, highlight: &Highlight) 
     )
 }
 
-/// The layer indices that occur among the model's tensors, sorted (the real structure, not
-/// `num_layers`).
-pub fn layer_indices(model: &ModelIR) -> Vec<usize> {
-    let set: std::collections::BTreeSet<usize> =
-        model.tensors.iter().filter_map(|t| t.layer_index).collect();
-    set.into_iter().collect()
-}
-
 /// One layers-animation frame on its card: every tensor of layer `layer` is lit, with one
 /// splash under the layer, and the readout names the layer with its tensor count and stored
 /// bytes.
@@ -1091,6 +810,7 @@ pub fn model_figure_layer_frame(model: &ModelIR, theme: Theme, layer: usize) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ir::tensor::TensorRole;
     use crate::parser::ModelImporter;
 
     /// A small synthetic checkpoint written for the test (the mock under examples/ is generated
