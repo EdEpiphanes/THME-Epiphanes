@@ -636,7 +636,7 @@ The same Pure-Rust THME engine scales across heterogeneous PCs, CPUs, and GPUs (
 | Heterogeneous Multi-PC Clustering (Wi-Fi / Ethernet / Thunderbolt) | `src/cluster/mod.rs` | **`[Tested]`** (planner only; `thme cluster` init/join/status networking pending, BACKLOG THME-1209) |
 | Dual-GPU `cuda.rs` + `wgpu` / `ash` + Adaptive FlashDecode + Native `PTX`/`SPIR-V` ISA + Compressed RAM/CPU/SSD Off-Load | `src/inference/gpu/backend.rs`, `src/inference/gpu/ptx_kernels.rs`, `src/inference/offload.rs` | **`[Measured]`** (`32.5×` prefill) / **`[Specification]`** (WGSL/PTX checks are string smoke tests; Vulkan test skips without an adapter; GPU BITCOS shader not wired into the backend)|
 
-**Governance & Binary Caps:** Permissive-only code (`QTIP`/`QuIP#` GPL-3.0 and `LittleBit` CC BY-NC 4.0 contribute clean-room equations only); `thme <= 16 MiB` (`14.81 MiB` **Measured** on the merged tree, 26 Nov 2026, release `thme.exe`), `thme-gui <= 25 MiB`; zero panics/unwraps (`clippy::unwrap_used` denied).
+**Governance & Binary Caps:** Permissive-only code (`QTIP`/`QuIP#` GPL-3.0 and `LittleBit` CC BY-NC 4.0 contribute clean-room equations only); `thme <= 16 MiB` (`14.81 MiB` **Measured** on `main` at `a31ac66`, 27 Nov 2026, release `thme.exe`), `thme-gui <= 25 MiB` (`15.56 MiB` **Measured** on `main` at `a31ac66`, 27 Nov 2026, release `thme-gui.exe`); zero panics/unwraps (`clippy::unwrap_used` denied).
 
 ---
 
