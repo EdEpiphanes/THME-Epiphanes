@@ -7,6 +7,7 @@
 pub mod bitnet_pack;
 pub mod calibration;
 pub mod conversion;
+pub mod ggml_names;
 pub mod gguf_check;
 pub mod gguf_writer;
 pub mod kquant;

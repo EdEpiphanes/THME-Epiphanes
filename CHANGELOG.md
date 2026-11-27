@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - v0.2.0 Measured Core
 
 ### Added
+- **GGML tensor names and rope row permutation** (27 November 2026, THME-3091 slice 1): pure, tested helpers for LLaMA-family export; not yet used by `thme export`.
 - **`thme pathfinder`** (27 November 2026, THME-3057 part): prints the memory plan for a model from its config (weights, KV, scratch, optional budget with the shrink order), every decision labelled `predicted`; `--json` for tools. Nothing is measured or run.
 - **Shrink loop** (27 November 2026, THME-3058 part): `profiling::shrink::shrink_to_budget` lowers the KV type, then the context, then the weight width until a run fits a byte budget, never touching flags the user fixed, or reports exactly what it tried.
 - **Stale agent notes removed from the tree** (27 November 2026, THME-3050 part): `TASKS.md`, `TEST_READY.md`, `TEST_INFRA.md`, `PROJECT.md` and `.claude_handover.md` described November milestones that have moved on; they remain in git history.
