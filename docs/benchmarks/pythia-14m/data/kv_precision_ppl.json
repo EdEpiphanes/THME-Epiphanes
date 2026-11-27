@@ -92,10 +92,10 @@
       }
     ]
   },
-  "reading": "Unlike SmolLM-135M (int8 within noise), Pythia-14M loses a lot with a quantized cache: int8 raises perplexity by 28 percent at 4x256 tokens (190.8 to 245.2) and 34 percent at one 2,048-token window (75.5 to 101.5); int4 collapses (5,805 and 10,350). The cause was not isolated. A group of 8 instead of 32 did not fix it (see experiment_not_committed), so coarse scales are not the whole story; tiny synthetic GPT-NeoX and LLaMA models show no cache problem in model-level tests (int8 within 0.05 nats per position), so the loss looks specific to this model's real weights; not proven.",
+  "reading": "Unlike SmolLM-135M (int8 within noise), Pythia-14M loses a lot with a quantized cache: int8 raises perplexity by 28 percent at 4x256 tokens (190.8 to 245.2) and 34 percent at one 2,048-token window (75.5 to 101.5); int4 collapses (5,805 and 10,350). The cause was not isolated. A group of 8 instead of 32 did not fix it (see experiment_not_committed), so coarse scales are not the whole story; tiny synthetic GPT-NeoX and LLaMA models show no cache problem in model-level tests (int8 within 0.05 nats per position), so the loss looks specific to this model's real weights; not proven. A later run that quantized only the keys or only the values showed that the keys cause all of the loss (only keys: int8 236.1, int4 7,349; only values: int8 190.9, int4 190.7).",
   "known_gaps": [
     "one corpus, one model per file; the SmolLM-135M report is separate",
-    "cause not isolated; a smaller group (8) was tried once and did not fix it; no per-channel scale and no keys-only or values-only test",
+    "cause narrowed to the keys; why (outlier channels in the keys is a guess) and whether a per-channel key scale fixes it were not tested; group 8 did not fix it",
     "no decode-speed figure"
   ],
   "experiment_not_committed": {
@@ -104,5 +104,18 @@
     "int4_perplexity": 4983.088113008206,
     "f32_perplexity": 190.83438413447126,
     "reading": "a four times finer group changed int8 from 245.2 to 234.3 and int4 from 5,805 to 4,983, so the group size does not explain the loss"
+  },
+  "experiment_keys_versus_values_not_committed": {
+    "what": "4 windows of 256 tokens, local reverted build where one of keys or values stayed f32 and the other used the chosen precision (group of 32)",
+    "f32_perplexity": 190.83438413447126,
+    "only_keys_quantized": {
+      "int8": 236.07,
+      "int4": 7349.4
+    },
+    "only_values_quantized": {
+      "int8": 190.9,
+      "int4": 190.66
+    },
+    "reading": "All of the loss comes from quantizing the keys. Quantizing only the values is free on this model, even at int4."
   }
 }
