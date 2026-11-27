@@ -3,7 +3,7 @@
 //!
 //! Implements distribution-free, anytime-valid quality-gate statistics from
 //! `THME_Research_Dossier_v3.3`: Geyer's integrated autocorrelation time,
-//! asymmetric two-sided Mixture-GKL + Fan-Howard-Ramdas E-processes,
+//! two-sided betting e-processes with a declared range,
 //! Kusuoka-coherent Weighted CVaR, Asymmetry-Adaptive Jeffreys-Renyi
 //! divergence, and pure-content Bits-Per-Byte (BPB).
 
@@ -52,82 +52,27 @@ pub fn pure_content_bpb(
     Ok(bits / (content_utf8_bytes as f64))
 }
 
-/// Evaluates the exact Fan-Howard-Ramdas supermartingale testing `H0: mu >= mu0`
-/// (rejecting large `mu0` when `delta < mu0`; strictly positive for all `delta >= -1.0`).
-fn upper_bound_eprocess(drifts: &[f64], mu0: f64) -> f64 {
-    let c0 = (1.0 + mu0).max(1e-6);
-    let mut log_wealth = 0.0_f64;
-    let mut mean_prev = 0.0_f64;
-    let mut m2_prev = 0.0_f64;
+/// Declared upper range `M` of a block drift (assumption A3, dossier v5 Table 3). Without a
+/// declared range no distribution-free upper confidence bound exists (Bahadur and Savage, 1956).
+pub const DEFAULT_DECLARED_RANGE: f64 = 0.25;
 
-    for (step, &delta) in drifts.iter().enumerate() {
-        if step > 0 {
-            let var_prev = if step > 1 {
-                (m2_prev / ((step - 1) as f64)).max(1e-6)
-            } else {
-                0.25
-            };
-            let gamma = (0.95 / (var_prev.sqrt() + c0)).min(0.92 / c0);
-            let gc = (gamma * c0).min(0.95);
-            let psi_e = (-(1.0 - gc).ln() - gc) / (c0 * c0);
-            let centered = delta - mean_prev;
-            // Grows when delta < mu0, proving true mean < mu0.
-            log_wealth += gamma * (mu0 - delta) - psi_e * centered * centered;
-        }
-        let n = (step + 1) as f64;
-        let diff = delta - mean_prev;
-        mean_prev += diff / n;
-        m2_prev += diff * (delta - mean_prev);
-    }
-
-    log_wealth.clamp(-700.0, 700.0).exp()
-}
-
-/// Evaluates the Mixture-GKL wealth process testing `H0: mu <= mu0`
-/// (rejecting small `mu0` when `delta > mu0`; non-negative for all `delta >= -1.0`).
-fn lower_bound_eprocess(drifts: &[f64], mu0: f64) -> f64 {
-    let mut running_max = 0.0_f64;
-    let mut mean_prev = 0.0_f64;
-    let mut m2_prev = 0.0_f64;
-    let mut wealth = [1.0_f64; 9];
-    let c_trunc = 0.5_f64;
-    let eps = 1e-8_f64;
-
-    for (step, &delta) in drifts.iter().enumerate() {
-        let var_prev = if step > 1 {
-            m2_prev / ((step - 1) as f64)
-        } else {
-            1.0
-        };
-        let denom_bound = (1.0 + mu0).max(running_max).max(1e-6);
-        let var_cap = c_trunc / (var_prev + eps).sqrt();
-
-        for (j, w) in wealth.iter_mut().enumerate() {
-            let grid_lam = 0.5_f64.powi(j as i32) / denom_bound;
-            let lam = grid_lam.min(var_cap).min(1.0 / (1.0 + mu0).max(1e-6));
-            let factor = (1.0 + lam * (delta - mu0)).max(0.0);
-            *w *= factor;
-        }
-
-        let n = (step + 1) as f64;
-        let diff = delta - mean_prev;
-        mean_prev += diff / n;
-        m2_prev += diff * (delta - mean_prev);
-        if delta > running_max {
-            running_max = delta;
-        }
-    }
-
-    wealth.iter().sum::<f64>() / (wealth.len() as f64)
-}
-
-/// Computes anytime-valid two-sided bounds `[L_t, U_t]` and the three-state
-/// Epiphanes `Decision` (`Pass`, `Fail`, `Inconclusive`) against `tau_ra`
-/// at significance `eta` (e.g., `0.05` for 95% confidence).
+/// Anytime-valid confidence sequence `[L_t, U_t]` for the mean block drift and the three-state
+/// `Decision` against `tau_ra`, at error level `eta` (dossier v5, Sections 3.3 and 3.6).
+///
+/// Two betting e-processes over a grid of null values `mu0` in `(-1, declared_range)`: the lower
+/// side bets on `delta > mu0` and needs only `delta >= -1`; the upper side bets on `delta < mu0`
+/// and uses the declared range `delta <= declared_range`. Each side is a mixture of nine bets
+/// with weights 1/9; the two sides are averaged and `mu0` stays in the set while the average is
+/// below `1 / eta`. The bounds are the running intersection over blocks.
+///
+/// A block above `declared_range` violates the declared range: the gate fails and returns
+/// `[mean, declared_range]` without running the processes (their factors are only guaranteed
+/// non-negative inside the range).
 pub fn hedged_epiphanes_bounds(
     drifts: &[f64],
     eta: f64,
     tau_ra: f64,
+    declared_range: f64,
 ) -> EngineResult<(f64, f64, Decision)> {
     if drifts.is_empty() {
         return Err(EngineError::InvalidInput(
@@ -144,6 +89,11 @@ pub fn hedged_epiphanes_bounds(
             "tau_ra must be finite and non-negative, got {tau_ra}"
         )));
     }
+    if !declared_range.is_finite() || declared_range <= 0.0 {
+        return Err(EngineError::InvalidInput(format!(
+            "declared range must be finite and positive, got {declared_range}"
+        )));
+    }
     ensure_finite("drifts", drifts)?;
     for (i, &d) in drifts.iter().enumerate() {
         if d < -1.0 {
@@ -153,52 +103,64 @@ pub fn hedged_epiphanes_bounds(
         }
     }
 
-    let threshold = 1.0 / eta;
     let sample_mean = drifts.iter().sum::<f64>() / (drifts.len() as f64);
-
-    // Bisection for upper bound U_t = inf { mu0 >= sample_mean : upper_bound_eprocess(mu0) >= 1/eta }.
-    // `upper_bound_eprocess` is monotonically increasing in mu0.
-    let mut u_lo = sample_mean.max(-1.0);
-    let mut u_hi = drifts
-        .iter()
-        .copied()
-        .fold(sample_mean + 1.0, f64::max)
-        .max(1.0);
-    while upper_bound_eprocess(drifts, u_hi) < threshold && u_hi < 1e6 {
-        u_hi *= 2.0;
+    if drifts.iter().any(|&d| d > declared_range) {
+        return Ok((sample_mean, declared_range, Decision::Fail));
     }
-    for _ in 0..48 {
-        let mid = 0.5 * (u_lo + u_hi);
-        if upper_bound_eprocess(drifts, mid) >= threshold {
-            u_hi = mid;
-        } else {
-            u_lo = mid;
+
+    const BETS: usize = 9;
+    const GRID_STEP: f64 = 1e-4;
+    let m = declared_range;
+    let threshold = 1.0 / eta;
+    let grid: Vec<f64> = (1..)
+        .map(|k| -1.0 + GRID_STEP * f64::from(k))
+        .take_while(|&mu0| mu0 < m)
+        .collect();
+    let mut plus = vec![[1.0_f64; BETS]; grid.len()];
+    let mut minus = vec![[1.0_f64; BETS]; grid.len()];
+    let (mut lower, mut upper) = (-1.0_f64, m);
+    let (mut mean_prev, mut m2_prev) = (0.0_f64, 0.0_f64);
+
+    for (step, &delta) in drifts.iter().enumerate() {
+        let b = (step + 1) as f64;
+        // Predictable variance statistic from blocks before this one only (A5).
+        let v_prev = (tau_ra * tau_ra + m2_prev) / b;
+        let cap = 1.0 / (v_prev + 1e-6).sqrt();
+        let (mut set_min, mut set_max) = (f64::INFINITY, f64::NEG_INFINITY);
+        for (i, &mu0) in grid.iter().enumerate() {
+            let mut sum_plus = 0.0;
+            let mut sum_minus = 0.0;
+            for j in 0..BETS {
+                let half = 0.5_f64.powi(j as i32);
+                let lam_plus = (half / (1.0 + mu0)).min(cap);
+                let lam_minus = (half / (m - mu0)).min(cap);
+                plus[i][j] *= 1.0 + lam_plus * (delta - mu0);
+                minus[i][j] *= 1.0 + lam_minus * (mu0 - delta);
+                sum_plus += plus[i][j];
+                sum_minus += minus[i][j];
+            }
+            let e = 0.5 * sum_plus / BETS as f64 + 0.5 * sum_minus / BETS as f64;
+            if e < threshold {
+                set_min = set_min.min(mu0);
+                set_max = set_max.max(mu0);
+            }
         }
-    }
-    let upper = u_hi;
-
-    // Bisection for lower bound L_t = sup { mu0 <= sample_mean : lower_bound_eprocess(mu0) >= 1/eta }.
-    // `lower_bound_eprocess` is monotonically decreasing in mu0.
-    let mut l_lo = -1.0_f64;
-    let mut l_hi = sample_mean.max(-1.0);
-    for _ in 0..48 {
-        let mid = 0.5 * (l_lo + l_hi);
-        if lower_bound_eprocess(drifts, mid) >= threshold {
-            l_lo = mid;
-        } else {
-            l_hi = mid;
+        if set_min <= set_max {
+            lower = lower.max(set_min);
+            upper = upper.min(set_max);
         }
+        let diff = delta - mean_prev;
+        mean_prev += diff / b;
+        m2_prev += diff * (delta - mean_prev);
     }
-    let lower = l_lo;
 
-    let decision = if upper <= tau_ra {
-        Decision::Pass
-    } else if lower > tau_ra {
+    let decision = if lower > tau_ra {
         Decision::Fail
+    } else if upper <= tau_ra {
+        Decision::Pass
     } else {
         Decision::Inconclusive
     };
-
     Ok((lower, upper, decision))
 }
 
@@ -327,18 +289,74 @@ mod tests {
     #[test]
     fn hedged_bounds_classify_pass_fail_inconclusive() {
         let low_drift = vec![0.002; 80];
-        let (l, u, dec) = hedged_epiphanes_bounds(&low_drift, 0.05, 0.05).unwrap();
+        let (l, u, dec) =
+            hedged_epiphanes_bounds(&low_drift, 0.05, 0.05, DEFAULT_DECLARED_RANGE).unwrap();
         assert!(l <= u);
         assert_eq!(dec, Decision::Pass);
 
         let high_drift = vec![0.20; 80];
-        let (l2, u2, dec2) = hedged_epiphanes_bounds(&high_drift, 0.05, 0.05).unwrap();
+        let (l2, u2, dec2) =
+            hedged_epiphanes_bounds(&high_drift, 0.05, 0.05, DEFAULT_DECLARED_RANGE).unwrap();
         assert!(l2 <= u2);
         assert_eq!(dec2, Decision::Fail);
 
         let tiny_sample = vec![0.04; 3];
-        let (_l3, _u3, dec3) = hedged_epiphanes_bounds(&tiny_sample, 0.05, 0.05).unwrap();
+        let (_l3, _u3, dec3) =
+            hedged_epiphanes_bounds(&tiny_sample, 0.05, 0.05, DEFAULT_DECLARED_RANGE).unwrap();
         assert_eq!(dec3, Decision::Inconclusive);
+    }
+
+    /// Source versus source at the paper's defaults (dossier v5, Table 4): the upper limit
+    /// of the confidence sequence for a candidate identical to the source.
+    #[test]
+    fn identical_candidate_matches_the_papers_table_4() {
+        for (blocks, expected) in [(37, 0.0360), (74, 0.0187), (111, 0.0126), (148, 0.0095)] {
+            let drifts = vec![0.0; blocks];
+            let (_l, u, _d) =
+                hedged_epiphanes_bounds(&drifts, 0.05, 0.0223, DEFAULT_DECLARED_RANGE).unwrap();
+            assert!(
+                (u - expected).abs() < 6e-5,
+                "U_{blocks} = {u}, the paper's Table 4 gives {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_block_above_the_declared_range_fails() {
+        let mut drifts = vec![0.0; 50];
+        drifts.push(0.30);
+        let (_l, _u, d) =
+            hedged_epiphanes_bounds(&drifts, 0.05, 0.0223, DEFAULT_DECLARED_RANGE).unwrap();
+        assert_eq!(d, Decision::Fail);
+        assert!(hedged_epiphanes_bounds(&drifts, 0.05, 0.0223, 0.0).is_err());
+    }
+
+    /// Miscoverage of `[L_t, U_t]` on a bounded law with known mean 0.04 stays below eta.
+    #[test]
+    fn miscoverage_stays_below_eta_on_a_bounded_law() {
+        let mut state = 20_261_126_u64;
+        let mut next = move || {
+            state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut z = state;
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            ((z ^ (z >> 31)) >> 11) as f64 / (1_u64 << 53) as f64
+        };
+        let (paths, blocks, true_mean) = (50, 100, 0.04);
+        let mut misses = 0;
+        for _ in 0..paths {
+            // Uniform on [-0.10, 0.18]: mean 0.04, inside [-1, M].
+            let drifts: Vec<f64> = (0..blocks).map(|_| -0.10 + 0.28 * next()).collect();
+            let (l, u, _) =
+                hedged_epiphanes_bounds(&drifts, 0.05, 0.0223, DEFAULT_DECLARED_RANGE).unwrap();
+            if true_mean < l || true_mean > u {
+                misses += 1;
+            }
+        }
+        assert!(
+            misses as f64 / paths as f64 <= 0.05,
+            "{misses} of {paths} paths missed"
+        );
     }
 
     #[test]
