@@ -142,8 +142,10 @@ Nothing here has been tried on a clean machine yet.
    which uses the command `thme` with the argument `mcp`.
 
    ```bash
-   thme mcp --model path/to/model
+   thme mcp --model path/to/model --allow-root path/to/models
    ```
+
+   `--allow-root` (repeatable) limits which folders the tools may read models from.
 
 4. **Download a model from the Hugging Face hub.** **Planned, not built yet** (ROADMAP v0.3.0.5).
    Until it lands, download the model with your own tools and point THME at the folder.

@@ -560,7 +560,7 @@ THME provides 12 commands with consistent options and machine-readable output:
 | `thme speculate` | `--model`, `--draft-layers`, `--bitnet`, `--horizon`, `--tree` | Telemetry report, draft JSON | Multi-token draft model synthesis and speculative speedup evaluation. |
 | `thme roofline` | `--model`, `--hardware`, `--batch-size`, `--seq-len`, `--flash-attn` | ASCII plot, cache telemetry | Operational arithmetic intensity profiler and hardware ceilings. |
 | `thme export` | `--strategy`, `--model`, `--dataset`, `--output-script`, `--cuda` | `train_cuda.py`, `config.json` | PyTorch CUDA training script generator and Hugging Face config exporter. |
-| `thme mcp` | `--model` | JSON-RPC 2024-11-05 standard I/O | Headless daemon for VS Code Copilot, Claude Desktop, and Cursor. |
+| `thme mcp` | `--model`, `--allow-root` | JSON-RPC 2024-11-05 standard I/O | Headless daemon for VS Code Copilot, Claude Desktop, and Cursor. |
 | `thme gui` | (No arguments required) | 60 FPS Native GUI | Launches the standalone desktop workstation. |
 | `thme report` | `<PLAN_PATH>`, `-m, --markdown <FILE>` | Markdown/terminal report | Exports comprehensive model profiling and audit report. |
 

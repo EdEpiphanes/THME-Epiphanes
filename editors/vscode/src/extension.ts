@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { spawn } from 'child_process';
-import { inspectArgs, planArgs, tweakArgs, validateArgs, run } from './thme';
+import { inspectArgs, planArgs, tweakArgs, validateArgs, mcpArgs, run } from './thme';
 import {
     LoadState,
     ModelData,
@@ -243,7 +243,8 @@ async function applySurgery(context: vscode.ExtensionContext) {
 
 function startMcpServer(context: vscode.ExtensionContext) {
     const bin = resolveBinaryPath();
-    const terminal = vscode.window.createTerminal({ name: "THME MCP Daemon", shellPath: bin, shellArgs: ["mcp"] });
+    const roots = (vscode.workspace.workspaceFolders ?? []).map((f) => f.uri.fsPath);
+    const terminal = vscode.window.createTerminal({ name: "THME MCP Daemon", shellPath: bin, shellArgs: mcpArgs(roots) });
     terminal.show();
     vscode.window.showInformationMessage("Started `thme mcp` in a terminal (stdin/stdout JSON-RPC).");
 }

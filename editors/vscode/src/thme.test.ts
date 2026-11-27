@@ -4,7 +4,7 @@ import * as assert from 'node:assert/strict';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { inspectArgs, planArgs, tweakArgs, validateArgs, requireNumber, run } from './thme';
+import { inspectArgs, planArgs, tweakArgs, validateArgs, mcpArgs, requireNumber, run } from './thme';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "thme-ext-"));
 // Quotes and an ampersand are legal in file names on Linux and macOS; on Windows only the ampersand is.
@@ -42,4 +42,9 @@ test("numeric inputs are validated", () => {
 
 test("run rejects with stderr on non-zero exit", async () => {
     await assert.rejects(run(process.execPath, ["-e", "console.error('boom');process.exit(3)"]), /boom/);
+});
+
+test("the MCP server is started with one --allow-root per workspace folder", () => {
+    assert.deepEqual(mcpArgs([]), ["mcp"]);
+    assert.deepEqual(mcpArgs(["/w/one", "/w/two"]), ["mcp", "--allow-root", "/w/one", "--allow-root", "/w/two"]);
 });

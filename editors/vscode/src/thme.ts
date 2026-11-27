@@ -31,6 +31,10 @@ export const planArgs = (modelPath: unknown, maxDegradation: unknown): string[] 
 export const tweakArgs = (modelPath: unknown, recipePath: unknown): string[] =>
     ["tweak", "--model", requireFile(modelPath, "modelPath"), "--recipe", requireFile(recipePath, "recipePath")];
 
+/** `thme mcp`, limited to the given folders; with none, the server reads any path the user can. */
+export const mcpArgs = (roots: string[]): string[] =>
+    ["mcp", ...roots.flatMap((r) => ["--allow-root", r])];
+
 export const validateArgs = (baseline: unknown, candidate: unknown, maxDelta: unknown = 0.25): string[] => [
     "validate",
     "--baseline-ppl", requireNumber(baseline, "baselinePpl", Number.MIN_VALUE),

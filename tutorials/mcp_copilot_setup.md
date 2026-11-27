@@ -90,7 +90,7 @@ To enable VS Code, GitHub Copilot, and compatible coding agents to launch the TH
   "servers": {
     "thme-mcp": {
       "command": "${workspaceFolder}/target/release/thme",
-      "args": ["mcp"],
+      "args": ["mcp", "--allow-root", "${workspaceFolder}"],
       "env": {
         "RUST_BACKTRACE": "1"
       }
