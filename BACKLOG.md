@@ -41,9 +41,10 @@ closes it.
 
 ### [THME-2005] Release v0.2.0
 
-- **Milestone**: v0.2.0 · **Roadmap**: v0.2.0.9 · **Priority**: p1 · **Area**: ci · **Type**: chore · **Status**: ready
+- **Milestone**: v0.2.0 · **Roadmap**: v0.2.0.9 · **Priority**: p1 · **Area**: ci · **Type**: chore · **Status**: deferred (owner decision)
 - **Problem**: The measured core is complete but unreleased.
 - **Done means**: CHANGELOG section `[0.2.0]`, Cargo version 0.2.0, tag `v0.2.0`; the release workflow publishes four signed archives with checksums.
+- **Progress** (27 November 2026): The owner can release v0.2.0 but the version number lags the work done (engine, GPU path, formats, gate, sampler). Decide the release version and name first, then do the CHANGELOG section, Cargo version and tag; no code is blocking.
 
 ### [THME-2006] Configure repository protection and secrets
 
@@ -475,9 +476,10 @@ closes it.
 
 ### [THME-3017] Trademark search and filing for the format name
 
-- **Milestone**: v0.2.6 · **Roadmap**: none · **Priority**: p1 · **Area**: legal · **Type**: chore · **Status**: triage
+- **Milestone**: v0.2.6 · **Roadmap**: none · **Priority**: p1 · **Area**: legal · **Type**: chore · **Status**: blocked (owner: funding and registration)
 - **Problem**: The owner wants the format name protected under Epiphanes. Extensions are not usually registrable; the name is.
 - **Done means**: A lawyer has searched and advised on the name; filing decided by the owner.
+- **Progress** (27 November 2026): The Epiphanes site exists but the domain and the business are not registered yet; funding for registration is being sought. A lawyer search and a filing decision follow registration.
 
 ### [THME-3018] Static model security scanner (`thme scan`)
 
@@ -493,10 +495,11 @@ closes it.
 
 ### [THME-3020] Developer sandbox for untrusted code
 
-- **Milestone**: v0.2.7 · **Roadmap**: v0.2.7.5, v0.2.7.6 · **Priority**: p2 · **Area**: security · **Type**: feature · **Status**: blocked
+- **Milestone**: v0.2.7 · **Roadmap**: v0.2.7.5, v0.2.7.6 · **Priority**: p2 · **Area**: security · **Type**: feature · **Status**: shelved (owner: opportunities and the commercial sector)
 - **Problem**: Remote-code models, plugins (dossier L.4) and benchmark code (R.4) need to run isolated.
 - **Done means**: Design doc first: separate process, no network, file access limited to a work folder, time and memory caps, per-OS mechanism; then an implementation with escape tests.
 - **Progress**: design done ([docs/sandbox.md](docs/sandbox.md)). Implementation shelved by the owner for the commercial version (unmerged branches `feature/sandbox-windows` and `feature/sandbox-linux`, PRs #65 and #66). Until then the open-source version does not run untrusted code.
+- **Progress** (27 November 2026): Design stays in docs/sandbox.md; the implementation branches (feature/sandbox-windows, feature/sandbox-linux, PRs 65 and 66) are kept for the commercial version. Not on the open-source roadmap.
 
 ### [THME-3021] Guardrail detection and evaluation (read-only)
 
