@@ -2,6 +2,10 @@
 /target
 /target-nodbg
 
+# Distillation datasets and adapters made with a hosted teacher: test artifacts, never committed
+/distill/
+*.test-only.*
+
 # Compiled binaries and debug symbols
 *.exe
 *.dll

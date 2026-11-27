@@ -46,6 +46,25 @@ text-summarising skill and contains no model training. It is not a source for th
 6. **Package.** An `.epiph` holding the student, the adapter, the recipe, the teacher identity, the
    dataset hash and the quality entries with their evidence labels.
 
+## Scope: functionality testing only
+
+Owner decision, 27 November 2026: distillation done with a hosted teacher (Claude) exists to test that
+the engine works. A model taught this way is a test artifact. It is not released to the public and not
+used commercially, and the goal is a solid multi-feature engine, not a product model.
+
+What that means in practice:
+- Datasets, adapters and `.epiph` files made with a hosted teacher stay on the machine that made them.
+  The repository ignores the `distill/` folder, and no such file goes into a commit, a release archive,
+  a benchmark folder or a published page. Reports may state numbers and method, never the teacher's
+  outputs.
+- Every such file carries the annotation `use=test-only` and the teacher's identity, so a later
+  reader cannot mistake it for a releasable model.
+- A model meant for release or commercial use must be taught by a teacher whose terms allow it
+  (an open-weight teacher with a permissive licence, or the source model itself). Turning a test
+  artifact into a release is a new decision for the owner and counsel, not a flag to flip.
+- This narrows the terms question below without removing it: the provider's terms may still apply to
+  testing, which counsel can confirm when convenient. It does not block the engine work.
+
 ## Teachers and subjects
 
 The student goes to class: it has several subjects, and each subject can have its own teacher.
