@@ -17,6 +17,7 @@ pub mod forward;
 pub mod inspect;
 pub mod interop;
 pub mod mcp;
+pub mod pathfinder;
 pub mod plan;
 pub mod profile;
 pub mod report;
@@ -63,6 +64,9 @@ pub enum Commands {
 
     /// Generate heterogeneous precision Pareto allocation plan
     Plan(plan::PlanArgs),
+
+    /// Plan run settings (context, KV precision, predicted memory) from a model header
+    Pathfinder(pathfinder::PathfinderArgs),
 
     /// Measure a surgery recipe's perplexity cost with the reference forward pass
     Evaluate(evaluate::EvaluateArgs),
@@ -156,6 +160,7 @@ pub fn run() -> Result<()> {
         Commands::Inspect(args) => inspect::execute(args),
         Commands::Profile(args) => profile::execute(args),
         Commands::Plan(args) => plan::execute(args),
+        Commands::Pathfinder(args) => pathfinder::execute(args),
         Commands::Evaluate(args) => evaluate::execute(args),
         Commands::Forward(args) => forward::execute(args),
         Commands::Chat(args) => chat::execute(args),
