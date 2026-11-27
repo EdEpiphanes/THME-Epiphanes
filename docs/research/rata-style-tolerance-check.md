@@ -1,6 +1,6 @@
 # Band tolerances shaped like a relative accuracy test (RATA): check against the committed results
 
-27 November 2026. Produced by `scripts/rata_style_check.py` from committed reports only.
+27 November 2026. SUPERSEDED the same day by `docs/research/ps16-transposition.md`, which reads the actual US EPA Performance Specification 16 text (the bands below were guessed before that). Produced by `scripts/rata_style_check.py` from committed reports only.
 
 ## The rule that was checked
 
