@@ -14,8 +14,9 @@ use thme::ir::tensor::{SourceEncoding, TensorSource};
 use thme::ir::{ModelArchitecture, ModelIR, TensorIR};
 
 /// SHA-256 of the whole file with identity encoding (`compress: None` writes the same bytes).
+/// The manifest records `tool_version`, so this hash changes with every crate version bump.
 const GOLDEN_IDENTITY_FILE: &str =
-    "b4b2638d395c684d89142dee4d7c744863bfadef76a6c81961730ee317b96678";
+    "9e6ea4736046fb873d730cd27183119c0ae6130f5e7cefe67ea322d4eddb8e48";
 /// SHA-256 of the three decoded payloads concatenated in tensor order. The DEFLATE stream bytes
 /// are not pinned: RFC 1951 allows many streams for one payload, and the stream depends on the
 /// compressor backend. Only the decoded bytes are the contract.
