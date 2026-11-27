@@ -65,6 +65,22 @@ What that means in practice:
 - This narrows the terms question below without removing it: the provider's terms may still apply to
   testing, which counsel can confirm when convenient. It does not block the engine work.
 
+## Permission to release (owner statement, 27 November 2026)
+
+Using a hosted model such as Claude to teach another model for release to the public or for commercial
+use requires permission from that model's provider. The person who plans the release must obtain and
+hold it; THME cannot grant it and does not assume it. That is why the work here is limited to testing
+that the engine works and to proving the claims THME makes.
+
+The engine should enforce this, not just document it. Planned guard (not built):
+- A file annotated `use=test-only` cannot be signed (`thme epiph sign`), exported to GGUF or
+  SafeTensors for sharing, or packed into a release archive; the command refuses and says why.
+- The way past it is an explicit `--permission-note TEXT` that is written into the file's provenance
+  with the date, so the claim of permission is visible and can be audited. THME records the note; it
+  does not check it.
+- Models taught only by open-weight teachers with permissive licences, or by the source model, carry no
+  such annotation.
+
 ## Teachers and subjects
 
 The student goes to class: it has several subjects, and each subject can have its own teacher.
