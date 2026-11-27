@@ -300,7 +300,7 @@ closes it.
 - **Milestone**: v0.2.8 · **Roadmap**: v0.2.8.3 · **Priority**: p1 · **Area**: bench · **Type**: feature · **Status**: in progress
 - **Problem**: A single run cannot tell a real difference from noise. Contention, thermal state, warm-up and GPU floating-point order move readings, and a reference check before and after a batch is the usual way to expose a bias that every run shares.
 - **Done means**: `docs/research/measurement-drift-protocol.md` is applied by the report scripts: each batch has a warm-up run, n repeats in interleaved order, a reference check before and after, a recorded drift, an accept or flag decision against a stated tolerance (5 percent for timings by default, tighter for perplexities), a guard band that turns a verdict into Inconclusive when the drift can flip it, and, when the tolerance is exceeded, an attribution table (run index, other processes, GPU temperature, clock, power, CPU load); committed reports carry the numbers; the compatibility report repeats its GPU runtimes under it.
-- **Progress** (27 November 2026): protocol written; `scripts/drift.py` with 14 tests worked by hand from the 100 ppm sensor example. Not yet applied to any committed report. The tolerances are proposals for the owner to adjust.
+- **Progress** (27 November 2026): protocol written; `scripts/drift.py` with 14 tests worked by hand from the 100 ppm sensor example. Not yet applied to any committed report. Owner decision: 5 percent for every measured quantity until the benchmark suites (mathematics, literature and others) can assess the models; the tolerance only decides stability, the guard band uses the observed drift.
 
 ### [THME-3100] Calibrate the allocator link constant C
 

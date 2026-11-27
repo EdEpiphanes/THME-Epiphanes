@@ -23,9 +23,16 @@ value is known (the committed CPU baseline of the same model on the same token s
   the reference check measured immediately before and after a batch of runs.
 - **Drift during the batch** `D = B_post - B_pre`.
 - **Spread** `S = (max R_k - min R_k) / mean(R_k)`: how far the run means disagree.
-- **Tolerance** `T`: the allowed relative deviation, plus or minus. Defaults, chosen here and open to the
-  owner: `5 %` for timings and throughput; `0.01 %` for a deterministic CPU perplexity (it should repeat
-  exactly, so any deviation is a finding); `0.5 %` for a GPU perplexity (floating-point order differs).
+- **Tolerance** `T`: the allowed relative deviation, plus or minus. Owner decision, 27 November 2026:
+  `5 %` for every measured quantity (timings, throughput, perplexities, agreement rates) for now. The
+  precision of the models cannot be judged until the benchmark suites (mathematics, literature and others,
+  ROADMAP v0.2.8) can show what they can do, so no tighter, quantity-specific tolerance is justified yet.
+  Tighter values can be set per quantity later; a deterministic CPU perplexity is still expected to repeat
+  exactly, and a run that does not is reported as a finding even though it is inside 5 %.
+
+`T` only decides whether a batch is stable enough to use. The guard band in rule 5 uses the drift that was
+actually observed, not `T`, so a 5 % tolerance does not widen the band: a deterministic CPU batch has an
+observed drift of 0 and its gate verdicts are the plain ones.
 
 ## Rules
 
@@ -64,6 +71,6 @@ does not decide whether a difference is practically important; the gate does tha
 ## Where it applies first
 
 - Timings of `thme chat`, `thme forward` and the compatibility report (tolerance 5 %).
-- GPU perplexities of the compatibility report (tolerance 0.5 %): do CUDA, Vulkan and DX12 repeat?
+- GPU perplexities of the compatibility report (tolerance 5 %): do CUDA, Vulkan and DX12 repeat?
 - Seeded training runs (the distillation work): run-to-run spread of the loss at a fixed seed.
 - Deterministic CPU results (GPTQ, Hadamard) are expected to repeat exactly; a second run shows that.
