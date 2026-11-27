@@ -1,7 +1,7 @@
 {
   "report": "hadamard_comparison",
   "report_version": 1,
-  "status": "preregistered",
+  "status": "measured",
   "status_note": "Registered on 2026-11-27 before any perplexity of this comparison was measured. THME-2206, ROADMAP v0.2.2.6.",
   "model_name": "pythia-14m",
   "model_repo": "EleutherAI/pythia-14m",
@@ -62,9 +62,87 @@
       "One corpus, one model per file; no calibration-based arm."
     ]
   },
-  "results": {},
-  "pending": [
-    "run on this model"
-  ],
-  "provenance": {}
+  "results": {
+    "ceiling": 114.28620839585075,
+    "q4_0_rtn": 193.00280711915582,
+    "runs": {
+      "int4_unrotated": {
+        "baseline_perplexity": 114.28620839585075,
+        "perplexity": 311382.93489778374,
+        "delta_ppl": 311268.6486893879,
+        "gate_accepted": false,
+        "thme_version": "0.2.0",
+        "logical_cpus": 12,
+        "device": {
+          "adapter": null,
+          "requested": "cpu",
+          "used": "cpu"
+        },
+        "backend": "THME reference CPU forward pass (f32, multithreaded)"
+      },
+      "int4_rotated": {
+        "baseline_perplexity": 114.28620839585075,
+        "perplexity": 1714157.0020937799,
+        "delta_ppl": 1714042.715885384,
+        "gate_accepted": false,
+        "thme_version": "0.2.0",
+        "logical_cpus": 12,
+        "device": {
+          "adapter": null,
+          "requested": "cpu",
+          "used": "cpu"
+        },
+        "backend": "THME reference CPU forward pass (f32, multithreaded)"
+      },
+      "ternary_unrotated": {
+        "baseline_perplexity": 114.28620839585075,
+        "perplexity": 37098.67017544951,
+        "delta_ppl": 36984.383967053654,
+        "gate_accepted": false,
+        "thme_version": "0.2.0",
+        "logical_cpus": 12,
+        "device": {
+          "adapter": null,
+          "requested": "cpu",
+          "used": "cpu"
+        },
+        "backend": "THME reference CPU forward pass (f32, multithreaded)"
+      },
+      "ternary_rotated": {
+        "baseline_perplexity": 114.28620839585075,
+        "perplexity": 28237.868132040836,
+        "delta_ppl": 28123.581923644986,
+        "gate_accepted": false,
+        "thme_version": "0.2.0",
+        "logical_cpus": 12,
+        "device": {
+          "adapter": null,
+          "requested": "cpu",
+          "used": "cpu"
+        },
+        "backend": "THME reference CPU forward pass (f32, multithreaded)"
+      }
+    },
+    "verdicts": {
+      "int4": {
+        "unrotated": 311382.93489778374,
+        "rotated": 1714157.0020937799,
+        "unrotated_minus_rotated": -1402774.0671959962,
+        "relative_change": 4.504980556036182,
+        "rotation": "worse"
+      },
+      "ternary": {
+        "unrotated": 37098.67017544951,
+        "rotated": 28237.868132040836,
+        "unrotated_minus_rotated": 8860.802043408672,
+        "relative_change": -0.23884419580280306,
+        "rotation": "better"
+      }
+    }
+  },
+  "pending": [],
+  "provenance": {
+    "thme": "C:/Users/TechTroniX/Documents/GitHub/thme-wt/solidify/target-nodbg/release/thme.exe",
+    "device": "cpu"
+  }
 }
