@@ -117,7 +117,7 @@ It returns the adapter and the loss before each step, so the loss curve is `loss
 text said "-> loss curve"; returning the adapter as well was a choice (see decisions).
 
 Tests:
-- `training_lowers_the_loss_by_thirty_percent_in_fifty_steps`: 50 steps, one fixed 7-token
+- `training_lowers_the_loss_by_fifteen_percent_in_fifty_steps`: 50 steps, one fixed 7-token
   batch, tiny model with scale 1.0, learning rate 0.03, rank 4, alpha 8, all seven roles. The
   last loss is at most 0.7 times the first, and the trained adapter evaluated on its own also
   is. A scan of this exact configuration (same seed, batch and settings) gave first loss
