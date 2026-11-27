@@ -97,6 +97,7 @@ closes it.
 - **Milestone**: v0.2.2 · **Roadmap**: v0.2.2.6 · **Priority**: p2 · **Area**: research · **Type**: experiment · **Status**: blocked
 - **Problem**: `RotatedQuantize` lowers rounding error on outlier-heavy weights in tests; its effect on perplexity is unmeasured.
 - **Done means**: `thme.hadamard_int4` and `thme.hadamard_ternary` compared with their unrotated rules via `thme evaluate` on both models; reports committed.
+- **Progress** (27 November 2026): measured on both models under a pre-registered 1 percent rule (`docs/benchmarks/*/data/hadamard_comparison.json`). Pythia-14M (CPU): int4 rotation worse (311,383 to 1,714,157), ternary better (37,099 to 28,238). SmolLM-135M (CUDA): both better (int4 7.3M to 466k, ternary 75M to 28.6M). Every arm is unusable against the ceilings (114.3 and 19.80): the whole-tensor absolute-maximum scale destroys these models with or without rotation, so rotation is not a consistent improvement and no quality claim follows. Status was blocked; the measurement part of the done-means is met.
 
 ### [THME-2207] SmoothQuant-style scale migration
 

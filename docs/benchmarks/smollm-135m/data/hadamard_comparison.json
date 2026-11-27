@@ -1,7 +1,7 @@
 {
   "report": "hadamard_comparison",
   "report_version": 1,
-  "status": "preregistered",
+  "status": "measured",
   "status_note": "Registered on 2026-11-27 before any perplexity of this comparison was measured. THME-2206, ROADMAP v0.2.2.6.",
   "model_name": "SmolLM-135M",
   "model_repo": "HuggingFaceTB/SmolLM-135M",
@@ -62,9 +62,97 @@
       "One corpus, one model per file; no calibration-based arm."
     ]
   },
-  "results": {},
-  "pending": [
-    "run on this model"
-  ],
-  "provenance": {}
+  "results": {
+    "ceiling": 19.798421901137832,
+    "q4_0_rtn": 23.698417820506624,
+    "runs": {
+      "int4_unrotated": {
+        "baseline_perplexity": 19.798628877768785,
+        "perplexity": 7318545.00690333,
+        "delta_ppl": 7318525.208274452,
+        "gate_accepted": false,
+        "thme_version": "0.2.0",
+        "logical_cpus": 12,
+        "device": {
+          "adapter": {
+            "name": "NVIDIA CUDA (Pure Embedded PTX, Zero External DLLs)"
+          },
+          "requested": "gpu",
+          "used": "gpu"
+        },
+        "backend": "THME reference forward pass on the GPU (CUDA pure PTX, f16 weights)"
+      },
+      "int4_rotated": {
+        "baseline_perplexity": 19.798628877768785,
+        "perplexity": 466208.96860177565,
+        "delta_ppl": 466189.16997289786,
+        "gate_accepted": false,
+        "thme_version": "0.2.0",
+        "logical_cpus": 12,
+        "device": {
+          "adapter": {
+            "name": "NVIDIA CUDA (Pure Embedded PTX, Zero External DLLs)"
+          },
+          "requested": "gpu",
+          "used": "gpu"
+        },
+        "backend": "THME reference forward pass on the GPU (CUDA pure PTX, f16 weights)"
+      },
+      "ternary_unrotated": {
+        "baseline_perplexity": 19.798628877768785,
+        "perplexity": 75358698.92894067,
+        "delta_ppl": 75358679.13031179,
+        "gate_accepted": false,
+        "thme_version": "0.2.0",
+        "logical_cpus": 12,
+        "device": {
+          "adapter": {
+            "name": "NVIDIA CUDA (Pure Embedded PTX, Zero External DLLs)"
+          },
+          "requested": "gpu",
+          "used": "gpu"
+        },
+        "backend": "THME reference forward pass on the GPU (CUDA pure PTX, f16 weights)"
+      },
+      "ternary_rotated": {
+        "baseline_perplexity": 19.798628877768785,
+        "perplexity": 28581956.73829441,
+        "delta_ppl": 28581936.939665534,
+        "gate_accepted": false,
+        "thme_version": "0.2.0",
+        "logical_cpus": 12,
+        "device": {
+          "adapter": {
+            "name": "NVIDIA CUDA (Pure Embedded PTX, Zero External DLLs)"
+          },
+          "requested": "gpu",
+          "used": "gpu"
+        },
+        "backend": "THME reference forward pass on the GPU (CUDA pure PTX, f16 weights)"
+      }
+    },
+    "verdicts": {
+      "int4": {
+        "unrotated": 7318545.00690333,
+        "rotated": 466208.96860177565,
+        "unrotated_minus_rotated": 6852336.0383015545,
+        "relative_change": -0.9362975880913464,
+        "rotation": "better"
+      },
+      "ternary": {
+        "unrotated": 75358698.92894067,
+        "rotated": 28581956.73829441,
+        "unrotated_minus_rotated": 46776742.19064626,
+        "relative_change": -0.6207212021369197,
+        "rotation": "better"
+      }
+    },
+    "reading": "Rotation is better by the pre-registered 1 percent rule in both pairs on SmolLM-135M (int4 7,318,545 to 466,209; ternary 75,358,699 to 28,581,957), but every arm is unusable against the ceiling of 19.80, and on Pythia-14M the int4 pair went the other way (rotation worse), so rotation is not a consistent improvement. These codebooks use one absolute-maximum scale for the whole tensor, which destroys these small models with or without rotation.",
+    "device_note": "All four arms ran on THME's CUDA path (embedded PTX) on 27 November 2026; the Pythia-14M file used the CPU. Results are not mixed across devices inside one file."
+  },
+  "pending": [],
+  "provenance": {
+    "thme": "C:/Users/TechTroniX/Documents/GitHub/thme-wt/solidify/target-nodbg/release/thme.exe",
+    "device": "gpu"
+  }
 }
