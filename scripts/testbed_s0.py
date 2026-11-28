@@ -178,7 +178,6 @@ def load_windows(path, context):
 
 
 @torch.no_grad()
-@torch.no_grad()
 def perplexity(model, windows, device, batch=8):
     """Returns (perplexity, per-window summed negative log-likelihood in nats, per-window scored tokens).
     Equal-length windows go through the model `batch` at a time; the short last window goes alone."""
