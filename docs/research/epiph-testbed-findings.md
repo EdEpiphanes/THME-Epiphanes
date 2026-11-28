@@ -68,3 +68,58 @@ data history (B), tokenizer (C) and capacity; they do not isolate the effect of 
 
 **Also in this entry's change.** `thme evaluate` reports now carry `window_nll`, a list of (summed loss, scored tokens) per
 window, the input for paired per-block losses (gate, block partition, PS-16). Reports from before this change lack it.
+
+## 3. S0: post-hoc fake quantisation of arm A, no training, 28 November 2026
+
+**What was run.** `scripts/testbed_s0.py` on arm A's final checkpoint (step 12,000). For each of the six layers, and then
+layers 1 to 4 together, the four weight matrices of the layer (attention QKV and output, MLP in and out; 0.79M weights per
+layer) were replaced by a quantised copy, one regime at a time, with no training. Regimes: ternary (dead zone 0.7 E|w|,
+scale per 1,024 weights), binary (sign plus a scale per 1,024, with a residual of rank 0, 8 or 32), four phase layouts
+(adjacent weight pairs as radius and angle: P1 3-bit angle, group radius; P2 3-bit angle and 1-bit radius; P3 4-bit
+angle, group radius; P4 4-bit angle and 2-bit radius) and a plain 2-bit scalar control with the Gaussian-optimal step.
+Measured in PyTorch (float32 weights, eager attention) on the WikiText-2 test tokens (281 windows of 1,024). The
+unquantised baseline measured 55.183, the same as `thme evaluate` (55.184), so the screening and the engine agree.
+Bits per weight are computed from the formulas (scale cost included, embeddings and output head not touched).
+Report: `docs/benchmarks/epiph-testbed/data/s0_arm_a.json`. Screening values only: numbers for a report should be
+re-measured with `thme evaluate` on exported folders (CPU F32).
+
+**Result** (test perplexity, baseline 55.18):
+
+| Regime | bits per weight | layer 0 | layer 1 | layer 2 | layer 3 | layer 4 | layer 5 | layers 1 to 4 |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| ternary | 1.60 | 103.2 | 85.6 | 84.5 | 90.6 | 81.5 | 82.4 | 380.7 |
+| binary, rank 0 | 1.02 | 523.9 | 108.6 | 105.7 | 120.5 | 117.7 | 129.5 | 797.7 |
+| binary, rank 8 | 2.35 | 275.2 | 80.0 | 81.5 | 87.0 | 102.7 | 89.9 | 374.9 |
+| binary, rank 32 | 6.35 | 104.8 | 66.3 | 68.4 | 72.2 | 77.7 | 71.1 | 170.5 |
+| 2-bit scalar (control) | 2.02 | 79.4 | 75.9 | 72.8 | 76.0 | 69.9 | 70.1 | 190.8 |
+| phase P1 (3-bit angle, group radius) | 1.52 | 101.5 | 106.0 | 120.3 | 109.2 | 103.5 | 103.5 | 586.5 |
+| phase P2 (3-bit angle, 1-bit radius) | 2.02 | 74.2 | 71.1 | 72.9 | 79.7 | 71.4 | 73.5 | 179.6 |
+| phase P3 (4-bit angle, group radius) | 2.02 | 95.6 | 99.2 | 121.2 | 104.0 | 95.1 | 92.6 | 584.9 |
+| phase P4 (4-bit angle, 2-bit radius) | 3.02 | 58.5 | 57.6 | 57.9 | 58.6 | 59.5 | 57.6 | 70.9 |
+
+**Readings** (what the numbers show, no more):
+- Damage adds up across layers. Ternary costs 26 to 35 points per middle layer alone, but 325 points when layers 1 to 4
+  are all ternary. This is the same non-additivity the paper reports for the allocator (section 12.2) seen on a trained
+  model.
+- At about 2 bits per weight, phase P2 is level with the 2-bit scalar control: slightly better on three single layers
+  and on layers 1 to 4 (179.6 against 190.8), slightly worse on two. Not a decisive win.
+- Radius precision matters more than angle precision at the same rate: P3 (4-bit angle, group radius) is far worse than
+  P2 (3-bit angle, 1-bit radius) at 2.02 bits. A single radius per 1,024 weights throws away the magnitude information.
+- P4 at 3.02 bits is close to lossless on single layers (+2 to +4) and +15.7 on layers 1 to 4. There is no 3-bit scalar
+  control yet, so P4's advantage over a plain 3-bit quantiser is not established.
+- Binary with rank 0 is the worst regime, and layer 0 is the most fragile layer for binary (523.9). This supports pinning
+  the boundary layers (paper 7.6), but only for the first layer; layer 5 is not more fragile than layers 1 to 4 here.
+- Binary with a residual rank of 32 reaches the control's quality only at 6.35 bits per weight, because at width 128 the
+  residual costs far more than the signs.
+
+**Against the advisor's pre-registered prediction** (ternary on all middle layers adds more than 100 points; falsified if
+less than 20): 380.7 against 55.2 is +325.5, so the prediction held.
+
+**Not claimed.** One checkpoint, one corpus, post-hoc quantisation with no training and no calibration. Weights outside the
+four matrices per layer, and the embeddings and head (about 92% of parameters), were not touched, so none of this is a
+size saving. The ordering of regimes may change after quantisation-aware training, which is what the branches test.
+
+**Next, from this result.** Add a 3-bit scalar control and a 1.6-bit control (ternary is the natural one) so each regime is
+compared at its own rate; repeat on arm B; then re-measure the reported rows through `thme evaluate`.
+
+**Proposed parameters or formulas.** None yet.
