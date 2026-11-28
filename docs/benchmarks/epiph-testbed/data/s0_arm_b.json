@@ -1,0 +1,895 @@
+{
+  "report": "s0_fake_quantise",
+  "model": [
+    "arm-pythia",
+    "step-012000"
+  ],
+  "device": "cuda",
+  "precision": "float32 weights, eager attention",
+  "context_len": 1024,
+  "windows": 281,
+  "baseline_perplexity": 47.88848834603788,
+  "note": "post-hoc fake quantisation, no training; screening values, re-measure reported ones with thme evaluate",
+  "rows": [
+    {
+      "layers": [
+        0
+      ],
+      "scope": "layer0",
+      "regime": "ternary",
+      "bits_per_weight": 1.601,
+      "f16_code_flip_fraction": 6.612141957399824e-05,
+      "perplexity": 98.07973726056723,
+      "delta_ppl": 50.191248914529346
+    },
+    {
+      "layers": [
+        0
+      ],
+      "scope": "layer0",
+      "regime": "binary_r0",
+      "bits_per_weight": 1.016,
+      "f16_code_flip_fraction": 0.0,
+      "perplexity": 466.6976614914205,
+      "delta_ppl": 418.8091731453826
+    },
+    {
+      "layers": [
+        0
+      ],
+      "scope": "layer0",
+      "regime": "binary_r8",
+      "bits_per_weight": 2.349,
+      "f16_code_flip_fraction": null,
+      "perplexity": 264.02972822841735,
+      "delta_ppl": 216.14123988237947
+    },
+    {
+      "layers": [
+        0
+      ],
+      "scope": "layer0",
+      "regime": "binary_r32",
+      "bits_per_weight": 6.349,
+      "f16_code_flip_fraction": null,
+      "perplexity": 107.24514451840302,
+      "delta_ppl": 59.35665617236514
+    },
+    {
+      "layers": [
+        0
+      ],
+      "scope": "layer0",
+      "regime": "scalar2_control",
+      "bits_per_weight": 2.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 69.25219881480321,
+      "delta_ppl": 21.363710468765326
+    },
+    {
+      "layers": [
+        0
+      ],
+      "scope": "layer0",
+      "regime": "scalar3_control",
+      "bits_per_weight": 3.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 53.67393878764876,
+      "delta_ppl": 5.785450441610877
+    },
+    {
+      "layers": [
+        0
+      ],
+      "scope": "layer0",
+      "regime": "scalar_3level_control",
+      "bits_per_weight": 1.601,
+      "f16_code_flip_fraction": null,
+      "perplexity": 95.04097564036165,
+      "delta_ppl": 47.15248729432377
+    },
+    {
+      "layers": [
+        0
+      ],
+      "scope": "layer0",
+      "regime": "phase_P1_a3_r0",
+      "bits_per_weight": 1.516,
+      "f16_code_flip_fraction": null,
+      "perplexity": 113.58278732511815,
+      "delta_ppl": 65.69429897908026
+    },
+    {
+      "layers": [
+        0
+      ],
+      "scope": "layer0",
+      "regime": "phase_P2_a3_r1",
+      "bits_per_weight": 2.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 64.8020360305485,
+      "delta_ppl": 16.913547684510625
+    },
+    {
+      "layers": [
+        0
+      ],
+      "scope": "layer0",
+      "regime": "phase_P3_a4_r0",
+      "bits_per_weight": 2.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 99.76260063093237,
+      "delta_ppl": 51.87411228489449
+    },
+    {
+      "layers": [
+        0
+      ],
+      "scope": "layer0",
+      "regime": "phase_P4_a4_r2",
+      "bits_per_weight": 3.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 51.35141078573082,
+      "delta_ppl": 3.462922439692939
+    },
+    {
+      "layers": [
+        1
+      ],
+      "scope": "layer1",
+      "regime": "ternary",
+      "bits_per_weight": 1.601,
+      "f16_code_flip_fraction": 6.10351568563298e-05,
+      "perplexity": 77.533204024701,
+      "delta_ppl": 29.644715678663125
+    },
+    {
+      "layers": [
+        1
+      ],
+      "scope": "layer1",
+      "regime": "binary_r0",
+      "bits_per_weight": 1.016,
+      "f16_code_flip_fraction": 0.0,
+      "perplexity": 123.95713186428574,
+      "delta_ppl": 76.06864351824785
+    },
+    {
+      "layers": [
+        1
+      ],
+      "scope": "layer1",
+      "regime": "binary_r8",
+      "bits_per_weight": 2.349,
+      "f16_code_flip_fraction": null,
+      "perplexity": 84.17265195567947,
+      "delta_ppl": 36.28416360964159
+    },
+    {
+      "layers": [
+        1
+      ],
+      "scope": "layer1",
+      "regime": "binary_r32",
+      "bits_per_weight": 6.349,
+      "f16_code_flip_fraction": null,
+      "perplexity": 66.14582595531911,
+      "delta_ppl": 18.25733760928123
+    },
+    {
+      "layers": [
+        1
+      ],
+      "scope": "layer1",
+      "regime": "scalar2_control",
+      "bits_per_weight": 2.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 65.41307864716507,
+      "delta_ppl": 17.524590301127184
+    },
+    {
+      "layers": [
+        1
+      ],
+      "scope": "layer1",
+      "regime": "scalar3_control",
+      "bits_per_weight": 3.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 53.03824213706989,
+      "delta_ppl": 5.149753791032012
+    },
+    {
+      "layers": [
+        1
+      ],
+      "scope": "layer1",
+      "regime": "scalar_3level_control",
+      "bits_per_weight": 1.601,
+      "f16_code_flip_fraction": null,
+      "perplexity": 75.33560489318035,
+      "delta_ppl": 27.447116547142464
+    },
+    {
+      "layers": [
+        1
+      ],
+      "scope": "layer1",
+      "regime": "phase_P1_a3_r0",
+      "bits_per_weight": 1.516,
+      "f16_code_flip_fraction": null,
+      "perplexity": 101.56637643082702,
+      "delta_ppl": 53.67788808478914
+    },
+    {
+      "layers": [
+        1
+      ],
+      "scope": "layer1",
+      "regime": "phase_P2_a3_r1",
+      "bits_per_weight": 2.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 62.22217042433203,
+      "delta_ppl": 14.333682078294146
+    },
+    {
+      "layers": [
+        1
+      ],
+      "scope": "layer1",
+      "regime": "phase_P3_a4_r0",
+      "bits_per_weight": 2.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 96.04299384721608,
+      "delta_ppl": 48.1545055011782
+    },
+    {
+      "layers": [
+        1
+      ],
+      "scope": "layer1",
+      "regime": "phase_P4_a4_r2",
+      "bits_per_weight": 3.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 51.49592936821813,
+      "delta_ppl": 3.6074410221802466
+    },
+    {
+      "layers": [
+        2
+      ],
+      "scope": "layer2",
+      "regime": "ternary",
+      "bits_per_weight": 1.601,
+      "f16_code_flip_fraction": 7.62939459188298e-05,
+      "perplexity": 93.49929965323656,
+      "delta_ppl": 45.61081130719868
+    },
+    {
+      "layers": [
+        2
+      ],
+      "scope": "layer2",
+      "regime": "binary_r0",
+      "bits_per_weight": 1.016,
+      "f16_code_flip_fraction": 0.0,
+      "perplexity": 154.6640955546891,
+      "delta_ppl": 106.77560720865122
+    },
+    {
+      "layers": [
+        2
+      ],
+      "scope": "layer2",
+      "regime": "binary_r8",
+      "bits_per_weight": 2.349,
+      "f16_code_flip_fraction": null,
+      "perplexity": 95.691665005599,
+      "delta_ppl": 47.803176659561124
+    },
+    {
+      "layers": [
+        2
+      ],
+      "scope": "layer2",
+      "regime": "binary_r32",
+      "bits_per_weight": 6.349,
+      "f16_code_flip_fraction": null,
+      "perplexity": 64.26591300895019,
+      "delta_ppl": 16.37742466291231
+    },
+    {
+      "layers": [
+        2
+      ],
+      "scope": "layer2",
+      "regime": "scalar2_control",
+      "bits_per_weight": 2.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 81.81951329366386,
+      "delta_ppl": 33.93102494762598
+    },
+    {
+      "layers": [
+        2
+      ],
+      "scope": "layer2",
+      "regime": "scalar3_control",
+      "bits_per_weight": 3.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 56.974000279906654,
+      "delta_ppl": 9.085511933868773
+    },
+    {
+      "layers": [
+        2
+      ],
+      "scope": "layer2",
+      "regime": "scalar_3level_control",
+      "bits_per_weight": 1.601,
+      "f16_code_flip_fraction": null,
+      "perplexity": 97.6720610142931,
+      "delta_ppl": 49.783572668255225
+    },
+    {
+      "layers": [
+        2
+      ],
+      "scope": "layer2",
+      "regime": "phase_P1_a3_r0",
+      "bits_per_weight": 1.516,
+      "f16_code_flip_fraction": null,
+      "perplexity": 158.21945648938333,
+      "delta_ppl": 110.33096814334544
+    },
+    {
+      "layers": [
+        2
+      ],
+      "scope": "layer2",
+      "regime": "phase_P2_a3_r1",
+      "bits_per_weight": 2.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 73.59424816846973,
+      "delta_ppl": 25.70575982243185
+    },
+    {
+      "layers": [
+        2
+      ],
+      "scope": "layer2",
+      "regime": "phase_P3_a4_r0",
+      "bits_per_weight": 2.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 131.16870382259884,
+      "delta_ppl": 83.28021547656095
+    },
+    {
+      "layers": [
+        2
+      ],
+      "scope": "layer2",
+      "regime": "phase_P4_a4_r2",
+      "bits_per_weight": 3.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 51.8122346264566,
+      "delta_ppl": 3.923746280418719
+    },
+    {
+      "layers": [
+        3
+      ],
+      "scope": "layer3",
+      "regime": "ternary",
+      "bits_per_weight": 1.601,
+      "f16_code_flip_fraction": 8.646647196049646e-05,
+      "perplexity": 93.07861051202109,
+      "delta_ppl": 45.190122165983205
+    },
+    {
+      "layers": [
+        3
+      ],
+      "scope": "layer3",
+      "regime": "binary_r0",
+      "bits_per_weight": 1.016,
+      "f16_code_flip_fraction": 0.0,
+      "perplexity": 193.20927475972272,
+      "delta_ppl": 145.32078641368483
+    },
+    {
+      "layers": [
+        3
+      ],
+      "scope": "layer3",
+      "regime": "binary_r8",
+      "bits_per_weight": 2.349,
+      "f16_code_flip_fraction": null,
+      "perplexity": 144.78032367996462,
+      "delta_ppl": 96.89183533392674
+    },
+    {
+      "layers": [
+        3
+      ],
+      "scope": "layer3",
+      "regime": "binary_r32",
+      "bits_per_weight": 6.349,
+      "f16_code_flip_fraction": null,
+      "perplexity": 92.26967452740368,
+      "delta_ppl": 44.3811861813658
+    },
+    {
+      "layers": [
+        3
+      ],
+      "scope": "layer3",
+      "regime": "scalar2_control",
+      "bits_per_weight": 2.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 73.98732507369621,
+      "delta_ppl": 26.09883672765833
+    },
+    {
+      "layers": [
+        3
+      ],
+      "scope": "layer3",
+      "regime": "scalar3_control",
+      "bits_per_weight": 3.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 53.83164342075306,
+      "delta_ppl": 5.943155074715179
+    },
+    {
+      "layers": [
+        3
+      ],
+      "scope": "layer3",
+      "regime": "scalar_3level_control",
+      "bits_per_weight": 1.601,
+      "f16_code_flip_fraction": null,
+      "perplexity": 92.8173775351591,
+      "delta_ppl": 44.928889189121215
+    },
+    {
+      "layers": [
+        3
+      ],
+      "scope": "layer3",
+      "regime": "phase_P1_a3_r0",
+      "bits_per_weight": 1.516,
+      "f16_code_flip_fraction": null,
+      "perplexity": 165.7422853239412,
+      "delta_ppl": 117.8537969779033
+    },
+    {
+      "layers": [
+        3
+      ],
+      "scope": "layer3",
+      "regime": "phase_P2_a3_r1",
+      "bits_per_weight": 2.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 73.31918757758243,
+      "delta_ppl": 25.430699231544544
+    },
+    {
+      "layers": [
+        3
+      ],
+      "scope": "layer3",
+      "regime": "phase_P3_a4_r0",
+      "bits_per_weight": 2.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 128.20904201345456,
+      "delta_ppl": 80.32055366741668
+    },
+    {
+      "layers": [
+        3
+      ],
+      "scope": "layer3",
+      "regime": "phase_P4_a4_r2",
+      "bits_per_weight": 3.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 52.45982771096644,
+      "delta_ppl": 4.571339364928555
+    },
+    {
+      "layers": [
+        4
+      ],
+      "scope": "layer4",
+      "regime": "ternary",
+      "bits_per_weight": 1.601,
+      "f16_code_flip_fraction": 3.051757827658245e-05,
+      "perplexity": 62.28751111871837,
+      "delta_ppl": 14.399022772680489
+    },
+    {
+      "layers": [
+        4
+      ],
+      "scope": "layer4",
+      "regime": "binary_r0",
+      "bits_per_weight": 1.016,
+      "f16_code_flip_fraction": 0.0,
+      "perplexity": 77.78591679168305,
+      "delta_ppl": 29.89742844564517
+    },
+    {
+      "layers": [
+        4
+      ],
+      "scope": "layer4",
+      "regime": "binary_r8",
+      "bits_per_weight": 2.349,
+      "f16_code_flip_fraction": null,
+      "perplexity": 72.83973978581629,
+      "delta_ppl": 24.95125143977841
+    },
+    {
+      "layers": [
+        4
+      ],
+      "scope": "layer4",
+      "regime": "binary_r32",
+      "bits_per_weight": 6.349,
+      "f16_code_flip_fraction": null,
+      "perplexity": 61.483788233419716,
+      "delta_ppl": 13.595299887381834
+    },
+    {
+      "layers": [
+        4
+      ],
+      "scope": "layer4",
+      "regime": "scalar2_control",
+      "bits_per_weight": 2.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 56.37681589481645,
+      "delta_ppl": 8.488327548778571
+    },
+    {
+      "layers": [
+        4
+      ],
+      "scope": "layer4",
+      "regime": "scalar3_control",
+      "bits_per_weight": 3.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 50.37009207317772,
+      "delta_ppl": 2.4816037271398415
+    },
+    {
+      "layers": [
+        4
+      ],
+      "scope": "layer4",
+      "regime": "scalar_3level_control",
+      "bits_per_weight": 1.601,
+      "f16_code_flip_fraction": null,
+      "perplexity": 62.90037971177247,
+      "delta_ppl": 15.011891365734591
+    },
+    {
+      "layers": [
+        4
+      ],
+      "scope": "layer4",
+      "regime": "phase_P1_a3_r0",
+      "bits_per_weight": 1.516,
+      "f16_code_flip_fraction": null,
+      "perplexity": 78.97118136742726,
+      "delta_ppl": 31.08269302138938
+    },
+    {
+      "layers": [
+        4
+      ],
+      "scope": "layer4",
+      "regime": "phase_P2_a3_r1",
+      "bits_per_weight": 2.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 58.2492277206858,
+      "delta_ppl": 10.36073937464792
+    },
+    {
+      "layers": [
+        4
+      ],
+      "scope": "layer4",
+      "regime": "phase_P3_a4_r0",
+      "bits_per_weight": 2.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 73.45441040827139,
+      "delta_ppl": 25.565922062233504
+    },
+    {
+      "layers": [
+        4
+      ],
+      "scope": "layer4",
+      "regime": "phase_P4_a4_r2",
+      "bits_per_weight": 3.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 50.08388667885041,
+      "delta_ppl": 2.1953983328125304
+    },
+    {
+      "layers": [
+        5
+      ],
+      "scope": "layer5",
+      "regime": "ternary",
+      "bits_per_weight": 1.601,
+      "f16_code_flip_fraction": 3.0517578125e-05,
+      "perplexity": 100.49917587686768,
+      "delta_ppl": 52.6106875308298
+    },
+    {
+      "layers": [
+        5
+      ],
+      "scope": "layer5",
+      "regime": "binary_r0",
+      "bits_per_weight": 1.016,
+      "f16_code_flip_fraction": 0.0,
+      "perplexity": 462.6023682979732,
+      "delta_ppl": 414.7138799519353
+    },
+    {
+      "layers": [
+        5
+      ],
+      "scope": "layer5",
+      "regime": "binary_r8",
+      "bits_per_weight": 2.349,
+      "f16_code_flip_fraction": null,
+      "perplexity": 202.4168822487306,
+      "delta_ppl": 154.5283939026927
+    },
+    {
+      "layers": [
+        5
+      ],
+      "scope": "layer5",
+      "regime": "binary_r32",
+      "bits_per_weight": 6.349,
+      "f16_code_flip_fraction": null,
+      "perplexity": 105.01488168808037,
+      "delta_ppl": 57.12639334204248
+    },
+    {
+      "layers": [
+        5
+      ],
+      "scope": "layer5",
+      "regime": "scalar2_control",
+      "bits_per_weight": 2.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 103.08770119634826,
+      "delta_ppl": 55.19921285031038
+    },
+    {
+      "layers": [
+        5
+      ],
+      "scope": "layer5",
+      "regime": "scalar3_control",
+      "bits_per_weight": 3.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 56.305316016035796,
+      "delta_ppl": 8.416827669997915
+    },
+    {
+      "layers": [
+        5
+      ],
+      "scope": "layer5",
+      "regime": "scalar_3level_control",
+      "bits_per_weight": 1.601,
+      "f16_code_flip_fraction": null,
+      "perplexity": 103.1938749878879,
+      "delta_ppl": 55.30538664185001
+    },
+    {
+      "layers": [
+        5
+      ],
+      "scope": "layer5",
+      "regime": "phase_P1_a3_r0",
+      "bits_per_weight": 1.516,
+      "f16_code_flip_fraction": null,
+      "perplexity": 155.78752796083884,
+      "delta_ppl": 107.89903961480096
+    },
+    {
+      "layers": [
+        5
+      ],
+      "scope": "layer5",
+      "regime": "phase_P2_a3_r1",
+      "bits_per_weight": 2.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 76.05733650601661,
+      "delta_ppl": 28.16884815997873
+    },
+    {
+      "layers": [
+        5
+      ],
+      "scope": "layer5",
+      "regime": "phase_P3_a4_r0",
+      "bits_per_weight": 2.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 139.85412162787608,
+      "delta_ppl": 91.9656332818382
+    },
+    {
+      "layers": [
+        5
+      ],
+      "scope": "layer5",
+      "regime": "phase_P4_a4_r2",
+      "bits_per_weight": 3.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 53.39882093538222,
+      "delta_ppl": 5.510332589344337
+    },
+    {
+      "layers": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "scope": "middle_1_to_4",
+      "regime": "ternary",
+      "bits_per_weight": 1.601,
+      "f16_code_flip_fraction": 6.357828825305963e-05,
+      "perplexity": 527.7804461399755,
+      "delta_ppl": 479.89195779393765
+    },
+    {
+      "layers": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "scope": "middle_1_to_4",
+      "regime": "binary_r0",
+      "bits_per_weight": 1.016,
+      "f16_code_flip_fraction": 0.0,
+      "perplexity": 1637.7542495429868,
+      "delta_ppl": 1589.865761196949
+    },
+    {
+      "layers": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "scope": "middle_1_to_4",
+      "regime": "binary_r8",
+      "bits_per_weight": 2.349,
+      "f16_code_flip_fraction": null,
+      "perplexity": 704.8200913556659,
+      "delta_ppl": 656.931603009628
+    },
+    {
+      "layers": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "scope": "middle_1_to_4",
+      "regime": "binary_r32",
+      "bits_per_weight": 6.349,
+      "f16_code_flip_fraction": null,
+      "perplexity": 262.7930663315649,
+      "delta_ppl": 214.904577985527
+    },
+    {
+      "layers": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "scope": "middle_1_to_4",
+      "regime": "scalar2_control",
+      "bits_per_weight": 2.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 228.479763637635,
+      "delta_ppl": 180.5912752915971
+    },
+    {
+      "layers": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "scope": "middle_1_to_4",
+      "regime": "scalar3_control",
+      "bits_per_weight": 3.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 75.8543097346572,
+      "delta_ppl": 27.965821388619325
+    },
+    {
+      "layers": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "scope": "middle_1_to_4",
+      "regime": "scalar_3level_control",
+      "bits_per_weight": 1.601,
+      "f16_code_flip_fraction": null,
+      "perplexity": 519.9026230719276,
+      "delta_ppl": 472.0141347258897
+    },
+    {
+      "layers": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "scope": "middle_1_to_4",
+      "regime": "phase_P1_a3_r0",
+      "bits_per_weight": 1.516,
+      "f16_code_flip_fraction": null,
+      "perplexity": 1334.7178607797775,
+      "delta_ppl": 1286.8293724337398
+    },
+    {
+      "layers": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "scope": "middle_1_to_4",
+      "regime": "phase_P2_a3_r1",
+      "bits_per_weight": 2.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 204.0454477071428,
+      "delta_ppl": 156.15695936110492
+    },
+    {
+      "layers": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "scope": "middle_1_to_4",
+      "regime": "phase_P3_a4_r0",
+      "bits_per_weight": 2.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 1101.6944472808877,
+      "delta_ppl": 1053.80595893485
+    },
+    {
+      "layers": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "scope": "middle_1_to_4",
+      "regime": "phase_P4_a4_r2",
+      "bits_per_weight": 3.016,
+      "f16_code_flip_fraction": null,
+      "perplexity": 66.33006761906367,
+      "delta_ppl": 18.441579273025788
+    }
+  ]
+}

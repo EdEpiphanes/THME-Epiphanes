@@ -68,3 +68,130 @@ data history (B), tokenizer (C) and capacity; they do not isolate the effect of 
 
 **Also in this entry's change.** `thme evaluate` reports now carry `window_nll`, a list of (summed loss, scored tokens) per
 window, the input for paired per-block losses (gate, block partition, PS-16). Reports from before this change lack it.
+
+## 3. S0: post-hoc fake quantisation of arm A, no training, 28 November 2026
+
+**What was run.** `scripts/testbed_s0.py` on arm A's final checkpoint (step 12,000). For each of the six layers, and then
+layers 1 to 4 together, the four weight matrices of the layer (attention QKV and output, MLP in and out; 0.79M weights per
+layer) were replaced by a quantised copy, one regime at a time, with no training. Regimes: ternary (dead zone 0.7 E|w|,
+scale per 1,024 weights), binary (sign plus a scale per 1,024, with a residual of rank 0, 8 or 32), four phase layouts
+(adjacent weight pairs as radius and angle: P1 3-bit angle, group radius; P2 3-bit angle and 1-bit radius; P3 4-bit
+angle, group radius; P4 4-bit angle and 2-bit radius) and a plain 2-bit scalar control with the Gaussian-optimal step.
+Measured in PyTorch (float32 weights, eager attention) on the WikiText-2 test tokens (281 windows of 1,024). The
+unquantised baseline measured 55.183, the same as `thme evaluate` (55.184), so the screening and the engine agree.
+Bits per weight are computed from the formulas (scale cost included, embeddings and output head not touched).
+Report: `docs/benchmarks/epiph-testbed/data/s0_arm_a.json`. Screening values only: numbers for a report should be
+re-measured with `thme evaluate` on exported folders (CPU F32).
+
+**Result** (test perplexity, baseline 55.18):
+
+| Regime | bits per weight | layer 0 | layer 1 | layer 2 | layer 3 | layer 4 | layer 5 | layers 1 to 4 |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| ternary | 1.60 | 103.2 | 85.6 | 84.5 | 90.6 | 81.5 | 82.4 | 380.7 |
+| binary, rank 0 | 1.02 | 523.9 | 108.6 | 105.7 | 120.5 | 117.7 | 129.5 | 797.7 |
+| binary, rank 8 | 2.35 | 275.2 | 80.0 | 81.5 | 87.0 | 102.7 | 89.9 | 374.9 |
+| binary, rank 32 | 6.35 | 104.8 | 66.3 | 68.4 | 72.2 | 77.7 | 71.1 | 170.5 |
+| 2-bit scalar (control) | 2.02 | 79.4 | 75.9 | 72.8 | 76.0 | 69.9 | 70.1 | 190.8 |
+| phase P1 (3-bit angle, group radius) | 1.52 | 101.5 | 106.0 | 120.3 | 109.2 | 103.5 | 103.5 | 586.5 |
+| phase P2 (3-bit angle, 1-bit radius) | 2.02 | 74.2 | 71.1 | 72.9 | 79.7 | 71.4 | 73.5 | 179.6 |
+| phase P3 (4-bit angle, group radius) | 2.02 | 95.6 | 99.2 | 121.2 | 104.0 | 95.1 | 92.6 | 584.9 |
+| phase P4 (4-bit angle, 2-bit radius) | 3.02 | 58.5 | 57.6 | 57.9 | 58.6 | 59.5 | 57.6 | 70.9 |
+
+**Readings** (what the numbers show, no more):
+- Damage adds up across layers. Ternary costs 26 to 35 points per middle layer alone, but 325 points when layers 1 to 4
+  are all ternary. This is the same non-additivity the paper reports for the allocator (section 12.2) seen on a trained
+  model.
+- At about 2 bits per weight, phase P2 is level with the 2-bit scalar control: better on layers 0 and 1, level on
+  layer 2, worse on layers 3, 4 and 5 (by 1.5 to 3.7), and better on layers 1 to 4 together (179.6 against 190.8).
+  Not a decisive win.
+- Radius precision matters more than angle precision at the same rate: P3 (4-bit angle, group radius) is far worse than
+  P2 (3-bit angle, 1-bit radius) at 2.02 bits. A single radius per 1,024 weights throws away the magnitude information.
+- P4 at 3.02 bits is close to lossless on single layers (+2 to +4) and +15.7 on layers 1 to 4. There is no 3-bit scalar
+  control yet, so P4's advantage over a plain 3-bit quantiser is not established.
+- Binary with rank 0 is the worst regime, and layer 0 is by far the most fragile layer for binary (523.9). The last layer
+  is also somewhat worse (129.5) than layers 1 to 4 (105.7 to 120.5). This supports pinning the boundary layers (paper
+  7.6), most strongly for the first layer; for ternary the last layer is not more fragile (82.4).
+- Binary with a residual rank of 32 reaches the control's quality only at 6.35 bits per weight, because at width 128 the
+  residual costs far more than the signs.
+
+**Against the advisor's pre-registered prediction** (ternary on all middle layers adds more than 100 points; falsified if
+less than 20): 380.7 against 55.2 is +325.5, so the prediction held.
+
+**Not claimed.** One checkpoint, one corpus, post-hoc quantisation with no training and no calibration. Weights outside the
+four matrices per layer, and the embeddings and head (about 92% of parameters), were not touched, so none of this is a
+size saving. The ordering of regimes may change after quantisation-aware training, which is what the branches test.
+
+**Next, from this result.** Add a 3-bit scalar control and a 1.6-bit control (ternary is the natural one) so each regime is
+compared at its own rate; repeat on arm B; then re-measure the reported rows through `thme evaluate`.
+
+**Proposed parameters or formulas.** None yet.
+
+## 4. S0 repeated with matched controls, arms A and B, 28 November 2026
+
+**What was run.** Entry 3's procedure with three more controls, so every regime is compared at its own rate: a 3-bit scalar
+control (eight uniform levels, Gaussian-optimal step), a 3-level control at ternary's rate with no dead-zone rule, and the 2-bit
+control of entry 3. The script also counts the share of ternary and binary codes that change when the float32 weights are first
+rounded to float16 (the effect reported in arXiv 2610.07853). Arm A (baseline 55.18) and arm B (baseline 47.89, Pythia start),
+both at step 12,000. Reports: `docs/benchmarks/epiph-testbed/data/s0_arm_a.json` and `s0_arm_b.json`. Screening values in
+PyTorch float32, no training.
+
+**Result** (test perplexity with layers 1 to 4 quantised together; the per-layer values are in the report files):
+
+| Rate | Regime | Arm A, layers 1 to 4 | Arm B, layers 1 to 4 |
+| :--- | :--- | ---: | ---: |
+| 3.02 bits | scalar, 8 levels (control) | 87.2 | 75.9 |
+| 3.02 bits | phase P4 (4-bit angle, 2-bit radius) | **70.9** | **66.3** |
+| 2.02 bits | scalar, 4 levels (control) | 190.8 | 228.5 |
+| 2.02 bits | phase P2 (3-bit angle, 1-bit radius) | **179.6** | **204.0** |
+| 1.60 bits | scalar, 3 levels (control) | 423.9 | 519.9 |
+| 1.60 bits | ternary (dead zone 0.7 E\|w\|) | **380.7** | 527.8 |
+| 1.02 bits | binary, rank 0 | 797.7 | 1,637.8 |
+
+**Readings.**
+- **Phase P4 against the 3-bit scalar control.** Over layers 1 to 4 together, the extra perplexity above baseline is 15.7
+  (P4) against 32.0 (control) on arm A, and 18.4 against 28.0 on arm B. On single layers the two are close (arm A, layers 1 to 4 alone: 57.6 to
+  59.5 for P4, 59.1 to 62.6 for the control). So the advantage of the polar form shows when several layers are quantised at
+  once, which is the case that matters. This answers the open point in entry 3.
+- **Phase P2 against the 2-bit control** is better on layers 1 to 4 together on both arms (179.6 against 190.8, and 204.0
+  against 228.5), mixed on single layers.
+- **Ternary against its matched 3-level control.** Level on single layers; the dead-zone rule is 10% lower on arm A over layers
+  1 to 4 (380.7 against 423.9) and level on arm B (527.8 against 519.9). The dead zone is not a clear gain here.
+- **f16 cast.** Ternary codes that change after rounding to float16: 0.01% (1 weight in 10,000) for post-hoc ternary, none for
+  binary. The 0.8 to 1.8% reported for released ternary checkpoints is for trained latent weights exported through bf16; it
+  does not appear for our float32 weights rounded to float16. Reported numbers should still be taken on the CPU float32 path.
+- **Arm B is more fragile** than arm A under every regime (for example binary rank 0 on layers 1 to 4: 1,637.8 against 797.7),
+  and its layers 3 and 5 are the sensitive ones. It was trained on a different corpus, so this may be about the model's history
+  rather than its architecture.
+
+**Not claimed.** One checkpoint per arm, post-hoc, no training, matched controls only at three rates. The phase P4 layout is a
+candidate from the advisor's list, not a tuned design; the 3-bit scalar control is a plain uniform quantiser, not the best 3-bit
+method (for example one with learned scales). Embeddings and head are untouched.
+
+**Proposed parameters or formulas.** None yet. Candidate for a registered follow-up: phase layouts at 3 bits per weight with
+different angle/radius splits (4+2, 3+3, 5+1) against the 3-bit scalar and a learned-scale 3-bit control, repeated on arm B
+and after quantisation-aware branches.
+
+## 5. Layer damage adds up in log-perplexity, not in perplexity (from the S0 data), 28 November 2026
+
+**What was looked at.** The S0 reports of entries 3 and 4 (arms A and B, 11 regimes each). For each regime: the extra
+cross-entropy of quantising layers 1 to 4 together, ln(PPL_joint / PPL_base), against the sum of the extra cross-entropy of
+quantising each of those layers alone. No new run; this is a second reading of committed data (`s0_arm_a.json`, `s0_arm_b.json`).
+
+**Result.** Joint divided by sum, in log-perplexity: between 0.86 and 1.15 for all 22 combinations (arm A 0.86 to 1.12, arm B
+0.88 to 1.15; ternary 1.10 and 1.15, 3-bit scalar 1.11 and 1.04, phase P4 1.11 and 1.13). The same ratio in plain perplexity
+points runs from 1.22 to 4.44 (ternary 2.68 on arm A, 3.56 on arm B). The ratio is below 1 only for the three worst regimes
+(binary rank 0, phase P1, phase P3), where the loss is already near its ceiling and cannot add up further.
+
+**Reading.** On these two models the damage from quantising several layers is close to additive in cross-entropy (nats) and
+strongly super-additive in perplexity. The paper (section 12.2) reports that ternary effects are not additive, with a
+sum of +1,509 and a joint of +15,877,276 perplexity; that was stated in perplexity points and the models differ, so this does
+not contradict it, but it says the non-additivity may largely be the exponential in the unit of measurement.
+
+**Proposed** (not confirmed): the allocator's per-layer cost should be the extra cross-entropy in nats, with the joint cost
+about the sum of the layer costs, ΔCE(S) ≈ γ · Σ ΔCE(ℓ) over ℓ in S, γ ∈ [0.86, 1.15] here. Confirmation is registered before it
+runs: (1) the same ratio on arm D1 and its Llama control (new architecture), (2) on arm C (bytes), (3) on arm A at steps 4,000
+and 8,000, (4) with two or three layers quantised in different subsets, not only layers 1 to 4. It is confirmed if γ stays in
+[0.8, 1.25] in at least 90% of these cases, and falsified if it exceeds 1.5 for any regime that does not sit at the loss ceiling.
+
+**Not claimed.** One quantiser family, post-hoc, no training; the ceiling effect is argued, not measured; and four layers of a
+six-layer model is a narrow test of additivity.
