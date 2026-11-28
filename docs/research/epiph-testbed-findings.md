@@ -195,3 +195,35 @@ and 8,000, (4) with two or three layers quantised in different subsets, not only
 
 **Not claimed.** One quantiser family, post-hoc, no training; the ceiling effect is argued, not measured; and four layers of a
 six-layer model is a narrow test of additivity.
+
+## 6. S0 with paired block-bootstrap intervals, matched Lloyd-Max control and three checkpoints, 28 November 2026
+
+**What was run.** S0 again on arm A (steps 4,000, 8,000, 12,000) and arm B (step 12,000), with per-window losses saved, then
+`scripts/testbed_s0_stats.py` (moving-block bootstrap, blocks of 10 windows, 2,000 resamples, seed 1234). New controls: a
+Lloyd-Max 3-bit quantiser (8 levels per group of 1,024 weights, 3.125 bits) and the phase splits 3+3 and 5+1. Numbers are in
+nats of extra cross-entropy per token, layers 1 to 4 quantised together, 95% interval in brackets. Post-hoc, float32 PyTorch
+screening, not yet re-measured through `thme evaluate`.
+
+| Comparison (test minus control, negative = test better) | A step 4,000 | A step 8,000 | A step 12,000 | B step 12,000 |
+| :--- | :--- | :--- | :--- | :--- |
+| Phase P4 (3.02 bits) vs 3-bit scalar | -0.148 | -0.204 | -0.207 | -0.134 |
+| Phase P4 vs Lloyd-Max 3-bit | -0.014 [-0.019, -0.009] | -0.013 [-0.018, -0.009] | -0.001 [-0.008, +0.005] | +0.006 [+0.001, +0.012] |
+| Phase 3+3 vs P4 | +0.055 | +0.143 | +0.145 | n/a here |
+| Phase 5+1 vs P4 | +0.324 | +0.510 | +0.581 | n/a here |
+| Phase P2 (2.02 bits) vs 2-bit scalar | -0.101 | -0.028 | -0.060 | see data |
+| Ternary vs 3-level control | -0.088 | -0.136 | -0.108 | see data |
+
+**Reading.**
+1. P4 beats the plain 3-bit scalar everywhere, but against a non-uniform Lloyd-Max control at the same rate the edge is small
+   (0.013 to 0.014 nats at steps 4,000 and 8,000, gone at 12,000, reversed slightly on arm B). Phase as built is about as
+   good as a good non-uniform scalar at 3 bits; it is not clearly better.
+2. Of the 3-bit splits, 4+2 is best by a clear margin on every checkpoint; 5+1 is far worse (the 1-bit radius loses most).
+3. Ternary's dead-zone rule beats the matched 3-level control at all three arm A checkpoints.
+4. Additivity (entry 5) holds at the earlier checkpoints too: gamma for P4 is 1.03 (step 4,000), 1.04 (8,000), 1.11 (12,000);
+   ternary 1.09, 1.13, 1.10; only binary rank 8 at step 4,000 sits above 1.2 (1.24 [1.20, 1.28]). Items (1) and (3) of
+   entry 5's registered confirmation are partly met for arm A; D1, arm C and subset tests are still to run.
+
+**Proposed parameters or formulas.** Unchanged from entry 5. Phase 4+2 is the layout to carry forward; 3+3 and 5+1 are dropped.
+
+**Not claimed.** One training seed per arm; post-hoc only; the f16-cast code-flip counts are in the JSON but not summarised;
+the reported numbers are not yet re-measured through `thme evaluate` on CPU F32.
