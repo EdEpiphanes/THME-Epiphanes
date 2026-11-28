@@ -1,0 +1,101 @@
+{
+  "baseline": 63.92380798376325,
+  "rows": [
+    {
+      "regime": "phase_P4_a4_r2",
+      "k": 1,
+      "perplexity": 67.91335304721737,
+      "delta_nats": 0.06054079887617809
+    },
+    {
+      "regime": "phase_P4_a4_r2",
+      "k": 2,
+      "perplexity": 72.8019984641376,
+      "delta_nats": 0.13005153235870354
+    },
+    {
+      "regime": "phase_P4_a4_r2",
+      "k": 3,
+      "perplexity": 78.06914251783168,
+      "delta_nats": 0.19990300267012456
+    },
+    {
+      "regime": "phase_P4_a4_r2",
+      "k": 4,
+      "perplexity": 85.34667155913613,
+      "delta_nats": 0.28902957703274623
+    },
+    {
+      "regime": "scalar3_control",
+      "k": 1,
+      "perplexity": 69.16073592146651,
+      "delta_nats": 0.07874142771491772
+    },
+    {
+      "regime": "scalar3_control",
+      "k": 2,
+      "perplexity": 77.18433389175834,
+      "delta_nats": 0.18850463367703438
+    },
+    {
+      "regime": "scalar3_control",
+      "k": 3,
+      "perplexity": 84.87378603513027,
+      "delta_nats": 0.28347340890552886
+    },
+    {
+      "regime": "scalar3_control",
+      "k": 4,
+      "perplexity": 94.18198395870046,
+      "delta_nats": 0.3875370363011462
+    },
+    {
+      "regime": "lloyd3_control",
+      "k": 1,
+      "perplexity": 66.91340132885607,
+      "delta_nats": 0.04570739199241464
+    },
+    {
+      "regime": "lloyd3_control",
+      "k": 2,
+      "perplexity": 72.48830177289402,
+      "delta_nats": 0.1257333200872849
+    },
+    {
+      "regime": "lloyd3_control",
+      "k": 3,
+      "perplexity": 78.43097194564545,
+      "delta_nats": 0.20452702577402254
+    },
+    {
+      "regime": "lloyd3_control",
+      "k": 4,
+      "perplexity": 85.89818592203666,
+      "delta_nats": 0.29547083638341126
+    },
+    {
+      "regime": "ternary",
+      "k": 1,
+      "perplexity": 92.03478822282919,
+      "delta_nats": 0.36447476453405336
+    },
+    {
+      "regime": "ternary",
+      "k": 2,
+      "perplexity": 154.7672762035945,
+      "delta_nats": 0.8842306708775168
+    },
+    {
+      "regime": "ternary",
+      "k": 3,
+      "perplexity": 287.31322127588766,
+      "delta_nats": 1.5028811100886095
+    },
+    {
+      "regime": "ternary",
+      "k": 4,
+      "perplexity": 508.1711784316672,
+      "delta_nats": 2.0731264823374396
+    }
+  ]
+}

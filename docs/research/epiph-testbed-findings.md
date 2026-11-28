@@ -255,8 +255,7 @@ four passes. Post-hoc, float32, screening values.
    ternary dead-zone rule that beat its control on arm A loses to the 3-level control on both Llama-shaped models. Both rules
    are architecture-dependent here.
 3. **Additivity (entry 5) fails for the looped model:** gamma 1.57 to 2.31 for every regime, above the registered 1.5 limit,
-   while the Llama control stays at 1.08 to 1.25. Likely cause: the four loop passes reuse one set of weights, so their
-   quantisation errors are the same error repeated, not independent. This is a reading, not tested. Consequence: for looped
+   while the Llama control stays at 1.08 to 1.25. The explanation first offered here (the same error repeated in every pass) is NOT supported; see entry 8. Consequence: for looped
    layers the allocator should cost the shared layer once (quantise the shared weights, measure that), not sum per-pass costs.
 
 **Proposed.** Entry 5's additivity holds only for layers with independent weights; for a shared layer used n times, cost the
@@ -265,3 +264,28 @@ shared tensor as one unit. The registered confirmation for entry 5 is therefore 
 
 **Not claimed.** D2 (distilled) was stopped at step 5,000 after running 6x slower than D1 (GPU memory pressure suspected, not
 confirmed); its checkpoint is not evaluated. One seed; post-hoc only; D1 is quantised per exported copy, not as one tied tensor.
+
+## 8. Damage grows about linearly with the number of quantised passes; D1 is not special (correction to entry 7), 28 November 2026
+
+**What was run.** `scripts/testbed_s0_growth.py`: quantise layers 1..k for k = 1 to 4 (in D1 these are k loop passes of the one
+shared layer; in the Llama control they are k different layers), four regimes, extra cross-entropy in nats per token.
+Note: the exported D1 copies are equal, so quantising all four copies is the same as quantising the one shared tensor; entry
+7's caveat about "per exported copy" was wrong in effect.
+
+| Phase P4 (3.02 bits), nats per token | k=1 | k=2 | k=3 | k=4 |
+| :--- | :--- | :--- | :--- | :--- |
+| D1 (looped) | 0.061 | 0.130 | 0.200 | 0.289 |
+| Llama control | 0.038 | 0.081 | 0.145 | 0.249 |
+
+Lloyd-Max 3-bit: D1 0.046, 0.126, 0.205, 0.295; Llama 0.045, 0.093, 0.222, 0.330. Ternary: D1 0.36, 0.88, 1.50, 2.07; Llama
+0.37, 0.90, 1.67, 2.02.
+
+**Reading.** Damage grows roughly in proportion to k in both models (about 0.07 nats per pass for P4 in D1). At k=4, D1 is
+within 16% of the control for P4, and slightly better for Lloyd-Max 3-bit and ternary. So the D1 gamma of 1.57 to 2.3 in
+entry 7 came from the single-layer terms (a later pass quantised alone costs less than it adds inside the whole group), not
+from errors compounding. For a shared layer, a usable cost is about (number of passes) x (cost of one pass), measured on the
+shared tensor. Entry 5's registered additivity check is reported as: holds for the Llama control, and D1 shows linear growth
+in k; "gamma" computed from single layers is the wrong test for tied weights.
+
+**Proposed** (not confirmed): allocator cost of a tied layer used n times = n x (damage of quantising it in one pass); confirm
+on a second D1 seed or the branch checkpoints.
