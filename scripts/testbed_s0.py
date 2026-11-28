@@ -20,7 +20,7 @@ import math
 
 import numpy as np
 import torch
-from transformers import GPTNeoXForCausalLM
+from transformers import AutoModelForCausalLM
 
 GROUP = 1024  # weights per scale, as in the paper's row blocks
 
@@ -113,6 +113,16 @@ def lloyd(r, levels, iters=8):
     return c
 
 
+def lloyd_batched(r, levels, iters=8):
+    """lloyd() for every row of r at once (rows are groups)."""
+    c = torch.quantile(r, torch.linspace(0.1, 0.9, levels, device=r.device), dim=1).T.contiguous()
+    for _ in range(iters):
+        onehot = (r[:, :, None] - c[:, None, :]).abs().argmin(2)[:, :, None] == torch.arange(levels, device=r.device)
+        cnt = onehot.sum(1)
+        c = torch.where(cnt > 0, (onehot * r[:, :, None]).sum(1) / cnt.clamp(min=1), c)
+    return c
+
+
 def phase(w, angle_bits, radius_bits):
     """Adjacent weight pairs as (radius, angle). Angle on a uniform grid; radius is the group RMS when
     radius_bits is 0, else Lloyd-Max levels per group. Radius is rescaled so the group's second moment is kept."""
@@ -121,15 +131,13 @@ def phase(w, angle_bits, radius_bits):
     r, th = torch.sqrt(a * a + b * b), torch.atan2(b, a)
     k = 2 ** angle_bits
     th_q = (torch.round((th + math.pi) / (2 * math.pi) * k) % k) / k * 2 * math.pi - math.pi
-    r_q = torch.empty_like(r)
-    for i in range(r.shape[0]):
-        if radius_bits == 0:
-            r_q[i] = torch.sqrt((r[i] ** 2).mean())
-        else:
-            c = lloyd(r[i], 2 ** radius_bits)
-            r_q[i] = c[(r[i][:, None] - c[None]).abs().argmin(1)]
-            e = (r[i] ** 2).mean() / ((r_q[i] ** 2).mean() + 1e-20)
-            r_q[i] = r_q[i] * torch.sqrt(e)
+    if radius_bits == 0:
+        r_q = torch.sqrt((r ** 2).mean(1, keepdim=True)).expand_as(r)
+    else:
+        c = lloyd_batched(r, 2 ** radius_bits)
+        r_q = torch.gather(c, 1, (r[:, :, None] - c[:, None, :]).abs().argmin(2))
+        e = (r ** 2).mean(1, keepdim=True) / ((r_q ** 2).mean(1, keepdim=True) + 1e-20)
+        r_q = r_q * torch.sqrt(e)
     out = torch.empty_like(g)
     out[:, 0::2], out[:, 1::2] = r_q * torch.cos(th_q), r_q * torch.sin(th_q)
     return ungroup(out, n, w.shape), (angle_bits + radius_bits) / 2 + 16 / GROUP
@@ -165,6 +173,10 @@ REGIMES = {
     "phase_P6_a5_r1": lambda w: phase(w, 5, 1),
     "lloyd3_control": lambda w: lloyd3(w),
 }
+FAST_REGIMES = ("ternary", "binary_r8", "scalar2_control", "scalar3_control", "scalar_3level_control",
+                "phase_P2_a3_r1", "phase_P4_a4_r2", "lloyd3_control")
+LLAMA_WEIGHTS = ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj", "self_attn.o_proj",
+                 "mlp.gate_proj", "mlp.up_proj", "mlp.down_proj")
 LAYER_WEIGHTS = ("attention.query_key_value", "attention.dense", "mlp.dense_h_to_4h", "mlp.dense_4h_to_h")
 
 
@@ -174,26 +186,38 @@ def load_windows(path, context):
 
 
 @torch.no_grad()
-def perplexity(model, windows, device):
-    """Returns (perplexity, per-window summed negative log-likelihood in nats, per-window scored tokens)."""
-    total, count, per, cnt = 0.0, 0, [], []
-    for w in windows:
-        x = torch.from_numpy(w).to(device)[None]
+def perplexity(model, windows, device, batch=8):
+    """Returns (perplexity, per-window summed negative log-likelihood in nats, per-window scored tokens).
+    Equal-length windows go through the model `batch` at a time; the short last window goes alone."""
+    per, cnt = [], []
+    i = 0
+    while i < len(windows):
+        n = 1
+        while i + n < len(windows) and n < batch and len(windows[i + n]) == len(windows[i]):
+            n += 1
+        x = torch.from_numpy(np.stack(windows[i:i + n])).to(device)
         logits = model(x[:, :-1]).logits.float()
-        nll = torch.nn.functional.cross_entropy(logits[0], x[0, 1:], reduction="sum").item()
-        total += nll
-        count += x.shape[1] - 1
-        per.append(round(nll, 4))
-        cnt.append(x.shape[1] - 1)
-    return math.exp(total / count), per, cnt
+        nll = torch.nn.functional.cross_entropy(logits.transpose(1, 2), x[:, 1:], reduction="none").sum(1)
+        per += [round(v, 4) for v in nll.tolist()]
+        cnt += [x.shape[1] - 1] * n
+        i += n
+    return math.exp(sum(per) / sum(cnt)), per, cnt
+
+
+def layer_list(model):
+    return (model.gpt_neox if hasattr(model, "gpt_neox") else model.model).layers
+
+
+def weight_names(model):
+    return LAYER_WEIGHTS if hasattr(model, "gpt_neox") else LLAMA_WEIGHTS
 
 
 def quantise_layers(model, layers, regime):
     """Replace the layer weights in place; returns (original tensors, weight-count-weighted bits per weight)."""
     saved, bits_sum, n_sum, flip_sum = {}, 0.0, 0, 0.0
     for li in layers:
-        layer = model.gpt_neox.layers[li]
-        for name in LAYER_WEIGHTS:
+        layer = layer_list(model)[li]
+        for name in weight_names(model):
             mod = layer
             for part in name.split("."):
                 mod = getattr(mod, part)
@@ -209,7 +233,7 @@ def quantise_layers(model, layers, regime):
 
 def restore(model, saved):
     for (li, name), w in saved.items():
-        mod = model.gpt_neox.layers[li]
+        mod = layer_list(model)[li]
         for part in name.split("."):
             mod = getattr(mod, part)
         mod.weight.data = w
@@ -239,19 +263,21 @@ def main():
     ap.add_argument("--context", type=int, default=1024)
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--cpu", action="store_true")
+    ap.add_argument("--fast", action="store_true", help="only the regimes still in play after entry 6 of the findings")
     a = ap.parse_args()
     if a.selftest:
         return selftest()
     device = "cuda" if torch.cuda.is_available() and not a.cpu else "cpu"
-    model = GPTNeoXForCausalLM.from_pretrained(a.model, torch_dtype=torch.float32).to(device).eval()
+    model = AutoModelForCausalLM.from_pretrained(a.model, torch_dtype=torch.float32, attn_implementation="eager").to(device).eval()
     windows = load_windows(a.tokens, a.context)
     base, base_nll, window_tokens = perplexity(model, windows, device)
     print("baseline", round(base, 3), flush=True)
     n_layers = model.config.num_hidden_layers
     cases = [([li], f"layer{li}") for li in range(n_layers)] + [(list(range(1, n_layers - 1)), "middle_1_to_%d" % (n_layers - 2))]
     rows = []
+    regimes = list(FAST_REGIMES) if a.fast else list(REGIMES)
     for layers, label in cases:
-        for regime in REGIMES:
+        for regime in regimes:
             saved, bpw, flips = quantise_layers(model, layers, regime)
             ppl, nll_w, _ = perplexity(model, windows, device)
             restore(model, saved)

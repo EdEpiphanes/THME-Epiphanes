@@ -195,3 +195,97 @@ and 8,000, (4) with two or three layers quantised in different subsets, not only
 
 **Not claimed.** One quantiser family, post-hoc, no training; the ceiling effect is argued, not measured; and four layers of a
 six-layer model is a narrow test of additivity.
+
+## 6. S0 with paired block-bootstrap intervals, matched Lloyd-Max control and three checkpoints, 28 November 2026
+
+**What was run.** S0 again on arm A (steps 4,000, 8,000, 12,000) and arm B (step 12,000), with per-window losses saved, then
+`scripts/testbed_s0_stats.py` (moving-block bootstrap, blocks of 10 windows, 2,000 resamples, seed 1234). New controls: a
+Lloyd-Max 3-bit quantiser (8 levels per group of 1,024 weights, 3.125 bits) and the phase splits 3+3 and 5+1. Numbers are in
+nats of extra cross-entropy per token, layers 1 to 4 quantised together, 95% interval in brackets. Post-hoc, float32 PyTorch
+screening, not yet re-measured through `thme evaluate`.
+
+| Comparison (test minus control, negative = test better) | A step 4,000 | A step 8,000 | A step 12,000 | B step 12,000 |
+| :--- | :--- | :--- | :--- | :--- |
+| Phase P4 (3.02 bits) vs 3-bit scalar | -0.148 | -0.204 | -0.207 | -0.134 |
+| Phase P4 vs Lloyd-Max 3-bit | -0.014 [-0.019, -0.009] | -0.013 [-0.018, -0.009] | -0.001 [-0.008, +0.005] | +0.006 [+0.001, +0.012] |
+| Phase 3+3 vs P4 | +0.055 | +0.143 | +0.145 | n/a here |
+| Phase 5+1 vs P4 | +0.324 | +0.510 | +0.581 | n/a here |
+| Phase P2 (2.02 bits) vs 2-bit scalar | -0.101 | -0.028 | -0.060 | see data |
+| Ternary vs 3-level control | -0.088 | -0.136 | -0.108 | see data |
+
+**Reading.**
+1. P4 beats the plain 3-bit scalar everywhere, but against a non-uniform Lloyd-Max control at the same rate the edge is small
+   (0.013 to 0.014 nats at steps 4,000 and 8,000, gone at 12,000, reversed slightly on arm B). Phase as built is about as
+   good as a good non-uniform scalar at 3 bits; it is not clearly better.
+2. Of the 3-bit splits, 4+2 is best by a clear margin on every checkpoint; 5+1 is far worse (the 1-bit radius loses most).
+3. Ternary's dead-zone rule beats the matched 3-level control at all three arm A checkpoints.
+4. Additivity (entry 5) holds at the earlier checkpoints too: gamma for P4 is 1.03 (step 4,000), 1.04 (8,000), 1.11 (12,000);
+   ternary 1.09, 1.13, 1.10; only binary rank 8 at step 4,000 sits above 1.2 (1.24 [1.20, 1.28]). Items (1) and (3) of
+   entry 5's registered confirmation are partly met for arm A; D1, arm C and subset tests are still to run.
+
+**Proposed parameters or formulas.** Unchanged from entry 5. Phase 4+2 is the layout to carry forward; 3+3 and 5+1 are dropped.
+
+**Not claimed.** One training seed per arm; post-hoc only; the f16-cast code-flip counts are in the JSON but not summarised;
+the reported numbers are not yet re-measured through `thme evaluate` on CPU F32.
+
+## 7. S0 on D1 (looped) and its Llama control, 28 November 2026
+
+**What was run.** The fast S0 set (8 regimes) on `arm-loop/step-012000` (D1: 1 prelude + 1 shared layer x4 + 1 coda, exported
+as 6 layers with equal copies) and `arm-llama/step-012000` (same shape, 6 unique layers), same WikiText-2 test windows, same
+bootstrap as entry 6. In D1 "layer 1 alone" quantises one loop pass only; "layers 1 to 4" quantises the shared layer in all
+four passes. Post-hoc, float32, screening values.
+
+| | Llama control | D1 |
+| :--- | :--- | :--- |
+| Unquantised test perplexity | 53.48 | 63.92 (+20%) |
+| Layers 1-4 phase P4 (3.02 bits) | 68.6 (x1.28) | 85.3 (x1.33) |
+| Layers 1-4 3-bit scalar | 80.9 | 94.2 |
+| Layers 1-4 Lloyd-Max 3-bit | 74.4 | 85.9 |
+| Layers 1-4 ternary | 402.9 (x7.5) | 508.2 (x7.9) |
+| Layers 1-4 binary rank 8 | 504.6 (x9.4) | 934.3 (x14.6) |
+| P4 minus Lloyd-Max, nats/token [95%] | -0.081 [-0.090, -0.071] | -0.006 [-0.015, +0.002] |
+| Ternary minus 3-level control | +0.058 (worse) | +0.207 (worse) |
+| gamma (joint/sum), P4 | 1.14 [1.12, 1.17] | 1.57 [1.54, 1.61] |
+| gamma, ternary | 1.11 | 2.21 |
+
+**Reading.**
+1. The shared layer costs 20% perplexity at full precision (matches the 0.143 nat validation gap). Under 3-bit phase it is
+   no more fragile than the control in ratio terms (1.33 vs 1.28); under binary it is clearly more fragile.
+2. On the SwiGLU Llama shape phase P4 beats the Lloyd-Max control (-0.081 nats), unlike the GPT-NeoX arms (entry 6). The
+   ternary dead-zone rule that beat its control on arm A loses to the 3-level control on both Llama-shaped models. Both rules
+   are architecture-dependent here.
+3. **Additivity (entry 5) fails for the looped model:** gamma 1.57 to 2.31 for every regime, above the registered 1.5 limit,
+   while the Llama control stays at 1.08 to 1.25. The explanation first offered here (the same error repeated in every pass) is NOT supported; see entry 8. Consequence: for looped
+   layers the allocator should cost the shared layer once (quantise the shared weights, measure that), not sum per-pass costs.
+
+**Proposed.** Entry 5's additivity holds only for layers with independent weights; for a shared layer used n times, cost the
+shared tensor as one unit. The registered confirmation for entry 5 is therefore partly met (arm A steps, Llama control within
+[0.8,1.25] except P2 at 1.25 to 1.29) and partly falsified for tied weights.
+
+**Not claimed.** D2 (distilled) was stopped at step 5,000 after running 6x slower than D1 (GPU memory pressure suspected, not
+confirmed); its checkpoint is not evaluated. One seed; post-hoc only; D1 is quantised per exported copy, not as one tied tensor.
+
+## 8. Damage grows about linearly with the number of quantised passes; D1 is not special (correction to entry 7), 28 November 2026
+
+**What was run.** `scripts/testbed_s0_growth.py`: quantise layers 1..k for k = 1 to 4 (in D1 these are k loop passes of the one
+shared layer; in the Llama control they are k different layers), four regimes, extra cross-entropy in nats per token.
+Note: the exported D1 copies are equal, so quantising all four copies is the same as quantising the one shared tensor; entry
+7's caveat about "per exported copy" was wrong in effect.
+
+| Phase P4 (3.02 bits), nats per token | k=1 | k=2 | k=3 | k=4 |
+| :--- | :--- | :--- | :--- | :--- |
+| D1 (looped) | 0.061 | 0.130 | 0.200 | 0.289 |
+| Llama control | 0.038 | 0.081 | 0.145 | 0.249 |
+
+Lloyd-Max 3-bit: D1 0.046, 0.126, 0.205, 0.295; Llama 0.045, 0.093, 0.222, 0.330. Ternary: D1 0.36, 0.88, 1.50, 2.07; Llama
+0.37, 0.90, 1.67, 2.02.
+
+**Reading.** Damage grows roughly in proportion to k in both models (about 0.07 nats per pass for P4 in D1). At k=4, D1 is
+within 16% of the control for P4, and slightly better for Lloyd-Max 3-bit and ternary. So the D1 gamma of 1.57 to 2.3 in
+entry 7 came from the single-layer terms (a later pass quantised alone costs less than it adds inside the whole group), not
+from errors compounding. For a shared layer, a usable cost is about (number of passes) x (cost of one pass), measured on the
+shared tensor. Entry 5's registered additivity check is reported as: holds for the Llama control, and D1 shows linear growth
+in k; "gamma" computed from single layers is the wrong test for tied weights.
+
+**Proposed** (not confirmed): allocator cost of a tied layer used n times = n x (damage of quantising it in one pass); confirm
+on a second D1 seed or the branch checkpoints.
