@@ -330,6 +330,7 @@ pub(crate) fn variant_json(
         "windows": report.windows,
         "elapsed_secs": report.elapsed_secs,
         "tokens_per_sec": report.tokens_per_sec,
+        "window_nll": report.window_nll,
         "delta_ppl": delta,
         "accepted": accepted,
     })

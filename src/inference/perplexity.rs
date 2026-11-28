@@ -32,6 +32,10 @@ pub struct PerplexityReport {
     pub context_len: usize,
     pub elapsed_secs: f64,
     pub tokens_per_sec: f64,
+    /// Per window: (summed negative log-likelihood in nats, scored tokens). Lets a script form the
+    /// paired per-block losses the quality gate needs. Absent in reports cached before this field.
+    #[serde(default)]
+    pub window_nll: Vec<(f64, usize)>,
 }
 
 impl PerplexityReport {
@@ -95,9 +99,12 @@ pub fn evaluate_perplexity(
     let started = Instant::now();
     let mut total_nll = 0.0f64;
     let mut scored = 0usize;
+    let mut window_nll = Vec::with_capacity(windows.len());
     for (index, window) in windows.iter().enumerate() {
         let nll = model.forward_nll(window)?;
-        total_nll += nll.iter().map(|&v| f64::from(v)).sum::<f64>();
+        let window_sum = nll.iter().map(|&v| f64::from(v)).sum::<f64>();
+        window_nll.push((window_sum, nll.len()));
+        total_nll += window_sum;
         scored += nll.len();
         progress(index + 1, windows.len(), (total_nll / scored as f64).exp());
     }
@@ -116,6 +123,7 @@ pub fn evaluate_perplexity(
         context_len: config.context_len,
         elapsed_secs,
         tokens_per_sec: scored as f64 / elapsed_secs.max(1e-9),
+        window_nll,
     })
 }
 
@@ -139,6 +147,11 @@ mod tests {
         assert_eq!(calls, 4);
         assert_eq!(report.scored_tokens, 46);
         assert!((report.perplexity - 40.0).abs() < 1e-3);
+        // One (sum, count) per window; the counts and sums reproduce the pooled result.
+        let counts: Vec<usize> = report.window_nll.iter().map(|w| w.1).collect();
+        assert_eq!(counts, vec![15, 15, 15, 1]);
+        let pooled = report.window_nll.iter().map(|w| w.0).sum::<f64>() / 46.0;
+        assert!((pooled - report.cross_entropy_nats).abs() < 1e-9);
         assert!(!report.to_metrics(EvaluationCorpus::WikiText2).is_simulated);
     }
 
