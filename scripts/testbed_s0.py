@@ -20,7 +20,7 @@ import math
 
 import numpy as np
 import torch
-from transformers import GPTNeoXForCausalLM
+from transformers import AutoModelForCausalLM
 
 GROUP = 1024  # weights per scale, as in the paper's row blocks
 
@@ -165,6 +165,10 @@ REGIMES = {
     "phase_P6_a5_r1": lambda w: phase(w, 5, 1),
     "lloyd3_control": lambda w: lloyd3(w),
 }
+FAST_REGIMES = ("ternary", "binary_r8", "scalar2_control", "scalar3_control", "scalar_3level_control",
+                "phase_P2_a3_r1", "phase_P4_a4_r2", "lloyd3_control")
+LLAMA_WEIGHTS = ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj", "self_attn.o_proj",
+                 "mlp.gate_proj", "mlp.up_proj", "mlp.down_proj")
 LAYER_WEIGHTS = ("attention.query_key_value", "attention.dense", "mlp.dense_h_to_4h", "mlp.dense_4h_to_h")
 
 
@@ -188,12 +192,20 @@ def perplexity(model, windows, device):
     return math.exp(total / count), per, cnt
 
 
+def layer_list(model):
+    return (model.gpt_neox if hasattr(model, "gpt_neox") else model.model).layers
+
+
+def weight_names(model):
+    return LAYER_WEIGHTS if hasattr(model, "gpt_neox") else LLAMA_WEIGHTS
+
+
 def quantise_layers(model, layers, regime):
     """Replace the layer weights in place; returns (original tensors, weight-count-weighted bits per weight)."""
     saved, bits_sum, n_sum, flip_sum = {}, 0.0, 0, 0.0
     for li in layers:
-        layer = model.gpt_neox.layers[li]
-        for name in LAYER_WEIGHTS:
+        layer = layer_list(model)[li]
+        for name in weight_names(model):
             mod = layer
             for part in name.split("."):
                 mod = getattr(mod, part)
@@ -209,7 +221,7 @@ def quantise_layers(model, layers, regime):
 
 def restore(model, saved):
     for (li, name), w in saved.items():
-        mod = model.gpt_neox.layers[li]
+        mod = layer_list(model)[li]
         for part in name.split("."):
             mod = getattr(mod, part)
         mod.weight.data = w
@@ -239,19 +251,21 @@ def main():
     ap.add_argument("--context", type=int, default=1024)
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--cpu", action="store_true")
+    ap.add_argument("--fast", action="store_true", help="only the regimes still in play after entry 6 of the findings")
     a = ap.parse_args()
     if a.selftest:
         return selftest()
     device = "cuda" if torch.cuda.is_available() and not a.cpu else "cpu"
-    model = GPTNeoXForCausalLM.from_pretrained(a.model, torch_dtype=torch.float32).to(device).eval()
+    model = AutoModelForCausalLM.from_pretrained(a.model, torch_dtype=torch.float32, attn_implementation="eager").to(device).eval()
     windows = load_windows(a.tokens, a.context)
     base, base_nll, window_tokens = perplexity(model, windows, device)
     print("baseline", round(base, 3), flush=True)
     n_layers = model.config.num_hidden_layers
     cases = [([li], f"layer{li}") for li in range(n_layers)] + [(list(range(1, n_layers - 1)), "middle_1_to_%d" % (n_layers - 2))]
     rows = []
+    regimes = list(FAST_REGIMES) if a.fast else list(REGIMES)
     for layers, label in cases:
-        for regime in REGIMES:
+        for regime in regimes:
             saved, bpw, flips = quantise_layers(model, layers, regime)
             ppl, nll_w, _ = perplexity(model, windows, device)
             restore(model, saved)
