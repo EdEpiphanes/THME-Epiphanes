@@ -135,7 +135,7 @@ rounded to float16 (the effect reported in arXiv 2610.07853). Arm A (baseline 55
 both at step 12,000. Reports: `docs/benchmarks/epiph-testbed/data/s0_arm_a.json` and `s0_arm_b.json`. Screening values in
 PyTorch float32, no training.
 
-**Result** (test perplexity; layers 1 to 4 quantised together; single-layer column is the mean of layers 1 to 4 alone):
+**Result** (test perplexity with layers 1 to 4 quantised together; the per-layer values are in the report files):
 
 | Rate | Regime | Arm A, layers 1 to 4 | Arm B, layers 1 to 4 |
 | :--- | :--- | ---: | ---: |
@@ -149,8 +149,8 @@ PyTorch float32, no training.
 
 **Readings.**
 - **Phase P4 against the 3-bit scalar control.** Over layers 1 to 4 together, the extra perplexity above baseline is 15.7
-  (P4) against 32.0 (control) on arm A, and 18.4 against 28.0 on arm B. On single layers the two are close (arm A: 57.6 to
-  59.5 for P4, 57.4 to 62.6 for the control). So the advantage of the polar form shows when several layers are quantised at
+  (P4) against 32.0 (control) on arm A, and 18.4 against 28.0 on arm B. On single layers the two are close (arm A, layers 1 to 4 alone: 57.6 to
+  59.5 for P4, 59.1 to 62.6 for the control). So the advantage of the polar form shows when several layers are quantised at
   once, which is the case that matters. This answers the open point in entry 3.
 - **Phase P2 against the 2-bit control** is better on layers 1 to 4 together on both arms (179.6 against 190.8, and 204.0
   against 228.5), mixed on single layers.
