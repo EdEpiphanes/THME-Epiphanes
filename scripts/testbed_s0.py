@@ -178,18 +178,23 @@ def load_windows(path, context):
 
 
 @torch.no_grad()
-def perplexity(model, windows, device):
-    """Returns (perplexity, per-window summed negative log-likelihood in nats, per-window scored tokens)."""
-    total, count, per, cnt = 0.0, 0, [], []
-    for w in windows:
-        x = torch.from_numpy(w).to(device)[None]
+@torch.no_grad()
+def perplexity(model, windows, device, batch=8):
+    """Returns (perplexity, per-window summed negative log-likelihood in nats, per-window scored tokens).
+    Equal-length windows go through the model `batch` at a time; the short last window goes alone."""
+    per, cnt = [], []
+    i = 0
+    while i < len(windows):
+        n = 1
+        while i + n < len(windows) and n < batch and len(windows[i + n]) == len(windows[i]):
+            n += 1
+        x = torch.from_numpy(np.stack(windows[i:i + n])).to(device)
         logits = model(x[:, :-1]).logits.float()
-        nll = torch.nn.functional.cross_entropy(logits[0], x[0, 1:], reduction="sum").item()
-        total += nll
-        count += x.shape[1] - 1
-        per.append(round(nll, 4))
-        cnt.append(x.shape[1] - 1)
-    return math.exp(total / count), per, cnt
+        nll = torch.nn.functional.cross_entropy(logits.transpose(1, 2), x[:, 1:], reduction="none").sum(1)
+        per += [round(v, 4) for v in nll.tolist()]
+        cnt += [x.shape[1] - 1] * n
+        i += n
+    return math.exp(sum(per) / sum(cnt)), per, cnt
 
 
 def layer_list(model):
