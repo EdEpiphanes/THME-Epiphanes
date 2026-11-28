@@ -46,6 +46,7 @@ def main():
     ap.add_argument("--json", required=True)
     ap.add_argument("--device", default="gpu")
     ap.add_argument("--note", default="")
+    ap.add_argument("--context", type=int, default=1024, help="evaluation window in tokens (2048 for the byte arm)")
     a = ap.parse_args()
 
     steps = sorted(d for d in os.listdir(a.run_dir) if re.fullmatch(r"step-\d{6}", d))
@@ -63,11 +64,12 @@ def main():
         run(cmd)
         report = os.path.join(a.run_dir, f"eval-{d}.json")
         run([a.thme, "evaluate", epiph, "--recipe", recipe, "--tokens", a.tokens, "--device", a.device,
-             "--report", report])
+             "--eval-context", str(a.context), "--report", report])
         r = json.load(open(report, encoding="utf-8"))
         base = next(v for v in r["evaluation"]["variants"] if v["id"] == "baseline")
         rows.append({"checkpoint": d, "step": int(d.split("-")[1]), "epiph_sha256": sha256(epiph),
                      "epiph_bytes": os.path.getsize(epiph), "wikitext2_test_perplexity": base["perplexity"],
+                     "bits_per_token": base["bits_per_token"],
                      "wikitext103_validation_loss_nats": val.get(d), "device_used": r["host"].get("used"),
                      "backend": r.get("host", {}).get("backend")})
         print(d, base["perplexity"], flush=True)
@@ -75,7 +77,7 @@ def main():
     out = {"report": "testbed_checkpoint_series", "arm": train["arm"], "training_report": "report.json of the run",
            "training": {k: train[k] for k in ("seed", "steps", "batch", "seq", "lr", "warmup", "weight_decay",
                                               "parameters", "data_sha256", "val_sha256", "device")},
-           "evaluation": {"tokens_sha256": sha256(a.tokens), "context_len": 1024,
+           "evaluation": {"tokens_sha256": sha256(a.tokens), "context_len": a.context,
                           "note": "perplexity of the unmodified checkpoint from thme evaluate; GPU path uses f16 weights"},
            "conditions": a.note, "checkpoints": rows, "provenance": {"thme": os.path.basename(a.thme)}}
     os.makedirs(os.path.dirname(a.json), exist_ok=True)

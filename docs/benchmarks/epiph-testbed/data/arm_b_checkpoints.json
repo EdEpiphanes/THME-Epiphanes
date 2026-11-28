@@ -1,0 +1,159 @@
+{
+  "report": "testbed_checkpoint_series",
+  "arm": "pythia",
+  "training_report": "report.json of the run",
+  "training": {
+    "seed": 1234,
+    "steps": 12000,
+    "batch": 32,
+    "seq": 1024,
+    "lr": 0.001,
+    "warmup": 200,
+    "weight_decay": 0.1,
+    "parameters": 14067712,
+    "data_sha256": "c81a6c24aed6b03340a727ad45ce851df039ce7ac6cdba1527b120b63de70327",
+    "val_sha256": "da9c9b5957d104d61781db738881d5cdef8c00bec594ca5fb63d76f6adb09be9",
+    "device": "cuda"
+  },
+  "evaluation": {
+    "tokens_sha256": "973595d9c7c580360a39eedde7297ec050f362a521940f7527eca4a00ea85278",
+    "context_len": 1024,
+    "note": "perplexity of the unmodified checkpoint from thme evaluate; GPU path uses f16 weights"
+  },
+  "conditions": "GPU exclusive; arms trained with a light game open earlier, closed before measuring",
+  "checkpoints": [
+    {
+      "checkpoint": "step-000000",
+      "step": 0,
+      "epiph_sha256": "ae9a9a3cfffee55dce7452495cb05c0093050ca269adf843cfa23ea88ab8b9d5",
+      "epiph_bytes": 58548601,
+      "wikitext2_test_perplexity": 114.28801047594769,
+      "wikitext103_validation_loss_nats": 4.734904294013977,
+      "device_used": null,
+      "backend": "THME reference forward pass on the GPU (CUDA pure PTX, f16 weights)"
+    },
+    {
+      "checkpoint": "step-001000",
+      "step": 1000,
+      "epiph_sha256": "efbb69be4cd05bfe66da9ccb3673ef7937ce0b0d0270ef75da8cd4eb028fd252",
+      "epiph_bytes": 58568505,
+      "wikitext2_test_perplexity": 72.9753214537525,
+      "wikitext103_validation_loss_nats": 4.051757624149323,
+      "device_used": null,
+      "backend": "THME reference forward pass on the GPU (CUDA pure PTX, f16 weights)"
+    },
+    {
+      "checkpoint": "step-002000",
+      "step": 2000,
+      "epiph_sha256": "9a43e3abf73042418990651d08062790dcb5e88977cfd1be2a2e01ffe0344892",
+      "epiph_bytes": 58568377,
+      "wikitext2_test_perplexity": 66.69302601721647,
+      "wikitext103_validation_loss_nats": 3.9637476634979247,
+      "device_used": null,
+      "backend": "THME reference forward pass on the GPU (CUDA pure PTX, f16 weights)"
+    },
+    {
+      "checkpoint": "step-003000",
+      "step": 3000,
+      "epiph_sha256": "6ce2198b0a8857db49390043905ae8366f9b2c3f2b61b3a42a8af85c0a67dfa3",
+      "epiph_bytes": 58568441,
+      "wikitext2_test_perplexity": 62.23725031087707,
+      "wikitext103_validation_loss_nats": 3.8790447449684144,
+      "device_used": null,
+      "backend": "THME reference forward pass on the GPU (CUDA pure PTX, f16 weights)"
+    },
+    {
+      "checkpoint": "step-004000",
+      "step": 4000,
+      "epiph_sha256": "7734f7d94766a22f58dfb46bcea1dc622e7829f3c2674799668c6b222739015a",
+      "epiph_bytes": 58568633,
+      "wikitext2_test_perplexity": 58.61214372344273,
+      "wikitext103_validation_loss_nats": 3.8331019949913023,
+      "device_used": null,
+      "backend": "THME reference forward pass on the GPU (CUDA pure PTX, f16 weights)"
+    },
+    {
+      "checkpoint": "step-005000",
+      "step": 5000,
+      "epiph_sha256": "93d282576f3b85754117487391d0435b2a3ffbeed131d9c41108c05bbf9f089a",
+      "epiph_bytes": 58568569,
+      "wikitext2_test_perplexity": 56.64166619735532,
+      "wikitext103_validation_loss_nats": 3.7750104212760927,
+      "device_used": null,
+      "backend": "THME reference forward pass on the GPU (CUDA pure PTX, f16 weights)"
+    },
+    {
+      "checkpoint": "step-006000",
+      "step": 6000,
+      "epiph_sha256": "4437782c262a775692e3c686947a96e7410ac53c43707dfc810d5149e64e98d7",
+      "epiph_bytes": 58568761,
+      "wikitext2_test_perplexity": 53.72932002783663,
+      "wikitext103_validation_loss_nats": 3.745636396408081,
+      "device_used": null,
+      "backend": "THME reference forward pass on the GPU (CUDA pure PTX, f16 weights)"
+    },
+    {
+      "checkpoint": "step-007000",
+      "step": 7000,
+      "epiph_sha256": "3eb10b84c02d67bc451cc67bf187f57c50004798b788f1f0e25327ec435f1b0a",
+      "epiph_bytes": 58569017,
+      "wikitext2_test_perplexity": 52.32680882255892,
+      "wikitext103_validation_loss_nats": 3.6986585450172424,
+      "device_used": null,
+      "backend": "THME reference forward pass on the GPU (CUDA pure PTX, f16 weights)"
+    },
+    {
+      "checkpoint": "step-008000",
+      "step": 8000,
+      "epiph_sha256": "5b75e9863d5eb59a2c2586a76da6584703f248ceaedf446c55c0217468ab7d5f",
+      "epiph_bytes": 58568889,
+      "wikitext2_test_perplexity": 50.77252853191785,
+      "wikitext103_validation_loss_nats": 3.6695084714889528,
+      "device_used": null,
+      "backend": "THME reference forward pass on the GPU (CUDA pure PTX, f16 weights)"
+    },
+    {
+      "checkpoint": "step-009000",
+      "step": 9000,
+      "epiph_sha256": "4121165cb02b4eb1357f2b676c48fd95459e3b3661c32d8adeb4e964445b452a",
+      "epiph_bytes": 58568825,
+      "wikitext2_test_perplexity": 49.932099472587915,
+      "wikitext103_validation_loss_nats": 3.6371040463447573,
+      "device_used": null,
+      "backend": "THME reference forward pass on the GPU (CUDA pure PTX, f16 weights)"
+    },
+    {
+      "checkpoint": "step-010000",
+      "step": 10000,
+      "epiph_sha256": "5ece3cdc1ac95a28875da0db094aa8a7fa6cedda0d47b575ecb844346001a348",
+      "epiph_bytes": 58568889,
+      "wikitext2_test_perplexity": 48.57910145526754,
+      "wikitext103_validation_loss_nats": 3.613388869762421,
+      "device_used": null,
+      "backend": "THME reference forward pass on the GPU (CUDA pure PTX, f16 weights)"
+    },
+    {
+      "checkpoint": "step-011000",
+      "step": 11000,
+      "epiph_sha256": "c2a91be682c554a73688e5a8a1d895aebde9a1b3711c06e01ef28a7066e74dd7",
+      "epiph_bytes": 58569209,
+      "wikitext2_test_perplexity": 48.154840188171065,
+      "wikitext103_validation_loss_nats": 3.5989442086219787,
+      "device_used": null,
+      "backend": "THME reference forward pass on the GPU (CUDA pure PTX, f16 weights)"
+    },
+    {
+      "checkpoint": "step-012000",
+      "step": 12000,
+      "epiph_sha256": "a531d81b4efdc45163e4b2c34e44eefb166edeec2862d77ff5b63e3c0179f14b",
+      "epiph_bytes": 58568889,
+      "wikitext2_test_perplexity": 47.8884777508641,
+      "wikitext103_validation_loss_nats": 3.5932849168777468,
+      "device_used": null,
+      "backend": "THME reference forward pass on the GPU (CUDA pure PTX, f16 weights)"
+    }
+  ],
+  "provenance": {
+    "thme": "thme.exe"
+  }
+}
