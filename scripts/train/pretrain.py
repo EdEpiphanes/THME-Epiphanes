@@ -19,16 +19,19 @@ steps and a report JSON records every setting, the data hash and the losses, so 
 """
 
 import argparse
+import contextlib
 import copy
 import hashlib
 import json
 import math
 import os
 import shutil
+import sys
 import time
 
 import numpy as np
 import torch
+import torch.nn.utils.parametrize
 from transformers import AutoModelForCausalLM, GPTNeoXConfig, GPTNeoXForCausalLM, LlamaConfig, LlamaForCausalLM
 
 ARMS = ("scratch", "pythia", "byte", "llama", "loop")
@@ -109,6 +112,74 @@ def build_model(arm, model_dir, seed, loop_shared_layers=1, loop_count=4):
     return GPTNeoXForCausalLM(cfg)
 
 
+class FakeQuant(torch.nn.Module):
+    """Parametrization: forward weight = w + blend * (quantise(w) - w), the second term detached (straight-through)."""
+
+    def __init__(self, regime):
+        super().__init__()
+        self.regime, self.blend = regime, 1.0
+
+    def forward(self, w):
+        if self.blend == 0.0:
+            return w
+        with torch.no_grad():
+            q = _regimes()[self.regime](w.detach().float())[0].to(w.dtype)
+        return w + self.blend * (q - w).detach()
+
+
+def _regimes():
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    import testbed_s0
+    return testbed_s0.REGIMES
+
+
+FQ_WEIGHTS = ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj", "self_attn.o_proj",
+              "mlp.gate_proj", "mlp.up_proj", "mlp.down_proj")
+
+
+def apply_fake_quant(model, regime, positions):
+    """Put FakeQuant on the linear weights of the given layer positions; shared layer objects are wrapped once."""
+    if regime not in _regimes():
+        raise ValueError(f"unknown regime {regime}")
+    done, fqs = set(), []
+    for pos in positions:
+        layer = model.model.layers[pos]
+        if id(layer) in done:
+            continue
+        done.add(id(layer))
+        for name in FQ_WEIGHTS:
+            mod = layer
+            for part in name.split("."):
+                mod = getattr(mod, part)
+            fq = FakeQuant(regime)
+            torch.nn.utils.parametrize.register_parametrization(mod, "weight", fq)
+            fqs.append(fq)
+    return fqs
+
+
+def export_quantised(model):
+    """A plain Llama with the fake-quantised weights written in place of the latent ones (the model is left untouched)."""
+    fqs = [fq for m in model.modules() if torch.nn.utils.parametrize.is_parametrized(m, "weight")
+           for fq in m.parametrizations.weight]
+    old = [fq.blend for fq in fqs]
+    for fq in fqs:
+        fq.blend = 1.0
+    try:
+        sd = {}
+        for k, v in model.state_dict().items():
+            if ".parametrizations.weight." in k:
+                prefix = k.split(".parametrizations.weight.")[0]
+                sd[prefix + ".weight"] = model.get_submodule(prefix).weight.detach().clone()
+            else:
+                sd[k] = v.detach().clone()
+    finally:
+        for fq, b in zip(fqs, old):
+            fq.blend = b
+    out = LlamaForCausalLM(copy.deepcopy(model.config))
+    out.load_state_dict(sd)
+    return out
+
+
 def load_ids(path, arm):
     return np.memmap(path, dtype=np.uint8 if arm == "byte" else np.uint16, mode="r")
 
@@ -146,6 +217,8 @@ def evaluate(model, ids, seq, windows, device):
 
 def save(model, out, step, model_dir, arm):
     d = os.path.join(out, f"step-{step:06d}")
+    if any(torch.nn.utils.parametrize.is_parametrized(m, "weight") for m in model.modules()):
+        model = export_quantised(model)
     if arm == "loop":
         # Materialize an untied Llama checkpoint with cloned tensors so safetensors never sees shared storage.
         rng_state = torch.get_rng_state()
@@ -187,7 +260,17 @@ def run(args):
     if not (0.0 <= distill_weight <= 1.0):
         raise ValueError("distill_weight must be in [0, 1]")
 
-    model = build_model(args.arm, args.model_dir, args.seed, loop_shared_layers, loop_count).to(device)
+    model = build_model(args.arm, args.model_dir, args.seed, loop_shared_layers, loop_count)
+    init_from = getattr(args, "init_from", None)
+    if init_from:
+        model.load_state_dict(LlamaForCausalLM.from_pretrained(init_from, torch_dtype=torch.float32).state_dict())
+    model = model.to(device)
+    fq_regime = getattr(args, "fq_regime", None)
+    fqs = []
+    if fq_regime:
+        fq_layers = [int(v) for v in str(getattr(args, "fq_layers", "1")).split(",")]
+        fqs = apply_fake_quant(model, fq_regime, fq_layers)
+    fq_blend_steps = getattr(args, "fq_blend_steps", 500)
     model.train()
     params = unique_params(model)
 
@@ -233,12 +316,16 @@ def run(args):
             print(f"step {step} val_loss {vl:.4f}", flush=True)
         if step == args.steps:
             break
+        for fq in fqs:
+            fq.blend = min(1.0, (step + 1) / max(1, fq_blend_steps))
         for g in opt.param_groups:
             g["lr"] = lr_at(step, args.steps, args.lr, args.warmup)
         x, y = batch(ids, rng, args.batch, args.seq, device)
         micro = args.micro_batch or args.batch
         opt.zero_grad(set_to_none=True)
         loss_sum = 0.0
+        cache = torch.nn.utils.parametrize.cached() if fqs else contextlib.nullcontext()
+        cache.__enter__()  # quantise each weight once per step, not once per loop pass and micro-batch
         for i in range(0, args.batch, micro):  # gradient accumulation: same batch, less memory
             x_mb, y_mb = x[i:i + micro], y[i:i + micro]
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=device == "cuda"):
@@ -253,6 +340,7 @@ def run(args):
                 part = ce_part
             (part / (args.batch * args.seq)).backward()
             loss_sum += part.item()
+        cache.__exit__(None, None, None)
         loss = torch.tensor(loss_sum / (args.batch * args.seq))
         torch.nn.utils.clip_grad_norm_(params, 1.0)
         opt.step()
@@ -294,6 +382,10 @@ def main():
     ap.add_argument("--distill-from", default=None, help="HF teacher checkpoint folder for KL distillation")
     ap.add_argument("--distill-weight", type=float, default=0.5)
     ap.add_argument("--distill-temp", type=float, default=1.0)
+    ap.add_argument("--init-from", default=None, help="HF Llama folder to start from (arms llama and loop)")
+    ap.add_argument("--fq-regime", default=None, help="fake-quantise (straight-through) with a testbed_s0 regime")
+    ap.add_argument("--fq-layers", default="1", help="comma list of layer positions to fake-quantise")
+    ap.add_argument("--fq-blend-steps", type=int, default=500)
     run(ap.parse_args())
 
 

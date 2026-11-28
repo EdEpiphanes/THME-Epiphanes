@@ -215,6 +215,37 @@ class PretrainTests(unittest.TestCase):
             x = torch.tensor([[10, 11, 12, 13]])
             self.assertEqual(int(m(x).logits[0, -1].argmax()), 14)
 
+    def test_fake_quant_forward_uses_quantised_weights_and_gradients_reach_latents(self):
+        model = pretrain.build_model("llama", tiny_llama_dir(tempfile.mkdtemp(), 64), seed=3)
+        regimes = pretrain._regimes()
+        orig = model.model.layers[1].mlp.up_proj.weight.detach().clone()
+        fqs = pretrain.apply_fake_quant(model, "ternary", [1])
+        self.assertEqual(len(fqs), 7)
+        x = torch.tensor([[1, 2, 3, 4, 5, 6]])
+        model(x).logits.sum().backward()
+        latent = model.model.layers[1].mlp.up_proj.parametrizations.weight.original
+        self.assertIsNotNone(latent.grad)
+        self.assertTrue(torch.equal(model.model.layers[1].mlp.up_proj.weight, regimes["ternary"](orig)[0]))
+        exported = pretrain.export_quantised(model)
+        self.assertTrue(torch.equal(exported.model.layers[1].mlp.up_proj.weight, regimes["ternary"](orig)[0]))
+        self.assertTrue(torch.equal(exported.model.layers[2].mlp.up_proj.weight, model.model.layers[2].mlp.up_proj.weight))
+
+    def test_branch_run_starts_from_a_checkpoint_and_exports_quantised_weights(self):
+        with tempfile.TemporaryDirectory() as root:
+            model_dir = tiny_llama_dir(root, vocab=64)
+            data = os.path.join(root, "d.u16")
+            np.random.default_rng(0).integers(0, 64, 4000, dtype=np.uint16).tofile(data)
+            base = pretrain.run(llama_args(root, "loop", model_dir, data, data, steps=4, ckpt_every=4, out_name="base"))
+            init = os.path.join(root, "base", base["checkpoints"][-1]["dir"])
+            rep = pretrain.run(llama_args(root, "loop", model_dir, data, data, steps=4, ckpt_every=4, out_name="branch",
+                                          init_from=init, fq_regime="phase_P4_a4_r2", fq_layers="1", fq_blend_steps=2))
+            self.assertTrue(math.isfinite(rep["checkpoints"][-1]["val_loss"]))
+            out = LlamaForCausalLM.from_pretrained(os.path.join(root, "branch", rep["checkpoints"][-1]["dir"]))
+            w = out.model.layers[1].mlp.up_proj.weight
+            self.assertTrue(torch.equal(w, out.model.layers[3].mlp.up_proj.weight))  # tied copies stay equal
+            import gc
+            gc.collect()  # release memory maps so Windows can delete the temporary folder
+
 
 if __name__ == "__main__":
     unittest.main()

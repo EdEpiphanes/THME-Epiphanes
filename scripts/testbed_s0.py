@@ -113,6 +113,16 @@ def lloyd(r, levels, iters=8):
     return c
 
 
+def lloyd_batched(r, levels, iters=8):
+    """lloyd() for every row of r at once (rows are groups)."""
+    c = torch.quantile(r, torch.linspace(0.1, 0.9, levels, device=r.device), dim=1).T.contiguous()
+    for _ in range(iters):
+        onehot = (r[:, :, None] - c[:, None, :]).abs().argmin(2)[:, :, None] == torch.arange(levels, device=r.device)
+        cnt = onehot.sum(1)
+        c = torch.where(cnt > 0, (onehot * r[:, :, None]).sum(1) / cnt.clamp(min=1), c)
+    return c
+
+
 def phase(w, angle_bits, radius_bits):
     """Adjacent weight pairs as (radius, angle). Angle on a uniform grid; radius is the group RMS when
     radius_bits is 0, else Lloyd-Max levels per group. Radius is rescaled so the group's second moment is kept."""
@@ -121,15 +131,13 @@ def phase(w, angle_bits, radius_bits):
     r, th = torch.sqrt(a * a + b * b), torch.atan2(b, a)
     k = 2 ** angle_bits
     th_q = (torch.round((th + math.pi) / (2 * math.pi) * k) % k) / k * 2 * math.pi - math.pi
-    r_q = torch.empty_like(r)
-    for i in range(r.shape[0]):
-        if radius_bits == 0:
-            r_q[i] = torch.sqrt((r[i] ** 2).mean())
-        else:
-            c = lloyd(r[i], 2 ** radius_bits)
-            r_q[i] = c[(r[i][:, None] - c[None]).abs().argmin(1)]
-            e = (r[i] ** 2).mean() / ((r_q[i] ** 2).mean() + 1e-20)
-            r_q[i] = r_q[i] * torch.sqrt(e)
+    if radius_bits == 0:
+        r_q = torch.sqrt((r ** 2).mean(1, keepdim=True)).expand_as(r)
+    else:
+        c = lloyd_batched(r, 2 ** radius_bits)
+        r_q = torch.gather(c, 1, (r[:, :, None] - c[:, None, :]).abs().argmin(2))
+        e = (r ** 2).mean(1, keepdim=True) / ((r_q ** 2).mean(1, keepdim=True) + 1e-20)
+        r_q = r_q * torch.sqrt(e)
     out = torch.empty_like(g)
     out[:, 0::2], out[:, 1::2] = r_q * torch.cos(th_q), r_q * torch.sin(th_q)
     return ungroup(out, n, w.shape), (angle_bits + radius_bits) / 2 + 16 / GROUP
