@@ -170,3 +170,28 @@ method (for example one with learned scales). Embeddings and head are untouched.
 **Proposed parameters or formulas.** None yet. Candidate for a registered follow-up: phase layouts at 3 bits per weight with
 different angle/radius splits (4+2, 3+3, 5+1) against the 3-bit scalar and a learned-scale 3-bit control, repeated on arm B
 and after quantisation-aware branches.
+
+## 5. Layer damage adds up in log-perplexity, not in perplexity (from the S0 data), 28 November 2026
+
+**What was looked at.** The S0 reports of entries 3 and 4 (arms A and B, 11 regimes each). For each regime: the extra
+cross-entropy of quantising layers 1 to 4 together, ln(PPL_joint / PPL_base), against the sum of the extra cross-entropy of
+quantising each of those layers alone. No new run; this is a second reading of committed data (`s0_arm_a.json`, `s0_arm_b.json`).
+
+**Result.** Joint divided by sum, in log-perplexity: between 0.86 and 1.15 for all 22 combinations (arm A 0.86 to 1.12, arm B
+0.88 to 1.15; ternary 1.10 and 1.15, 3-bit scalar 1.11 and 1.04, phase P4 1.11 and 1.13). The same ratio in plain perplexity
+points runs from 1.22 to 4.44 (ternary 2.68 on arm A, 3.56 on arm B). The ratio is below 1 only for the three worst regimes
+(binary rank 0, phase P1, phase P3), where the loss is already near its ceiling and cannot add up further.
+
+**Reading.** On these two models the damage from quantising several layers is close to additive in cross-entropy (nats) and
+strongly super-additive in perplexity. The paper (section 12.2) reports that ternary effects are not additive, with a
+sum of +1,509 and a joint of +15,877,276 perplexity; that was stated in perplexity points and the models differ, so this does
+not contradict it, but it says the non-additivity may largely be the exponential in the unit of measurement.
+
+**Proposed** (not confirmed): the allocator's per-layer cost should be the extra cross-entropy in nats, with the joint cost
+about the sum of the layer costs, ΔCE(S) ≈ γ · Σ ΔCE(ℓ) over ℓ in S, γ ∈ [0.86, 1.15] here. Confirmation is registered before it
+runs: (1) the same ratio on arm D1 and its Llama control (new architecture), (2) on arm C (bytes), (3) on arm A at steps 4,000
+and 8,000, (4) with two or three layers quantised in different subsets, not only layers 1 to 4. It is confirmed if γ stays in
+[0.8, 1.25] in at least 90% of these cases, and falsified if it exceeds 1.5 for any regime that does not sit at the loss ceiling.
+
+**Not claimed.** One quantiser family, post-hoc, no training; the ceiling effect is argued, not measured; and four layers of a
+six-layer model is a narrow test of additivity.
