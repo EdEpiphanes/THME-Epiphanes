@@ -101,14 +101,16 @@ re-measured with `thme evaluate` on exported folders (CPU F32).
 - Damage adds up across layers. Ternary costs 26 to 35 points per middle layer alone, but 325 points when layers 1 to 4
   are all ternary. This is the same non-additivity the paper reports for the allocator (section 12.2) seen on a trained
   model.
-- At about 2 bits per weight, phase P2 is level with the 2-bit scalar control: slightly better on three single layers
-  and on layers 1 to 4 (179.6 against 190.8), slightly worse on two. Not a decisive win.
+- At about 2 bits per weight, phase P2 is level with the 2-bit scalar control: better on layers 0 and 1, level on
+  layer 2, worse on layers 3, 4 and 5 (by 1.5 to 3.7), and better on layers 1 to 4 together (179.6 against 190.8).
+  Not a decisive win.
 - Radius precision matters more than angle precision at the same rate: P3 (4-bit angle, group radius) is far worse than
   P2 (3-bit angle, 1-bit radius) at 2.02 bits. A single radius per 1,024 weights throws away the magnitude information.
 - P4 at 3.02 bits is close to lossless on single layers (+2 to +4) and +15.7 on layers 1 to 4. There is no 3-bit scalar
   control yet, so P4's advantage over a plain 3-bit quantiser is not established.
-- Binary with rank 0 is the worst regime, and layer 0 is the most fragile layer for binary (523.9). This supports pinning
-  the boundary layers (paper 7.6), but only for the first layer; layer 5 is not more fragile than layers 1 to 4 here.
+- Binary with rank 0 is the worst regime, and layer 0 is by far the most fragile layer for binary (523.9). The last layer
+  is also somewhat worse (129.5) than layers 1 to 4 (105.7 to 120.5). This supports pinning the boundary layers (paper
+  7.6), most strongly for the first layer; for ternary the last layer is not more fragile (82.4).
 - Binary with a residual rank of 32 reaches the control's quality only at 6.35 bits per weight, because at width 128 the
   residual costs far more than the signs.
 
