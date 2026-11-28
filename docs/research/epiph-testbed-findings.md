@@ -227,3 +227,41 @@ screening, not yet re-measured through `thme evaluate`.
 
 **Not claimed.** One training seed per arm; post-hoc only; the f16-cast code-flip counts are in the JSON but not summarised;
 the reported numbers are not yet re-measured through `thme evaluate` on CPU F32.
+
+## 7. S0 on D1 (looped) and its Llama control, 28 November 2026
+
+**What was run.** The fast S0 set (8 regimes) on `arm-loop/step-012000` (D1: 1 prelude + 1 shared layer x4 + 1 coda, exported
+as 6 layers with equal copies) and `arm-llama/step-012000` (same shape, 6 unique layers), same WikiText-2 test windows, same
+bootstrap as entry 6. In D1 "layer 1 alone" quantises one loop pass only; "layers 1 to 4" quantises the shared layer in all
+four passes. Post-hoc, float32, screening values.
+
+| | Llama control | D1 |
+| :--- | :--- | :--- |
+| Unquantised test perplexity | 53.48 | 63.92 (+20%) |
+| Layers 1-4 phase P4 (3.02 bits) | 68.6 (x1.28) | 85.3 (x1.33) |
+| Layers 1-4 3-bit scalar | 80.9 | 94.2 |
+| Layers 1-4 Lloyd-Max 3-bit | 74.4 | 85.9 |
+| Layers 1-4 ternary | 402.9 (x7.5) | 508.2 (x7.9) |
+| Layers 1-4 binary rank 8 | 504.6 (x9.4) | 934.3 (x14.6) |
+| P4 minus Lloyd-Max, nats/token [95%] | -0.081 [-0.090, -0.071] | -0.006 [-0.015, +0.002] |
+| Ternary minus 3-level control | +0.058 (worse) | +0.207 (worse) |
+| gamma (joint/sum), P4 | 1.14 [1.12, 1.17] | 1.57 [1.54, 1.61] |
+| gamma, ternary | 1.11 | 2.21 |
+
+**Reading.**
+1. The shared layer costs 20% perplexity at full precision (matches the 0.143 nat validation gap). Under 3-bit phase it is
+   no more fragile than the control in ratio terms (1.33 vs 1.28); under binary it is clearly more fragile.
+2. On the SwiGLU Llama shape phase P4 beats the Lloyd-Max control (-0.081 nats), unlike the GPT-NeoX arms (entry 6). The
+   ternary dead-zone rule that beat its control on arm A loses to the 3-level control on both Llama-shaped models. Both rules
+   are architecture-dependent here.
+3. **Additivity (entry 5) fails for the looped model:** gamma 1.57 to 2.31 for every regime, above the registered 1.5 limit,
+   while the Llama control stays at 1.08 to 1.25. Likely cause: the four loop passes reuse one set of weights, so their
+   quantisation errors are the same error repeated, not independent. This is a reading, not tested. Consequence: for looped
+   layers the allocator should cost the shared layer once (quantise the shared weights, measure that), not sum per-pass costs.
+
+**Proposed.** Entry 5's additivity holds only for layers with independent weights; for a shared layer used n times, cost the
+shared tensor as one unit. The registered confirmation for entry 5 is therefore partly met (arm A steps, Llama control within
+[0.8,1.25] except P2 at 1.25 to 1.29) and partly falsified for tied weights.
+
+**Not claimed.** D2 (distilled) was stopped at step 5,000 after running 6x slower than D1 (GPU memory pressure suspected, not
+confirmed); its checkpoint is not evaluated. One seed; post-hoc only; D1 is quantised per exported copy, not as one tied tensor.
