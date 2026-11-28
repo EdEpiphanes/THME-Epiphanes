@@ -65,3 +65,35 @@ here. Nothing in this note is a measured result of ours.
 The Meta publications list itself was not read; the date range is whatever the search engine returned; most 2026 entries
 are Snippet. Next pass: fetch and read the Snippet papers marked above in order of use (items 2 and 4 first), and ask the
 owner for the exact Meta paper links to read if specific ones are wanted.
+
+## 5. Dr. Zero read in full (owner-supplied, arXiv 2601.07055)
+
+**Status: Read** (abstract page and HTML version; a summary of part of the body is marked unverified in the notes below).
+Dr. Zero: Self-Evolving Search Agents without Training Data. Yue, Upasani, Yang, Ge, Nie, Mao, Liu, Wang; work done at Meta
+Superintelligence Labs and UIUC; submitted 11 January 2026, v2 21 July 2026; COLM 2026. Code: `github.com/facebookresearch/drzero`
+(licence not stated on the pages read).
+
+**Method (authors').** A proposer and a solver start from the same base model. The proposer writes questions from seed
+Wikipedia documents; the solver answers them with a search tool. The proposer is rewarded for questions of middling
+difficulty: with n solver attempts and k correct, reward (n-k)/(n-1) when 0<k<n, so questions the solver always or never
+gets right earn nothing. The proposer trains with HRPO (advantage normalised within groups of equal hop count, strictly
+on-policy; 6 rollouts per question against 20 for their GRPO setting, and the global baseline was unstable). The solver
+trains with GRPO on the proposed questions with an exact-match reward. They alternate for 3 iterations. There is no teacher
+model and no distillation in the paper.
+
+**Results (authors', exact match, average over seven QA sets).** 3B: 0.326 against supervised Search-R1 at 0.327. 7B: 0.372
+against 0.384. Data-free baselines at 3B: SQLM 0.233, R-Zero 0.256. The 7B model stops improving after iteration 2 (0.366,
+0.372, 0.360). Only Qwen2.5-3B and 7B were used. The abstract's "matches or surpasses" is level at 3B and slightly lower at
+7B.
+
+**Limits stated by the authors.** Short-form verifiable QA only; the reward does not remove wrong or ambiguous synthetic
+answers; the 7B run shows instability. Quantisation, ternary or binary weights, shared looped layers and small models are
+not addressed at all.
+
+**How it could pair with a teacher (our reading, not the paper's; untested).** The pass-rate reward needs only the
+student's own attempts, so it can pick which of the teacher's lessons to keep. A teacher could write the questions
+(proposer role) while the student's measured pass rate selects the ones worth training on; the student's loss could add a
+distillation term on the teacher's answers. For a looped student, grouping the baseline by loop count mirrors HRPO's
+grouping by hop count. This is the shape of stage 2 in the testbed plan, now with a selection rule. A 14M model cannot
+search or reason in the paper's sense, so the first version would be on next-token tasks (cloze and short completion
+questions with an exact answer), not search. Registered scenario before any run; test-only and local for hosted-teacher text.
