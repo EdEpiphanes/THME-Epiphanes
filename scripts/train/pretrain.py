@@ -3,10 +3,12 @@
 """
 Small-model pretraining for the .epiph testbed (THME-3110, docs/research/epiph-testbed-plan.md).
 
-Three arms share Pythia-14M's shape (6 layers, width 128, 4 heads, GPT-NeoX blocks):
-  scratch  random initialisation, Pythia tokenizer ids
+Five arms are supported:
+  scratch  random initialisation, Pythia-14M GPT-NeoX shape, Pythia tokenizer ids
   pythia   initialised from the published Pythia-14M weights, Pythia tokenizer ids
-  byte     random initialisation, vocabulary 256 (raw UTF-8 bytes, no tokenizer)
+  byte     random initialisation, Pythia-14M GPT-NeoX shape, vocabulary 256 (raw UTF-8 bytes)
+  llama    random initialisation, 6-layer Llama shape (width 128, 4 heads, SwiGLU 352), Pythia tokenizer ids
+  loop     Llama shape with weight-shared middle layer(s) (prelude + shared*k + coda), exported untied
 
 Data is a flat binary file of ids (uint16 for the token arms, uint8 for bytes). Windows are drawn at random
 offsets from a seeded generator. A checkpoint (Hugging Face safetensors folder) is written every --ckpt-every
@@ -17,6 +19,7 @@ steps and a report JSON records every setting, the data hash and the losses, so 
 """
 
 import argparse
+import copy
 import hashlib
 import json
 import math
@@ -26,9 +29,9 @@ import time
 
 import numpy as np
 import torch
-from transformers import GPTNeoXConfig, GPTNeoXForCausalLM
+from transformers import AutoModelForCausalLM, GPTNeoXConfig, GPTNeoXForCausalLM, LlamaConfig, LlamaForCausalLM
 
-ARMS = ("scratch", "pythia", "byte")
+ARMS = ("scratch", "pythia", "byte", "llama", "loop")
 
 
 def sha256(path):
@@ -39,10 +42,66 @@ def sha256(path):
     return h.hexdigest()
 
 
-def build_model(arm, model_dir, seed):
+def loop_schedule(shared_layers=1, loop_count=4):
+    if shared_layers < 1 or loop_count < 1:
+        raise ValueError("loop_shared_layers and loop_count must be >= 1")
+    return [0] + list(range(1, 1 + shared_layers)) * loop_count + [1 + shared_layers]
+
+
+def llama_config(model_dir, num_layers=None):
+    with open(os.path.join(model_dir, "config.json"), encoding="utf-8") as f:
+        raw = json.load(f)
+    if raw.get("model_type") == "llama":
+        cfg = LlamaConfig.from_pretrained(model_dir)
+        if num_layers is not None and cfg.num_hidden_layers != num_layers:
+            cfg.num_hidden_layers = num_layers
+            if getattr(cfg, "layer_types", None) is not None:
+                cfg.layer_types = ["full_attention"] * num_layers
+        cfg.tie_word_embeddings = False
+        cfg.attention_bias = False
+        cfg.mlp_bias = False
+        return cfg
+    return LlamaConfig(
+        vocab_size=raw["vocab_size"],
+        hidden_size=128,
+        num_hidden_layers=num_layers if num_layers is not None else 6,
+        num_attention_heads=4,
+        num_key_value_heads=4,
+        intermediate_size=352,
+        max_position_embeddings=2048,
+        rms_norm_eps=1e-5,
+        rope_theta=10000.0,
+        tie_word_embeddings=False,
+        attention_bias=False,
+        mlp_bias=False,
+    )
+
+
+def unique_params(model):
+    seen, params = set(), []
+    for p in model.parameters():
+        if id(p) not in seen:
+            seen.add(id(p))
+            params.append(p)
+    return params
+
+
+def build_model(arm, model_dir, seed, loop_shared_layers=1, loop_count=4):
     torch.manual_seed(seed)
     if arm == "pythia":
         return GPTNeoXForCausalLM.from_pretrained(model_dir, torch_dtype=torch.float32)
+    if arm == "llama":
+        return LlamaForCausalLM(llama_config(model_dir))
+    if arm == "loop":
+        sched = loop_schedule(loop_shared_layers, loop_count)
+        cfg = llama_config(model_dir, num_layers=len(sched))
+        cfg.use_cache = False
+        model = LlamaForCausalLM(cfg)
+        layers = model.model.layers
+        unique = [layers[0]] + [layers[1 + j] for j in range(loop_shared_layers)] + [layers[-1]]
+        for pos, u in enumerate(sched):
+            layers[pos] = unique[u]
+        return model
     cfg = GPTNeoXConfig.from_pretrained(model_dir)
     if arm == "byte":
         cfg.vocab_size = 256
@@ -87,7 +146,19 @@ def evaluate(model, ids, seq, windows, device):
 
 def save(model, out, step, model_dir, arm):
     d = os.path.join(out, f"step-{step:06d}")
-    model.save_pretrained(d, safe_serialization=True)
+    if arm == "loop":
+        # Materialize an untied Llama checkpoint with cloned tensors so safetensors never sees shared storage.
+        rng_state = torch.get_rng_state()
+        try:
+            export_cfg = copy.deepcopy(model.config)
+            export_cfg.use_cache = True
+            export_model = LlamaForCausalLM(export_cfg)
+        finally:
+            torch.set_rng_state(rng_state)
+        export_model.load_state_dict({k: v.detach().cpu().clone() for k, v in model.state_dict().items()})
+        export_model.save_pretrained(d, safe_serialization=True)
+    else:
+        model.save_pretrained(d, safe_serialization=True)
     if arm != "byte":  # token arms keep the Pythia tokenizer next to the weights
         for f in ("tokenizer.json", "tokenizer_config.json", "special_tokens_map.json"):
             src = os.path.join(model_dir, f)
@@ -96,22 +167,62 @@ def save(model, out, step, model_dir, arm):
     return d
 
 
+def distill_loss(ce_sum, student_logits, teacher_logits, weight, temp):
+    s_log_p = torch.nn.functional.log_softmax(student_logits / temp, dim=-1)
+    t_log_p = torch.nn.functional.log_softmax(teacher_logits / temp, dim=-1)
+    kl_sum = torch.nn.functional.kl_div(s_log_p, t_log_p, reduction="sum", log_target=True) * (temp * temp)
+    return (1.0 - weight) * ce_sum + weight * kl_sum
+
+
 def run(args):
     device = "cuda" if torch.cuda.is_available() and not args.cpu else "cpu"
     os.makedirs(args.out, exist_ok=True)
-    model = build_model(args.arm, args.model_dir, args.seed).to(device)
+    loop_shared_layers = getattr(args, "loop_shared_layers", 1)
+    loop_count = getattr(args, "loop_count", 4)
+    distill_from = getattr(args, "distill_from", None)
+    distill_weight = getattr(args, "distill_weight", 0.5)
+    distill_temp = getattr(args, "distill_temp", 1.0)
+    if distill_temp <= 0:
+        raise ValueError("distill_temp must be positive")
+    if not (0.0 <= distill_weight <= 1.0):
+        raise ValueError("distill_weight must be in [0, 1]")
+
+    model = build_model(args.arm, args.model_dir, args.seed, loop_shared_layers, loop_count).to(device)
     model.train()
+    params = unique_params(model)
+
+    teacher = None
+    if distill_from:
+        teacher = AutoModelForCausalLM.from_pretrained(distill_from, torch_dtype=torch.float32).to(device)
+        teacher.eval()
+        teacher.config.use_cache = False
+        for p in teacher.parameters():
+            p.requires_grad_(False)
+        if teacher.config.vocab_size != model.config.vocab_size:
+            raise ValueError(
+                f"teacher vocab_size ({teacher.config.vocab_size}) != student ({model.config.vocab_size})"
+            )
+
     ids = load_ids(args.data, args.arm)
     val = load_ids(args.val, args.arm)
-    opt = torch.optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.95), weight_decay=args.weight_decay)
+    opt = torch.optim.AdamW(params, lr=args.lr, betas=(0.9, 0.95), weight_decay=args.weight_decay)
     rng = np.random.default_rng(args.seed)
+    n_params = sum(p.numel() for p in params)
     report = {
         "report": "pretrain", "arm": args.arm, "seed": args.seed, "steps": args.steps, "batch": args.batch,
         "seq": args.seq, "lr": args.lr, "warmup": args.warmup, "weight_decay": args.weight_decay,
-        "parameters": sum(p.numel() for p in model.parameters()), "device": device,
+        "parameters": n_params, "device": device,
         "data_sha256": sha256(args.data), "val_sha256": sha256(args.val), "data_ids": int(len(ids)),
         "checkpoints": [], "train_loss_every_100": [],
     }
+    if args.arm == "loop":
+        report["unique_parameters"] = n_params
+        report["layer_schedule"] = loop_schedule(loop_shared_layers, loop_count)
+    if teacher is not None:
+        report["distill_from"] = os.path.basename(os.path.normpath(distill_from))
+        report["distill_weight"] = distill_weight
+        report["distill_temp"] = distill_temp
+
     t0, run_loss = time.time(), 0.0
     for step in range(args.steps + 1):
         if step % args.ckpt_every == 0 or step == args.steps:
@@ -129,16 +240,28 @@ def run(args):
         opt.zero_grad(set_to_none=True)
         loss_sum = 0.0
         for i in range(0, args.batch, micro):  # gradient accumulation: same batch, less memory
+            x_mb, y_mb = x[i:i + micro], y[i:i + micro]
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=device == "cuda"):
-                logits = model(x[i:i + micro]).logits
-            part = torch.nn.functional.cross_entropy(logits.float().reshape(-1, logits.shape[-1]),
-                                                     y[i:i + micro].reshape(-1), reduction="sum")
+                logits = model(x_mb).logits
+            ce_part = torch.nn.functional.cross_entropy(logits.float().reshape(-1, logits.shape[-1]),
+                                                        y_mb.reshape(-1), reduction="sum")
+            if teacher is not None:
+                with torch.no_grad():
+                    t_logits = teacher(x_mb).logits.float()
+                part = distill_loss(ce_part, logits.float(), t_logits, distill_weight, distill_temp)
+            else:
+                part = ce_part
             (part / (args.batch * args.seq)).backward()
             loss_sum += part.item()
         loss = torch.tensor(loss_sum / (args.batch * args.seq))
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        torch.nn.utils.clip_grad_norm_(params, 1.0)
         opt.step()
-        run_loss += loss.item()
+        loss_val = loss.item()
+        if teacher is not None:
+            if step == 0:
+                report["first_train_loss"] = loss_val
+            report["last_train_loss"] = loss_val
+        run_loss += loss_val
         if (step + 1) % 100 == 0:
             report["train_loss_every_100"].append(round(run_loss / 100, 5))
             run_loss = 0.0
@@ -166,6 +289,11 @@ def main():
     ap.add_argument("--val-windows", type=int, default=100)
     ap.add_argument("--seed", type=int, default=1234)
     ap.add_argument("--cpu", action="store_true")
+    ap.add_argument("--loop-shared-layers", type=int, default=1)
+    ap.add_argument("--loop-count", type=int, default=4)
+    ap.add_argument("--distill-from", default=None, help="HF teacher checkpoint folder for KL distillation")
+    ap.add_argument("--distill-weight", type=float, default=0.5)
+    ap.add_argument("--distill-temp", type=float, default=1.0)
     run(ap.parse_args())
 
 

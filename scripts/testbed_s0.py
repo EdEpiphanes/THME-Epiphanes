@@ -67,6 +67,40 @@ def scalar2(w):
     return ungroup(q, n, w.shape), 2 + 16 / GROUP
 
 
+def scalar3(w):
+    """Control: 3 bits per weight, eight uniform levels, Gaussian-optimal step (0.586 standard deviations)."""
+    g, n = groups(w)
+    d = 0.586 * g.std(1, keepdim=True).clamp(min=1e-12)
+    q = torch.clamp(torch.round(g / d + 0.5) - 0.5, -3.5, 3.5) * d
+    return ungroup(q, n, w.shape), 3 + 16 / GROUP
+
+
+def scalar_3level(w):
+    """Control at ternary's rate with no dead-zone rule: three uniform levels, Gaussian-optimal step (1.224 sd)."""
+    g, n = groups(w)
+    d = 1.224 * g.std(1, keepdim=True).clamp(min=1e-12)
+    return ungroup(torch.clamp(torch.round(g / d), -1, 1) * d, n, w.shape), math.log2(3) + 16 / GROUP
+
+
+def codes(w, regime):
+    """Integer code of each weight for the regimes that have one; used to count codes that change in the f16 cast."""
+    g, _ = groups(w)
+    if regime == "ternary":
+        return torch.sign(g) * (g.abs() > 0.7 * g.abs().mean(1, keepdim=True))
+    if regime == "binary_r0":
+        return torch.sign(g)
+    return None
+
+
+def f16_flip_fraction(w, regime):
+    """Share of weights whose code changes when the float32 weight is first rounded to float16 (paper 2610.07853)."""
+    a = codes(w, regime)
+    if a is None:
+        return None
+    b = codes(w.half().float(), regime)
+    return (a != b).float().mean().item()
+
+
 def lloyd(r, levels, iters=8):
     """1-D Lloyd-Max levels for the magnitudes of one group."""
     c = torch.quantile(r, torch.linspace(0.1, 0.9, levels, device=r.device))
@@ -107,6 +141,8 @@ REGIMES = {
     "binary_r8": lambda w: binary(w, 8),
     "binary_r32": lambda w: binary(w, 32),
     "scalar2_control": lambda w: scalar2(w),
+    "scalar3_control": lambda w: scalar3(w),
+    "scalar_3level_control": lambda w: scalar_3level(w),
     "phase_P1_a3_r0": lambda w: phase(w, 3, 0),
     "phase_P2_a3_r1": lambda w: phase(w, 3, 1),
     "phase_P3_a4_r0": lambda w: phase(w, 4, 0),
@@ -133,7 +169,7 @@ def perplexity(model, windows, device):
 
 def quantise_layers(model, layers, regime):
     """Replace the layer weights in place; returns (original tensors, weight-count-weighted bits per weight)."""
-    saved, bits_sum, n_sum = {}, 0.0, 0
+    saved, bits_sum, n_sum, flip_sum = {}, 0.0, 0, 0.0
     for li in layers:
         layer = model.gpt_neox.layers[li]
         for name in LAYER_WEIGHTS:
@@ -142,10 +178,12 @@ def quantise_layers(model, layers, regime):
                 mod = getattr(mod, part)
             saved[(li, name)] = mod.weight.data.clone()
             q, bits = REGIMES[regime](mod.weight.data.float())
+            fl = f16_flip_fraction(mod.weight.data.float(), regime)
+            flip_sum = None if fl is None or flip_sum is None else flip_sum + fl * q.numel()
             mod.weight.data = q.to(mod.weight.dtype)
             bits_sum += bits * q.numel()
             n_sum += q.numel()
-    return saved, bits_sum / max(1, n_sum)
+    return saved, bits_sum / max(1, n_sum), None if flip_sum is None else flip_sum / max(1, n_sum)
 
 
 def restore(model, saved):
@@ -193,10 +231,11 @@ def main():
     rows = []
     for layers, label in cases:
         for regime in REGIMES:
-            saved, bpw = quantise_layers(model, layers, regime)
+            saved, bpw, flips = quantise_layers(model, layers, regime)
             ppl = perplexity(model, windows, device)
             restore(model, saved)
             rows.append({"layers": layers, "scope": label, "regime": regime, "bits_per_weight": round(bpw, 3),
+                         "f16_code_flip_fraction": flips,
                          "perplexity": ppl, "delta_ppl": ppl - base})
             print(label, regime, round(bpw, 2), round(ppl, 2), flush=True)
     out = {"report": "s0_fake_quantise", "model": a.model.replace("\\", "/").split("/")[-2:], "device": device,
