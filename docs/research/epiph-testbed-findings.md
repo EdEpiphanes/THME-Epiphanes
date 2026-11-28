@@ -125,3 +125,48 @@ size saving. The ordering of regimes may change after quantisation-aware trainin
 compared at its own rate; repeat on arm B; then re-measure the reported rows through `thme evaluate`.
 
 **Proposed parameters or formulas.** None yet.
+
+## 4. S0 repeated with matched controls, arms A and B, 28 November 2026
+
+**What was run.** Entry 3's procedure with three more controls, so every regime is compared at its own rate: a 3-bit scalar
+control (eight uniform levels, Gaussian-optimal step), a 3-level control at ternary's rate with no dead-zone rule, and the 2-bit
+control of entry 3. The script also counts the share of ternary and binary codes that change when the float32 weights are first
+rounded to float16 (the effect reported in arXiv 2610.07853). Arm A (baseline 55.18) and arm B (baseline 47.89, Pythia start),
+both at step 12,000. Reports: `docs/benchmarks/epiph-testbed/data/s0_arm_a.json` and `s0_arm_b.json`. Screening values in
+PyTorch float32, no training.
+
+**Result** (test perplexity; layers 1 to 4 quantised together; single-layer column is the mean of layers 1 to 4 alone):
+
+| Rate | Regime | Arm A, layers 1 to 4 | Arm B, layers 1 to 4 |
+| :--- | :--- | ---: | ---: |
+| 3.02 bits | scalar, 8 levels (control) | 87.2 | 75.9 |
+| 3.02 bits | phase P4 (4-bit angle, 2-bit radius) | **70.9** | **66.3** |
+| 2.02 bits | scalar, 4 levels (control) | 190.8 | 228.5 |
+| 2.02 bits | phase P2 (3-bit angle, 1-bit radius) | **179.6** | **204.0** |
+| 1.60 bits | scalar, 3 levels (control) | 423.9 | 519.9 |
+| 1.60 bits | ternary (dead zone 0.7 E\|w\|) | **380.7** | 527.8 |
+| 1.02 bits | binary, rank 0 | 797.7 | 1,637.8 |
+
+**Readings.**
+- **Phase P4 against the 3-bit scalar control.** Over layers 1 to 4 together, the extra perplexity above baseline is 15.7
+  (P4) against 32.0 (control) on arm A, and 18.4 against 28.0 on arm B. On single layers the two are close (arm A: 57.6 to
+  59.5 for P4, 57.4 to 62.6 for the control). So the advantage of the polar form shows when several layers are quantised at
+  once, which is the case that matters. This answers the open point in entry 3.
+- **Phase P2 against the 2-bit control** is better on layers 1 to 4 together on both arms (179.6 against 190.8, and 204.0
+  against 228.5), mixed on single layers.
+- **Ternary against its matched 3-level control.** Level on single layers; the dead-zone rule is 10% lower on arm A over layers
+  1 to 4 (380.7 against 423.9) and level on arm B (527.8 against 519.9). The dead zone is not a clear gain here.
+- **f16 cast.** Ternary codes that change after rounding to float16: 0.01% (1 weight in 10,000) for post-hoc ternary, none for
+  binary. The 0.8 to 1.8% reported for released ternary checkpoints is for trained latent weights exported through bf16; it
+  does not appear for our float32 weights rounded to float16. Reported numbers should still be taken on the CPU float32 path.
+- **Arm B is more fragile** than arm A under every regime (for example binary rank 0 on layers 1 to 4: 1,637.8 against 797.7),
+  and its layers 3 and 5 are the sensitive ones. It was trained on a different corpus, so this may be about the model's history
+  rather than its architecture.
+
+**Not claimed.** One checkpoint per arm, post-hoc, no training, matched controls only at three rates. The phase P4 layout is a
+candidate from the advisor's list, not a tuned design; the 3-bit scalar control is a plain uniform quantiser, not the best 3-bit
+method (for example one with learned scales). Embeddings and head are untouched.
+
+**Proposed parameters or formulas.** None yet. Candidate for a registered follow-up: phase layouts at 3 bits per weight with
+different angle/radius splits (4+2, 3+3, 5+1) against the 3-bit scalar and a learned-scale 3-bit control, repeated on arm B
+and after quantisation-aware branches.
