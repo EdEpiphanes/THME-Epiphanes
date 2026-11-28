@@ -135,6 +135,20 @@ def phase(w, angle_bits, radius_bits):
     return ungroup(out, n, w.shape), (angle_bits + radius_bits) / 2 + 16 / GROUP
 
 
+def lloyd3(w, iters=10):
+    """Stronger 3-bit control: eight non-uniform Lloyd-Max levels per group of 1,024 weights (levels stored in f16, so
+    the rate is 3 + 128/1024 bits). Batched over groups."""
+    g, n = groups(w)
+    c = torch.quantile(g, torch.linspace(0.0625, 0.9375, 8, device=g.device), dim=1).T.contiguous()  # (G, 8)
+    for _ in range(iters):
+        idx = (g[:, :, None] - c[:, None, :]).abs().argmin(2)
+        for k in range(8):
+            m = (idx == k).float()
+            c[:, k] = torch.where(m.sum(1) > 0, (g * m).sum(1) / m.sum(1).clamp(min=1), c[:, k])
+    idx = (g[:, :, None] - c[:, None, :]).abs().argmin(2)
+    return ungroup(torch.gather(c, 1, idx), n, w.shape), 3 + 128 / GROUP
+
+
 REGIMES = {
     "ternary": lambda w: ternary(w),
     "binary_r0": lambda w: binary(w, 0),
@@ -147,6 +161,9 @@ REGIMES = {
     "phase_P2_a3_r1": lambda w: phase(w, 3, 1),
     "phase_P3_a4_r0": lambda w: phase(w, 4, 0),
     "phase_P4_a4_r2": lambda w: phase(w, 4, 2),
+    "phase_P5_a3_r3": lambda w: phase(w, 3, 3),
+    "phase_P6_a5_r1": lambda w: phase(w, 5, 1),
+    "lloyd3_control": lambda w: lloyd3(w),
 }
 LAYER_WEIGHTS = ("attention.query_key_value", "attention.dense", "mlp.dense_h_to_4h", "mlp.dense_4h_to_h")
 
@@ -158,13 +175,17 @@ def load_windows(path, context):
 
 @torch.no_grad()
 def perplexity(model, windows, device):
-    total, count = 0.0, 0
+    """Returns (perplexity, per-window summed negative log-likelihood in nats, per-window scored tokens)."""
+    total, count, per, cnt = 0.0, 0, [], []
     for w in windows:
         x = torch.from_numpy(w).to(device)[None]
         logits = model(x[:, :-1]).logits.float()
-        total += torch.nn.functional.cross_entropy(logits[0], x[0, 1:], reduction="sum").item()
+        nll = torch.nn.functional.cross_entropy(logits[0], x[0, 1:], reduction="sum").item()
+        total += nll
         count += x.shape[1] - 1
-    return math.exp(total / count)
+        per.append(round(nll, 4))
+        cnt.append(x.shape[1] - 1)
+    return math.exp(total / count), per, cnt
 
 
 def quantise_layers(model, layers, regime):
@@ -224,7 +245,7 @@ def main():
     device = "cuda" if torch.cuda.is_available() and not a.cpu else "cpu"
     model = GPTNeoXForCausalLM.from_pretrained(a.model, torch_dtype=torch.float32).to(device).eval()
     windows = load_windows(a.tokens, a.context)
-    base = perplexity(model, windows, device)
+    base, base_nll, window_tokens = perplexity(model, windows, device)
     print("baseline", round(base, 3), flush=True)
     n_layers = model.config.num_hidden_layers
     cases = [([li], f"layer{li}") for li in range(n_layers)] + [(list(range(1, n_layers - 1)), "middle_1_to_%d" % (n_layers - 2))]
@@ -232,15 +253,15 @@ def main():
     for layers, label in cases:
         for regime in REGIMES:
             saved, bpw, flips = quantise_layers(model, layers, regime)
-            ppl = perplexity(model, windows, device)
+            ppl, nll_w, _ = perplexity(model, windows, device)
             restore(model, saved)
             rows.append({"layers": layers, "scope": label, "regime": regime, "bits_per_weight": round(bpw, 3),
                          "f16_code_flip_fraction": flips,
-                         "perplexity": ppl, "delta_ppl": ppl - base})
+                         "perplexity": ppl, "delta_ppl": ppl - base, "window_nll": nll_w})
             print(label, regime, round(bpw, 2), round(ppl, 2), flush=True)
     out = {"report": "s0_fake_quantise", "model": a.model.replace("\\", "/").split("/")[-2:], "device": device,
            "precision": "float32 weights, eager attention", "context_len": a.context, "windows": len(windows),
-           "baseline_perplexity": base,
+           "baseline_perplexity": base, "baseline_window_nll": base_nll, "window_tokens": window_tokens,
            "note": "post-hoc fake quantisation, no training; screening values, re-measure reported ones with thme evaluate",
            "rows": rows}
     with open(a.json, "w", encoding="utf-8", newline="\n") as f:
